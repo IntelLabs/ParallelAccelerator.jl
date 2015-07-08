@@ -1393,6 +1393,13 @@ function dir_live_cb(ast, cbdata)
 
       dprintln(3, ":stencil! ", expr_to_process)
       return expr_to_process
+    elseif head == :assertEqShape
+      assert(length(args) == 2)
+      #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
+      expr_to_process = Any[]
+      push!(expr_to_process, args[1].name)
+      push!(expr_to_process, args[2].name)
+      return expr_to_process
     end
   elseif asttyp == KernelStat
     return Any[]

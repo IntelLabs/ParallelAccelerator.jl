@@ -887,14 +887,13 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     dprintln(3, "parallel code = ", code)
     dprintln(1, "offload: ParallelIR conversion time = ", ns_to_sec(pir_time))
     def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
-    precompile(function_name, signature)
   else
     dprintln(1, "IntelPSE code optimization skipped")
     code = ct[1]
   end
 
   if client_intel_pse_mode == 5
-    if noPrecompile == 0
+    if no_precompile == 0
       precompile(function_name, signature)
     end
     return nothing
@@ -1038,7 +1037,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     off_time = time_ns() - off_time_start
     dprintln(1, "offload: offload conversion time = ", ns_to_sec(off_time))
     
-    if noPrecompile == 0
+    if no_precompile == 0
       precompile(function_name, signature)
       precompile(proxy_func, signature)
     end
@@ -1054,6 +1053,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
         proxy_ct = proxy_ct[1]
         println("Proxy code for ", function_name)
         println(proxy_ct)    
+		println("Done printing proxy code")
       end
     end
   
@@ -1067,6 +1067,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
 end
 
 include("pp.jl")
+include("ParallelComprehension.jl")
 
 @eval function StartTiming(state::String)
     ccall((:StartTiming, $runtime_libpath), Void, (Ptr{Uint8},), state)

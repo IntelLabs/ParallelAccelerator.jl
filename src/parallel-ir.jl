@@ -205,7 +205,7 @@ function show(io::IO, pnode::IntelPSE.ParallelIR.PIRParForAst)
     end
 end
 
-export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, set_debug_level, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, createVarSet, createVarDict, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRPreEq, PIRTaskGraphMode
+export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, set_debug_level, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, createVarSet, createVarDict, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRPreEq, PIRTaskGraphMode, PIRPolyhedral
 
 function mk_return_expr(outs)
     if length(outs) == 1
@@ -299,6 +299,10 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        0)
 end
 
+
+function isArrayType(typ)
+  return (typ.name == Array.name)
+end
 
 # Return the type of an Array
 function getArrayElemType(array::SymbolNode)
@@ -458,6 +462,7 @@ type expr_state
   array_length_correlation :: Dict{Symbol,Int}
   symbol_array_correlation :: Dict{Array{Symbol,1},Int}
   param :: Array{Symbol}
+  meta  :: Array{Any}
   meta2 :: Set
   meta2_typed :: Dict{Symbol,Array{Any,1}}
   num_var_assignments :: Dict{Symbol,Int}
@@ -470,7 +475,7 @@ type expr_state
     for i = 1:length(input_arrays)
       init_corr[input_arrays[i]] = i
     end
-    new(bl, 0, init_corr, Dict{Array{Symbol,1},Int}(), Symbol[], Set(), Dict{Symbol,Array{Any,1}}(), Dict{Symbol,Int}(), max_label)
+    new(bl, 0, init_corr, Dict{Array{Symbol,1},Int}(), Symbol[], Any[], Set(), Dict{Symbol,Array{Any,1}}(), Dict{Symbol,Int}(), max_label)
   end
 end
 
@@ -1243,10 +1248,12 @@ function from_lambda(ast::Array{Any,1}, depth, state)
   body  = ast[3]
 
   save_param = state.param
+  save_meta  = state.meta
   save_meta2 = state.meta2
   save_meta2_typed = state.meta2_typed
 
   state.param = param
+  state.meta  = meta
   state.meta2 = createVarSet(meta[1])
   state.meta2_typed = createVarDict(meta[2])
   dprintln(3,"state.meta2 = ",state.meta2)
@@ -1288,6 +1295,7 @@ function from_lambda(ast::Array{Any,1}, depth, state)
   ast[3] = body
 
   state.param = save_param
+  state.meta  = save_meta
   state.meta2 = save_meta2
   state.meta2_typed = save_meta2_typed
 
@@ -2651,6 +2659,11 @@ function PIRStop(x)
   global pir_stop = x
 end
 
+polyhedral = 0
+function PIRPolyhedral(x)
+  global polyhedral = x
+end
+
 num_threads_mode = 0
 function PIRNumThreadsMode(x)
   if num_threads_mode != x
@@ -3155,6 +3168,10 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
   # TASK GRAPH
 
+  if polyhedral != 0
+    # Anand: you can insert code here.
+  end
+
   rr = ReplacedRegion[]
 
   expand_start = time_ns()
@@ -3223,20 +3240,19 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     dprintln(3,body[j])
   end
 
-  fake_body = Expr(:body)
-  fake_body.args = body
+  fake_body = lambdaFromStmtsMeta(body, state.param, state.meta)
   dprintln(3,"fake_body = ", fake_body)
   new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
   dprintln(1,"Starting loop analysis.")
-  loop_info = Loops.compute_dom_loops(new_lives)
+  loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
   dprintln(1,"Finished loop analysis.")
 
   if hoist_allocation == 1
     body = hoistAllocation(body, new_lives, loop_info, state)
-    fake_body.args = body
+    fake_body = lambdaFromStmtsMeta(body, state.param, state.meta)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
     dprintln(1,"Starting loop analysis again.")
-    loop_info = Loops.compute_dom_loops(new_lives)
+    loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
     dprintln(1,"Finished loop analysis.")
   end
 
@@ -3354,7 +3370,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     for i in map_reduced_bb_num_to_body
       bb_num = i[1]
       body_indices = i[2]
-      bb_live_info = new_lives.basic_blocks[bb_num]
+      bb_live_info = new_lives.basic_blocks[new_lives.cfg.basic_blocks[bb_num]]
 
       if !in(bb_num, bbs_in_task_graph_loops)
         if task_graph_mode == SEQUENTIAL_TASKS
@@ -3779,8 +3795,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   end
 
   if shortcut_array_assignment != 0
-    fake_body = Expr(:body)
-    fake_body.args = body
+    fake_body = lambdaFromStmtsMeta(body, state.param, state.meta)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
 
     for i = 1:length(body)
@@ -3941,7 +3956,7 @@ function getIO(stmt_ids, bb_statements)
   assert(length(stmt_ids) > 0)
 
   # Get the statements out of the basic block statement array such that those statement's ID's are in the stmt_ids ID array.
-  stmts_for_ids = filter(x -> in(x.index, stmt_ids) , bb_statements)
+  stmts_for_ids = filter(x -> in(x.tls.index, stmt_ids) , bb_statements)
   # Make sure that we found a statement for every statement ID.
   if length(stmt_ids) != length(stmts_for_ids)
     dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
@@ -3959,8 +3974,11 @@ function getIO(stmt_ids, bb_statements)
     cur_inputs = union(cur_inputs, setdiff(stmts_for_ids[i].use, cur_defs))
     cur_defs   = union(cur_defs, stmts_for_ids[i].def)
   end
-  outputs = intersect(cur_defs, stmts_for_ids[end].live_out)
-  cur_inputs = filter(x -> !(is(x, :Int64) || is(x, :Float32)), cur_inputs)
+  IntrinsicSet = Set()
+  push!(IntrinsicSet, :Intrinsics)
+  outputs = setdiff(intersect(cur_defs, stmts_for_ids[end].live_out), IntrinsicSet)
+  cur_defs = setdiff(cur_defs, IntrinsicSet)
+  cur_inputs = setdiff(filter(x -> !(is(x, :Int64) || is(x, :Float32)), cur_inputs), IntrinsicSet)
   cur_inputs, outputs, setdiff(cur_defs, union(cur_inputs, outputs))
 end
 
@@ -4249,10 +4267,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
   task_body = TypedExpr(Int, :body)
   saved_loopNests = deepcopy(the_parfor.loopNests)
 
-  for i in all_arg_names
-    push!(task_body.args, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), string(i), " = ", Symbol(i)))
-#    push!(task_body.args, quote println("$i = ", $i) end)
-  end
+#  for i in all_arg_names
+#    push!(task_body.args, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), string(i), " = ", Symbol(i)))
+#  end
  
   dprintln(3, "meta = ", meta)
 
@@ -4433,11 +4450,12 @@ function pir_live_cb(ast, cbdata)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
       end
-      fake_body = Expr(:body)
-      fake_body.args = this_parfor.body
+      #fake_body = Expr(:body)
+      #fake_body.args = this_parfor.body
+      fake_body = lambdaFromStmtsMeta(this_parfor.body)
 
       body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
-      live_in_to_start_block = body_lives.basic_blocks[-1].live_in
+      live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
       all_defs = Set()
       for bb in body_lives.basic_blocks
         all_defs = union(all_defs, bb[2].def)
@@ -5494,8 +5512,8 @@ end
 function hoistAllocation(ast, lives, domLoop, state::IntelPSE.ParallelIR.expr_state)
   for l in domLoop.loops
     dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
-    headBlk = lives.basic_blocks[ l.head ]
-    tailBlk = lives.basic_blocks[ l.back_edge ]
+    headBlk = lives.cfg.basic_blocks [ l.head ]
+    tailBlk = lives.cfg.basic_blocks [ l.back_edge ]
     if length(headBlk.preds) != 2
       continue
     end
@@ -5507,11 +5525,12 @@ function hoistAllocation(ast, lives, domLoop, state::IntelPSE.ParallelIR.expr_st
       end
     end
     if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
-    tls = preBlk
+    tls = lives.basic_blocks[ preBlk ]
     preHead = preBlk.statements[end].index
     head = headBlk.statements[1].index
     tail = tailBlk.statements[1].index
     dprintln(3, "HA: line before head is ", ast[preHead-1])
+    # Is iterating through statement indices this way safe?
     for i = head:tail
       if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
         dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
@@ -5718,18 +5737,19 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
         while i < length(bb.statements)
           cur  = bb.statements[i]
           next = bb.statements[i+1]
-          cannot_move_next = mustRemainLastStatementInBlock(next.expr)
-          dprintln(3,"maxFusion cur = ", cur.expr)
-          dprintln(3,"maxFusion next = ", next.expr)
-          cur_domain_node  = isDomainNode(cur.expr)  
-          next_domain_node = isDomainNode(next.expr) 
+          cannot_move_next = mustRemainLastStatementInBlock(next.tls.expr)
+          dprintln(3,"maxFusion cur = ", cur.tls.expr)
+          dprintln(3,"maxFusion next = ", next.tls.expr)
+          cur_domain_node  = isDomainNode(cur.tls.expr)  
+          next_domain_node = isDomainNode(next.tls.expr) 
           intersection     = intersect(cur.def, next.use)
           dprintln(3,"cur_domain_node = ", cur_domain_node, " next_domain_node = ", next_domain_node, " intersection = ", intersection)
           if cur_domain_node && !cannot_move_next
             if !next_domain_node && isempty(intersection)
               dprintln(3,"bubbling domain node down")
               (bb.statements[i], bb.statements[i+1]) = (bb.statements[i+1], bb.statements[i])
-              (bb.statements[i].index, bb.statements[i+1].index) = (bb.statements[i+1].index, bb.statements[i].index)
+              (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
+              (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
               found_change = true
             else
               if i < earliest_parfor
@@ -5751,8 +5771,7 @@ function pirPrintDl(dbg_level, dl)
   dprintln(dbg_level, "escapes = ", dl.escapes)
 end
 
-function getMaxLabel(stmts :: Array{Any, 1})
-  max_label = 0
+function getMaxLabel(max_label, stmts :: Array{Any, 1})
   for i =1:length(stmts)
     if isa(stmts[i], LabelNode)
       max_label = max(max_label, stmts[i].label)
@@ -5761,24 +5780,36 @@ function getMaxLabel(stmts :: Array{Any, 1})
   return max_label
 end
 
-function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
-  dprintln(2,"nested_function_exprs called with ", stmts, " of type = ", typeof(stmts))
-  if !isa(stmts, Array)
-    return stmts
+function lambdaFromStmtsMeta(stmts, params=Any[], meta=Any[Any[],Any[],Any[]])
+  Expr(:lambda, deepcopy(params), deepcopy(meta), Expr(:body, stmts...))
   end
+
+function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   inputs_as_symbols = map(x -> x.name, dl_inputs)
   type_data = Any[]
+  input_arrays = Symbol[]
   for di in dl_inputs
     push!(type_data, [di.name, di.typ, 0])
+    if isArrayType(di.typ)
+      push!(input_arrays, di.name)
+    end
   end
   dprintln(3,"inputs = ", inputs_as_symbols)
   dprintln(3,"types = ", type_data)
   dprintln(3,"DomainLambda is:")
   pirPrintDl(3, domain_lambda)
   ast = Expr(:lambda, inputs_as_symbols, Any[Symbol[],type_data,Any[]], Expr(:body, stmts...))
-  input_arrays = Symbol[]
   assert(typeof(ast) == Expr)
   assert(ast.head == :lambda)
+  return (ast, input_arrays) 
+end
+
+function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
+  dprintln(2,"nested_function_exprs called with ", stmts, " of type = ", typeof(stmts))
+  if !isa(stmts, Array)
+    return stmts
+  end
+  (ast, input_arrays) = lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
 
   start_time = time_ns()
@@ -5820,7 +5851,7 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
   # find out max_label
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
-  max_label = getMaxLabel(body.args)
+  max_label = getMaxLabel(max_label, body.args)
 
   eq_start = time_ns()
 
@@ -5882,6 +5913,9 @@ function from_expr(function_name, ast::Any, input_arrays)
 
   dprintln(1,"Starting liveness analysis.")
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+#  udinfo = CompilerTools.UDChains.getUDChains(lives)
+  dprintln(3,"lives = ", lives)
+#  dprintln(3,"udinfo = ", udinfo)
   dprintln(1,"Finished liveness analysis.")
 
   dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
@@ -5918,7 +5952,7 @@ function from_expr(function_name, ast::Any, input_arrays)
   # find out max_label
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
-  max_label = getMaxLabel(body.args)
+  max_label = getMaxLabel(0, body.args)
 
   rep_start = time_ns()
 
@@ -5979,7 +6013,7 @@ function from_expr(function_name, ast::Any, input_arrays)
   if bb_reorder != 0
     maxFusion(lives)
     # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
-    ast.args[3].args = CompilerTools.LivenessAnalysis.createFunctionBody(lives)
+    ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     dprintln(3,"ast after maxFusion = ")
     printLambda(3, ast)
