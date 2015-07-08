@@ -55,8 +55,10 @@ using CompilerTools
 include("domain-ir.jl")
 include("alias-analysis.jl")
 include("parallel-ir.jl")
+include("cgen.jl")
 
 import .DomainIR.isarray
+import .cgen.from_root, .cgen.writec, .cgen.compile, .cgen.link
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
@@ -903,7 +905,14 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     off_time_start = time_ns()
   
     julia_root   = getJuliaRoot()
-  
+
+	# cgen path
+    if client_intel_pse_cgen == 1
+        cgen.writec(from_root(code, string(function_name)))
+        cgen.compile()
+        cgen.link()
+    end 
+ 
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name,"_j2c_proxy")
     proxy_sym    = symbol(proxy_name)
