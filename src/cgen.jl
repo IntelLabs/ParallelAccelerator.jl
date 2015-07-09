@@ -599,8 +599,7 @@ function from_inlineable(f, args)
 	debugp("Checking if ", f, " can be inlined")
 	debugp("Args are: ", args)
 	if has(_operators, string(f))
-			s = "(" * from_expr(args[1]) * string(f) * from_expr(args[2]) * ")"
-		return s
+		return "(" * from_expr(args[1]) * string(f) * from_expr(args[2]) * ")"
 	elseif has(_builtins, string(f))
 		return from_builtins(f, args)
 	elseif has(_Intrinsics, string(f))
@@ -617,14 +616,9 @@ function isInlineable(f, args)
 	debugp("Args = ", args, " length = ", length(args))
 	if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
 		return true
-	#elseif isa(f, Expr) && f.head == :call
-	#	if typeof(f.args[1]) == TopNode && has(_builtins, string(f.args[1].name))
-	#		return true
-	#	end
 	end
 	debugp("Typeof: ", typeof(f), " : ", typeof(f) == TopNode ? string(f.name) : "None")
 	return false
-	#return typeof(f) == TopNode && has(_builtins, string(f.name))
 end
 
 function arrayToTuple(a)
@@ -647,108 +641,6 @@ function from_labelnode(ast)
 	"label" * string(ast.label) * " : "
 end
 
-#=
-function resolveCallTarget(ast::Symbol)
-	return ast
-end
-
-function resolveCallTarget(ast::GetfieldNode)
-	return ast.name # ast.value is the Module, ast.typ is the type
-end
-
-function resolveCallTarget(ast::TopNode, args)
-	debugp("In topnode: ", names(ast))
-	if hasfield(ast, :name)
-		tgt = ast.name
-		mod = ""
-	else
-		debugp("Resolving call target: Invalid topnode found in AST: ", ast)
-		throw("Fatal Error: Invalid Node")
-	end
-	debugp("In resolveCallTarget, target is: ", tgt, " (typeof = ", typeof(tgt), ")")
-	if tgt == :getfield
-		debugp("In resolveCallTarget, ast is topnode")
-		debugp("Got args: ", args, " (with length = ", length(args), ")")
-		debugp("Ast args: ", ast.args, " (with length = ", length(ast.args), ")")
-		mod, tgt = args[2], args[3]
-	end
-	debugp("Done processing Topnode, returning module = ", mod, " and tgt = ", tgt)
-	return mod, tgt
-end
-
-function resolveCallTarget(ast::Expr, args)
-	if length(ast.args) >= 1 && isa(ast.args[1], TopNode)
-		return resolveCallTarget(ast.args[1], ast.args[2:end])
-	end
-end
-
-function resolveCallTarget(args::Array{Any, 1})
-	if isa(args[1], TopNode) && is(args[1].name, :getfield) && isa(args[3], QuoteNode)
-		s = args[3].value
-		if isa(args[2], Module)
-			M = args[2]
-		else
-			M = ""
-			#M, _s = resolveCallTarget([args[2]])
-		end
-		return M, s
-	else
-		throw("Couldn't resolve target")
-	end
-end
-
-function resolveCallTarget(ast, args, dummy)
-	debugp("Resolving call: ", ast)
-	debugp("Type of node = ", typeof(ast))
-	if isa(ast, Expr)
-		debugp("Head is: ", ast.head)
-		debugp("Args are: ", ast.args)
-	end
-#=
-	if typeof(ast) == TopNode
-		if hasfield(ast, :name)
-			tgt = ast.name
-			mod = ""
-		else
-			debugp("Invalid topnode found in AST: ", ast)
-			throw("Fatal Error: Invalid Node")
-		end
-		if tgt == "getfield"
-			mod, tgt = ast.args[2], ast.args[3]
-		end
-		return mod, tgt
-=#
-	if typeof(ast) == Symbol
-		return "", ast
-	elseif typeof(ast) == GetfieldNode
-		debugp("Got a getfieldnode: ", ast.name, ast.value, ast.typ)
-		return ast.value, ast.name # ast.value is the Module, ast.typ is the type
-	else
-		return "", ast
-	#if length(ast) >= 1
-	#	return ast[1]
-		#return resolveCallTarget(ast[1])
-	#elseif hasfield(ast, :args)
-	#	return resolveCallTarget(ast.args[1])
-	end
-	debugp("At AST = ", ast, ", ")
-	throw("Could not compile call target")
-end
-
-
-function findTarget_old(ast)
-	assert(length(ast) >= 1)
-	if typeof(ast[1]) == TopNode
-		return ast[1].name
-	elseif typeof(ast[1]) == Symbol
-		return ast[1]
-	elseif length(ast[1].args) >= 1
-		return findTarget(ast[1].args[1])
-	end
-	debugp("At AST = ", ast, ", ")
-	throw("Could not compile call")
-end
-=#
 function from_call1(ast::Array{Any, 1})
 	debugp("Call1 args")
 	s = ""
@@ -1182,7 +1074,10 @@ type ASTDispatcher
 	function ASTDispatcher()
 		d = Dict{Any, Any}()
 		n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
-			GotoNode, TopNode, QuoteNode, isdefined(:GetfieldNode) ? GetfieldNode : (isdefined(:GlobalRef) ? GlobalRef : throw(string("Neither GetfieldNode or GlobalRef defined."))), 
+			GotoNode, TopNode, QuoteNode,
+			isdefined(:GetfieldNode) ? GetfieldNode : 
+				(isdefined(:GlobalRef) ? GlobalRef :
+				throw(string("Neither GetfieldNode or GlobalRef defined."))), 
 			:block, :body, :new, :lambda, :(=), :call, :call1,
 			:return, :line, :gotoifnot, :parfor_start, :parfor_end,
 			:boundscheck, :loophead, :loopend]
@@ -1219,7 +1114,6 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 		", " * foldl((a, b) -> "$a, $b",
 		[(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
 	wrapperParams = "int run_where, $args"
-	#retSlot = [toCtype(a) * "**ret" * string(i-1) for i in 1:length(jtyp)]
 	allocResult = ""
 	retSlot = ""
 	for i in 1:length(jtyp)
