@@ -478,7 +478,8 @@ function metaToVarDef(meta)
   defs = Dict{Symbol,VarDef}()
   for m in meta
     assert(length(m)==3)
-    push!(defs, m[1], VarDef(m[2], m[3], nothing))
+    defs[m[1]] = VarDef(m[2], m[3], nothing)
+    #push!(defs, m[1], VarDef(m[2], m[3], nothing))
   end
   return defs
 end
@@ -609,6 +610,9 @@ function from_assignment(state, env, expr::Any)
   local rhs = ast[2]
   if isa(lhs, SymbolNode)
     lhs = lhs.name
+  end
+  if typeof(lhs) != Symbol
+    println(expr, " lhs type = ", typeof(lhs))
   end
   assert(isa(lhs, Symbol))
   rhs = from_expr(state, env_, rhs)
