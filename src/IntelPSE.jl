@@ -7,6 +7,37 @@ export decompose, offload, set_debug_level, getenv
 const TOPLEVEL=1
 const PROXYONLY=3
 
+# 0 = none
+# 1 = host
+# 2 = offload1
+# 3 = offload2
+# 4 = task
+# 5 = threads
+client_intel_pse_mode = 5
+# true if use task graph, false if use old-style whole-function conversion.
+client_intel_task_graph = false
+import Base.show
+
+if haskey(ENV,"INTEL_PSE_MODE")
+  println("Got here 2")
+  mode = ENV["INTEL_PSE_MODE"]
+  if mode == 0 || mode == "none"
+    client_intel_pse_mode = 0
+  elseif mode == 1 || mode == "host"
+    client_intel_pse_mode = 1
+  elseif mode == 2 || mode == "offload1"
+    client_intel_pse_mode = 2
+  elseif mode == 3 || mode == "offload2"
+    client_intel_pse_mode = 3
+  elseif mode == 4 || mode == "task"
+    client_intel_pse_mode = 4
+  elseif mode == 5 || mode == "threads"
+    client_intel_pse_mode = 5
+  else
+    println("Unknown INTEL_PSE_MODE = ", mode)
+  end
+end
+
 # a hack to make offload function available to domain IR. The assumption is that this
 # is neither a TOPLEVEL function for J2C, nor a PROXYONLY compilation.
 _offload(func, sig) = offload(func, sig, 0)
@@ -129,36 +160,6 @@ function convert_sig(sig)
   dprintln(3,"new_tuple.args = ", new_tuple.args)
   dprintln(3,"sig_ndims = ", sig_ndims)
   return (eval(new_tuple), sig_ndims)
-end
-
-# 0 = none
-# 1 = host
-# 2 = offload1
-# 3 = offload2
-# 4 = task
-# 5 = threads
-client_intel_pse_mode = 5
-# true if use task graph, false if use old-style whole-function conversion.
-client_intel_task_graph = false
-import Base.show
-
-if in("INTEL_PSE_MODE", ENV)
-  mode = ENV["INTEL_PSE_MODE"]
-  if mode == 0 || mode == "none"
-    client_intel_pse_mode = 0
-  elseif mode == 1 || mode == "host"
-    client_intel_pse_mode = 1
-  elseif mode == 2 || mode == "offload1"
-    client_intel_pse_mode = 2
-  elseif mode == 3 || mode == "offload2"
-    client_intel_pse_mode = 3
-  elseif mode == 4 || mode == "task"
-    client_intel_pse_mode = 4
-  elseif mode == 5 || mode == "threads"
-    client_intel_pse_mode = 5
-  else
-    println("Unknown INTEL_PSE_MODE = ", mode)
-  end
 end
 
 function get_input_arrays(input_vars, var_types)
