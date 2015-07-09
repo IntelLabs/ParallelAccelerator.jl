@@ -834,7 +834,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       # call typeinf since Julia doesn't do it for us
       # and we can figure out the element type from mapExp's return type
       (tree, ety)=Base.typeinf(mapExp, tuple(argstyp...), ())
-      etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
+      etys = isa(ety, Tuple) ? Type[ t for t in ety ] : Type[ ety ]
       mapExp.ast = tree
       # make sure we go through domain translation on the lambda too
       ast = from_expr("anonymous", env.cur_module, uncompressed_ast(mapExp))
