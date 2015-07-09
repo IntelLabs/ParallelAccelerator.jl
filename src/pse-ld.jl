@@ -1,6 +1,6 @@
 module LD
 
-import Base.LinAlg: BlasChar, BlasInt
+import Base.LinAlg: BlasInt
 
 #require("intel-pse.jl")
 #importall IntelPSE
@@ -35,6 +35,14 @@ type LDState
   defs  :: Array{Any, 1} # (Symbol, Type, Flag)
   exprs :: Array{Any, 1}
 end
+
+#if isdefined(LinAlg.BlasChar)
+#  import Base.LinAlg: BlasChar
+#else
+#if !isdefined(LinAlg.BlasChar)
+typealias BlasChar Char
+#end
+#end
 
 empty_state() = LDState(Array(Any, 0), Array(Any, 0))
 emit_expr(state, expr) = push!(state.exprs, expr)
