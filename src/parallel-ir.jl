@@ -5514,8 +5514,8 @@ end
 function hoistAllocation(ast, lives, domLoop, state::IntelPSE.ParallelIR.expr_state)
   for l in domLoop.loops
     dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
-    headBlk = lives.cfg.basic_blocks [ l.head ]
-    tailBlk = lives.cfg.basic_blocks [ l.back_edge ]
+    headBlk = lives.cfg.basic_blocks[ l.head ]
+    tailBlk = lives.cfg.basic_blocks[ l.back_edge ]
     if length(headBlk.preds) != 2
       continue
     end
