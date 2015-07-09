@@ -823,8 +823,11 @@ function resolveCallTarget(args::Array{Any, 1})
 	elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && hasfield(args[1], :head) && is(args[1].head, :call)
 		return resolveCallTarget(args[1])
 		
-	elseif isa(args[1],GetfieldNode) && isa(args[1].value,Module)
+	elseif isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
         M = args[1].value; s = args[1].name; t = ""
+
+	elseif isdefined(:GlobalRef) && isa(args[1],GlobalRef) && isa(args[1].mod,Module)
+        M = args[1].mod; s = args[1].name; t = ""
 
 	# case 3:
 	elseif isa(args[1], TopNode) && isInlineable(args[1].name, args[2:end])
@@ -1179,7 +1182,7 @@ type ASTDispatcher
 	function ASTDispatcher()
 		d = Dict{Any, Any}()
 		n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
-			GotoNode, TopNode, QuoteNode, GetfieldNode, 
+			GotoNode, TopNode, QuoteNode, isdefined(:GetfieldNode) ? GetfieldNode : (isdefined(:GlobalRef) ? GlobalRef : throw(string("Neither GetfieldNode or GlobalRef defined."))), 
 			:block, :body, :new, :lambda, :(=), :call, :call1,
 			:return, :line, :gotoifnot, :parfor_start, :parfor_end,
 			:boundscheck, :loophead, :loopend]
