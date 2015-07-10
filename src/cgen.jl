@@ -873,16 +873,80 @@ function from_parforend(args)
 	s
 end
 
+function loopNestCount(loop)
+	"(((" * from_expr(loop.upper) * ") + 1 - (" * from_expr(loop.lower) * ")) / (" * from_expr(loop.step) * "))"
+end
+
+
+# If the parfor body is too complicated then DIR or PIR will set
+# instruction_count_expr = nothing
+
+# Meaning of num_threads_mode
+# mode = 1 uses static insn count if it is there, but doesn't do dynamic estimation and fair core allocation between levels in a loop nest.
+# mode = 2 does all of the above
+# mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
+
 function from_parforstart(args)
-	s = ""
-	debugp("Got Parfor start, args = ", args)
+	# TODO: PIR does not export a way to get the mode in Julia.
+	num_threads_mode = 2
+
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	global ompPrivateList
+	s = ""
+	privatevars = isempty(ompPrivateList) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", ompPrivateList) * ")"
+
+	ivs = map((a)->from_expr(a.indexVariable), lpNests)
+	starts = map((a)->from_expr(a.lower), lpNests)
+	stops = map((a)->from_expr(a.upper), lpNests)
+	steps = map((a)->from_expr(a.step), lpNests)
+
+	lcountexpr = ""
+	for i in 1:length(lpNests)
+		lcountexpr *= "(((" * starts[i] * ") + 1 - (" * stops[i] * ")) / (" * steps[i] * "))" * (i == length(lpNests) ? "" : " * ")
+	end
+	preclause = ""
+	nthreadsclause = ""
+	if num_threads_mode == 1
+		if instruction_count_expr != nothing
+			icountexpr = from_expr(parfor.instruction_count_expr)
+			preclause = "unsigned _vnfntc = computeNumThreads(((unsigned)" * icountexpr * ") * (" * lcountexpr * "));\n";
+			nthreadsclause = "num_threads(_vnfntc) "
+		end
+	elseif num_threads_mode = 2
+		if instruction_count_expr != nothing
+			icountexpr = from_expr(parfor.instruction_count_expr)
+			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $icountexpr ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
+		else
+			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n";
+		end
+		nthreadsclause = "num_threads(j2c_block_region_thread_count.getUsed()) "
+	elseif num_threads_mode = 3
+		if instruction_count_expr != nothing
+			icountexpr = from_expr(parfor.instruction_count_expr)
+			preclause << "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $icountexpr) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n";
+		else
+			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n";
+		end
+		nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads(j2c_block_region_thread_count.getUsed()) ";
+	end
+
+	s *= "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
+	s *= "#pragma omp for private($(ivs[1]))\n"
+	s *= mapfoldl(
+			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+			(a, b) -> "$a, $b",
+			1:length(lpNests))
+	s
+end
+#=
+
+	debugp("Got Parfor start, args = ", args)
+	debugp("insns count Expr is: ", parfor.instruction_count_expr)
+	debugp("After translation, insns count Expr is: ", from_expr(parfor.instruction_count_expr))
+	lpNests = parfor.loopNests
 	debugp("In parforstart, ompPrivateList is: ", ompPrivateList)
-	s *= isempty(ompPrivateList) ? "" :
-		"#pragma omp parallel private(" *
-		mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", ompPrivateList) * ")\n{\n"
+	s *= isempty(ompPrivateList) ? "" : "#pragma omp parallel private(" * privateVars * ")\n{\n"
 	for i in 1:length(lpNests)
 		iv = from_expr(lpNests[i].indexVariable)
 		start = from_expr(lpNests[i].lower)
@@ -894,6 +958,36 @@ function from_parforstart(args)
 	debugp("Parforstart = ", s)
 	s
 end
+=#
+
+#gnumthreads_mode = 2
+#=
+function from_parforstart(args)
+	
+	if(gnumthreads_mode != 0)
+		return from_parforstart(args, global_num_threads_mode)
+	s = ""
+	parfor = args[1]
+	debugp("Got Parfor start, args = ", args)
+	debugp("insns count Expr is: ", parfor.instruction_count_expr)
+	debugp("After translation, insns count Expr is: ", from_expr(parfor.instruction_count_expr))
+	global ompPrivateList
+	debugp("In parforstart, ompPrivateList is: ", ompPrivateList)
+	privateVars = isempty(ompPrivateList) ? "" : mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", ompPrivateList)
+	s *= isempty(ompPrivateList) ? "" : "#pragma omp parallel private(" * privateVars * ")\n{\n"
+	for i in 1:length(lpNests)
+		iv = from_expr(lpNests[i].indexVariable)
+		start = from_expr(lpNests[i].lower)
+		stop = from_expr(lpNests[i].upper)
+		step = from_expr(lpNests[i].step)
+		s *= (i == 1) ? "#pragma omp for private($iv)\n" : ""
+		s *= "for ($iv =  $start;$iv <= $stop; ($iv) += $step) {\n"
+	end
+	debugp("Parforstart = ", s)
+	s
+end
+=#
+
 # TODO: Should simple objects be heap allocated ?
 # For now, we stick with stack allocation
 function from_new(args)
@@ -1125,12 +1219,12 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 			allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
 		end
 	end
+	#printf(\"Starting execution of cgen generated code\\n\");
+	#printf(\"End of execution of cgen generated code\\n\");
 	s::ASCIIString =
 	"extern \"C\" void _$(functionName)_($wrapperParams, $retSlot) {\n
-		printf(\"Starting execution of cgen generated code\\n\");
 		$allocResult
 		$functionName($actualParams);
-		printf(\"End of execution of cgen generated code\\n\");
 	}\n"
 	s
 end
