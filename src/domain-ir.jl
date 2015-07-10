@@ -280,8 +280,8 @@ end
 include("domain-ir-stencil.jl")
 
 function isinttyp(typ)
-    is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is (typ, Int8)  || 
-    is(typ, Uint64) || is(typ, Uint32) || is(typ, Uint16) || is (typ, Uint8)
+    is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is(typ, Int8)  || 
+    is(typ, Uint64) || is(typ, Uint32) || is(typ, Uint16) || is(typ, Uint8)
 end
 
 function isarray(typ)
@@ -1073,7 +1073,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
           (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
         expr = mk_expr(typ, :call, :getindex, args[2:end]...)
       end
-    elseif is(fun, :sum) || is (fun, :prod)
+    elseif is(fun, :sum) || is(fun, :prod)
       args = normalize_args(state, env_, args)
       assert(length(args) == 1)
       arr = args[1]

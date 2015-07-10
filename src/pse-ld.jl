@@ -59,8 +59,8 @@ function check_ccall(state, expr)
     dprintln(2,"got ccall: ", expr)
     args = expr.args
     if isa(args[2], Expr) && is(args[2].head, :call1) 
-      dprintln (2,"length: ", length(args[2].args), " ", args[2].args[2], " ", args[2].args[3])
-      dprintln (2,"args[5:end]: ", args[5:end])
+      dprintln(2,"length: ", length(args[2].args), " ", args[2].args[2], " ", args[2].args[3])
+      dprintln(2,"args[5:end]: ", args[5:end])
       if length(args[2].args) == 3 && haskey(call_dict, args[2].args[2]) && is(args[2].args[3], lib_dict[args[2].args[2]])
          matched_call = call_dict[args[2].args[2]]
          dprintln(2, "found ", matched_call, " call!")

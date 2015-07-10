@@ -186,7 +186,7 @@ function analyze_kernel(bufTyps, krn, borderSty)
       expr.args[2] = bufSym
       local idxOffset = isGet ? 2 : 3
       local dim = length(expr.args) - idxOffset
-      assert (dim <= 10)      # arbitrary limit controlling the total num of dimensions
+      assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
       if is(stat, ())         # create stat if not already exists
         local idxSym = [ freshsym(string(char(i+'h'))) for i in 1:dim ]
         local strideSym = [ freshsym(string("st", char(i+'h'))) for i in 1:dim ]
