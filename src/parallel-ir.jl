@@ -4798,7 +4798,7 @@ type CopyPropagateState
   copies :: Dict{Symbol,Symbol}
 
   function CopyPropagateState(l, c)
-    new (l,c)
+    new(l,c)
   end
 end
 

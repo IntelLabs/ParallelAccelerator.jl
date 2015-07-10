@@ -236,11 +236,11 @@ type extractStaticCallGraphState
   local_lambdas :: Dict{Symbol,LambdaStaticData}
 
   function extractStaticCallGraphState(fs, mnfi, ftp)
-    new (fs, mnfi, ftp, CallInfo[], Set(), nothing, nothing, nothing, Set(), false, Dict{Symbol,LambdaStaticData}())
+    new(fs, mnfi, ftp, CallInfo[], Set(), nothing, nothing, nothing, Set(), false, Dict{Symbol,LambdaStaticData}())
   end
 
   function extractStaticCallGraphState(fs, mnfi, ftp, calls, gw, ll)
-    new (fs, mnfi, ftp, calls, gw, nothing, nothing, nothing, Set(), false, ll)
+    new(fs, mnfi, ftp, calls, gw, nothing, nothing, nothing, Set(), false, ll)
   end
 end
 
