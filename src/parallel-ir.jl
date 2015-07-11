@@ -1,4 +1,5 @@
 module ParallelIR
+export num_threads_mode
 
 using CompilerTools
 using ..DomainIR

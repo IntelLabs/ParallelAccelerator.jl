@@ -868,7 +868,7 @@ function from_parforend(args)
 	for i in 1:length(lpNests)
 		s *= "}\n"	
 	end
-	s *= "}/*parforend*/\n" # end block introduced by private list
+	s *= "}\n}/*parforend*/\n" # end block introduced by private list
 	debugp("Parforend = ", s)
 	s
 end
@@ -887,8 +887,7 @@ end
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
 
 function from_parforstart(args)
-	# TODO: PIR does not export a way to get the mode in Julia.
-	num_threads_mode = 2
+	num_threads_mode = IntelPSE.ParallelIR.num_threads_mode
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
@@ -936,7 +935,7 @@ function from_parforstart(args)
 	s *= "#pragma omp for private($(ivs[1]))\n"
 	s *= mapfoldl(
 			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
-			(a, b) -> "$a, $b",
+			(a, b) -> "$a $b",
 			1:length(lpNests))
 	s
 end
