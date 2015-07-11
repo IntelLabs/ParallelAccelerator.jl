@@ -907,24 +907,25 @@ function from_parforstart(args)
 	end
 	preclause = ""
 	nthreadsclause = ""
+	instruction_count_expr = parfor.instruction_count_expr
 	if num_threads_mode == 1
 		if instruction_count_expr != nothing
-			icountexpr = from_expr(parfor.instruction_count_expr)
-			preclause = "unsigned _vnfntc = computeNumThreads(((unsigned)" * icountexpr * ") * (" * lcountexpr * "));\n";
+			insncount = from_expr(instruction_count_expr)
+			preclause = "unsigned _vnfntc = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n";
 			nthreadsclause = "num_threads(_vnfntc) "
 		end
-	elseif num_threads_mode = 2
+	elseif num_threads_mode == 2
 		if instruction_count_expr != nothing
-			icountexpr = from_expr(parfor.instruction_count_expr)
-			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $icountexpr ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
+			insncount = from_expr(instruction_count_expr)
+			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
 		else
 			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n";
 		end
 		nthreadsclause = "num_threads(j2c_block_region_thread_count.getUsed()) "
-	elseif num_threads_mode = 3
+	elseif num_threads_mode == 3
 		if instruction_count_expr != nothing
-			icountexpr = from_expr(parfor.instruction_count_expr)
-			preclause << "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $icountexpr) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n";
+			insncount = from_expr(instruction_count_expr)
+			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n";
 		else
 			preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n";
 		end
