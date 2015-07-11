@@ -5,6 +5,8 @@ module cgen
 export generate, from_root, writec, compile, link
 verbose = true
 
+using .ParallelIR
+
 _symPre = 0
 _jtypesToctypes = Dict(
 		Int8	=>	"int8_t",
@@ -887,7 +889,7 @@ end
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
 
 function from_parforstart(args)
-	num_threads_mode = IntelPSE.ParallelIR.num_threads_mode
+	num_threads_mode = ParallelIR.num_threads_mode
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
