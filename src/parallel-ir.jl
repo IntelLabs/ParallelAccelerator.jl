@@ -5,9 +5,9 @@ using CompilerTools
 using ..DomainIR
 using ..AliasAnalysis
 using ..IntelPSE
-if IntelPSE.client_intel_pse_mode == 5
-using Base.Threading
-end
+#if IntelPSE.client_intel_pse_mode == 5
+#using Base.Threading
+#end
 
 import Base.show
 import CompilerTools.AstWalker
