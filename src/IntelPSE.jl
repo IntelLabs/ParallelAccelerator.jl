@@ -837,6 +837,7 @@ previouslyOptimized = Set()
 
 function remove_gensym(node, state, top_level_number, is_top_level, read)
 	dprintln(3,"in node:",node)
+	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
 	end
