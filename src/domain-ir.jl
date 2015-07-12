@@ -731,8 +731,8 @@ function normalize_callname(state::IRState, env, fun, args)
       else
       end
     end
-  elseif isa(fun, GetfieldNode)
-    if is(fun.value, Base.Broadcast)
+  elseif isa(fun, GlobalRef)
+    if is(fun.mod, Base.Broadcast)
       if is(fun.name, :broadcast_shape)
         fun = :broadcast_shape
       end
@@ -1096,7 +1096,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
         dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
         _offload(getfield(env.cur_module, fun), tuple(args_typ...))
-        oldfun = GetfieldNode(env.cur_module, fun, Any)
+        oldfun = GlobalRef(env.cur_module, fun)
       elseif is(fun, :getfield)
         dprintln(env,"eval getfield with args ", args)
         if isa(args[1], Symbol) && isa(args[2], QuoteNode)
@@ -1108,14 +1108,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
           dprintln(env,"module name ", args[1], " fails to resolve")
           throw(err)
         end
-        return GetfieldNode(m, args[2].value, typ) # TODO: fill in the type properly?
+        return GlobalRef(m, args[2].value) 
         end
       else
         dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), "head = ", head, "oldfun = ", oldfun, ", args typ=", args_typ)
       end
     end
-  elseif isa(fun, GetfieldNode)
-    if is(fun.value, Base.Math)
+  elseif isa(fun, GlobalRef)
+    if is(fun.mod, Base.Math)
       # NOTE: we simply bypass all math functions for now
       dprintln(env,"by pass math function ", fun, ", typ=", typ)
       # Fix return type of math functions
@@ -1123,15 +1123,15 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(env,"fix type for ", expr, " from ", typ, " => ", args[1].typ)
         typ = args[1].typ
       end
-    elseif isdefined(fun.value, fun.name)
+    elseif isdefined(fun.mod, fun.name)
         args_typ = map(typeOfOpr, args)
-        dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(fun.value, fun.name)))
-        _offload(getfield(fun.value, fun.name), tuple(args_typ...))
+        dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(fun.mod, fun.name)))
+        _offload(getfield(fun.mod, fun.name), tuple(args_typ...))
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")
     end
   else
-    dprintln(env,"function call is not GetfieldNode and not translated: ", fun, ", return typ=", typ)
+    dprintln(env,"function call is not GlobalRef and not translated: ", fun, ", return typ=", typ)
   end
   if isa(expr, Nothing)
     if !is(fun, :ccall)

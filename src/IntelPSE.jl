@@ -330,8 +330,8 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
     return nothing
   elseif fetyp == DataType
     return nothing
-  elseif fetyp == GetfieldNode
-    func = getfield(func_expr.value, func_expr.name)
+  elseif fetyp == GlobalRef
+    func = getfield(func_expr.mod, func_expr.name)
   elseif fetyp == Expr
     dprintln(3,"head = ", func_expr.head)
     if func_expr.head == :call && func_expr.args[1] == TopNode(:getfield)

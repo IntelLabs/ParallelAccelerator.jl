@@ -2802,9 +2802,9 @@ function generate_instr_count(function_name, signature)
   if ftyp == Expr
     dprintln(3,"eval'ing Expr to Function")
     function_name = eval(function_name)
-  elseif ftyp == GetfieldNode
+  elseif ftyp == GlobalRef
     dprintln(3,"Calling getfield")
-    function_name = getfield(function_name.value, function_name.name)
+    function_name = getfield(function_name.mod, function_name.name)
   elseif ftyp == IntrinsicFunction
     dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
     call_costs[(function_name, signature)] = nothing
@@ -2930,11 +2930,11 @@ function estimateInstrCount(ast, state, top_level_number, is_top_level, read)
     #skip
   elseif asttyp == TopNode    # name
     #skip
-  elseif asttyp == GetfieldNode
+  elseif asttyp == GlobalRef
     #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-#    mod = ast.value
+#    mod = ast.mod
 #    name = ast.name
-#    typ = ast.typ
+#    typ = typeof(mod)
     state.non_calls = state.non_calls + 1
   elseif asttyp == QuoteNode
     dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
@@ -3528,7 +3528,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
               dprintln(3,"whole_range_expr = ", whole_range_expr)
               push!(new_body, whole_range_expr) 
 
-#    push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
+#    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
 
               real_args_build = Any[]
               args_type = Expr(:tuple)
@@ -4106,10 +4106,10 @@ function recreateLoopsInternal(new_body, the_parfor :: IntelPSE.ParallelIR.PIRPa
     next_var  = string("#recreate_next_",  (loop_nest_level-1) * 3 + 1)
     next_sym  = symbol(next_var)
 
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "this_nest.lower = ", this_nest.lower))
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "this_nest.step  = ", this_nest.step))
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "this_nest.upper = ", this_nest.upper))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
     push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper))))
     push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym)))
@@ -4120,8 +4120,8 @@ function recreateLoopsInternal(new_body, the_parfor :: IntelPSE.ParallelIR.PIRPa
     push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any)))
     push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any)))
 
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), "loopIndex = ", this_nest.indexVariable))
-    #push!(new_body, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), colon_sym, " ", start_sym))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
     recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4)
 
     push!(new_body, LabelNode(label_before_second_unless))
@@ -4271,7 +4271,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   saved_loopNests = deepcopy(the_parfor.loopNests)
 
 #  for i in all_arg_names
-#    push!(task_body.args, TypedExpr(Any, :call, :println, GetfieldNode(Base,:STDOUT,Any), string(i), " = ", Symbol(i)))
+#    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
 #  end
  
   dprintln(3, "meta = ", meta)
@@ -6174,11 +6174,12 @@ function from_expr(ast::Any, depth, state, top_level)
   elseif asttyp == TopNode    # name
     dprintln(2,"TopNode type")
     #skip
-  elseif asttyp == GetfieldNode
-    mod = ast.value
+  elseif asttyp == GlobalRef
+    mod = ast.mod
     name = ast.name
-    typ = ast.typ
-    dprintln(2,"GetfieldNode type ",typeof(mod))
+   # typ = ast.typ  # FIXME: is this type needed?
+   typ = typeof(mod)
+    dprintln(2,"GlobalRef type ",typeof(mod))
   elseif asttyp == QuoteNode
     value = ast.value
     #TODO: fields: value
