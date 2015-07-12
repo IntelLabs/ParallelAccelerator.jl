@@ -835,6 +835,16 @@ end
 
 previouslyOptimized = Set()
 
+function remove_gensym(node, state, top_level_number, is_top_level, read)
+	dprintln(3,"in node:",node)
+	if !isa(node,GenSym)
+		return nothing
+	end
+	return symbol("loc_sym_"*string(node.id))
+end
+
+
+
 # Converts a given function and signature to use domain IR and parallel IR.
 # It also generates a stub/proxy with the same signature as the original that you can call to get you
 # to the j2c version of the code.
@@ -867,6 +877,12 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
 
   cur_module   = def.module
   ct           = code_typed(function_name, signature)      # get information about code for the given function and signature
+  
+  dprintln(3,"before remove_gensym()",ct[1])
+  
+  AstWalker.AstWalk(ct[1], remove_gensym, nothing)
+
+  dprintln(3,"after remove_gensym()",ct[1])
 
   if offload_mode & PROXYONLY != PROXYONLY
     push!(previouslyOptimized, (function_name, signature))
