@@ -835,7 +835,7 @@ end
 
 previouslyOptimized = Set()
 
-function remove_gensym(node, state, top_level_number, is_top_level, read)
+function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
 	dprintln(3,"in node:",node)
 	#xdump(node,1000)
 	if !isa(node,GenSym)
@@ -844,7 +844,18 @@ function remove_gensym(node, state, top_level_number, is_top_level, read)
 	return symbol("loc_sym_"*string(node.id))
 end
 
+function remove_gensym(ast)
 
+	# gensym types are in the 3rd array in lambda's metadata
+	gensym_types = ast.args[2][3]
+	# go through function body and rename gensyms with symbols
+	AstWalker.AstWalk(ast.args[3], replace_gensym_nodes, nothing)
+	for i in 1:length(gensym_types)
+		gensym_types[i] = [Symbol("loc_sym_"*string(i-1)), gensym_types[i], 18]
+	end
+	append!(ast.args[2][1],gensym_types)
+	ast.args[2][3] = Any[]
+end
 
 # Converts a given function and signature to use domain IR and parallel IR.
 # It also generates a stub/proxy with the same signature as the original that you can call to get you
@@ -881,7 +892,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
   dprintln(3,"before remove_gensym()",ct[1])
   
-  AstWalker.AstWalk(ct[1], remove_gensym, nothing)
+  remove_gensym(ct[1])
 
   dprintln(3,"after remove_gensym()",ct[1])
 
