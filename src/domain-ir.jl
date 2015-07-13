@@ -1123,6 +1123,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(env,"fix type for ", expr, " from ", typ, " => ", args[1].typ)
         typ = args[1].typ
       end
+    elseif is(fun.mod, Base) && is(fun.name, :arraysize)
+      args = normalize_args(state, env_, args)
+      dprintln(env,"got arraysize, args=", args)
+      expr = mk_arraysize(args...)
+      expr.typ = typ
     elseif isdefined(fun.mod, fun.name)
         args_typ = map(typeOfOpr, args)
         dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(fun.mod, fun.name)))
