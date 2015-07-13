@@ -841,7 +841,7 @@ function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
 	if !isa(node,GenSym)
 		return nothing
 	end
-	return symbol("loc_sym_"*string(node.id))
+	return SymbolNode(Symbol("loc_sym_"*string(node.id)), state[node.id+1])
 end
 
 function remove_gensym(ast)
@@ -849,12 +849,26 @@ function remove_gensym(ast)
 	# gensym types are in the 3rd array in lambda's metadata
 	gensym_types = ast.args[2][3]
 	# go through function body and rename gensyms with symbols
-	AstWalker.AstWalk(ast.args[3], replace_gensym_nodes, nothing)
+	AstWalker.AstWalk(ast.args[3], replace_gensym_nodes, gensym_types)
 	for i in 1:length(gensym_types)
 		gensym_types[i] = [Symbol("loc_sym_"*string(i-1)), gensym_types[i], 18]
 	end
-	append!(ast.args[2][1],gensym_types)
-	ast.args[2][3] = Any[]
+
+	new_meta = Any[]
+	push!(new_meta, Any[])
+	# add local GenSym types to meta data
+	push!(new_meta,append!(ast.args[2][1],gensym_types))
+	# assume no free variables
+	push!(new_meta, Any[])
+	# construct local variables
+	for i in 1:length(new_meta[2])
+		# extract symbol from metadata
+		sym = new_meta[2][i][1]
+		if findfirst(ast.args[1],sym) == 0
+			push!(new_meta[1],sym)
+		end
+	end
+	ast.args[2] = new_meta
 end
 
 # Converts a given function and signature to use domain IR and parallel IR.
