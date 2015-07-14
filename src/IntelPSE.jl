@@ -19,7 +19,6 @@ client_intel_task_graph = false
 import Base.show
 
 if haskey(ENV,"INTEL_PSE_MODE")
-  println("Got here 2")
   mode = ENV["INTEL_PSE_MODE"]
   if mode == 0 || mode == "none"
     client_intel_pse_mode = 0
@@ -881,6 +880,10 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   start_time = time_ns()
 
   dprintln(2, "Starting offload for ", function_name)
+  if !isgeneric(function_name)
+    dprintln(1, "method ", function_name, " is not generic.")
+    return nothing
+  end
   m = methods(function_name, signature)
   if length(m) < 1
     error("Method for ", function_name, " with signature ", signature, " is not found")
