@@ -835,7 +835,7 @@ end
 previouslyOptimized = Set()
 
 function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
-	dprintln(3,"in node:",node)
+	dprintln(9,"replace gensym in node:",node)
 	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
