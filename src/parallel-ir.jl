@@ -4132,7 +4132,7 @@ function recreateLoopsInternal(new_body, the_parfor :: IntelPSE.ParallelIR.PIRPa
 end
 
 function recreateLoops(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
-  max_label = getMaxLabel(the_parfor.body)
+  max_label = getMaxLabel(0, the_parfor.body)
   dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
   recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1)
   nothing
