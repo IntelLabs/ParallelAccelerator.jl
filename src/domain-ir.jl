@@ -457,6 +457,7 @@ end
 function typeOfOpr(x)
   if isa(x, Expr) x.typ
   elseif isa(x, SymbolNode) x.typ
+  elseif isa(x, GlobalRef) typeof(eval(x))
   else typeof(x)
   end
 end
@@ -626,7 +627,7 @@ function from_assignment(state, env, expr::Any)
      lhs = freshsym(string(lhs))
   end
   # TODO: handle indirections like x = y so that x gets y's definition instead of just y.
-  push!(state.defs, lhs, VarDef(def.typ, def.flag, rhs))
+  state.defs[lhs] = VarDef(def.typ, def.flag, rhs)
   return mk_expr(typ, head, lhs, rhs)
 end
 
@@ -1115,7 +1116,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         return GlobalRef(m, args[2].value) 
         end
       else
-        dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), "head = ", head, "oldfun = ", oldfun, ", args typ=", args_typ)
+        dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), " head = ", head, " oldfun = ", oldfun, ", args typ=", args_typ)
       end
     end
   elseif isa(fun, GlobalRef)
@@ -1134,8 +1135,13 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       expr.typ = typ
     elseif isdefined(fun.mod, fun.name)
         args_typ = map(typeOfOpr, args)
-        dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(fun.mod, fun.name)))
-        _offload(getfield(fun.mod, fun.name), tuple(args_typ...))
+        gf = getfield(fun.mod, fun.name)
+        if isgeneric(gf)
+          dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
+          _offload(gf, tuple(args_typ...))
+        else
+          dprintln(env,"function ", fun, " not offloaded since it isn't generic.")
+        end
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")
     end
