@@ -773,6 +773,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   local env_ = nextEnv(env)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
+  # new mainline Julia puts functions in Main module but PSE expects the symbol only
+  if isa(fun, GlobalRef) && fun.mod == Main
+	  fun = fun.name
+  end
   if isa(fun, Symbol)
     dprintln(env, "verifyMapOps -> ", verifyMapOps(fun, args))
     if verifyMapOps(fun, args) && (isarray(typ) || isbitarray(typ)) 
