@@ -952,11 +952,11 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     julia_root   = getJuliaRoot()
 
 	# cgen path
-    if client_intel_pse_cgen == 1
+  #  if client_intel_pse_cgen == 1
         cgen.writec(from_root(code, string(function_name)))
         cgen.compile()
         cgen.link()
-    end 
+ #   end 
  
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name,"_j2c_proxy")

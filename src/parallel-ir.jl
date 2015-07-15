@@ -4335,11 +4335,11 @@ function parforToTask(parfor_index, bb_statements, body, state)
     def.j2cflag = convert(Int32,6)
     ccall(:set_j2c_task_arg_types, Void, (Ptr{Uint8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
   end
-  if IntelPSE.client_intel_pse_mode == 5
-    precompile(task_func, all_arg_type)
-  else
-    cfunction(task_func, Int, all_arg_type)
-  end
+#  if IntelPSE.client_intel_pse_mode == 5
+  precompile(task_func, all_arg_type)
+#  else
+ #   cfunction(task_func, Int, all_arg_type)
+#  end
   dprintln(3, "def post = ", def, " type = ", typeof(def))
 
   if DEBUG_LVL >= 3
