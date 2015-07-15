@@ -457,6 +457,7 @@ end
 function typeOfOpr(x)
   if isa(x, Expr) x.typ
   elseif isa(x, SymbolNode) x.typ
+  elseif isa(x, GlobalRef) typeof(eval(x))
   else typeof(x)
   end
 end
@@ -626,7 +627,7 @@ function from_assignment(state, env, expr::Any)
      lhs = freshsym(string(lhs))
   end
   # TODO: handle indirections like x = y so that x gets y's definition instead of just y.
-  push!(state.defs, lhs, VarDef(def.typ, def.flag, rhs))
+  state.defs[lhs] = VarDef(def.typ, def.flag, rhs)
   return mk_expr(typ, head, lhs, rhs)
 end
 
@@ -731,8 +732,8 @@ function normalize_callname(state::IRState, env, fun, args)
       else
       end
     end
-  elseif isa(fun, GetfieldNode)
-    if is(fun.value, Base.Broadcast)
+  elseif isa(fun, GlobalRef)
+    if is(fun.mod, Base.Broadcast)
       if is(fun.name, :broadcast_shape)
         fun = :broadcast_shape
       end
@@ -773,6 +774,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   local env_ = nextEnv(env)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
+  # new mainline Julia puts functions in Main module but PSE expects the symbol only
+  if isa(fun, GlobalRef) && fun.mod == Main
+	  fun = fun.name
+  end
   if isa(fun, Symbol)
     dprintln(env, "verifyMapOps -> ", verifyMapOps(fun, args))
     if verifyMapOps(fun, args) && (isarray(typ) || isbitarray(typ)) 
@@ -1096,7 +1101,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
         dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
         _offload(getfield(env.cur_module, fun), tuple(args_typ...))
-        oldfun = GetfieldNode(env.cur_module, fun, Any)
+        oldfun = GlobalRef(env.cur_module, fun)
       elseif is(fun, :getfield)
         dprintln(env,"eval getfield with args ", args)
         if isa(args[1], Symbol) && isa(args[2], QuoteNode)
@@ -1108,14 +1113,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
           dprintln(env,"module name ", args[1], " fails to resolve")
           throw(err)
         end
-        return GetfieldNode(m, args[2].value, typ) # TODO: fill in the type properly?
+        return GlobalRef(m, args[2].value) 
         end
       else
-        dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), "head = ", head, "oldfun = ", oldfun, ", args typ=", args_typ)
+        dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), " head = ", head, " oldfun = ", oldfun, ", args typ=", args_typ)
       end
     end
-  elseif isa(fun, GetfieldNode)
-    if is(fun.value, Base.Math)
+  elseif isa(fun, GlobalRef)
+    if is(fun.mod, Base.Math)
       # NOTE: we simply bypass all math functions for now
       dprintln(env,"by pass math function ", fun, ", typ=", typ)
       # Fix return type of math functions
@@ -1123,15 +1128,25 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(env,"fix type for ", expr, " from ", typ, " => ", args[1].typ)
         typ = args[1].typ
       end
-    elseif isdefined(fun.value, fun.name)
+    elseif is(fun.mod, Base) && is(fun.name, :arraysize)
+      args = normalize_args(state, env_, args)
+      dprintln(env,"got arraysize, args=", args)
+      expr = mk_arraysize(args...)
+      expr.typ = typ
+    elseif isdefined(fun.mod, fun.name)
         args_typ = map(typeOfOpr, args)
-        dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(fun.value, fun.name)))
-        _offload(getfield(fun.value, fun.name), tuple(args_typ...))
+        gf = getfield(fun.mod, fun.name)
+        if isgeneric(gf)
+          dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
+          _offload(gf, tuple(args_typ...))
+        else
+          dprintln(env,"function ", fun, " not offloaded since it isn't generic.")
+        end
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")
     end
   else
-    dprintln(env,"function call is not GetfieldNode and not translated: ", fun, ", return typ=", typ)
+    dprintln(env,"function call is not GlobalRef and not translated: ", fun, ", return typ=", typ)
   end
   if isa(expr, Nothing)
     if !is(fun, :ccall)

@@ -19,7 +19,6 @@ client_intel_task_graph = false
 import Base.show
 
 if haskey(ENV,"INTEL_PSE_MODE")
-  println("Got here 2")
   mode = ENV["INTEL_PSE_MODE"]
   if mode == 0 || mode == "none"
     client_intel_pse_mode = 0
@@ -152,7 +151,7 @@ end
 
 # Convert a whole function signature in a form of a tuple to something appropriate for calling C code.
 function convert_sig(sig)
-  assert(isa(typeof(sig),Tuple))   # make sure we got a tuple
+  assert(isa(sig,Tuple))   # make sure we got a tuple
   new_tuple = Expr(:tuple)         # declare the new tuple
   # fill in the new_tuple args/elements by converting the individual elements of the incoming signature
   new_tuple.args = [ convert_to_ccall_typ(sig[i])[1] for i = 1:length(sig) ]
@@ -330,8 +329,8 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
     return nothing
   elseif fetyp == DataType
     return nothing
-  elseif fetyp == GetfieldNode
-    func = getfield(func_expr.value, func_expr.name)
+  elseif fetyp == GlobalRef
+    func = getfield(func_expr.mod, func_expr.name)
   elseif fetyp == Expr
     dprintln(3,"head = ", func_expr.head)
     if func_expr.head == :call && func_expr.args[1] == TopNode(:getfield)
@@ -835,15 +834,41 @@ end
 
 previouslyOptimized = Set()
 
-function remove_gensym(node, state, top_level_number, is_top_level, read)
-	dprintln(3,"in node:",node)
+function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
+	dprintln(9,"replace gensym in node:",node)
+	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
 	end
-	return symbol("loc_sym_"*string(node.id))
+	return SymbolNode(Symbol("loc_sym_"*string(node.id)), state[node.id+1])
 end
 
+function remove_gensym(ast)
 
+	# gensym types are in the 3rd array in lambda's metadata
+	gensym_types = ast.args[2][3]
+	# go through function body and rename gensyms with symbols
+	AstWalker.AstWalk(ast.args[3], replace_gensym_nodes, gensym_types)
+	for i in 1:length(gensym_types)
+		gensym_types[i] = [Symbol("loc_sym_"*string(i-1)), gensym_types[i], 18]
+	end
+
+	new_meta = Any[]
+	push!(new_meta, Any[])
+	# add local GenSym types to meta data
+	push!(new_meta,append!(ast.args[2][1],gensym_types))
+	# assume no free variables
+	push!(new_meta, Any[])
+	# construct local variables
+	for i in 1:length(new_meta[2])
+		# extract symbol from metadata
+		sym = new_meta[2][i][1]
+		if findfirst(ast.args[1],sym) == 0
+			push!(new_meta[1],sym)
+		end
+	end
+	ast.args[2] = new_meta
+end
 
 # Converts a given function and signature to use domain IR and parallel IR.
 # It also generates a stub/proxy with the same signature as the original that you can call to get you
@@ -855,6 +880,10 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   start_time = time_ns()
 
   dprintln(2, "Starting offload for ", function_name)
+  if !isgeneric(function_name)
+    dprintln(1, "method ", function_name, " is not generic.")
+    return nothing
+  end
   m = methods(function_name, signature)
   if length(m) < 1
     error("Method for ", function_name, " with signature ", signature, " is not found")
@@ -880,7 +909,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
   dprintln(3,"before remove_gensym()",ct[1])
   
-  AstWalker.AstWalk(ct[1], remove_gensym, nothing)
+  remove_gensym(ct[1])
 
   dprintln(3,"after remove_gensym()",ct[1])
 
@@ -923,11 +952,11 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     julia_root   = getJuliaRoot()
 
 	# cgen path
-    if client_intel_pse_cgen == 1
+  #  if client_intel_pse_cgen == 1
         cgen.writec(from_root(code, string(function_name)))
         cgen.compile()
         cgen.link()
-    end 
+ #   end 
  
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name,"_j2c_proxy")
