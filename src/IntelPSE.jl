@@ -151,7 +151,7 @@ end
 
 # Convert a whole function signature in a form of a tuple to something appropriate for calling C code.
 function convert_sig(sig)
-  assert(isa(typeof(sig),Tuple))   # make sure we got a tuple
+  assert(isa(sig,Tuple))   # make sure we got a tuple
   new_tuple = Expr(:tuple)         # declare the new tuple
   # fill in the new_tuple args/elements by converting the individual elements of the incoming signature
   new_tuple.args = [ convert_to_ccall_typ(sig[i])[1] for i = 1:length(sig) ]
