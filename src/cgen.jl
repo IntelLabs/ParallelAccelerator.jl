@@ -5,7 +5,7 @@ module cgen
 export generate, from_root, writec, compile, link
 verbose = true
 
-#using .ParallelIR
+using ..ParallelIR
 
 _symPre = 0
 _jtypesToctypes = Dict(
