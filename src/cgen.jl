@@ -2,11 +2,9 @@
 # jaswanth.sreeram@intel.com
 
 module cgen
+using ..ParallelIR
 export generate, from_root, writec, compile, link
 verbose = true
-
-#using .ParallelIR
-
 _symPre = 0
 _jtypesToctypes = Dict(
 		Int8	=>	"int8_t",
@@ -1129,14 +1127,15 @@ function resolveFunction_O(func::Symbol, typs)
 	throw(string("Unable to resolve function ", string(func)))
 end
 
-function from_formalargs(params)
+function from_formalargs(params, unaliased=false)
 	s = ""
+	ql = unaliased ? "__restrict" : ""
 	debugp("Compiling formal args: ", params)
 	for p in 1:length(params)
 		if haskey(_symbolTable, params[p])
 			s *= (toCtype(_symbolTable[params[p]])
 				* (isArrayType(_symbolTable[params[p]]) ? "&" : "")
-				* " "
+				* (isArrayType(_symbolTable[params[p]]) ? " $ql " : " ")
 				* canonicalize(params[p])
 				* (p < length(params) ? ", " : ""))
 		end
@@ -1188,7 +1187,7 @@ end
 function dispatch(a::ASTDispatcher, node::Any, args)
 	tgt = typeof(node)
 	if !haskey(a.dt, tgt)
-		dumpSymbolTable(a.dt)
+		#dumpSymbolTable(a.dt)
 		debugp("ERROR: Unexpected node: ", node, " with type = ", tgt)
 		throw("Could not dispatch node")
 	end
@@ -1215,7 +1214,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 	for i in 1:length(jtyp)
 		delim = i < length(jtyp) ? ", " : ""
 		retSlot *= toCtype(jtyp[i]) * 
-			(isScalarType(jtyp[i]) ? "" : "*") * "* ret" * string(i-1) * delim
+			(isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
 		if isArrayType(jtyp[i])
 			typ = toCtype(jtyp[i])
 			allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
@@ -1241,9 +1240,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	bod		=	ast.args[3]
 	returnType = bod.typ
 	typ = returnType
-	f = Dict(ast => functionName)
+	#f = Dict(ast => functionName)
 	bod = from_expr(ast)
 	args = from_formalargs(params)
+	argsunal = from_formalargs(params, true)
 	dumpSymbolTable(_symbolTable)
 	hdr = ""
 	wrapper = ""
@@ -1252,15 +1252,19 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	end
 	hdr = from_header(isEntryPoint)
 	if isEntryPoint
-		wrapper = createEntryPointWrapper(functionName, params, args, returnType) 
+		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
+			createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
-		args *= ", " * foldl((a, b) -> "$a, $b",
-		[toCtype(returnType[i]) * " *ret" * string(i-1) for i in 1:length(returnType)])
+		retargs = ", " * foldl((a, b) -> "$a, $b",
+		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
+
+		args *= retargs
+		argsunal *= retargs
 	else
 		
 		rtyp = toCtype(typ)
 	end
-	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
 	if inEntryPoint
 		inEntryPoint = false
 	end

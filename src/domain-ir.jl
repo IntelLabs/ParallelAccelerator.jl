@@ -775,9 +775,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
   # new mainline Julia puts functions in Main module but PSE expects the symbol only
-  if isa(fun, GlobalRef) && fun.mod == Main
-	  fun = fun.name
-  end
+  #if isa(fun, GlobalRef) && fun.mod == Main
+#	  fun = fun.name
+ # end
   if isa(fun, Symbol)
     dprintln(env, "verifyMapOps -> ", verifyMapOps(fun, args))
     if verifyMapOps(fun, args) && (isarray(typ) || isbitarray(typ)) 
@@ -1128,11 +1128,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(env,"fix type for ", expr, " from ", typ, " => ", args[1].typ)
         typ = args[1].typ
       end
-    elseif is(fun.mod, Base) && is(fun.name, :arraysize)
-      args = normalize_args(state, env_, args)
-      dprintln(env,"got arraysize, args=", args)
-      expr = mk_arraysize(args...)
-      expr.typ = typ
+#    elseif is(fun.mod, Base) && is(fun.name, :arraysize)
+ #     args = normalize_args(state, env_, args)
+  #    dprintln(env,"got arraysize, args=", args)
+   #   expr = mk_arraysize(args...)
+  #    expr.typ = typ
     elseif isdefined(fun.mod, fun.name)
         args_typ = map(typeOfOpr, args)
         gf = getfield(fun.mod, fun.name)

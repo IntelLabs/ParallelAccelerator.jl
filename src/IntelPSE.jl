@@ -151,7 +151,7 @@ end
 
 # Convert a whole function signature in a form of a tuple to something appropriate for calling C code.
 function convert_sig(sig)
-  assert(isa(typeof(sig),Tuple))   # make sure we got a tuple
+  assert(isa(sig,Tuple))   # make sure we got a tuple
   new_tuple = Expr(:tuple)         # declare the new tuple
   # fill in the new_tuple args/elements by converting the individual elements of the incoming signature
   new_tuple.args = [ convert_to_ccall_typ(sig[i])[1] for i = 1:length(sig) ]
@@ -835,7 +835,7 @@ end
 previouslyOptimized = Set()
 
 function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
-	dprintln(3,"in node:",node)
+	dprintln(9,"replace gensym in node:",node)
 	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
@@ -909,7 +909,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
   dprintln(3,"before remove_gensym()",ct[1])
   
-  remove_gensym(ct[1])
+#  remove_gensym(ct[1])
 
   dprintln(3,"after remove_gensym()",ct[1])
 
@@ -952,11 +952,11 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     julia_root   = getJuliaRoot()
 
 	# cgen path
-    if client_intel_pse_cgen == 1
+  #  if client_intel_pse_cgen == 1
         cgen.writec(from_root(code, string(function_name)))
         cgen.compile()
         cgen.link()
-    end 
+ #   end 
  
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name,"_j2c_proxy")
