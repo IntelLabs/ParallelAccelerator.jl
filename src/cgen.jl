@@ -4,6 +4,8 @@
 module cgen
 using ..ParallelIR
 export generate, from_root, writec, compile, link
+import IntelPSE.getPackageRoot
+
 verbose = true
 _symPre = 0
 _jtypesToctypes = Dict(
@@ -55,14 +57,14 @@ function getenv(var::String)
   ENV[var]
 end
 
-function getJuliaRoot()
-	julia_root = getenv("JULIA_ROOT")
-	len_root     = endof(julia_root)
-	if(julia_root[len_root] == '/')
-		julia_root = julia_root[1:len_root-1]
+#= function getPackageRoot()
+	package_root = getenv("JULIA_ROOT")
+	len_root     = endof(package_root)
+	if(package_root[len_root] == '/')
+		package_root = package_root[1:len_root-1]
   	end
-	julia_root
-end
+	package_root
+end =#
 
 globalUDTs = Dict()
 
@@ -72,17 +74,17 @@ function from_header(isEntryPoint::Bool)
 end
 
 function from_includes()
-	julia_root = getJuliaRoot()
+	package_root = getPackageRoot()
 	reduce(*, "", (
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$julia_root/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/j2c-array.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/j2c-array-pert.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/pse-types.h\"\n")
+		"#include \"$package_root/src/intel-runtime/include/pse-runtime.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/j2c-array.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/j2c-array-pert.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/pse-types.h\"\n")
 	)
 end
 
@@ -1316,8 +1318,8 @@ function from_worklist()
 end
 import Base.write
 function writec(s::ASCIIString)
-	julia_root = getJuliaRoot()
-	cgenOutput = "$julia_root/j2c/out.cpp"
+	package_root = getPackageRoot()
+	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
 	cf = open(cgenOutput, "w")
 	write(cf, s)
 	debugp("Done committing cgen code")
@@ -1325,18 +1327,20 @@ function writec(s::ASCIIString)
 end
 
 function compile()
-	julia_root = getJuliaRoot()
-	cgenOutput = "$julia_root/j2c/out.cpp"
-	iccOpts = "-O3"
+	package_root = getPackageRoot()
+	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+	iccOpts = "-O3 --offload-mode=none"
+#	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $julia_root/j2c/out.o $cgenOutput $otherArgs -I$julia_root/src/arena_allocator -qoffload-attribute-target=mic`
+	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
+	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs --offload-mode=none`
 	run(compileCommand)	
 end
 
 function link()
-	julia_root = getJuliaRoot()
-	linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $julia_root/j2c/libout.so.1.0 $julia_root/j2c/out.o -lc $julia_root/intel-runtime/lib/libintel-runtime.so`
+	package_root = getPackageRoot()
+	linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
 	run(linkCommand)
 	debugp("Done cgen linking")
 end
