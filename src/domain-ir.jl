@@ -577,7 +577,7 @@ function mmapRemoveDupArg!(expr)
 	hasDup = true
 	indices[i] = posMap[s]
       else
-	push!(posMap, s, n)
+	posMap[s] = n
 	push!(newarr, arr[i])
 	push!(newinp, f.inputs[i])
         n += 1
