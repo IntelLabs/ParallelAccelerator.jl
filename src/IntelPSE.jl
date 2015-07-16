@@ -1,7 +1,7 @@
 module IntelPSE
 
 export DomainIR, ParallelIR, AliasAnalysis, LD
-export decompose, offload, set_debug_level, getenv
+export decompose, offload, set_debug_level, getenv, getPackageRoot
 
 # MODE for offload
 const TOPLEVEL=1
@@ -62,24 +62,31 @@ function getenv(var::String)
   ENV[var]
 end
 
-function getJuliaRoot()
-  julia_root   = getenv("JULIA_ROOT")
+#= function getPackageRoot()
+  package_root   = getenv("JULIA_ROOT")
   # Strip trailing /
-  len_root     = endof(julia_root)
-  if(julia_root[len_root] == '/')
-    julia_root = julia_root[1:len_root-1]
+  len_root     = endof(package_root)
+  if(package_root[len_root] == '/')
+    package_root = package_root[1:len_root-1]
   end
 
-  return julia_root
+  return package_root
+end
+=#
+
+function getPackageRoot()
+	path = ENV["HOME"]*"/.julia/v0.4/IntelPSE"
 end
 
 function __init__()
-  julia_root = getJuliaRoot()
-  ENV["LD_LIBRARY_PATH"] = string(ENV["LD_LIBRARY_PATH"], ":" , julia_root, "/intel-runtime/lib", ":", julia_root, "/j2c")
+#  package_root = getPackageRoot()
+#  ENV["LD_LIBRARY_PATH"] = string(ENV["LD_LIBRARY_PATH"], ":" , package_root, "/intel-runtime/lib", ":", package_root, "/j2c")
+   package_root = getPackageRoot()
+   ENV["LD_LIBRARY_PATH"] = string(ENV["LD_LIBRARY_PATH"], ":" , package_root, "bin")
 end
 
-julia_root      = IntelPSE.getJuliaRoot()
-runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
+package_root      = IntelPSE.getPackageRoot()
+runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
 
 using CompilerTools
 include("domain-ir.jl")
@@ -111,22 +118,22 @@ function dprintln(level,msgs...)
     end
 end
 
-function pert_shutdown(julia_root)
-  #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime")
+function pert_shutdown(package_root)
+  #runtime_libpath = string(package_root, "/intel-runtime/lib/libintel-runtime")
   eval(quote ccall((:pert_shutdown, $runtime_libpath), Cint, ()) end)
   eval(quote ccall((:FinalizeTiming, $runtime_libpath), Void, ()) end)
 end
 
 pert_inited = false
 
-function pert_init(julia_root, double_buffer::Bool)
+function pert_init(package_root, double_buffer::Bool)
   global pert_inited
   if !pert_inited
     pert_inited = true
-    #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime")
+    #runtime_libpath = string(package_root, "/intel-runtime/lib/libintel-runtime")
     eval(quote (ccall((:InitializeTiming, $runtime_libpath), Void, ())) end)
     eval(quote (ccall((:pert_init,$runtime_libpath), Cint, (Cint,), convert(Cint, $double_buffer))) end)
-    shutdown() = pert_shutdown(julia_root) 
+    shutdown() = pert_shutdown(package_root) 
     atexit(shutdown)
   end
 end
@@ -635,34 +642,37 @@ end
 # It will share the data pointer of the given inp array, and if inp is nothing,
 # the j2c array will allocate fresh memory to hold data.
 # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
-function j2c_array_new(elem_bytes::Int, inp::Union(Array, Nothing), ndim::Int, dims::Tuple)
+  package_root = getPackageRoot()
+  dyn_lib      = string(package_root, "/src/intel-runtime/libout.so.1.0")
+@eval function j2c_array_new(elem_bytes::Int, inp::Union(Array, Nothing), ndim::Int, dims::Tuple)
   # note that C interface mandates Int64 for dimension data
   _dims = Int64[ convert(Int64, x) for x in dims ]
   _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
-  ccall(:j2c_array_new, Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{Uint64}),
+
+  ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{Uint64}),
         convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
 end
 
 # Array size in the given dimension.
-function j2c_array_size(arr::Ptr{Void}, dim::Int)
-  l = ccall(:j2c_array_size, Cuint, (Ptr{Void}, Cuint),
+@eval function j2c_array_size(arr::Ptr{Void}, dim::Int)
+  l = ccall((:j2c_array_size, $dyn_lib), Cuint, (Ptr{Void}, Cuint),
             arr, convert(Cuint, dim))
   return convert(Int, l)
 end
 
 # Retrieve j2c array data pointer, and parameter "own" means caller will
 # handle the memory deallocation of this pointer.
-function j2c_array_to_pointer(arr::Ptr{Void}, own::Bool)
-  ccall(:j2c_array_to_pointer, Ptr{Void}, (Ptr{Void}, Bool), arr, own)
+@eval function j2c_array_to_pointer(arr::Ptr{Void}, own::Bool)
+  ccall((:j2c_array_to_pointer,$dyn_lib), Ptr{Void}, (Ptr{Void}, Bool), arr, own)
 end
 
 # Read the j2c array element of given type at the given (linear) index.
 # If T is Ptr{Void}, treat the element type as j2c array, and the
 # returned array is merely a pointer, not a new object.
-function j2c_array_get(arr::Ptr{Void}, idx::Int, T::Type)
+@eval function j2c_array_get(arr::Ptr{Void}, idx::Int, T::Type)
   nbytes = is(T, Ptr{Void}) ? 0 : sizeof(T)
   _value = Array(T, 1)
-  ccall(:j2c_array_get, Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
+  ccall((:j2c_array_get,$dyn_lib), Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
         convert(Cint, nbytes), arr, convert(Cuint, idx), convert(Ptr{Void}, pointer(_value)))
   return _value[1]
 end
@@ -682,8 +692,8 @@ end
 # deletion (either data pointer is NULL, or refcount > 1).
 # Currently there is no way to cleanly delete an nested j2c
 # array without first converting back to a julia array.
-function j2c_array_delete(arr::Ptr{Void})
-  ccall(:j2c_array_delete, Void, (Ptr{Void},), arr)
+@eval function j2c_array_delete(arr::Ptr{Void})
+  ccall((:j2c_array_delete,$dyn_lib), Void, (Ptr{Void},), arr)
 end
 
 # Dereference a j2c array data pointer.
@@ -949,7 +959,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
      
     off_time_start = time_ns()
   
-    julia_root   = getJuliaRoot()
+    package_root   = getPackageRoot()
 
 	# cgen path
   #  if client_intel_pse_cgen == 1
@@ -966,7 +976,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     # This is the name of the function that j2c generates.
     j2c_name     = string("_",function_name,"_")
     # This is where the j2c dynamic library should be.
-    dyn_lib      = string(julia_root, "/j2c/libout.so.1.0")
+    dyn_lib      = string(package_root, "/src/intel-runtime/libout.so.1.0")
     dprintln(2, "dyn_lib = ", dyn_lib)
   
     # Same the number of statements so we can get the last one.
@@ -1016,7 +1026,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     if client_intel_pse_mode == 1
       if client_intel_task_graph
           # task mode, init runtime without double buffer
-          pert_init(julia_root, false)
+          pert_init(package_root, false)
       end
       run_where = -1
     elseif client_intel_pse_mode == 2
@@ -1084,8 +1094,8 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     dprintln(1, "offload: offload conversion time = ", ns_to_sec(off_time))
     
     if no_precompile == 0
-      precompile(function_name, signature)
-      precompile(proxy_func, signature)
+    #  precompile(function_name, signature)
+    #  precompile(proxy_func, signature)
     end
   
     end_time = time_ns() - start_time
