@@ -909,7 +909,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
   dprintln(3,"before remove_gensym()",ct[1])
   
-  remove_gensym(ct[1])
+#  remove_gensym(ct[1])
 
   dprintln(3,"after remove_gensym()",ct[1])
 
