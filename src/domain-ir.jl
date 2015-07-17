@@ -675,6 +675,18 @@ end
 
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun, args)
+	# remove module info if in Base.broadcast
+	if( isa(fun, GlobalRef) &&  is(fun.mod, Base.Broadcast) )
+#=		if is(fun.name, :broadcast_shape)
+			fun = :broadcast_shape
+		elseif is(fun.name, :broadcast!)
+			fun = :broadcast!
+		else
+			println("---*** new Broadcast?? ",fun)
+		end =#
+		fun = fun.name
+	end
+
   if isa(fun, Symbol)
     if is(fun, :broadcast!)
       dst = lookupConstDefForArg(state, args[2])
@@ -683,6 +695,9 @@ function normalize_callname(state::IRState, env, fun, args)
          is(dst.args[2].value, :jl_new_array)
         # now we are sure destination array is new
         fun   = args[1]
+	if( isa(fun, GlobalRef) && ( is(fun.mod, Base.Broadcast) || is(fun.mod, Base.SparseMatrix) ) )
+		fun = fun.name
+	end
         args  = args[3:end]
         if isa(fun, Symbol)
         elseif isa(fun, SymbolNode)
@@ -729,13 +744,6 @@ function normalize_callname(state::IRState, env, fun, args)
         end
         fun  = :alloc
         args = realArgs
-      else
-      end
-    end
-  elseif isa(fun, GlobalRef)
-    if is(fun.mod, Base.Broadcast)
-      if is(fun.name, :broadcast_shape)
-        fun = :broadcast_shape
       end
     end
   end
