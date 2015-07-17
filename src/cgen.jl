@@ -413,10 +413,10 @@ function from_ccall(args)
 	if isInlineable(fun, args)
 		return from_inlineable(fun, args)
 	end
-	
+
 	if isa(fun, QuoteNode)
 		s = from_expr(fun)
-	elseif isa(fun, Expr) && is(fun.head, :call1)
+	elseif isa(fun, Expr) && ( is(fun.head, :call1) || is(fun.head, :call))
 		s = string(fun.args[2]) #* "/*" * from_expr(fun.args[3]) * "*/"
 	else
 		throw("Invalid ccall format...")
@@ -732,7 +732,27 @@ function resolveCallTarget(args::Array{Any, 1})
 	return M, s, t
 end
 
+function pattern_match_call(ast::Array{Any, 1})
+	# math functions 
+	libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+
+	debugp("pattern matching ",ast)
+	s = ""
+	if( length(ast)==2 && typeof(ast[1])==Symbol && in(ast[1],libm_math_functions) && typeof(ast[2])==SymbolNode && (ast[2].typ==Float64 || ast[2].typ==Float32))
+	  debugp("FOUND ", ast[1])
+	  s = string(ast[1])*"("*from_expr(ast[2].name)*");"
+	end
+	s
+end
+
+
 function from_call(ast::Array{Any, 1})
+	# pattern match math functions to avoid overheads
+	s = pattern_match_call(ast)
+	if(s != "")
+		return s;
+	end
+
 	debugp("Compiling call: ast = ", ast, " args are: ")
 	for i in 1:length(ast)
 		debugp("Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
@@ -1275,7 +1295,7 @@ end
 
 function insert(func::Symbol, name, typs)
 	target = resolveFunction(func, typs)
-	debugp("Resolved function ", func, " : ", name, " : ", typs)
+	debugp("Resolved function ", func, " : ", name, " : ", typs, " target ", target)
 	insert(target, name, typs)
 end
 
