@@ -35,6 +35,9 @@ if haskey(ENV,"INTEL_PSE_MODE")
   else
     println("Unknown INTEL_PSE_MODE = ", mode)
   end
+else
+	#default
+ client_intel_pse_mode = 1
 end
 
 # a hack to make offload function available to domain IR. The assumption is that this
@@ -846,6 +849,7 @@ previouslyOptimized = Set()
 
 function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
 	dprintln(9,"replace gensym in node:",node)
+	#println("replace gensym in node:",node)
 	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
