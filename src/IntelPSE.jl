@@ -711,7 +711,7 @@ end
 # Note that Julia array data are not copied but shared by the J2C array
 # The caller needs to make sure these arrays stay alive so long as the
 # returned j2c array is alive.
-function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr, Array})
+function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr{Void}, Array})
   dims = size(inp)
   _isbits = isbits(T)
   nbytes = _isbits ? sizeof(T) : 0
@@ -734,7 +734,7 @@ end
 # 2. The returned Julia array will share the pointer to J2C array data at leaf level.
 # 3. The input j2c array object will be de-referenced before return, and shall
 #    be later manually freed. 
-function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr, Array})
+function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr{Void}, Array})
   dims = Array(Int, N)
   len  = 1
   for i = 1:N
@@ -761,7 +761,7 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
   return arr
 end
 
-function from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr, Array})
+function from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr{Void}, Array})
    arr = _from_j2c_array(inp, elem_typ, N, ptr_array_dict)
    j2c_array_delete(inp)
    return arr
@@ -1062,7 +1062,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
       # equal to one of the pointers in the ptr_array_dict.  If so, then the C code has returned an
       # array we passed to it as input and so from_j2c_array will get the original array from
       # ptr_array_dict and will alias to the returned array.
-      ptr_array_dict = Dict{Ptr,Array}()
+      ptr_array_dict = Dict{Ptr{Void},Array}()
       #dprintln(2,"Running proxy function.")
       ret_args = Array(Any, $num_rets)
       for i = 1:$num_rets
