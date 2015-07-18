@@ -47,7 +47,7 @@ _Intrinsics = [
 ]
 
 function debugp(a...)
-	verbose && println(a...)
+	#verbose && println(a...)
 end
 
 inEntryPoint = false
@@ -1339,7 +1339,7 @@ end
 import Base.write
 function writec(s::ASCIIString)
 	package_root = getPackageRoot()
-	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+	cgenOutput = "$package_root/src/intel-runtime/tmp.cpp"
 	cf = open(cgenOutput, "w")
 	write(cf, s)
 	debugp("Done committing cgen code")
@@ -1348,7 +1348,14 @@ end
 
 function compile()
 	package_root = getPackageRoot()
+	
+	cgenOutputTmp = "$package_root/src/intel-runtime/tmp.cpp"
 	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+
+	# make cpp code readable
+	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+	run(beautifyCommand)
+
 	iccOpts = "-O3 --offload-mode=none"
 #	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
