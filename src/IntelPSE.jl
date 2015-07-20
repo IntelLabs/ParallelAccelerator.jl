@@ -907,11 +907,9 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   cur_module   = def.module
   ct           = code_typed(function_name, signature)      # get information about code for the given function and signature
   
-  dprintln(3,"before remove_gensym()",ct[1])
-  
+#  dprintln(3,"before remove_gensym()",ct[1])
 #  remove_gensym(ct[1])
-
-  dprintln(3,"after remove_gensym()",ct[1])
+#  dprintln(3,"after remove_gensym()",ct[1])
 
   if offload_mode & PROXYONLY != PROXYONLY
     push!(previouslyOptimized, (function_name, signature))
