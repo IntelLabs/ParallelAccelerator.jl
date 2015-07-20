@@ -88,8 +88,8 @@ function __init__()
    ENV["LD_LIBRARY_PATH"] = string(ENV["LD_LIBRARY_PATH"], ":" , package_root, "bin")
 end
 
-#package_root      = IntelPSE.getPackageRoot()
-#runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
+package_root      = IntelPSE.getPackageRoot()
+runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
 
 using CompilerTools
 include("domain-ir.jl")
@@ -122,8 +122,7 @@ function dprintln(level,msgs...)
 end
 
 function pert_shutdown(package_root)
-  package_root      = IntelPSE.getPackageRoot()
-  runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
+  #runtime_libpath = string(package_root, "/intel-runtime/lib/libintel-runtime")
   eval(quote ccall((:pert_shutdown, $runtime_libpath), Cint, ()) end)
   eval(quote ccall((:FinalizeTiming, $runtime_libpath), Void, ()) end)
 end
@@ -134,8 +133,7 @@ function pert_init(package_root, double_buffer::Bool)
   global pert_inited
   if !pert_inited
     pert_inited = true
-    package_root      = IntelPSE.getPackageRoot()
-    runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
+    #runtime_libpath = string(package_root, "/intel-runtime/lib/libintel-runtime")
     eval(quote (ccall((:InitializeTiming, $runtime_libpath), Void, ())) end)
     eval(quote (ccall((:pert_init,$runtime_libpath), Cint, (Cint,), convert(Cint, $double_buffer))) end)
     shutdown() = pert_shutdown(package_root) 
@@ -1132,14 +1130,10 @@ include("pp.jl")
 include("ParallelComprehension.jl")
 
 @eval function StartTiming(state::String)
-    package_root      = IntelPSE.getPackageRoot()
-    runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
     ccall((:StartTiming, $runtime_libpath), Void, (Ptr{Uint8},), state)
 end
 
 @eval function StopTiming(state::String)
-    package_root      = IntelPSE.getPackageRoot()
-    runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
     ccall((:StopTiming, $runtime_libpath), Void, (Ptr{Uint8},), state)
 end
 
@@ -1153,8 +1147,6 @@ end
 
 #    println("data ", data, "is_scalar ", is_scalar, "dim ", dim, "sizes ", sizes, "max_size ", max_size, "type_size ", type_size);
 
-    package_root      = IntelPSE.getPackageRoot()
-    runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
     ccall((:pert_register_data, $runtime_libpath), Cint, (Ptr{Void}, Cint, Cuint, Ptr{Int64}, Cuint),
     	    data, is_scalar, dim, max_size, type_size)
 end
