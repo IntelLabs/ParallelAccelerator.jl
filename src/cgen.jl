@@ -1357,12 +1357,12 @@ function compile()
 	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
 	run(beautifyCommand)
 
-	iccOpts = "-O3 --offload-mode=none"
+	iccOpts = "-O3"
 #	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
 	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs --offload-mode=none`
+	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
