@@ -49,14 +49,18 @@ ISPRIVATEPARFORLOOP = 32
 
 unique_num = 1
 
-# This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.
+@doc """
+This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.
+"""
 function TypedExpr(typ, rest...)
     res = Expr(rest...)
     res.typ = typ
     res
 end
 
-# Holds the information about a loop in a parfor node.
+@doc """
+Holds the information about a loop in a parfor node.
+"""
 type PIRLoopNest
     indexVariable :: SymbolNode
     lower
@@ -64,18 +68,27 @@ type PIRLoopNest
     step
 end
 
-# Holds the information about a reduction in a parfor node.
+@doc """
+Holds the information about a reduction in a parfor node.
+"""
 type PIRReduction
     reductionVar  :: SymbolNode
     reductionVarInit
     reductionFunc
 end
 
+@doc """
+Holds information about domain operations part of a parfor node.
+"""
 type DomainOperation
     operation
     input_args :: Array{Any,1}
 end
 
+@doc """
+Holds a dictionary from an array symbol to an integer corresponding to an equivalence class.
+All array symbol in the same equivalence class are known to have the same shape.
+"""
 type EquivalenceClasses
   data :: Dict{Symbol,Int64}
 
@@ -84,6 +97,13 @@ type EquivalenceClasses
   end
 end
 
+@doc """
+At some point we realize that two arrays must have the same dimensions but up until that point
+we might not have known that.  In which case they will start in different equivalence classes,
+merge_to and merge_from, but need to be combined into one equivalence class.
+Go through the equivalence class dictionary and for any symbol belonging to the merge_from
+equivalence class, change it to now belong to the merge_to equivalence class.
+"""
 function EquivalenceClassesMerge(ec :: EquivalenceClasses, merge_to :: Symbol, merge_from :: Symbol)
   to_int   = EquivalenceClassesAdd(ec, merge_to)
   from_int = EquivalenceClassesAdd(ec, merge_from)
@@ -99,20 +119,34 @@ function EquivalenceClassesMerge(ec :: EquivalenceClasses, merge_to :: Symbol, m
   nothing
 end
 
+@doc """
+Add a symbol as part of a new equivalence class if the symbol wasn't already in an equivalence class.
+Return the equivalence class for the symbol.
+"""
 function EquivalenceClassesAdd(ec :: EquivalenceClasses, sym :: Symbol)
+  # If the symbol isn't already in an equivalence class.
   if !haskey(ec.data, sym)
+    # Find the maximum equivalence class "m".
     a = collect(values(ec.data))
     m = length(a) == 0 ? 0 : maximum(a)
+    # Create a new equivalence class with this symbol with class "m+1"
     ec.data[sym] = m + 1
   end
   ec.data[sym]
 end
 
+@doc """
+Clear an equivalence class.
+"""
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
   empty!(ec.data)
 end
 
-# The parfor AST type.
+@doc """
+The parfor AST node type.
+While we are lowering domain IR to parfors and fusing we use this representation because it
+makes it easier to associate related statements before and after the loop to the loop itself.
+"""
 type PIRParForAst
     body                                      # holds the body of the innermost loop (outer loops can't have anything in them except inner loops)
     preParFor    :: Array{Any,1}              # do these statements before the parfor
@@ -143,6 +177,12 @@ type PIRParForAst
     end
 end
 
+@doc """
+After lowering, it is necessary to make the parfor body top-level statements so that basic blocks
+can be correctly identified and labels correctly found.  There is a phase in parallel IR where we 
+take a PIRParForAst node and split it into a parfor_start node followed by the body as top-level
+statements followed by parfor_end (also a top-level statement).
+"""
 type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
@@ -151,7 +191,9 @@ end
 
 include("parallel-ir-stencil.jl")
 
-# Pretty printing routine for parfor AST nodes.
+@doc """
+Overload of Base.show to pretty print for parfor AST nodes.
+"""
 function show(io::IO, pnode::IntelPSE.ParallelIR.PIRParForAst)
     println(io,"")
     if pnode.instruction_count_expr != nothing
@@ -210,6 +252,11 @@ end
 
 export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, set_debug_level, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, createVarSet, createVarDict, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRPreEq, PIRTaskGraphMode, PIRPolyhedral
 
+@doc """
+Given an array of outputs in "outs", form a return expression.
+If there is only one out then the args of :return is just that expression.
+If there are multiple outs then form a tuple of them and that tuple goes in :return args.
+"""
 function mk_return_expr(outs)
     if length(outs) == 1
         return TypedExpr(outs[1].typ, :return, outs[1])
@@ -222,7 +269,10 @@ function mk_return_expr(outs)
     end
 end
 
-# Create an assignment expression AST node given a left and right-hand side.
+@doc """
+Create an assignment expression AST node given a left and right-hand side.
+The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
+"""
 function mk_assignment_expr(lhs, rhs)
     if(typeof(lhs) == SymbolNode)
         expr_typ = lhs.typ
@@ -233,26 +283,40 @@ function mk_assignment_expr(lhs, rhs)
     TypedExpr(expr_typ, symbol('='), lhs, rhs)
 end
 
-# Create an expression whose value is the length of the input array.
+@doc """
+Create an expression whose value is the length of the input array.
+"""
 function mk_arraylen_expr(x, dim)
     TypedExpr(Int, :call, TopNode(:arraysize), :($x), dim)
 end
 
+@doc """
+Create an expression that references something inside ParallelIR.
+In other words, returns an expression the equivalent of IntelPSE.ParallelIR.sym where sym is an input argument to this function.
+"""
 function mk_parallelir_ref(sym, ref_type=Function)
     inner_call = TypedExpr(Module, :call, TopNode(:getfield), :IntelPSE, QuoteNode(:ParallelIR))
     TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
 end
 
+@doc """
+Returns an expression that convert "ex" into a another type "new_type".
+"""
 function mk_convert(new_type, ex)
     TypedExpr(new_type, :call, TopNode(:convert), new_type, ex)
 end
 
-# Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.
+@doc """
+Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.
+"""
 function mk_tupleref_expr(tuple_var, index, typ)
     TypedExpr(typ, :call, TopNode(:tupleref), tuple_var, index)
 end
 
-# Allocate and initialize a 1D Julia array.
+@doc """
+Return an expression that allocates and initializes a 1D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and a "length".
+"""
 function mk_alloc_array_1d_expr(elem_type, atype, length)
   dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
   ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
@@ -281,7 +345,10 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        0)
 end
 
-# Allocate and initialize a 2D Julia array.
+@doc """
+Return an expression that allocates and initializes a 2D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2".
+"""
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
   dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
   ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
@@ -302,12 +369,16 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        0)
 end
 
-
+@doc """
+Returns true if the incoming type in "typ" is an array type.
+"""
 function isArrayType(typ)
   return (typ.name == Array.name)
 end
 
-# Return the type of an Array
+@doc """
+Returns the element type of an Array.
+"""
 function getArrayElemType(array::SymbolNode)
   assert(typeof(array) == SymbolNode)
   if array.typ.name == Array.name
@@ -319,14 +390,18 @@ function getArrayElemType(array::SymbolNode)
   end
 end
 
-# Return the number of dimensions of an Array
+@doc """
+Return the number of dimensions of an Array.
+"""
 function getArrayNumDims(array::SymbolNode)
   assert(typeof(array) == SymbolNode)
   assert(array.typ.name == Array.name)
   array.typ.parameters[2]
 end
 
-# Return the type of an Array
+@doc """
+Returns the element type of an Array.
+"""
 function getArrayElemType(array::DataType)
   if array.name == Array.name
     array.parameters[1]
@@ -337,6 +412,9 @@ function getArrayElemType(array::DataType)
   end
 end
 
+@doc """
+Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
+"""
 function augment_sn(x)
   if typeof(x) == Int64
     return x
@@ -345,7 +423,10 @@ function augment_sn(x)
   end
 end
 
-# Return a new AST node that corresponds to getting the index_var index from the array array_name.
+@doc """
+Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
+"""
 function mk_arrayref1(array_name, index_vars, inbounds)
   dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
@@ -370,7 +451,7 @@ end
 
 function createStateVar(state, name, typ, access)
   new_temp_sym = symbol(name)
-  addStateVar(state, new_var(new_temp_sym, typ, access))
+  CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
   SymbolNode(new_temp_sym, typ)
 end
 
@@ -464,11 +545,7 @@ type expr_state
   # If two arrays have the same dictionary value, they are equal in size.
   array_length_correlation :: Dict{Symbol,Int}
   symbol_array_correlation :: Dict{Array{Symbol,1},Int}
-  param :: Array{Symbol}
-  meta  :: Array{Any}
-  meta2 :: Set
-  meta2_typed :: Dict{Symbol,Array{Any,1}}
-  num_var_assignments :: Dict{Symbol,Int}
+  lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
   max_label :: Int # holds the max number of all LabelNodes
 
   # Initialize the state for parallel IR translation.
@@ -620,7 +697,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   for i = 1:num_dim_inputs
     parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
     parfor_index_sym = symbol(parfor_index_var)
-    addStateVar(state,new_var(parfor_index_sym,Int,ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
     push!(parfor_index_syms, parfor_index_sym)
   end
 
@@ -672,9 +749,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     push!(pre_statements,array1_start)
     push!(pre_statements,array1_step)
     push!(pre_statements,array1_len)
-    addStateVar(state,new_var(symbol(save_array_start),Int,ISASSIGNEDONCE | ISASSIGNED))
-    addStateVar(state,new_var(symbol(save_array_step),Int,ISASSIGNEDONCE | ISASSIGNED))
-    addStateVar(state,new_var(symbol(save_array_len),Int,ISASSIGNEDONCE | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(save_array_start, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
     push!(save_array_lens, save_array_len)
 
     loopNests[num_dim_inputs - i + 1] =
@@ -690,7 +767,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
   reduction_output_snode = SymbolNode(symbol(reduction_output_name), out_type)
   dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-  addStateVar(state,new_var(symbol(reduction_output_name),out_type,ISASSIGNED))
+  CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.lambdaInfo)
   push!(post_statements, reduction_output_snode)
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
@@ -832,7 +909,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   for i = 1:num_dim_inputs
     parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
     parfor_index_sym = symbol(parfor_index_var)
-    addStateVar(state,new_var(parfor_index_sym,Int,ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
     push!(parfor_index_syms, parfor_index_sym)
   end
 
@@ -874,7 +951,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_arrays[1],i))
     # add that assignment to the set of statements to execute before the parfor
     push!(pre_statements,array1_len)
-    addStateVar(state,new_var(symbol(save_array_len),Int,ISASSIGNEDONCE | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
     push!(save_array_lens, save_array_len)
 
     loopNests[num_dim_inputs - i + 1] =
@@ -886,7 +963,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   # add local vars to state
   for (v, d) in dl.locals
-    addStateVar(state, new_var(v, d.typ, d.flag))
+    CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
   end
 
   dprintln(3,"indexed_arrays = ", indexed_arrays)
@@ -946,7 +1023,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
     out_type = temp_type
     dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
-    addStateVar(state,new_var(symbol(new_temp_name),temp_type,ISASSIGNEDONCE | ISCONST | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
     append!(post_statements, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(map( x -> x.name, input_arrays), temp_type)), new_temp_snode])
   end
@@ -1027,7 +1104,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   for i = 1:num_dim_inputs
     parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
     parfor_index_sym = symbol(parfor_index_var)
-    addStateVar(state,new_var(parfor_index_sym,Int,ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
     push!(parfor_index_syms, parfor_index_sym)
   end
 
@@ -1073,7 +1150,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_arrays[1],i))
     # add that assignment to the set of statements to execute before the parfor
     push!(pre_statements,array1_len)
-    addStateVar(state,new_var(symbol(save_array_len),Int,ISASSIGNEDONCE | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
     push!(save_array_lens, save_array_len)
 
     loopNests[num_dim_inputs - i + 1] =
@@ -1085,7 +1162,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
   # add local vars to state
   for (v, d) in dl.locals
-    addStateVar(state, new_var(v, d.typ, d.flag))
+    CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
   end
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
@@ -1124,7 +1201,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
       throw(string("Only arrays up to two dimensions supported in parallel IR."))
     end
     # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
-    addStateVar(state,new_var(symbol(new_array_name),Array{dl.outputs[i],num_dim_inputs},ISASSIGNEDONCE | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
     # add the statement to create the new output array to the set of statements to execute before the parfor
     push!(pre_statements,new_ass_expr)
     nans = symbol(new_array_name)
@@ -1166,7 +1243,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     new_temp_name  = string("parallel_ir_tuple_ret_",get_unique_num())
     new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
     dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
-    addStateVar(state,new_var(symbol(new_temp_name),temp_type,ISASSIGNEDONCE | ISCONST | ISASSIGNED))
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
     append!(post_statements, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(new_array_symbols, temp_type)), new_temp_snode])
 
@@ -1243,69 +1320,29 @@ end
 
 # :lambda expression
 # ast = [ parameters, meta (local, types, etc), body ]
-function from_lambda(ast::Array{Any,1}, depth, state)
+function from_lambda(lambda :: Expr, depth, state)
   dprintln(4,"from_lambda starting")
-  assert(length(ast) == 3)
-  param = ast[1]
-  meta  = ast[2]
-  body  = ast[3]
 
-  save_param = state.param
-  save_meta  = state.meta
-  save_meta2 = state.meta2
-  save_meta2_typed = state.meta2_typed
+  save_lambdaInfo  = state.lambdaInfo
+  state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(lambda)
+  body = CompilerTools.LambdaHandling.getBody(lambda)
 
-  state.param = param
-  state.meta  = meta
-  state.meta2 = createVarSet(meta[1])
-  state.meta2_typed = createVarDict(meta[2])
-  dprintln(3,"state.meta2 = ",state.meta2)
-  dprintln(3,"state.meta2_typed = ",state.meta2_typed)
+  dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
   body = get_one(from_expr(body, depth, state, false))
   dprintln(4,"from_lambda after from_expr")
-  ast = Array(Any, 3)
-  assert(length(meta) >= 2)
-  dprintln(3,"meta[1] = ", meta[1], " type = ", typeof(meta[1]))
-  dprintln(3,"meta[2] = ", meta[2], " type = ", typeof(meta[2]))
-  meta[1] = Any[]
-  meta[2] = Any[]
 
   symbol_assigns = Dict{Symbol,Int}()
   AstWalk(body, count_assignments, symbol_assigns)
 
-  for i in state.meta2
-    dprintln(3, "from_lambda inspecting variable usage for ", i)
-    if haskey(symbol_assigns, i)
-      num_assigns = symbol_assigns[i]
-      dprintln(3, "symbols_assigns = ", num_assigns)
-      push!(meta[1], i)
-      if num_assigns > 1
-        new_assign_state = ISASSIGNED
-      else
-        new_assign_state = ISASSIGNED | ISASSIGNEDONCE
-      end
-      push!(meta[2], updateAssignState(state.meta2_typed[i], new_assign_state))
-    end
-  end
-  for i in param
-    push!(meta[2], state.meta2_typed[i])
-  end
+  CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  dprintln(3,"meta[1] = ", meta[1], " type = ", typeof(meta[1]))
-  dprintln(3,"meta[2] = ", meta[2], " type = ", typeof(meta[2]))
-  ast[1] = param
-  ast[2] = meta
-  ast[3] = body
+  lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+  dprintln(3,"new lambda = ", lambda)
 
-  state.param = save_param
-  state.meta  = save_meta
-  state.meta2 = save_meta2
-  state.meta2_typed = save_meta2_typed
-
-#throw(string("testing"))
+  state.lambdaInfo = save_lambdaInfo
 
   dprintln(4,"from_lambda ending")
-  return ast
+  return lambda
 end
 
 # Is a node an assignment expression node.
@@ -1498,38 +1535,11 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
   new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
   dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
   # Add the new var to the list of variables for the function.
-  addStateVar(state,new_var(symbol(new_temp_name),temp_type,ISASSIGNEDONCE | ISCONST | ISASSIGNED))
+  CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
   # Two postParFor statements are needed.  The first to assign a newly created tuple with the outputs
   # into a tuple variable and then in the second to return that tuple variable.
   ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(rhs_order, temp_type)), new_temp_snode], rhs_order)
-end
-
-function eliminateStateVar(state, x)
-  delete!(state.meta2, x)
-  delete!(state.meta2_typed, x)
-end
-
-# Add a new variable to the set of variables that get merged into the function's variable list.
-function addStateVar(state, x)
-  if in(x.name, state.meta2)
-    state.meta2_typed[x.name][2] = x.typ
-    state.meta2_typed[x.name][3] = x.access_info
-    dprintln(3, "addStateVar variable ", x.name, " already exists with type ", state.meta2_typed[x.name])
-    return true
-  end
-
-  push!(state.meta2, x.name)
-  state.meta2_typed[x.name] = [x.name, x.typ, x.access_info]
-  dprintln(3,"addStateVar = ", x, " length = ", length(state.meta2_typed))
-
-  if (x.access_info & ISASSIGNEDONCE) != 0
-    state.num_var_assignments[x.name] = 2
-  else
-    state.num_var_assignments[x.name] = 1
-  end
-
-  return false
 end
 
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
@@ -1559,7 +1569,7 @@ function createRetTupleType(rets :: Array{SymbolNode,1}, unique_id, state)
   new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
   new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
   dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
-  addStateVar(state,new_var(symbol(new_temp_name),temp_type,ISASSIGNEDONCE | ISCONST | ISASSIGNED))
+  CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
   new_temp_snode
 end
@@ -3122,7 +3132,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
                   if getSName(last_node.args[i]) == getSName(new_rhs)
                     dprintln(3,"Removing an unnecessary assignment statement in a fusion extended assignment.")
                     # Found the variable to replace in the real output list so replace it.
-                    eliminateStateVar(state, last_node.args[i].name)
+                    CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, last_node.args[i].name)
                     last_node.args[i].name = getSName(new_lhs)
                     removed_assignment = true
                     break
@@ -3145,7 +3155,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
                   dprintln(3,"Removing an unnecessary assignment statement.")
                   # ...replace with the left-hand side of the second assignment.
                   last_node.args[1] = new_lhs
-                  eliminateStateVar(state, getSName(prev_lhs))
+                  CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, getSName(prev_lhs))
                   continue
                 end
               end
@@ -4640,7 +4650,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
   if !in(lhsName, statement_live_info.live_out) && hasNoSideEffects(rhs)
     dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
     # FIX FIX FIX...is this safe?
-    eliminateStateVar(state, lhsName)
+    #CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, lhsName)
     # Eliminate the statement.
     return [], nothing
   end
@@ -4719,12 +4729,6 @@ function from_assignment(ast::Array{Any,1}, depth, state)
     out_typ = state.meta2_typed[lhs][2]
 #    out_typ = nothing
 #    throw(string("unknown RHS type in from_assignment."))
-  end
-
-  if haskey(state.num_var_assignments, lhs)
-    state.num_var_assignments[lhs] = state.num_var_assignments[lhs] + 1
-  else
-    state.num_var_assignments[lhs] = 1
   end
 
   return [SymbolNode(lhs, out_typ), rhs], out_typ
@@ -4920,7 +4924,6 @@ function remove_dead(node, data::RemoveDeadState, top_level_number, is_top_level
           if !in(lhs_sym, live_info.live_out)
             dprintln(3,"remove_dead lhs is NOT live out")
             if hasNoSideEffects(rhs)
-              # FIX FIX FIX...eliminateStateVar here for lhs?
               dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
               return Any[]
             else
@@ -4999,7 +5002,6 @@ function remove_no_deps(node, data::RemoveNoDepsState, top_level_number, is_top_
           if !in(lhs_sym, live_info.live_out)
             dprintln(3,"remove_no_deps lhs is NOT live out")
             if hasNoSideEffects(rhs)
-              # FIX FIX FIX...eliminateStateVar here for lhs?
               dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
               return Any[]
             else
@@ -6068,7 +6070,7 @@ function from_expr(ast::Any, depth, state, top_level)
     typ  = ast.typ
     dprintln(2,head, " ", args)
     if head == :lambda
-        args = from_lambda(args,depth,state)
+        ast = from_lambda(ast, depth, state)
     elseif head == :body
         dprintln(3,"Processing body start")
         args = from_exprs(args,depth+1,state)
@@ -6158,6 +6160,9 @@ function from_expr(ast::Any, depth, state, top_level)
     elseif head == :assert
         args = from_exprs(args,depth,state)
     elseif head == :boundscheck
+        # skip
+    elseif head == :meta
+        # skip
     else
         #println("from_expr: unknown Expr head :", head)
         throw(string("from_expr: unknown Expr head :", head))
