@@ -577,7 +577,7 @@ function mmapRemoveDupArg!(expr)
 	hasDup = true
 	indices[i] = posMap[s]
       else
-	push!(posMap, s, n)
+	setindex!(posMap, n, s)
 	push!(newarr, arr[i])
 	push!(newinp, f.inputs[i])
         n += 1
@@ -661,7 +661,7 @@ function normalize_args(state::IRState, env, args)
       newVar = freshsym("arg")
       typ = isa(arg, Expr) ? arg.typ : Any
       # set flag [is assigned once][is const][is assigned by inner function][is assigned][is captured]
-      push!(state.defs, newVar, VarDef(typ, 16+8, arg))
+      setindex!(state.defs, VarDef(typ, 16+8, arg), newVar)
       emitStmt(state, mk_expr(typ, :(=), newVar, arg))
       j = j + 1
       args[j] = SymbolNode(newVar, typ)
