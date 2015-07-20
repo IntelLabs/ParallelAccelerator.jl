@@ -3,6 +3,7 @@
 
 module cgen
 using ..ParallelIR
+using ..IntelPSE
 export generate, from_root, writec, compile, link
 import IntelPSE.getPackageRoot
 
@@ -1163,7 +1164,7 @@ function from_formalargs(params, unaliased=false)
 		end
 	end
 	debugp("Formal args are: ", s)
-	debugp("Julia root is: ", getenv("JULIA_ROOT"))
+	debugp("Packege root is: ", IntelPSE.getPackageRoot())
 	s
 end
 
