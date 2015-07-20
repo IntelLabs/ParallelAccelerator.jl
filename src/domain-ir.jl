@@ -1227,6 +1227,8 @@ function from_expr(state, env, ast)
         # skip?
     elseif is(head, :gotoifnot)
         # ?
+    elseif is(head, :meta)
+        # skip
     else
         throw(string("from_expr: unknown Expr head :", head))
     end
