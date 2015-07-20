@@ -1091,7 +1091,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl.genBody(indexed_arrays), dl, indexed_arrays)
   state.max_label = max_label
-  out_body = [out_body, nested_body...]
+  out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
   assert(isa(out_body,Array))
   oblen = length(out_body)
@@ -2325,7 +2325,7 @@ function fuse(body, body_index, cur, state)
 
     # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
     # prevParFor where the array is in allocs_to_eliminate.
-    prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor),
+    prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
                               map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
     dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
@@ -2345,7 +2345,7 @@ function fuse(body, body_index, cur, state)
     else
       num_cur_sub = 1
     end
-    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-num_prev_sub], cur_parfor.postParFor[1:end-num_cur_sub], merged_output ]
+    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-num_prev_sub]; cur_parfor.postParFor[1:end-num_cur_sub]; merged_output ]
     dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
 
     # original_domain_nodes - simple append
@@ -4747,7 +4747,7 @@ function from_call(ast::Array{Any,1}, depth, state)
   end
   args = from_exprs(args,depth+1,state)
 
-  return [fun, args]
+  return [fun; args]
 end
 
 # Expands FusionSentinel assignments on a node-by-node basis.
@@ -4947,7 +4947,7 @@ end
 # Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.
 function insert_no_deps_beginning(node, data::RemoveNoDepsState, top_level_number, is_top_level, read)
   if is_top_level && top_level_number == 1
-    return [data.top_level_no_deps, node]
+    return [data.top_level_no_deps; node]
   end
   nothing
 end
