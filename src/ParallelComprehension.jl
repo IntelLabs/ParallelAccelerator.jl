@@ -103,10 +103,10 @@ IntelPSE.set_debug_level(3)
   return a
 end
 
-IntelPSE.offload(test, ())
+test2 = IntelPSE.offload(test, ())
 
 function main()
-  a = test()
+  a = test2()
   println(a)
 end
 

@@ -1,6 +1,7 @@
 module DomainIR
 
 import CompilerTools.AstWalker
+import ..IntelPSE
 
 # List of Domain IR Operators
 #
@@ -651,7 +652,6 @@ function from_call(state, env, expr::Any)
     isa(args[1], Expr) &&
     args[1].head == :call &&
     isa(args[1].args[1], GlobalRef) &&
-    args[1].args[1].mod == Main &&
     args[1].args[1].name == :cartesianarray
       remove_typeassert = true
   end
@@ -802,7 +802,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
   # new mainline Julia puts functions in Main module but PSE expects the symbol only
-  if isa(fun, GlobalRef) && fun.mod == Main
+  if isa(fun, GlobalRef) && (fun.mod == Main || fun.mod == IntelPSE)
 	  fun = fun.name
   end
   if isa(fun, Symbol)
@@ -858,7 +858,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       ndim = length(dimExp)   # num of dimensions
       argstyp = Any[ Int for i in 1:ndim ] 
       local mapExp = args[1]     # first argument is the lambda
-      if isa(mapExp, GlobalRef) && mapExp.mod == Main
+      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == IntelPSE)
         mapExp = mapExp.name
       end
       if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && isdefined(env.cur_module, mapExp) && !isdefined(Base, mapExp) # only handle functions in current or Main module
