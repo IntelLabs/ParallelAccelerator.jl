@@ -1292,7 +1292,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     else
 		  args = retargs
     end
-		argsunal *= retargs
+		argsunal *= ", "*retargs
 	else
 		
 		rtyp = toCtype(typ)
