@@ -1289,10 +1289,11 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
     if length(args) > 0
 		  args *= ", " * retargs
+		argsunal *= ", "*retargs
     else
 		  args = retargs
+		  argsunal = retargs
     end
-		argsunal *= ", "*retargs
 	else
 		
 		rtyp = toCtype(typ)
