@@ -1227,11 +1227,17 @@ end
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp)
-	actualParams = 
-		mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * 
-		", " * foldl((a, b) -> "$a, $b",
+  if length(params) > 0
+    params = mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * ", "
+  else
+    params = ""
+  end
+	actualParams = params * foldl((a, b) -> "$a, $b",
 		[(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
-	wrapperParams = "int run_where, $args"
+	wrapperParams = "int run_where"
+  if length(args) > 0
+    wrapperParams *= ", $args"
+  end
 	allocResult = ""
 	retSlot = ""
 	for i in 1:length(jtyp)
@@ -1278,10 +1284,14 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
 			createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
-		retargs = ", " * foldl((a, b) -> "$a, $b",
+		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
 
-		args *= retargs
+    if length(args) > 0
+		  args *= ", " * retargs
+    else
+		  args = retargs
+    end
 		argsunal *= retargs
 	else
 		
