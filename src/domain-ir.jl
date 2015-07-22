@@ -198,9 +198,10 @@ Look up a definition of a variable only when it is const or assigned once.
 Return nothing if none is found.
 """
 function lookupConstDef(state::IRState, s::Union{Symbol, SymbolNode, GenSym})
-  def = lookupDef(state, s)
-  # flag bits are [is assigned once][is const][is assigned by inner function][is assigned][is captured]
-  if !is(def, nothing) && (def.flag & (16 + 8)) != 0
+  def = get(state.defs, s, nothing)
+  # we assume all GenSym is assigned once 
+  desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
+  if !is(def, nothing) && (desc & (ISASSIGNEDONCE | ISCONST)) != 0
     return def
   end
   return nothing
@@ -679,6 +680,9 @@ end
 
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun, args)
+  if isa(fun, GlobalRef)
+    fun = fun.name
+  end
   if isa(fun, Symbol)
     if is(fun, :broadcast!)
       dst = lookupConstDefForArg(state, args[2])
@@ -688,6 +692,9 @@ function normalize_callname(state::IRState, env, fun, args)
         # now we are sure destination array is new
         fun   = args[1]
         args  = args[3:end]
+        if isa(fun, GlobalRef)
+          fun = fun.name
+        end
         if isa(fun, Symbol)
         elseif isa(fun, SymbolNode)
           fun = lookupConstDef(state, fun.name)
@@ -732,12 +739,6 @@ function normalize_callname(state::IRState, env, fun, args)
       else
       end
     end
-  elseif isa(fun, GlobalRef)
-    if is(fun.mod, Base.Broadcast)
-      if is(fun.name, :broadcast_shape)
-        fun = :broadcast_shape
-      end
-    end
   end
   return (fun, args)
 end
@@ -750,12 +751,12 @@ function inline_select(env, state, arr)
     # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
     def = lookupConstDef(state, arr.name)
     if !isa(def, Nothing)  
-      if isa(def.rhs, Expr) && is(def.rhs.head, :call) 
-        assert(length(def.rhs.args) > 2)
-        if is(def.rhs.args[1], :getindex)
-          arr = def.rhs.args[2]
-          range_extra = def.rhs.args[3:end]
-        elseif def.rhs.args[1] == TopNode(:_getindex!) # getindex gets desugared!
+      if isa(def, Expr) && is(def.head, :call) 
+        assert(length(def.args) > 2)
+        if is(def.args[1], :getindex)
+          arr = def.args[2]
+          range_extra = def.args[3:end]
+        elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
           error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
         end
         dprintln(env, "inline-select: arr = ", arr, " range = ", range_extra)
@@ -831,6 +832,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       ndim = length(dimExp)   # num of dimensions
       argstyp = Any[ Int for i in 1:ndim ] 
       local mapExp = args[1]     # first argument is the lambda
+      if isa(mapExp, GlobalRef) 
+        mapExp = mapExp.name
+      end
       if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && isdefined(env.cur_module, mapExp) && !isdefined(Base, mapExp) # only handle functions in current or Main module
         dprintln(env,"function for cartesianarray: ", mapExp, " methods=", methods(getfield(env.cur_module, mapExp)), " argstyp=", argstyp)
         m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
@@ -1007,7 +1011,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
                                       mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
       elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
         def = lookupConstDefForArg(state, args[2])
-        (start, step, final) = from_range(def.rhs)
+        (start, step, final) = from_range(def)
         expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
                                       mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
       else
