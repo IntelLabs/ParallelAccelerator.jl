@@ -1,4 +1,5 @@
 import CompilerTools.AstWalker
+import CompilerTools
 
 export @replace_comprehensions
 
@@ -37,6 +38,8 @@ function parallelize(comp, typ)
   block.args[2].args[1].args[1] = orig
   block.args[2].args[1].args[2:end] = [var.args[1] for var in comp.args[2:end]]
 
+#  esc(block)
+#  @eval Main.$compreFun(1)
   @eval $block
 
 	constructor = :(cartesianarray($compreFun, $typ, ())::Array{$typ, $(length(comp.args[2:end]))})
@@ -89,9 +92,11 @@ function process_node(node, state, top_level_number, is_top_level, read)
 end
 
 macro replace_comprehensions(func)
+	func = CompilerTools.constant_fold(func)
+	println(func)
 	AstWalker.AstWalk(func, process_node, nothing)
   println(func)
-  return eval(func)
+  return esc(func)
 end
 #=
 using IntelPSE

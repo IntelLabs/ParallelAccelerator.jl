@@ -860,18 +860,25 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       ndim = length(dimExp)   # num of dimensions
       argstyp = Any[ Int for i in 1:ndim ] 
       local mapExp = args[1]     # first argument is the lambda
+      #println("mapExp ", mapExp)
+      #dump(mapExp,1000)
       if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == IntelPSE)
         mapExp = mapExp.name
       end
-      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && isdefined(env.cur_module, mapExp) && !isdefined(Base, mapExp) # only handle functions in current or Main module
-        dprintln(env,"function for cartesianarray: ", mapExp, " methods=", methods(getfield(env.cur_module, mapExp)), " argstyp=", argstyp)
-        m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+
+	if(isdefined(IntelPSE, mapExp))
+		m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+	else
+          m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+        end
+	dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
         assert(length(m) > 0)
         mapExp = m[1].func.code
       elseif isa(mapExp, SymbolNode)
         mapExp = lookupConstDefForArg(state, mapExp)
       end
-      assert(isa(mapExp, LambdaStaticData))
+      @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
       # call typeinf since Julia doesn't do it for us
       # and we can figure out the element type from mapExp's return type
       (tree, ety)=Core.Inference.typeinf(mapExp, Tuple{argstyp...}, Base.svec())
