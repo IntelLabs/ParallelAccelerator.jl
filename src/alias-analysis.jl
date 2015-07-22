@@ -330,21 +330,21 @@ function from_expr(state, env, ast)
   return Unknown
 end
 
-# (:lambda, {param, meta@{localvars, types, freevars}, body})
-function analyze_lambda_body(body, param, meta_typed, liveness)
+function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo, liveness)
   local state = init_state(liveness)
   dprintln(2, "AA ", isa(body, Expr), " ", is(body.head, :body)) 
   # FIXME: surprisingly the first value printed above is false!
-  for (v, (u,t,m)) in meta_typed
-    if !(DomainIR.isarray(t) || DomainIR.isbitarray(t))
+  for (v, vd) in lambdaInfo.var_defs
+    if !(DomainIR.isarray(vd.typ) || DomainIR.isbitarray(vd.typ))
       update_notarray(state, v)
     end
   end
-  for v in param
+  for v in lambdaInfo.input_params
+    vtyp = CompilerTools.LambdaHandling.getType(v, lambdaInfo)
     # Note we assume all input parameters do not aliasing each other,
     # which is a very strong assumption. This may require reconsideration.
     # Update: changed to assum nothing by default.
-    if DomainIR.isarray(meta_typed[v][2]) || DomainIR.isbitarray(meta_typed[v][2])
+    if DomainIR.isarray(vtyp) || DomainIR.isbitarray(vtyp)
       #update_node(state, v, next_node(state))
       update_unknown(state, v)
     end
@@ -372,19 +372,9 @@ function analyze_lambda_body(body, param, meta_typed, liveness)
   return unique
 end
 
-# (:lambda, {param, meta@{localvars, types, freevars}, body})
-function analyze_lambda(expr, liveness)
-  local head = expr.head
-  local ast  = expr.args
-  assert(length(ast) == 3)
-  local param = ast[1]
-  local meta  = ast[2] # { {Symbol}, {{Symbol,Type,Int}}, {Symbol,Type,Int} }
-  local body  = ast[3]
-  local meta2 = Dict{Symbol, Array{Any}}()
-  for info in meta[2]
-    meta2[info[1]] = info
-  end
-  analyze_lambda_body(body, param, meta2, liveness)
+function analyze_lambda(expr :: Expr, liveness)
+  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(expr)
+  analyze_lambda_body(CompilerTools.LambdaHandling.getBody(expr), lambdaInfo, liveness)
 end
 
 end
