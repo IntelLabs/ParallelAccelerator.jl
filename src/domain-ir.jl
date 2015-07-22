@@ -1418,14 +1418,27 @@ function dir_live_cb(ast, cbdata)
       assert(length(args) == 2)
       #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
       expr_to_process = Any[]
-      push!(expr_to_process, args[1].name)
-      push!(expr_to_process, args[2].name)
+      push!(expr_to_process, symbol_or_gensym(args[1]))
+      push!(expr_to_process, symbol_or_gensym(args[2]))
       return expr_to_process
     end
   elseif asttyp == KernelStat
     return Any[]
   end
   return nothing
+end
+
+function symbol_or_gensym(x)
+  xtyp = typeof(x)
+  if xtyp == Symbol
+    return x
+  elseif xtyp == SymbolNode
+    return x.name
+  elseif xtyp == GenSym
+    return x
+  else
+    throw(string("Don't know how to convert ", x, " of type ", xtyp, " to a symbol or a GenSym"))
+  end
 end
 
 end
