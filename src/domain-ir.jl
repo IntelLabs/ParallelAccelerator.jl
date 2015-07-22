@@ -802,7 +802,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
   # new mainline Julia puts functions in Main module but PSE expects the symbol only
-  if isa(fun, GlobalRef) && (fun.mod == Main || fun.mod == IntelPSE)
+  if isa(fun, GlobalRef) && (fun.mod == Main || fun.mod == IntelPSE || fun.mod == Base)
 	  fun = fun.name
   end
   if isa(fun, Symbol)
@@ -842,6 +842,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       expr = mmapRemoveDupArg!(mk_mmap(args, domF))
       expr.typ = typ
+   # elseif is(fun, :randn)
+#	    expr = mk_map(randn,)
     elseif is(fun, :cartesianarray)
       # equivalent to creating an array first, then map! with indices.
       dprintln(env, "got cartesianarray args=", args)
