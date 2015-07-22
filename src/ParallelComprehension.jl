@@ -43,7 +43,7 @@ function parallelize(comp, typ)
 
   # The dimensions of the cartesian array are the end of the range minus the
   # start of the range plus one.
-  constructor.args[1].args[4].args = [range.args[2].args[2] - range.args[2].args[1] + 1
+  constructor.args[1].args[4].args = [:($(range.args[2].args[2]) - $(range.args[2].args[1]) + 1)
                                       for range in comp.args[2:end]]
   return constructor
 end
