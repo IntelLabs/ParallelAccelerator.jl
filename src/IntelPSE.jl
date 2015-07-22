@@ -2,6 +2,7 @@ module IntelPSE
 
 export DomainIR, ParallelIR, AliasAnalysis, LD
 export decompose, offload, set_debug_level, getenv
+using CompilerTools.LambdaHandling
 
 # MODE for offload
 const TOPLEVEL=1
@@ -161,30 +162,17 @@ function convert_sig(sig)
   return (eval(new_tuple), sig_ndims)
 end
 
-function get_input_arrays(input_vars, var_types)
+function get_input_arrays(linfo::LambdaInfo)
   ret = Symbol[]
-
+  input_vars = linfo.input_params
   dprintln(3,"input_vars = ", input_vars)
-  dprintln(3,"var_types = ", var_types)
 
-  for i = 1:length(input_vars)
-    iv = input_vars[i]
-    dprintln(3,"iv = ", iv, " type = ", typeof(iv))
-    found = false
-    for j = 1:length(var_types)
-      dprintln(3,"vt = ", var_types[j][1], " type = ", typeof(var_types[j][1]))
-      if iv == var_types[j][1]
-        dprintln(3,"Found matching name.")
-        if var_types[j][2].name == Array.name
-          dprintln(3,"Parameter is an Array.")
-          push!(ret, iv)
-        end
-        found = true
-        break
-      end
-    end
-    if !found
-      throw(string("Didn't find parameter variable in type list."))
+  for iv in input_vars
+    it = getType(iv, linfo)
+    dprintln(3,"iv = ", iv, " type = ", it)
+    if it.name == Array.name
+      dprintln(3,"Parameter is an Array.")
+      push!(ret, iv)
     end
   end
 
@@ -919,7 +907,8 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     dir_time = time_ns() - domain_start
     dprintln(3, "domain code = ", domain_ir)
     dprintln(1, "offload: DomainIR conversion time = ", ns_to_sec(dir_time))
-    input_arrays = get_input_arrays(ct[1].args[1],ct[1].args[2][2])
+    lambdaInfo = lambdaExprToLambdaInfo(ct[1])
+    input_arrays = get_input_arrays(lambdaInfo)
     pir_start = time_ns()
     if DEBUG_LVL >= 5
       code = @profile ParallelIR.from_expr(string(function_name), domain_ir, input_arrays) # convert that code to parallel IR
