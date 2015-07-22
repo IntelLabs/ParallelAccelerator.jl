@@ -14,7 +14,7 @@ const PROXYONLY=3
 # 3 = offload2
 # 4 = task
 # 5 = threads
-client_intel_pse_mode = 5
+client_intel_pse_mode = 1
 # true if use task graph, false if use old-style whole-function conversion.
 client_intel_task_graph = false
 import Base.show
