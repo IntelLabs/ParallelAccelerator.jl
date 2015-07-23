@@ -198,7 +198,7 @@ Look up a definition of a variable only when it is const or assigned once.
 Return nothing if none is found.
 """
 function lookupConstDef(state::IRState, s::Union{Symbol, SymbolNode, GenSym})
-  def = get(state.defs, s, nothing)
+  def = lookupDef(state, s)
   # we assume all GenSym is assigned once 
   desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
   if !is(def, nothing) && (desc & (ISASSIGNEDONCE | ISCONST)) != 0
@@ -209,13 +209,15 @@ end
 
 @doc """
 Look up a definition of a variable recursively until the RHS is no-longer just a variable.
-Return nothing if none is found.
+Return the last rhs if found, or the input variable itself otherwise.
 """
 function lookupConstDefForArg(state::IRState, s::Any)
+  s1 = s
   while isa(s, Symbol) || isa(s, SymbolNode) || isa(s, GenSym)
-    s = lookupConstDef(state, s.name)
+    s1 = s
+    s = lookupConstDef(state, s1)
   end
-  return s
+  is(s, nothing) ? s1 : s
 end
 
 @doc """
@@ -939,12 +941,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         iterations = args[i]
         borderExp = args[i+1]
       end
-      assert(isa(kernelExp, SymbolNode))
+      assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
       kernelExp = lookupConstDefForArg(state, kernelExp)
+      dprintln(env, "stencil kernelExp = ", kernelExp)
       assert(isa(kernelExp, LambdaStaticData))
       # TODO: better infer type here
       (ast, ety) = lambdaTypeinf(kernelExp, to_tuple_type(tuple(bufstyp...)))
       #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
+      dprintln(env, "type inferred AST = ", ast)
       kernelExp = from_expr(state, env_, ast)
       if !is(borderExp, nothing)
         borderExp = lookupConstDefForArg(state, borderExp)
