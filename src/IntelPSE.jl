@@ -848,13 +848,20 @@ end
 previouslyOptimized = Set()
 
 function replace_gensym_nodes(node, state, top_level_number, is_top_level, read)
-	dprintln(9,"replace gensym in node:",node)
+	dprintln(9,"replace gensym in node:",node, " ast types: " ,state)
 	#println("replace gensym in node:",node)
 	#xdump(node,1000)
 	if !isa(node,GenSym)
 		return nothing
 	end
-	return SymbolNode(Symbol("loc_sym_"*string(node.id)), state[node.id+1])
+	
+	ret = Symbol("loc_sym_"*string(node.id))
+
+	if(node.id+1<length(state))
+		ret = SymbolNode(Symbol("loc_sym_"*string(node.id)), state[node.id+1])
+	end
+	
+	return ret
 end
 
 function remove_gensym(ast)
@@ -862,6 +869,7 @@ function remove_gensym(ast)
 	# gensym types are in the 3rd array in lambda's metadata
 	gensym_types = ast.args[2][3]
 	# go through function body and rename gensyms with symbols
+	dprintln(9, "lambda metadata: ", ast.args[2], "\n    gensym_types: ", gensym_types )
 	AstWalker.AstWalk(ast.args[3], replace_gensym_nodes, gensym_types)
 	for i in 1:length(gensym_types)
 		gensym_types[i] = [Symbol("loc_sym_"*string(i-1)), gensym_types[i], 18]
