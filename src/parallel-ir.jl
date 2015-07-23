@@ -783,7 +783,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_inputs = [reduction_output_snode, atm]
-  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl.genBody(dl_inputs), dl, dl_inputs)
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
+  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inptus), gensym_map)
+  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
   state.max_label = max_label
   assert(isa(temp_body,Array))
   assert(length(temp_body) == 1)
@@ -975,15 +977,17 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   end
 
   # add local vars to state
-  for (v, d) in dl.locals
-    CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-  end
+  #for (v, d) in dl.locals
+  #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+  #end
 
   dprintln(3,"indexed_arrays = ", indexed_arrays)
   dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
   dprintln(3,"dl_inputs = ", dl_inputs)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl.genBody(dl_inputs), dl, dl_inputs)
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
+  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inptus), gensym_map)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
   state.max_label = max_label
   out_body = [out_body, nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -1176,12 +1180,13 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   end
 
   # add local vars to state
-  for (v, d) in dl.locals
-    CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-  end
-
+  #for (v, d) in dl.locals
+  #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+  #end
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
+  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(indexed_arrays), gensym_map)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl.genBody(indexed_arrays), dl, indexed_arrays)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
   state.max_label = max_label
   out_body = [out_body, nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -5110,11 +5115,11 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
     intersection_dict = Dict{Symbol,Any}()
     for copy in data.copies
-      if haskey(node.escapes, copy[1])
-        ed = node.escapes[copy[1]]
+      if haskey(node.linfo.escaping_defs, copy[1])
+        ed = node.linfo.escaping_defs[copy[1]]
         intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
-        delete!(node.escapes, copy[1])
-        node.escapes[copy[2]] = ed
+        delete!(node.linfo.escaping_defs, copy[1])
+        node.linfo.escaping_defs[copy[2]] = ed
       end
     end 
     dprintln(3,"Intersection dict = ", intersection_dict)
@@ -5558,15 +5563,15 @@ end
 """
 function mmapInline(ast, lives, uniqSet)
   body = ast.args[3]
-  defs = Dict{Symbol, Int}()
-  usedAt = Dict{Symbol, Int}()
-  modifiedAt = Dict{Symbol, Array{Int}}()
-  shapeAssertAt = Dict{Symbol, Array{Int}}()
+  defs = Dict{Union{Symbol, GenSym}, Int}()
+  usedAt = Dict{Union{Symbol, GenSym}, Int}()
+  modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
+  shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
   function modify!(dict, lhs, i)
     if haskey(dict, lhs)
       push!(dict[lhs], i)
     else
-      push!(dict, lhs, Int[i])
+      dict[lhs] = Int[i]
     end
   end
   assert(isa(body, Expr) && is(body.head, :body))
@@ -5581,7 +5586,7 @@ function mmapInline(ast, lives, uniqSet)
         # as valid references
           for arg in expr.args
             s = isa(arg, SymbolNode) ? arg.name : arg 
-            if isa(s, Symbol)
+            if isa(s, Symbol) || isa(s, GenSym)
               modify!(shapeAssertAt, s, i)
             end
           end
@@ -5590,18 +5595,18 @@ function mmapInline(ast, lives, uniqSet)
             check_used(arg)
           end
         end
-      elseif isa(expr, Symbol)
+      elseif isa(expr, Symbol) || isa(expr, GenSym)
         if haskey(usedAt, expr) # already used? remove from defs
           delete!(defs, expr)
         else
-          push!(usedAt, expr, i)
+          usedAt[expr] = i
         end 
       elseif isa(expr, SymbolNode)
         if haskey(usedAt, expr.name) # already used? remove from defs
           dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
           delete!(defs, expr.name)
         else
-          push!(usedAt, expr.name, i)
+          usedAt[expr.name] = i
         end 
       elseif isa(expr, Array) || isa(expr, Tuple)
         for e in expr
@@ -5615,7 +5620,7 @@ function mmapInline(ast, lives, uniqSet)
       lhs = expr.args[1]
       rhs = expr.args[2]
       check_used(rhs)
-      assert(isa(lhs, Symbol))
+      assert(isa(lhs, Symbol) || isa(lhs, GenSym))
       modify!(modifiedAt, lhs, i)
       if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
         ok = true
@@ -5626,7 +5631,7 @@ function mmapInline(ast, lives, uniqSet)
             break
           end
         end
-        if (ok) push!(defs, lhs, i) end
+        if (ok) defs[lhs] = i end
         dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
       end
     else
@@ -5639,7 +5644,7 @@ function mmapInline(ast, lives, uniqSet)
         if isa(v, SymbolNode)
           v = v.name
         end
-        if isa(v, Symbol)
+        if isa(v, Symbol) || isa(v, GenSym)
           modify!(modifiedAt, v, i)
         end
       end
@@ -5709,26 +5714,26 @@ function mmapInline(ast, lives, uniqSet)
           end
         end
         assert(pos > 0)
-        args = [args[1:pos-1], args[pos+1:end], src.args[1]]
+        args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
         f = src.args[2]
         assert(length(f.outputs)==1)
-        tmp_v = gensym()
-        tmp_t = f.outputs[1]
         dst.args[1] = args
         g = dst.args[2]
         inputs = g.inputs
         g_inps = length(inputs) 
-        inputs = [inputs[1:pos-1], inputs[pos+1:end], f.inputs]
-        locals = merge(f.locals, g.locals)
-        escapes = merge(f.escapes, g.escapes)
-        push!(locals, tmp_v, DomainIR.VarDef(tmp_t, ISASSIGNED | ISASSIGNEDONCE, nothing))
+        inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
+        linfo = g.linfo
+        gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+        tmp_t = f.outputs[1]
+        tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
         dst.args[2] = DomainLambda(inputs, g.outputs, 
           args -> begin
             fb = f.genBody(args[g_inps:end])
+            fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
             expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-            gb = g.genBody([args[1:pos-1], [SymbolNode(tmp_v, tmp_t)], args[pos:g_inps-1]])
+            gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
             return [fb[1:end-1], [expr], gb]
-          end, locals, escapes)
+          end, linfo)
         DomainIR.mmapRemoveDupArg!(dst)
       end
       function eliminateShapeAssert(dict, lhs)
@@ -5846,7 +5851,7 @@ function mmapToMmap!(ast, lives, uniqSet)
       lhs = expr.args[1]
       rhs = expr.args[2]
       # right now assume all
-      assert(isa(lhs, Symbol))
+      assert(isa(lhs, Symbol) || isa(lhs, SymbolNode) || isa(lhs, GenSym))
       # If the right-hand side is an mmap.
       if isa(rhs, Expr) && is(rhs.head, :mmap)
         args = rhs.args[1]
@@ -5860,7 +5865,8 @@ function mmapToMmap!(ast, lives, uniqSet)
         while j < length(args)
           j = j + 1
           v = args[j]
-          if isa(v, SymbolNode) && !in(v.name, tls.live_out) && in(v.name, uniqSet)
+          v = isa(v, SymbolNode) ? v.name : v
+          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet)
             reuse = v  # Found a dying symbol.
             break
           end
@@ -6081,8 +6087,7 @@ Debug print the parts of a DomainLambda.
 function pirPrintDl(dbg_level, dl)
   dprintln(dbg_level, "inputs = ", dl.inputs)
   dprintln(dbg_level, "output = ", dl.outputs)
-  dprintln(dbg_level, "locals = ", dl.locals)
-  dprintln(dbg_level, "escapes = ", dl.escapes)
+  dprintln(dbg_level, "linfo  = ", dl.linfo)
 end
 
 @doc """
