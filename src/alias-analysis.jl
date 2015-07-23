@@ -14,9 +14,11 @@
 module AliasAnalysis
 
 using ..DomainIR
+using CompilerTools.LambdaHandling
 using CompilerTools
 
-import CompilerTools
+#import CompilerTools
+
 
 DEBUG_LVL=0
 
@@ -44,14 +46,14 @@ const NotArray = 0
 
 type State
   baseID :: Int
-  locals :: Dict{Symbol, Int}
-  revmap :: Dict{Int, Set{Symbol}}
+  locals :: Dict{Union{Symbol, GenSym}, Int}
+  revmap :: Dict{Int, Set{Union{Symbol, GenSym}}}
   nest_level :: Int
   top_level_idx :: Int
   liveness :: CompilerTools.LivenessAnalysis.BlockLiveness
 end
 
-init_state(liveness) = State(0, Dict{Symbol,Int}(), Dict{Int, Set{Symbol}}(), 0, 0, liveness)
+init_state(liveness) = State(0, Dict{Union{Symbol,GenSym},Int}(), Dict{Int, Set{Union{Symbol,GenSym}}}(), 0, 0, liveness)
 
 function next_node(state)
   local n = state.baseID + 1
@@ -62,18 +64,18 @@ end
 function update_node(state, v, w)
   if !haskey(state.locals, v)
     # new initialization
-    push!(state.locals, v, w)
+    state.locals[v] = w
     if haskey(state.revmap, w)
-      push!(state.revmap, w, push!(state.revmap[w], v))
+      push!(state.revmap[w], v)
     else
-      push!(state.revmap, w, push!(Set{Symbol}(), v))
+      state.revmap[w] = push!(Set{Union{Symbol,GenSym}}(), v)
     end
   else
     # when a variable is initialized more than once, set to Unknown
-    push!(state.locals, v, Unknown)
+    state.locals[v] = Unknown
     if haskey(state.revmap, w)
       for u in state.revmap[w]
-        push!(state.locals, u, Unknown)
+        state.locals[u] = Unknown
       end
       pop!(state.revmap, w)
     end
@@ -112,13 +114,11 @@ function from_lambda(state, env, expr)
   local ast  = expr.args
   local typ  = expr.typ
   assert(length(ast) == 3)
-  local param = ast[1]
-  local meta  = ast[2] # { {Symbol}, {{Symbol,Type,Int}}, {Symbol,Type,Int} }
-  local body  = ast[3]
+  local linfo = lambdaExprToLambdaInfo(expr)
   # very conservative handling by setting free variables to Unknown.
   # TODO: may want to simulate function call at call site to get
   #       more accurate information.
-  for (v,vt,vm) in meta[3]
+  for (v, vd) in linfo.escaping_variables
     update_unknown(state, v)
   end
   return NotArray
@@ -149,10 +149,10 @@ function from_assignment(state, env, expr::Any)
   local lhs = ast[1]
   local rhs = ast[2]
   dprintln(2, "AA ", lhs, " = ", rhs)
-  if (isa(lhs, SymbolNode))
+  if isa(lhs, SymbolNode)
     lhs = lhs.name
   end
-  assert(isa(lhs, Symbol))
+  assert(isa(lhs, Symbol) || isa(lhs, GenSym))
   if lookup(state, lhs) != NotArray
     rhs = from_expr(state, env, rhs)
     # if all vars that have rhs are not alive afterwards
@@ -352,8 +352,8 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
   dprintln(2, "AA locals=", state.locals)
   from_expr(state, Nothing, body)
   dprintln(2, "AA locals=", state.locals)
-  local revmap = Dict{Int, Symbol}()
-  local unique = Set{Symbol}()
+  local revmap = Dict{Int, Union{Symbol,GenSym}}()
+  local unique = Set{Union{Symbol,GenSym}}()
   # keep only variables that have unique object IDs.
   # TODO: should consider liveness either here or during analysis,
   #       since its ok to alias dead vars.
@@ -363,7 +363,7 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
         delete!(unique, revmap[w])
       else
         push!(unique, v)
-        push!(revmap, w, v)
+        revmap[w] = v
       end
     end
   end
