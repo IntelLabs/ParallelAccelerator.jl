@@ -142,6 +142,12 @@ function EquivalenceClassesClear(ec :: EquivalenceClasses)
   empty!(ec.data)
 end
 
+# A type union to be precise that some data structures can now use a GenSym in addition to a Symbol but nothing else.
+SymGen = Union{Symbol, GenSym}
+SymNodeGen = Union{SymbolNode, GenSym}
+SymAllGen = Union{Symbol, SymbolNode, GenSym}
+SymAll = Union{Symbol, SymbolNode}
+
 @doc """
 The parfor AST node type.
 While we are lowering domain IR to parfors and fusing we use this representation because it
@@ -159,7 +165,7 @@ type PIRParForAst
     rws          :: ReadWriteSet.ReadWriteSetType
 
     unique_id
-    array_aliases :: Dict{Symbol, Symbol}
+    array_aliases :: Dict{SymGen, SymGen}
 
     # instruction count estimate of the body
     # To get the total loop instruction count, multiply this value by (upper_limit - lower_limit)/step for each loop nest
@@ -187,6 +193,30 @@ type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
+end
+
+@doc """
+State passed around while converting an AST from domain to parallel IR.
+"""
+type expr_state
+  block_lives :: CompilerTools.LivenessAnalysis.BlockLiveness    # holds the output of liveness analysis at the block and top-level statement level
+  top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
+  # Arrays created from each other are known to have the same size. Store such correlations here.
+  # If two arrays have the same dictionary value, they are equal in size.
+  array_length_correlation :: Dict{SymGen,Int}
+  symbol_array_correlation :: Dict{Array{SymGen,1},Int}
+  lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
+  max_label :: Int # holds the max number of all LabelNodes
+
+  # Initialize the state for parallel IR translation.
+  function expr_state(bl, max_label, input_arrays)
+    init_corr = Dict{SymGen,Int}()
+    # For each input array, insert into the correlations table with a different value.
+    for i = 1:length(input_arrays)
+      init_corr[input_arrays[i]] = i
+    end
+    new(bl, 0, init_corr, Dict{Array{SymGen,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
+  end
 end
 
 include("parallel-ir-stencil.jl")
@@ -379,11 +409,10 @@ end
 @doc """
 Returns the element type of an Array.
 """
-function getArrayElemType(array::SymbolNode)
-  assert(typeof(array) == SymbolNode)
-  if array.typ.name == Array.name
-    array.typ.parameters[1]
-  elseif array.typ.name == BitArray.name
+function getArrayElemType(atyp :: DataType)
+  if atyp.name == Array.name
+    atyp.parameters[1]
+  elseif atyp.name == BitArray.name
     Bool
   else
     assert(false)
@@ -391,32 +420,46 @@ function getArrayElemType(array::SymbolNode)
 end
 
 @doc """
+Returns the element type of an Array.
+"""
+function getArrayElemType(array :: SymbolNode, state :: expr_state)
+  assert(typeof(array) == SymbolNode)
+  return getArrayElemType(array.typ)
+end
+
+@doc """
+Returns the element type of an Array.
+"""
+function getArrayElemType(array :: GenSym, state :: expr_state)
+  atyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+  return getArrayElemType(atyp)
+end
+
+@doc """
 Return the number of dimensions of an Array.
 """
-function getArrayNumDims(array::SymbolNode)
+function getArrayNumDims(array :: SymbolNode, state :: expr_state)
   assert(typeof(array) == SymbolNode)
   assert(array.typ.name == Array.name)
   array.typ.parameters[2]
 end
 
 @doc """
-Returns the element type of an Array.
+Return the number of dimensions of an Array.
 """
-function getArrayElemType(array::DataType)
-  if array.name == Array.name
-    array.parameters[1]
-  elseif array.name == BitArray.name
-    Bool
-  else
-    assert(false)
-  end
+function getArrayNumDims(array :: GenSym, state :: expr_state)
+  gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+  assert(gstyp.name == Array.name)
+  gstyp.parameters[2]
 end
 
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(x)
-  if typeof(x) == Int64
+  xtyp = typeof(x)
+
+  if xtyp == Int64 || xtyp == GenSym
     return x
   else
     return SymbolNode(x,Int)
@@ -427,11 +470,11 @@ end
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
-function mk_arrayref1(array_name, index_vars, inbounds)
+function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state)
   dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-  elem_typ = getArrayElemType(array_name)
-  dprintln(3,"mk_arrayref1 array_name.typ = ", array_name.typ, " element type = ", elem_typ)
+  elem_typ = getArrayElemType(array_name, state)
+  dprintln(3,"mk_arrayref1 element type = ", elem_typ)
 
   if inbounds
     fname = :unsafe_arrayref
@@ -459,15 +502,23 @@ function createStateVar(state, name, typ, access)
   SymbolNode(new_temp_sym, typ)
 end
 
+function convert(dt :: DataType, x :: GenSym)
+  if dt == String
+       return string("GenSym", x.id)
+  end
+  throw(string("Unsupport conversion of GenSym to something."))
+end
+
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForArray(array_sn, unique_id, state, temp_map)
-  if !haskey(temp_map, array_sn.name)
-    temp_type = getArrayElemType(array_sn.typ)
-    temp_map[array_sn.name] = createStateVar(state, string("parallel_ir_temp_", array_sn.name, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+function createTempForArray(array_sn, unique_id :: Int64, state :: expr_state, temp_map :: Dict{SymGen,SymbolNode})
+  key = toSymGen(array_sn) 
+  if !haskey(temp_map, key)
+    temp_type = getArrayElemType(array_sn, state)
+    temp_map[key] = createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
   end
-  temp_map[array_sn.name]
+  return temp_map[key]
 end
 
 @doc """
@@ -483,13 +534,11 @@ end
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
-function mk_arrayset1(array_name, index_vars, value, inbounds)
+function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state)
+  dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-  if(typeof(array_name) == SymbolNode)
-      dprintln(3,"mk_arrayset1 array_name.typ = ", array_name.typ, " param len = ", length(array_name.typ.parameters))
-  end
-  assert(typeof(array_name) == SymbolNode)
-  elem_typ = array_name.typ.parameters[1]  # The type of the array reference will be the element type.
+  elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
+  dprintln(3,"mk_arrayset1 element type = ", elem_typ)
 
   # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
   if inbounds
@@ -542,33 +591,42 @@ function simpleIndex(dict)
 end
 
 @doc """
-State passed around while converting an AST from domain to parallel IR.
+In various places we need a SymGen type which is the union of Symbol and GenSym.
+This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.
 """
-type expr_state
-  block_lives :: CompilerTools.LivenessAnalysis.BlockLiveness    # holds the output of liveness analysis at the block and top-level statement level
-  top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
-  # Arrays created from each other are known to have the same size. Store such correlations here.
-  # If two arrays have the same dictionary value, they are equal in size.
-  array_length_correlation :: Dict{Symbol,Int}
-  symbol_array_correlation :: Dict{Array{Symbol,1},Int}
-  lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
-  max_label :: Int # holds the max number of all LabelNodes
+function toSymGen(x)
+  xtyp = typeof(x)
+  if xtyp == Symbol
+    return x
+  elseif xtyp == SymbolNode
+    return x.name
+  elseif xtyp == GenSym
+    return x
+  else
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
+  end
+end
 
-  # Initialize the state for parallel IR translation.
-  function expr_state(bl, max_label, input_arrays)
-    init_corr = Dict{Symbol,Int}()
-    # For each input array, insert into the correlations table with a different value.
-    for i = 1:length(input_arrays)
-      init_corr[input_arrays[i]] = i
-    end
-    new(bl, 0, init_corr, Dict{Array{Symbol,1},Int}(), Symbol[], Any[], Set(), Dict{Symbol,Array{Any,1}}(), Dict{Symbol,Int}(), max_label)
+@doc """
+Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
+"""
+function toSymNodeGen(x, typ)
+  xtyp = typeof(x)
+  if xtyp == Symbol
+    return SymbolNode(x, typ)
+  elseif xtyp == SymbolNode
+    return x
+  elseif xtyp == GenSym
+    return x
+  else
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
   end
 end
 
 @doc """
 Returns the next usable label for the current function.
 """
-function next_label(state :: IntelPSE.ParallelIR.expr_state)
+function next_label(state :: expr_state)
   state.max_label = state.max_label + 1
   return state.max_label
 end
@@ -576,7 +634,7 @@ end
 @doc """
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
-function addUnknownArray(x, state)
+function addUnknownArray(x :: SymGen, state :: expr_state)
   a = collect(values(state.array_length_correlation))
   m = length(a) == 0 ? 0 : maximum(a)
   state.array_length_correlation[x] = m + 1
@@ -606,7 +664,7 @@ end
 If we somehow determine that two arrays must be the same length then 
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
-function add_merge_correlations(old_sym :: Symbol, new_sym :: Symbol, state)
+function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state)
   dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
   old_corr = getOrAddArrayCorrelation(old_sym, state)
   new_corr = getOrAddArrayCorrelation(new_sym, state)
@@ -617,7 +675,7 @@ end
 @doc """
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
-function getOrAddArrayCorrelation(x, state)
+function getOrAddArrayCorrelation(x :: SymGen, state)
   if !haskey(state.array_length_correlation, x)
     dprintln(3,"Correlation for array not found = ", x)
     addUnknownArray(x, state)
@@ -628,7 +686,7 @@ end
 @doc """
 A new array is being created with an explicit size specification in dims.
 """
-function getOrAddSymbolCorrelation(array, state, dims)
+function getOrAddSymbolCorrelation(array :: GenSym, state, dims)
   if !haskey(state.symbol_array_correlation, dims)
     # We haven't yet seen this combination of dims used to create an array.
     dprintln(3,"Correlation for symbol set not found, dims = ", dims)
@@ -695,7 +753,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   unique_node_id = get_unique_num()
 
   # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
-  num_dim_inputs = getArrayNumDims(input_array)
+  num_dim_inputs = getArrayNumDims(input_array, state)
   loopNests = Array(PIRLoopNest, num_dim_inputs)
   if is(input_array_ranges, nothing)
     input_array_ranges = Any[ Expr(:range, 1, 1, mk_arraylen_expr(input_array,i)) for i = 1:num_dim_inputs ]
@@ -718,14 +776,14 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
   assert(argtyp == SymbolNode)
 
-  array_temp_map = Dict{Symbol,SymbolNode}()
+  array_temp_map = Dict{SymGen,SymbolNode}()
   reduce_body = Any[]
   atm = createTempForArray(input_array, 1, state, array_temp_map)
-  push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true)))
+  push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true, state)))
 
   # Create an expression to access one element of this input array with index symbols parfor_index_syms
   indexed_array = atm
-  #indexed_array = mk_arrayref1(input_array, parfor_index_syms, true)
+  #indexed_array = mk_arrayref1(input_array, parfor_index_syms, true, state)
 
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
@@ -855,7 +913,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     throw(string("Parallel IR only supports + and * reductions right now."))
   end
 
-  makeLhsPrivate(out_body, state)
+#  makeLhsPrivate(out_body, state)
 
   # The parfor node that will go into the AST.
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
@@ -911,7 +969,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   unique_node_id = get_unique_num()
 
   first_input = input_arrays[1]
-  num_dim_inputs = getArrayNumDims(first_input)
+  num_dim_inputs = getArrayNumDims(first_input, state)
   loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Make the DomainLambda easier to access
@@ -929,9 +987,9 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   end
 
   # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(input_arrays[1].name, state)
+  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
-  array_temp_map = Dict{Symbol,SymbolNode}()
+  array_temp_map = Dict{SymGen,SymbolNode}()
   out_body = Any[]
 
   # Make sure each input array is a SymbolNode
@@ -939,15 +997,15 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   for i = 1:len_input_arrays
     argtyp = typeof(input_arrays[i])
     dprintln(3,"mk_parfor_args_from_mmap! input_array[i] = ", input_arrays[i], " type = ", argtyp)
-    assert(argtyp == SymbolNode)
+    assert(isa(input_arrays[i], SymNodeGen))
 
     atm = createTempForArray(input_arrays[i], 1, state, array_temp_map)
-    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true)))
+    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true, state)))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     push!(indexed_arrays, atm)
 
-    this_correlation = getOrAddArrayCorrelation(input_arrays[i].name, state)
+    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
     # Verify that all the inputs are the same size by verifying they are in the same correlation set.
     if this_correlation != main_length_correlation
       merge_correlations(state, main_length_correlation, this_correlation)
@@ -986,10 +1044,10 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(3,"dl_inputs = ", dl_inputs)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
-  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inptus), gensym_map)
+  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inputs), gensym_map)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
   state.max_label = max_label
-  out_body = [out_body, nested_body...]
+  out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
   assert(isa(out_body,Array))
   oblen = length(out_body)
@@ -1005,11 +1063,11 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   printBody(3,out_body)
 
   out_body = out_body[1:oblen-1]
-  array_temp_map2 = Dict{Symbol,SymbolNode}()
+  array_temp_map2 = Dict{SymGen,SymbolNode}()
   for i = 1:length(dl.outputs)
     tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i]))
-    push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true))
+    push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1029,11 +1087,11 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   if length(dl.outputs) == 1
     # If there is only one output then put that output in the post_statements
     push!(post_statements,input_arrays[1])
-    out_type = input_arrays[1].typ
+    out_type = CompilerTools.LambdaHandling.getType(input_arrays[1], state.lambdaInfo)
   else
     # FIXME: multi mmap! return values are not handled properly below
     tt = Expr(:tuple)
-    tt.args = map( x -> x.typ, input_arrays)
+    tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), input_arrays)
     temp_type = eval(tt)
 
     new_temp_name  = string("parallel_ir_tuple_ret_",get_unique_num())
@@ -1047,7 +1105,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   dprintln(2,"mk_parfor_args_from_mmap! with out_type = ", out_type)
 
-  makeLhsPrivate(out_body, state)
+#  makeLhsPrivate(out_body, state)
 
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
       out_body,
@@ -1115,7 +1173,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   unique_node_id = get_unique_num()
 
   first_input = input_arrays[1]
-  num_dim_inputs = getArrayNumDims(first_input)
+  num_dim_inputs = getArrayNumDims(first_input, state)
   loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
@@ -1128,9 +1186,9 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   end
 
   # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(input_arrays[1].name, state)
+  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
-  array_temp_map = Dict{Symbol,SymbolNode}()
+  array_temp_map = Dict{SymGen,SymbolNode}()
   out_body = Any[]
 
   # Make sure each input array is a SymbolNode
@@ -1141,14 +1199,14 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     assert(argtyp == SymbolNode)
 
     atm = createTempForArray(input_arrays[i], 1, state, array_temp_map)
-    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true)))
+    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true, state)))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     push!(indexed_arrays,atm)
     # Keep a sum of the size of each arrays individual element sizes.
     input_element_sizes = input_element_sizes + sizeof(argtyp)
 
-    this_correlation = getOrAddArrayCorrelation(input_arrays[i].name, state)
+    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
     # Verify that all the inputs are the same size by verifying they are in the same correlation set.
     if this_correlation != main_length_correlation
       merge_correlations(state, main_length_correlation, this_correlation)
@@ -1188,7 +1246,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
   state.max_label = max_label
-  out_body = [out_body, nested_body...]
+  out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
   assert(isa(out_body,Array))
   oblen = length(out_body)
@@ -1230,7 +1288,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
     tfa = createTempForArray(nans_sn, 1, state, array_temp_map)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i]))
-    push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true))
+    push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
 
     # keep the sum of the sizes of the individual output array elements
     output_element_sizes = output_element_sizes + sizeof(dl.outputs)
@@ -1272,7 +1330,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
   dprintln(2,"mk_parfor_args_from_mmap with out_type = ", out_type)
 
-  makeLhsPrivate(out_body, state)
+#  makeLhsPrivate(out_body, state)
 
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
       out_body,
@@ -1293,40 +1351,42 @@ end
 
 # ===============================================================================================================================
 
-@doc """
-The AstWalk callback function for makeLhsPrivate.
-For each AST in a parfor body, add the private parfor descriptor to the lambdaInfo for all
-symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-"""
-function makeLhsPrivateInner(x, state, top_level_number, is_top_level, read)
-  # If the node is an assignment node or a loop head node.
-  if isAssignmentNode(x) || isLoopheadNode(x)
-    lhs = x.args[1]
-    sname = getSName(lhs)
-    red_var_start = "parallel_ir_reduction_output_"
-    red_var_len = length(red_var_start)
-    sstr = string(sname)
-    if length(sstr) >= red_var_len
-      if sstr[1:red_var_len] == red_var_start
-        # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-        return nothing
-      end
-    end
-    makePrivateParfor(sname, state)
-  end
-  nothing
-end
 
-@doc """
-Go through the body of a parfor and add the private parfor descriptor to the lambdaInfo for all
-symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-Reduction variables are not included in this process.
-"""
-function makeLhsPrivate(body, state)
-  for i = 1:length(body)
-    AstWalk(body[i], makeLhsPrivateInner, state)
-  end
-end
+# @doc """
+# The AstWalk callback function for makeLhsPrivate.
+# For each AST in a parfor body, add the private parfor descriptor to the lambdaInfo for all
+# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
+# """
+# function makeLhsPrivateInner(x, state, top_level_number, is_top_level, read)
+#   # If the node is an assignment node or a loop head node.
+#   if isAssignmentNode(x) || isLoopheadNode(x)
+#     lhs = x.args[1]
+#     sname = getSName(lhs)
+#     red_var_start = "parallel_ir_reduction_output_"
+#     red_var_len = length(red_var_start)
+#     sstr = string(sname)
+#     if length(sstr) >= red_var_len
+#       if sstr[1:red_var_len] == red_var_start
+#         # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
+#         return nothing
+#       end
+#     end
+#     makePrivateParfor(sname, state)
+#   end
+#   nothing
+# end
+
+
+# @doc """
+# Go through the body of a parfor and add the private parfor descriptor to the lambdaInfo for all
+# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
+# Reduction variables are not included in this process.
+# """
+# function makeLhsPrivate(body, state)
+#   for i = 1:length(body)
+#     AstWalk(body[i], makeLhsPrivateInner, state)
+#   end
+# end
 
 # ===============================================================================================================================
 
@@ -1339,9 +1399,13 @@ uncompressed_ast(l::LambdaStaticData) =
 @doc """
 AstWalk callback to count the number of static times that a symbol is assigne within a method.
 """
-function count_assignments(x, symbol_assigns, top_level_number, is_top_level, read)
+function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_number, is_top_level, read)
   if isAssignmentNode(x) || isLoopheadNode(x)
     lhs = x.args[1]
+    # GenSyms don't have descriptors so no need to count their assignment.
+    if !hasSymbol(lhs)
+      return nothing
+    end
     sname = getSName(lhs)
     if !haskey(symbol_assigns, sname)
       symbol_assigns[sname] = 0
@@ -1370,7 +1434,7 @@ function from_lambda(lambda :: Expr, depth, state)
   dprintln(4,"from_lambda after from_expr")
 
   # Count the number of static assignments per var.
-  symbol_assigns = Dict{Symbol,Int}()
+  symbol_assigns = Dict{Symbol, Int}()
   AstWalk(body, count_assignments, symbol_assigns)
 
   # After counting static assignments, update the lambdaInfo for those vars
@@ -1426,7 +1490,7 @@ function isParforAssignmentNode(node)
       rhs = node.args[2]
       dprintln(4,rhs)
 
-      if(typeof(lhs) == Symbol || typeof(lhs) == SymbolNode)
+      if(isa(lhs, SymAll))
           if(typeof(rhs) == Expr && rhs.head == :parfor)
               dprintln(4,"Found a parfor assignment node.")
               return true
@@ -1547,7 +1611,12 @@ end
 Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
 """
 function nameToSymbolNode(name, sym_to_type)
-  SymbolNode(name, sym_to_type[name])
+  if typeof(name) == Symbol
+    return SymbolNode(name, sym_to_type[name])
+  else
+    assert(typeof(name) == GenSym)
+    return name
+  end
 end
 
 function getAliasMap(loweredAliasMap, sym)
@@ -1574,8 +1643,8 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     end
   end
 
-  lhs_order = SymbolNode[]
-  rhs_order = SymbolNode[]
+  lhs_order = Union{SymbolNode,GenSym}[]
+  rhs_order = Union{SymbolNode,GenSym}[]
   for i in output_map
     push!(lhs_order, nameToSymbolNode(i[1], sym_to_type))
     push!(rhs_order, nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type))
@@ -1587,12 +1656,12 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
   # First, form the type of the tuple for those multiple outputs.
   tt = Expr(:tuple)
   for i = 1:num_map
-    push!(tt.args, rhs_order[i].typ)
+    push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.lambdaInfo))
   end
   temp_type = eval(tt)
 
   # Create a new variable to hold the return tuple for this new parfor node.
-  new_temp_name  = string("parallel_ir_tuple_ret_",unique_id)
+  new_temp_name  = string("parallel_ir_tuple_ret_", unique_id)
   new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
   dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
   # Add the new var to the list of variables for the function.
@@ -1612,10 +1681,10 @@ function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
-function createRetTupleType(rets :: Array{SymbolNode,1}, unique_id, state)
+function createRetTupleType(rets :: Array{Union{SymbolNode, GenSym},1}, unique_id :: Int64, state :: expr_state)
   # Form the type of the tuple var.
   tt = Expr(:tuple)
-  tt.args = map( x -> x.typ, rets)
+  tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), rets)
   temp_type = eval(tt)
 
   new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
@@ -1654,7 +1723,7 @@ function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either
   (createRetTupleType(all_array, unique_id, state), all_array, false)
 end
 
-function getAllAliases(input :: Set, aliases :: Dict{Symbol,Symbol})
+function getAllAliases(input :: Set{SymGen}, aliases :: Dict{SymGen, SymGen})
   dprintln(3,"getAllAliases input = ", input, " aliases = ", aliases)
   out = Set()
 
@@ -1776,11 +1845,11 @@ function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
         array_name = x.args[2]
         value      = x.args[3]
         index      = x.args[4]
-        assert(typeof(array_name) == SymbolNode)
+        assert(isa(array_name, SymNodeGen))
         # If the array being assigned to is in temp_map.
-        if in(array_name.name, cbd.arrays_set_in_cur_body)
+        if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
           return [nothing]
-        elseif !in(array_name.name, cbd.output_items_with_aliases)
+        elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
           return [nothing]
         else
           dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
@@ -1802,10 +1871,7 @@ map_drop_arrayset drops the arrayset without replacing with a variable.  This is
 function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases)
   dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
   # Walk the AST and call sub_arrayset_walk for each node.
-  res = AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
-  assert(isa(res,Array))
-  assert(length(res) == 1)
-  res[1]
+  return get_one(AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases)))
 end
 
 @doc """
@@ -1834,22 +1900,18 @@ end
 Holds the data for substitute_cur_body AST walk.
 """
 type cur_body_data
-  temp_map                         # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
-  index_map                        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
-  arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
-  replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
+  temp_map  :: Dict{SymGen, SymNodeGen}    # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
+  index_map :: Dict{SymGen, SymGen}        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
+  arrays_set_in_cur_body :: Set{SymGen}    # Used as output.  Collects the arrays set in the current body.
+  replace_array_name_in_arrayset :: Dict{SymGen, SymGen}  # Map from one array to another.  Replace first array with second when used in arrayset context.
+  state :: expr_state
 end
 
 @doc """
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
-function sub_cur_body_walk(x, cbd, top_level_number, is_top_level, read)
+function sub_cur_body_walk(x, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dbglvl = 3
-  temp_map  = cbd.temp_map
-  index_map = cbd.index_map
-  map_replace_array_name = cbd.map_replace_array_name
-  replace_array_name_in_arrayset = cbd.replace_array_name_in_arrayset
-
   dprintln(dbglvl,"sub_cur_body_walk ", x)
   xtype = typeof(x)
 
@@ -1866,42 +1928,35 @@ function sub_cur_body_walk(x, cbd, top_level_number, is_top_level, read)
         lowered_array_name = array_name.name
         assert(typeof(lowered_array_name) == Symbol)
         dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
-        # If the array name is in temp_map then replace the arrayref call with the mapped variable.
-        if haskey(temp_map, lowered_array_name)
-          dprintln(dbglvl,"sub_cur_body_walk IS substituting ", temp_map[lowered_array_name])
-          return temp_map[lowered_array_name]
+        # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
+        if haskey(cbd.temp_map, lowered_array_name)
+          dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
+          return [cbd.temp_map[lowered_array_name]]
         end
       elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
         array_name = x.args[2]
-        assert(typeof(array_name) == SymbolNode)
-        push!(cbd.arrays_set_in_cur_body, map_replace_array_name, array_name.name)
-        if haskey(replace_array_name_in_arrayset, array_name.name)
-          x.args[2].name = replace_array_name_in_arrayset[array_name.name]
+        assert(isa(array_name, SymNodeGen))
+        push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
+        if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
+          new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
+          x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
         end
       end
     end
   elseif xtype == Symbol
     dprintln(dbglvl,"sub_cur_body_walk xtype is Symbol")
-    if haskey(index_map, x)
+    if haskey(cbd.index_map, x)
       # Detected the use of an index variable.  Change it to the first parfor's index variable.
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", index_map[x])
-      return index_map[x]
+      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
+      return [cbd.index_map[x]]
     end
   elseif xtype == SymbolNode
     dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
-    if haskey(index_map, x.name)
+    if haskey(cbd.index_map, x.name)
       # Detected the use of an index variable.  Change it to the first parfor's index variable.
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", index_map[x.name])
-      x.name = index_map[x.name]
-      return x
-    elseif haskey(map_replace_array_name, x.name)
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting from map_replace_array_name ", map_replace_array_name[x.name], " for ", x.name)
-      x.name = map_replace_array_name[x.name]
-      return x
-    elseif haskey(map_replace_array_temps, x.name)
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting from map_replace_array_temps ", map_replace_array_temps[x.name], " for ", x.name)
-      x.name = map_replace_array_temps[x.name].name
-      return x
+      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
+      x.name = cbd.index_map[x.name]
+      return [x]
     end
   end
   dprintln(dbglvl,"sub_cur_body_walk not substituting")
@@ -1915,17 +1970,19 @@ index_map holds maps between index variables.  The second parfor is modified to 
 arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
 replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
 """
-function substitute_cur_body(x, temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset)
+function substitute_cur_body(x, 
+                             temp_map :: Dict{SymGen, SymNodeGen}, 
+                             index_map :: Dict{SymGen, SymGen}, 
+                             arrays_set_in_cur_body :: Set{SymGen}, 
+                             replace_array_name_in_arrayset :: Dict{SymGen, SymGen},
+                             state :: expr_state)
   dprintln(3,"substitute_cur_body ", x)
   dprintln(3,"temp_map = ", temp_map)
   dprintln(3,"index_map = ", index_map)
   dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
   dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
   # Walk the AST and call sub_cur_body_walk for each node.
-  res = DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset))
-  assert(isa(res,Array))
-  assert(length(res) == 1)
-  res[1]
+  return get_one(DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state)))
 end
 
 @doc """
@@ -1983,10 +2040,7 @@ If we see a call to create an array, replace the length params with those in the
 function substitute_arraylen(x, replacement)
   dprintln(3,"substitute_arraylen ", x, " ", replacement)
   # Walk the AST and call sub_arraylen_walk for each node.
-  res = DomainIR.AstWalk(x, sub_arraylen_walk, replacement)
-  assert(isa(res,Array))
-  assert(length(res) == 1)
-  res[1]
+  return get_one(DomainIR.AstWalk(x, sub_arraylen_walk, replacement))
 end
 
 fuse_limit = -1
@@ -2011,7 +2065,7 @@ end
 @doc """
 Add to the map of symbol names to types.
 """
-function rememberTypeForSym(sym_to_type, sym, typ)
+function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
   assert(typ != Any)
   sym_to_type[sym] = typ
 end
@@ -2079,9 +2133,11 @@ function getParforCorrelation(parfor, state)
     first_stmt = parfor.preParFor[i]
     if (typeof(first_stmt) == Expr) && (first_stmt.head == symbol('='))
       rhs = first_stmt.args[2]
-      if (typeof(rhs) == Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize)) && (typeof(rhs.args[2]) == SymbolNode)
-        dprintln(3,"Getting parfor array correlation for array = ", rhs.args[2].name)
-        return getOrAddArrayCorrelation(rhs.args[2].name, state) 
+      if (typeof(rhs) == Expr) && (rhs.head == :call)
+        if (rhs.args[1] == TopNode(:arraysize)) && (isa(rhs.args[2], SymNodeGen))
+          dprintln(3,"Getting parfor array correlation for array = ", rhs.args[2])
+          return getOrAddArrayCorrelation(toSymGen(rhs.args[2]), state) 
+        end
       end
     end
   end
@@ -2098,9 +2154,9 @@ parfor_assignment is the AST of the whole expression.
 the_parfor is the PIRParForAst type part of the incoming assignment.
 sym_to_type is an out parameter that maps symbols in the output mapping to their types.
 """
-function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi, sym_to_type)
-  map_lhs_post_array     = Dict{Symbol,Symbol}()
-  map_lhs_post_reduction = Dict{Symbol,Symbol}()
+function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, sym_to_type :: Dict{SymGen, DataType}, state :: expr_state)
+  map_lhs_post_array     = Dict{SymGen, SymGen}()
+  map_lhs_post_reduction = Dict{SymGen, SymGen}()
 
   if is_multi
     # In our special AST node format for assignment to make fusion easier, args[3] is a FusionSentinel node
@@ -2108,32 +2164,35 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi, sym_to_ty
     for i = 4:length(parfor_assignment.args)
       assert(typeof(parfor_assignment.args[i]) == SymbolNode)
       dprintln(3,"Remembering type for parfor_assignment sym ", parfor_assignment.args[i].name, "=>", parfor_assignment.args[i].typ)
-      rememberTypeForSym(sym_to_type, parfor_assignment.args[i].name, parfor_assignment.args[i].typ)
-      rememberTypeForSym(sym_to_type, the_parfor.postParFor[end-1].args[2].args[i-2].name, the_parfor.postParFor[end-1].args[2].args[i-2].typ)
+      rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
+      rememberTypeForSym(sym_to_type, toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2]), CompilerTools.LambdaHandling.getType(the_parfor.postParFor[end-1].args[2].args[i-2], state.lambdaInfo))
       if parfor_assignment.args[i].typ.name == Array.name
         # For fused parfors, the last post statement is a tuple variable.
         # That tuple variable is declared in the previous statement (end-1).
         # The statement is an Expr with head == :call and top(:tuple) as the first arg.
         # So, the first member of the tuple is at offset 2 which corresponds to index 4 of this loop, ergo the "i-2".
-        map_lhs_post_array[parfor_assignment.args[i].name] = the_parfor.postParFor[end-1].args[2].args[i-2].name
+        map_lhs_post_array[toSymGen(parfor_assignment.args[i])] = toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2])
       else
-        map_lhs_post_reduction[parfor_assignment.args[i].name] = the_parfor.postParFor[end-1].args[2].args[i-2].name
+        map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2])
       end
     end
   else
     # There is no mapping if this isn't actually an assignment statement but really a bare parfor.
     if !isBareParfor(parfor_assignment)
       lhs_pa = getLhsFromAssignment(parfor_assignment)
-      if typeof(lhs_pa) == SymbolNode
-        assert(typeof(the_parfor.postParFor[end]) == SymbolNode)
-        rememberTypeForSym(sym_to_type, lhs_pa.name, lhs_pa.typ)
+      ast_lhs_pa_typ = typeof(lhs_pa)
+      lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.lambdaInfo)
+      if isa(lhs_pa, SymNodeGen)
+        ppftyp = typeof(the_parfor.postParFor[end]) 
+        assert(isa(the_parfor.postParFor[end], SymNodeGen))
+        rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
         rhs = the_parfor.postParFor[end]
-        rememberTypeForSym(sym_to_type, rhs.name, rhs.typ)
+        rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.lambdaInfo))
 
-        if lhs_pa.typ.name == Array.name
-          map_lhs_post_array[lhs_pa.name] = the_parfor.postParFor[end].name
+        if isArrayType(lhs_pa_typ)
+          map_lhs_post_array[toSymGen(lhs_pa)]     = toSymGen(the_parfor.postParFor[end])
         else
-          map_lhs_post_reduction[lhs_pa.name] = the_parfor.postParFor[end].name
+          map_lhs_post_reduction[toSymGen(lhs_pa)] = toSymGen(the_parfor.postParFor[end])
         end
       elseif typeof(lhs_pa) == Symbol
         throw(string("lhs_pa as a symbol no longer supported"))
@@ -2151,7 +2210,7 @@ end
 Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a Symbol is present
 in the dictionary replace it with the corresponding value from the dict.
 """
-function fullyLowerAlias(dict, input :: Symbol)
+function fullyLowerAlias(dict :: Dict{SymGen, SymGen}, input :: SymGen)
   while haskey(dict, input)
     input = dict[input]
   end
@@ -2163,10 +2222,9 @@ Take a single-step alias map, e.g., a=>b, b=>c, and create a lowered dictionary,
 maps each array to the transitively lowered array.
 """
 function createLoweredAliasMap(dict1)
-  ret = Dict{Symbol,Symbol}()
+  ret = Dict{SymGen, SymGen}()
 
   for i in dict1
-    assert(typeof(i[1]) == Symbol)
     ret[i[1]] = fullyLowerAlias(dict1, i[2])
   end
 
@@ -2200,7 +2258,7 @@ function fuse(body, body_index, cur, state)
   prev_parfor = getParforNode(prev)
   cur_parfor  = getParforNode(cur)
 
-  sym_to_type   = Dict{Symbol,DataType}()
+  sym_to_type   = Dict{SymGen, DataType}()
 
   dprintln(2, "prev = ", prev)
   dprintln(2, "cur = ", cur)
@@ -2224,9 +2282,9 @@ function fuse(body, body_index, cur, state)
   prev_num_dims = length(prev_parfor.loopNests)
   cur_num_dims  = length(cur_parfor.loopNests)
 
-  map_prev_lhs_post, map_prev_lhs_reduction = createMapLhsToParfor(prev, prev_parfor, is_prev_multi, sym_to_type)
+  map_prev_lhs_post, map_prev_lhs_reduction = createMapLhsToParfor(prev, prev_parfor, is_prev_multi, sym_to_type, state)
   map_prev_lhs_all = merge(map_prev_lhs_post, map_prev_lhs_reduction)
-  map_cur_lhs_post,  map_cur_lhs_reduction  = createMapLhsToParfor(cur,  cur_parfor,  is_cur_multi,  sym_to_type)
+  map_cur_lhs_post,  map_cur_lhs_reduction  = createMapLhsToParfor(cur,  cur_parfor,  is_cur_multi,  sym_to_type, state)
   map_cur_lhs_all  = merge(map_cur_lhs_post, map_cur_lhs_reduction)
   prev_output_arrays = collect(values(map_prev_lhs_post))
   prev_output_reduce = collect(values(map_prev_lhs_reduction))
@@ -2308,7 +2366,7 @@ function fuse(body, body_index, cur, state)
 
     # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
     # that don't die during the current parfor.
-    output_map = Dict{Symbol,Symbol}()
+    output_map = Dict{SymGen, SymGen}()
     for i in map_prev_lhs_all
       if !in(i[1], not_used_after_cur)
         output_map[i[1]] = i[2]
@@ -2318,7 +2376,7 @@ function fuse(body, body_index, cur, state)
       output_map[i[1]] = i[2]
     end
 
-    new_aliases = Dict{Symbol,Symbol}()
+    new_aliases = Dict{SymGen, SymGen}()
     for i in map_prev_lhs_post
       if !in(i[1], not_used_after_cur)
         new_aliases[i[1]] = i[2]
@@ -2336,7 +2394,7 @@ function fuse(body, body_index, cur, state)
     # loopNests - nothing needs to be done to the loopNests
     # But we use them to establish a mapping between corresponding indices in the two parfors.
     # Then, we use that map to convert indices in the second parfor to the corresponding ones in the first parfor.
-    index_map = Dict{Symbol,Symbol}()
+    index_map = Dict{SymGen, SymGen}()
     assert(length(prev_parfor.loopNests) == length(cur_parfor.loopNests))
     for i = 1:length(prev_parfor.loopNests)
         index_map[cur_parfor.loopNests[i].indexVariable.name] = prev_parfor.loopNests[i].indexVariable.name
@@ -2362,24 +2420,24 @@ function fuse(body, body_index, cur, state)
 
     # Create a dictionary of arrays to the last variable containing the array's value at the current index space.
     save_body = prev_parfor.body
-    arrayset_dict = Dict{Symbol,SymbolNode}()
+    arrayset_dict = Dict{SymGen, SymNodeGen}()
     for i = 1:length(save_body)
       x = save_body[i]
       if isArraysetCall(x)
         # Here we have a call to arrayset.
         array_name = x.args[2]
         value      = x.args[3]
-        assert(typeof(array_name) == SymbolNode)
-        assert(typeof(value) == SymbolNode)
-        arrayset_dict[array_name.name] = value
+        assert(isa(array_name, SymNodeGen))
+        assert(isa(value, SymNodeGen))
+        arrayset_dict[toSymGen(array_name)] = value
       elseif typeof(x) == Expr && x.head == :(=)
         lhs = x.args[1]
         rhs = x.args[2]
-        assert(typeof(lhs) == SymbolNode)
+        assert(isa(lhs, SymNodeGen))
         if isArrayrefCall(rhs)
           array_name = rhs.args[2]
-          assert(typeof(array_name) == SymbolNode)
-          arrayset_dict[array_name.name] = lhs
+          assert(isa(array_name, SymNodeGen))
+          arrayset_dict[toSymGen(array_name)] = lhs
         end
       end
     end
@@ -2395,10 +2453,9 @@ function fuse(body, body_index, cur, state)
 
     # body - Append cur body to prev body but replace arrayset's in prev with a temp variable
     # and replace arrayref's in cur with the same temp.
-    empty_dict = Dict{Symbol,Symbol}()
-    arrays_set_in_cur_body = Set()
+    arrays_set_in_cur_body = Set{SymGen}()
     # Convert the cur_parfor body.
-    new_cur_body = map(x -> substitute_cur_body(x, arrayset_dict, index_map, arrays_set_in_cur_body, loweredAliasMap), cur_parfor.body)
+    new_cur_body = map(x -> substitute_cur_body(x, arrayset_dict, index_map, arrays_set_in_cur_body, loweredAliasMap, state), cur_parfor.body)
     arrays_set_in_cur_body_with_aliases = getAllAliases(arrays_set_in_cur_body, prev_parfor.array_aliases)
     dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
     dprintln(3,"arrays_set_in_cur_body_with_aliases = ", arrays_set_in_cur_body_with_aliases)
@@ -2419,7 +2476,7 @@ function fuse(body, body_index, cur, state)
 
     # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
     # prevParFor where the array is in allocs_to_eliminate.
-    prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor),
+    prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
                               map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
     dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
@@ -2439,7 +2496,7 @@ function fuse(body, body_index, cur, state)
     else
       num_cur_sub = 1
     end
-    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-num_prev_sub], cur_parfor.postParFor[1:end-num_cur_sub], merged_output ]
+    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-num_prev_sub]; cur_parfor.postParFor[1:end-num_cur_sub]; merged_output ]
     dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
 
     # original_domain_nodes - simple append
@@ -2503,6 +2560,22 @@ function fuse(body, body_index, cur, state)
   return false
 
   false
+end
+
+@doc """
+Returns true if the incoming AST node can be interpreted as a Symbol.
+"""
+function hasSymbol(ssn)
+  stype = typeof(ssn)
+  if stype == Symbol
+    return true
+  elseif stype == SymbolNode
+    return true
+  elseif stype == Expr && ssn.head == :(::)
+    return true
+  else
+    return false
+  end
 end
 
 @doc """
@@ -3263,7 +3336,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
           end
         end
 
-        new_exprs = [ pre_next_parfor, new_exprs ]
+        new_exprs = [ pre_next_parfor; new_exprs ]
         pre_next_parfor = Any[]
         # Do this transformation:  a = ...; b = a; becomes b = ...
         # Eliminate the variable a if it is never used again.
@@ -3938,7 +4011,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
           push!(new_body, TypedExpr(Nothing, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
 
           for k = 1:out_len
-            push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false)))
+            push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state)))
           end
         end
 
@@ -4688,7 +4761,10 @@ function printLambda(dlvl, node)
   dprintln(dlvl, "Input parameters: ", node.args[1])
   dprintln(dlvl, "Metadata: ", node.args[2])
   body = node.args[3]
-  assert(typeof(body) == Expr)
+  if typeof(body) != Expr
+    dprintln(0, "printLambda got ", typeof(body), " for a body, len = ", length(node.args))
+    dprintln(0, node)
+  end
   assert(body.head == :body)
   dprintln(dlvl, "typeof(body): ", body.typ)
   printBody(dlvl, body.args)
@@ -4871,8 +4947,8 @@ function from_assertEqShape(node, state)
   dprintln(3,"from_assertEqShape ", node)
   a1 = node.args[1]    # first array to compare
   a2 = node.args[2]    # second array to compare
-  a1_corr = getOrAddArrayCorrelation(a1.name, state)  # get the length set of the first array
-  a2_corr = getOrAddArrayCorrelation(a2.name, state)  # get the length set of the second array
+  a1_corr = getOrAddArrayCorrelation(toSymGen(a1), state)  # get the length set of the first array
+  a2_corr = getOrAddArrayCorrelation(toSymGen(a2), state)  # get the length set of the second array
   if a1_corr == a2_corr
     # If they are the same then return an empty array so that the statement is eliminated.
     dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
@@ -4901,7 +4977,6 @@ function from_assignment(ast::Array{Any,1}, depth, state)
   rhs = ast[2]
   dprintln(3,"from_assignment lhs = ", lhs)
   dprintln(3,"from_assignment rhs = ", rhs)
-  assert(typeof(lhs) == Symbol)
   if isa(rhs, Expr) && rhs.head == :lambda
     # skip handling rhs lambdas
     rhs = [rhs]
@@ -4915,7 +4990,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
 
   # Eliminate assignments to variables which are immediately dead.
   # The variable name.
-  lhsName = getSName(lhs)
+  lhsName = toSymGen(lhs)
   # Get liveness information for the current statement.
   statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
   assert(statement_live_info != nothing)
@@ -4947,13 +5022,13 @@ function from_assignment(ast::Array{Any,1}, depth, state)
           assert(typeof(ast[i]) == SymbolNode)
           assert(typeof(rhs_entry) == SymbolNode)
           if rhs_entry.typ.name == Array.name
-            add_merge_correlations(rhs_entry.name, ast[i].name, state)
+            add_merge_correlations(toSymGen(rhs_entry), toSymGen(ast[i]), state)
           end
         end
       else
         if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
-          dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end].name)
-          add_merge_correlations(the_parfor.postParFor[end].name, lhs, state)
+          dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
+          add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
         end
       end
     # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
@@ -4976,7 +5051,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
             if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
               dprintln(3, "Will establish array length correlation for const size ", dim1)
-              getOrAddSymbolCorrelation(lhs, state, [dim1.name])
+              getOrAddSymbolCorrelation(lhsName, state, [dim1.name])
             end
           end
         elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
@@ -4988,7 +5063,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
             if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
               dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-              getOrAddSymbolCorrelation(lhs, state, [dim1.name, dim2.name])
+              getOrAddSymbolCorrelation(lhsName, state, [dim1.name, dim2.name])
               dprintln(3, "correlations = ", state.array_length_correlation)
             end
           end
@@ -5000,14 +5075,31 @@ function from_assignment(ast::Array{Any,1}, depth, state)
     if out_typ.name == Array.name
       # Add a length correlation of the form "a = b".
       dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
-      add_merge_correlations(rhs.name, lhs, state)
+      add_merge_correlations(toSymGen(rhs), lhsName, state)
     end
   else
     # Get the type of the lhs from its metadata declaration.
     out_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
   end
 
-  return [SymbolNode(lhs, out_typ), rhs], out_typ
+  return [toSNGen(lhs, out_typ); rhs], out_typ
+end
+
+@doc """
+If we have the type, convert a Symbol to SymbolNode.
+If we have a GenSym then we have to keep it.
+"""
+function toSNGen(x, typ)
+  xtyp = typeof(x)
+  if xtyp == Symbol
+    return SymbolNode(x, typ)
+  elseif xtyp == SymbolNode
+    return x
+  elseif xtyp == GenSym
+    return x
+  else
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
+  end
 end
 
 @doc """
@@ -5031,7 +5123,7 @@ function from_call(ast::Array{Any,1}, depth, state)
   # Recursively process the arguments to the call.  
   args = from_exprs(args, depth+1, state)
 
-  return [fun, args]
+  return [fun; args]
 end
 
 @doc """
@@ -5201,9 +5293,9 @@ end
 @doc """
 Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.
 """
-function insert_no_deps_beginning(node, data::RemoveNoDepsState, top_level_number, is_top_level, read)
+function insert_no_deps_beginning(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
   if is_top_level && top_level_number == 1
-    return [data.top_level_no_deps, node]
+    return [data.top_level_no_deps; node]
   end
   nothing
 end
@@ -5214,7 +5306,7 @@ end
 # insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
 # where they can't prevent fusion.
 """
-function remove_no_deps(node, data::RemoveNoDepsState, top_level_number, is_top_level, read)
+function remove_no_deps(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
   dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5364,15 +5456,13 @@ function extractArrayEquivalencies(node, state)
   end
 
   # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(input_arrays[1].name, state)
+  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
   for i = 2:len_input_arrays
-    argtyp = typeof(input_arrays[i])
-    dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", argtyp)
-    assert(argtyp == SymbolNode)
-    this_correlation = getOrAddArrayCorrelation(input_arrays[i].name, state)
+    dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
+    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
     # Verify that all the inputs are the same size by verifying they are in the same correlation set.
     if this_correlation != main_length_correlation
       merge_correlations(state, main_length_correlation, this_correlation)
@@ -5430,7 +5520,7 @@ end
 @doc """
 AstWalk callback to determine the array equivalence classes.
 """
-function create_equivalence_classes(node, state :: IntelPSE.ParallelIR.expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function create_equivalence_classes(node, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5534,11 +5624,11 @@ function create_equivalence_classes(node, state :: IntelPSE.ParallelIR.expr_stat
           dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
           if typeof(lhs) == SymbolNode
             assert(isArrayType(lhs))
-            lhs_corr = getOrAddArrayCorrelation(lhs.name, state) 
+            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
             dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
           elseif typeof(lhs) == Symbol
-            lhs_corr = getOrAddArrayCorrelation(lhs, state) 
+            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
             dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
           end
@@ -5732,7 +5822,7 @@ function mmapInline(ast, lives, uniqSet)
             fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
             expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
             gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
-            return [fb[1:end-1], [expr], gb]
+            return [fb[1:end-1]; [expr]; gb]
           end, linfo)
         DomainIR.mmapRemoveDupArg!(dst)
       end
@@ -5776,7 +5866,7 @@ end
 @doc """
 Try to hoist allocations outside the loop if possible.
 """
-function hoistAllocation(ast, lives, domLoop, state::IntelPSE.ParallelIR.expr_state)
+function hoistAllocation(ast, lives, domLoop, state :: expr_state)
   for l in domLoop.loops
     dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
     headBlk = lives.cfg.basic_blocks[ l.head ]
@@ -6106,8 +6196,8 @@ end
 Form a Julia :lambda Expr from a DomainLambda.
 """
 function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
-  inputs_as_symbols = map(x -> x.name, dl_inputs)
-  type_data = Any[]
+#  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
+  type_data = CompilerTools.LambdaHandling.VarDef[]
   input_arrays = Symbol[]
   for di in dl_inputs
     push!(type_data, CompilerTools.LambdaHandling.VarDef(di.name, di.typ, 0))
@@ -6115,13 +6205,14 @@ function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
       push!(input_arrays, di.name)
     end
   end
-  dprintln(3,"inputs = ", inputs_as_symbols)
+#  dprintln(3,"inputs = ", inputs_as_symbols)
   dprintln(3,"types = ", type_data)
   dprintln(3,"DomainLambda is:")
   pirPrintDl(3, domain_lambda)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
-  CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
+  CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
+  #CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
+  #CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
   ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
   return (ast, input_arrays) 
 end
@@ -6166,7 +6257,7 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
   # the code will detect statements that depend only on array params and move them to the top which
   # leaves other non-array operations after that and so prevents fusion.
   dprintln(3,"All params = ", ast.args[1])
-  non_array_params = Set{Symbol}()
+  non_array_params = Set{SymGen}()
   for param in ast.args[1]
     if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
       push!(non_array_params, param)
@@ -6276,7 +6367,7 @@ function from_expr(function_name, ast::Any, input_arrays)
   # the code will detect statements that depend only on array params and move them to the top which
   # leaves other non-array operations after that and so prevents fusion.
   dprintln(3,"All params = ", ast.args[1])
-  non_array_params = Set{Symbol}()
+  non_array_params = Set{SymGen}()
   for param in ast.args[1]
     if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
       push!(non_array_params, param)
@@ -6411,7 +6502,7 @@ function from_expr(ast::Any, depth, state, top_level)
         dprintln(3,"Processing body end")
     elseif head == :(=)
         dprintln(3,"Before from_assignment typ is ", typ)
-        args, new_typ = from_assignment(args,depth,state)
+        args, new_typ = from_assignment(args, depth, state)
         if length(args) == 0
           return []
         end
@@ -6573,14 +6664,23 @@ type DirWalk
 end
 
 @doc """
+Return one element array with element x.
+"""
+function asArray(x)
+  ret = Any[]
+  push!(ret, x)
+  return ret
+end
+
+@doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
 function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
-  dprintln(4,"PIR AstWalkCallback starting")
+  dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-  dprintln(4,"PIR AstWalkCallback ret = ", ret)
+  dprintln(3,"PIR AstWalkCallback ret = ", ret)
   if ret != nothing
-    return [ret]
+    return ret
   end
 
   asttyp = typeof(x)
@@ -6611,7 +6711,7 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
       for i = 1:length(cur_parfor.postParFor)-1
         AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
       end
-      return x
+      return [x]
     elseif head == :parfor_start # || head == :parfor_end
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.loopNests)
@@ -6625,29 +6725,29 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
         AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
         AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
       end
-      return x
+      return [x]
     elseif head == :parfor_end
       # intentionally do nothing
-      return x
+      return [x]
     elseif head == :insert_divisible_task
       cur_task = args[1]
       for i = 1:length(cur_task.args)
         AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
       end
-      return x
+      return [x]
     elseif head == :loophead
       # intentionally do nothing
-      return x
+      return [x]
     elseif head == :loopend
       # intentionally do nothing
-      return x
+      return [x]
     end
   elseif asttyp == pir_range_actual
     for i = 1:length(x.dim)
       AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
       AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
     end
-    return x
+    return [x]
   end
   return nothing
 end
