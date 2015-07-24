@@ -1273,7 +1273,7 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
   if ret != nothing
-    return [ret]
+    return ret
   end
 
   local asttyp = typeof(x)
@@ -1288,13 +1288,13 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
         args[1][i] = get_one(AstWalker.AstWalk(input_arrays[i], AstWalkCallback, dw))
       end
       args[2] = get_one(AstWalker.AstWalk(args[2], AstWalkCallback, dw))
-      return x
+      return [x]
     elseif head == :reduce
       assert(length(args) == 3)
       for i = 1:3
         args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
       end
-      return x
+      return [x]
     elseif head == :select 
       # it is always in the form of select(arr, mask), where range can itself be ranges(range(...), ...))
       assert(length(args) == 2)
@@ -1314,31 +1314,31 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
           ranges[i].args[j] = get_one(AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw))
         end
       end
-      return x
+      return [x]
     elseif head == :stencil!
       assert(length(args) == 4)
       args[2] = get_one(AstWalker.AstWalk(args[2], AstWalkCallback, dw))
       for i in 1:length(args[3]) # buffer array
         args[3][i] = get_one(AstWalker.AstWalk(args[3][i], AstWalkCallback, dw))
       end
-      return x
+      return [x]
     elseif head == :assertEqShape
       assert(length(args) == 2)
       for i = 1:length(args)
         args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
       end
-      return x
+      return [x]
     elseif head == :assert
       for i = 1:length(args)
         AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return x
+      return [x]
     end
     x = Expr(head, args...)
     x.typ = typ
   elseif asttyp == DomainLambda
     dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
-    return x
+    return [x]
   end
   return nothing
 end
