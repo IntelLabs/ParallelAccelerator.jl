@@ -1,3 +1,6 @@
+using CompilerTools
+using CompilerTools.LambdaHandling
+
 type KernelStat
   dimension :: Int             # number of dimensions of the stencil
   shapeMax  :: Array{Int,1}    # max extent of the stencil for each dimension
@@ -151,7 +154,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
     local bufDict = Dict{SymGen, Any}(zip(bufSyms, bufSymNodes))
     local dict = merge(bufDict, idxDict, strideDict)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    replaceExprWithDict(krnExpr, dict)
+    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
   end
   # Remove those with no definition from locals as a sanity cleanup.
   # Note that among those removed are the input arguments, but this
