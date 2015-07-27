@@ -5746,8 +5746,7 @@ function mmapInline(ast, lives, uniqSet)
       krnStat = expr.args[1]
       iterations = expr.args[2]
       bufs = expr.args[3]
-      for j in krnStat.modified
-        k = krnStat.modified[j]
+      for k in krnStat.modified
         s = bufs[k]
         if isa(s, SymbolNode) s = s.name end
         modify!(modifiedAt, s, i)
