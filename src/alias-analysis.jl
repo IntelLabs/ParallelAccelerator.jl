@@ -14,6 +14,7 @@
 module AliasAnalysis
 
 using ..DomainIR
+using Base.uncompressed_ast
 using CompilerTools.LambdaHandling
 using CompilerTools
 
@@ -118,7 +119,7 @@ function from_lambda(state, env, expr)
   # very conservative handling by setting free variables to Unknown.
   # TODO: may want to simulate function call at call site to get
   #       more accurate information.
-  for (v, vd) in linfo.escaping_variables
+  for (v, vd) in linfo.escaping_defs
     update_unknown(state, v)
   end
   return NotArray

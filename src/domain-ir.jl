@@ -175,7 +175,7 @@ newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
 @doc """
 update the definition of a variable.
 """
-function updateDef(state::IRState, s::Union{Symbol,SymbolNode,GenSym}, rhs)
+function updateDef(state::IRState, s::SymAllGen, rhs)
   s = isa(s, SymbolNode) ? s.name : s
   dprintln(3, "updateDef: s = ", s, " rhs = ", rhs)
   @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
@@ -188,7 +188,7 @@ end
 Look up a definition of a variable.
 Return nothing if none is found.
 """
-function lookupDef(state::IRState, s::Union{Symbol, SymbolNode, GenSym})
+function lookupDef(state::IRState, s::SymAllGen)
   s = isa(s, SymbolNode) ? s.name : (isa(s, GenSym) ? s.id : s)
   get(state.defs, s, nothing)
 end
@@ -197,7 +197,7 @@ end
 Look up a definition of a variable only when it is const or assigned once.
 Return nothing if none is found.
 """
-function lookupConstDef(state::IRState, s::Union{Symbol, SymbolNode, GenSym})
+function lookupConstDef(state::IRState, s::SymAllGen)
   def = lookupDef(state, s)
   # we assume all GenSym is assigned once 
   desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
@@ -224,7 +224,7 @@ end
 Look up a definition of a variable throughout nested states until a definition is found.
 Return nothing if none is found.
 """
-function lookupDefInAllScopes(state::IRState, s::Union{Symbol, SymbolNode, GenSym})
+function lookupDefInAllScopes(state::IRState, s::SymAllGen)
   def = lookupDef(state, s)
   if is(def, nothing) && !is(state.parent, nothing)
     return lookupDefInAllScopes(state.parent, s)
@@ -299,11 +299,19 @@ sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_i
 ignoreSym = Symbol[:box]
 ignoreSet = Set{Symbol}(ignoreSym)
 
+# some part of the code still requires this
 unique_id = 0
-function freshsym(s::String)
+function addFreshLocalVariable(s::String, t::DataType, desc, linfo::LambdaInfo)
   global unique_id
-  unique_id = unique_id + 1
-  return symbol(string(s, "##", unique_id))
+  name = :tmpvar
+  unique = false
+  while (unique)
+    unique_id = unique_id + 1
+    name = symbol(string(s, "##", unique_id))
+    unique = !isLocalVariable(name, linfo)
+  end
+  addLocalVariable(name, t, desc, linfo)
+  return SymbolNode(name, t)
 end
 
 include("domain-ir-stencil.jl")
@@ -311,6 +319,10 @@ include("domain-ir-stencil.jl")
 function isinttyp(typ)
     is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is(typ, Int8)  || 
     is(typ, Uint64) || is(typ, Uint32) || is(typ, Uint16) || is(typ, Uint8)
+end
+
+function istupletyp(typ)
+  isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
 function isarray(typ)
@@ -882,14 +894,12 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         local tvar = lastExp.args[1]
         local typs = tvar.typ
         local nvar = length(typs)
-        local retNodes = SymbolNode[ SymbolNode(freshsym("ret"), t) for t in typs ]
+        local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
         local retExprs = Array(Expr, length(retNodes))
         for i in 1:length(retNodes)
           n = retNodes[i]
-          #push!(locals, n.name, VarDef(n.typ, 16+2, nothing)) # tmp vars assigned only once
-          addLocalVariable(n.name, n.typ, ISASSIGNEDONCE | ISASSINGED, linfo)
-          retExprs[i] = mk_expr(n.typ, :(=), n.name,
-                                  mk_expr(n.typ, :call, TopNode(:tupleref), tvar, i))
+          t = typs[i]
+          retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, TopNode(:tupleref), tvar, i))
         end
         lastExp.head = retExprs[1].head
         lastExp.args = retExprs[1].args
@@ -955,7 +965,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
       local stat, kernelF
-      stat, kernelF = mkStencilLambda(bufs, kernelExp, borderExp)
+      stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
+      dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
       expr = mk_stencil!(stat, iterations, bufs, kernelF)
       #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
       # force typ to be Void, which means stencil doesn't return anything

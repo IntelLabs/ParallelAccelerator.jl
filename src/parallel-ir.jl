@@ -5753,7 +5753,7 @@ function mmapInline(ast, lives, uniqSet)
         modify!(modifiedAt, s, i)
       end
       if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
-        for j in 1:min(krnStat.rotatNum, length(bufs))
+        for j in 1:min(krnStat.rotateNum, length(bufs))
           s = bufs[j]
           if isa(s, SymbolNode) s = s.name end
           modify!(modifiedAt, s, i)
