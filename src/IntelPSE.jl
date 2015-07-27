@@ -38,6 +38,13 @@ if haskey(ENV,"INTEL_PSE_MODE")
   end
 end
 
+@doc """
+Provide a way to access the mode variable so that we can change the implementation over time if we have to.
+"""
+function getIntelPseMode()
+  return client_intel_pse_mode
+end
+
 # a hack to make offload function available to domain IR. The assumption is that this
 # is neither a TOPLEVEL function for J2C, nor a PROXYONLY compilation.
 _offload(func, sig) = offload(func, sig, 0)
