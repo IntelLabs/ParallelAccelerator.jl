@@ -978,6 +978,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       expr = mk_copy(args[1])
       expr.typ = typ
     elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
+      dprintln(env, " args = ", args)
       typ1 = typeOfOpr(state, args[1])
       if is(fun, :fptrunc)
         if is(args[1], :Float32) typ1 = Float32
@@ -1003,10 +1004,13 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       if isa(typExp, QuoteNode) 
         elemTyp = typExp.value 
       elseif isa(typExp, DataType)
-        elemTyp = elmTypOf(typExp)
+        elemTyp = typExp
+      elseif isa(typExp, GlobalRef)
+        elemTyp = eval(typExp)
       else
         error("Expect QuoteNode or DataType, but got typExp = ", typExp)
       end
+      assert(isa(elemTyp, DataType))
       expr = mk_alloc(elemTyp, args)
       expr.typ = typ
     elseif is(fun, :broadcast_shape)

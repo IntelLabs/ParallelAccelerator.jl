@@ -21,7 +21,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   #assert(krn.head == symbol("->"))
   assert(isa(krn, Expr) && krn.head == :lambda)
   local stat = ()
-  warn(string("krn.args[1]=", krn.args[1]))
+  # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms = krn.args[1] # parameter of the kernel lambda
   local narrs = length(arrSyms)
   local bufSyms = Array(GenSym, narrs)
@@ -37,7 +37,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   local bufSymSet = Set{GenSym}(bufSyms)
   local expr = krn.args[3]
   assert(isa(expr, Expr) && expr.head == :body)
-  warn(string("got arrSymDict = ", arrSymDict))
+  # warn(string("got arrSymDict = ", arrSymDict))
   # traverse expr to fix types, and places where arrSyms is refernced
   function traverse(expr)
     # recurse
@@ -137,7 +137,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   end
   # if not returning buffers or buffers not found, return nothing
   if rhs == nothing 
-    lastExpr.args = is(rhs, nothing)
+    lastExpr.args = Any[ nothing ]
   end 
   krnExpr = expr
   assert(stat != ())            # check if stat is indeed created
@@ -165,7 +165,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   #    delete!(locals, v)
   #  end
   #end
-  warn(string("return from analyze kernel: ", (stat, state.linfo, krnExpr)))
+  # warn(string("return from analyze kernel: ", (stat, state.linfo, krnExpr)))
   return stat, genBody
 end
 
@@ -200,7 +200,7 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
     error("Border specification in runStencil can only be Symbols.")
   end
   borderSty = borderExp.value 
-  warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
+  # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, genBody = analyze_kernel(state, typs, kernelExp, borderSty)
   # f expects input of either [indices, strides, buffers] or [symbols].
   # the latter is used in show method for DomainLambda

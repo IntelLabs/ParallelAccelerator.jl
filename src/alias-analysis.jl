@@ -47,14 +47,14 @@ const NotArray = 0
 
 type State
   baseID :: Int
-  locals :: Dict{Union{Symbol, GenSym}, Int}
-  revmap :: Dict{Int, Set{Union{Symbol, GenSym}}}
+  locals :: Dict{SymGen, Int}
+  revmap :: Dict{Int, Set{SymGen}}
   nest_level :: Int
   top_level_idx :: Int
   liveness :: CompilerTools.LivenessAnalysis.BlockLiveness
 end
 
-init_state(liveness) = State(0, Dict{Union{Symbol,GenSym},Int}(), Dict{Int, Set{Union{Symbol,GenSym}}}(), 0, 0, liveness)
+init_state(liveness) = State(0, Dict{SymGen,Int}(), Dict{Int, Set{SymGen}}(), 0, 0, liveness)
 
 function next_node(state)
   local n = state.baseID + 1
@@ -69,7 +69,7 @@ function update_node(state, v, w)
     if haskey(state.revmap, w)
       push!(state.revmap[w], v)
     else
-      state.revmap[w] = push!(Set{Union{Symbol,GenSym}}(), v)
+      state.revmap[w] = push!(Set{SymGen}(), v)
     end
   else
     # when a variable is initialized more than once, set to Unknown
@@ -98,6 +98,16 @@ function update(state, v, w)
     update_notarray(state, v)
   else
     update_unknown(state, v)
+  end
+end
+
+function toSymGen(x)
+  if isa(x, SymbolNode)
+    x.name
+  elseif isa(x, GenSym) || isa(x, Symbol) 
+    x
+  else
+    error("Expecting Symbol, SymbolNode, or GenSym, but got ", x)
   end
 end
 
@@ -280,7 +290,7 @@ function from_expr(state, env, ast)
     elseif is(head, :select)
         return next_node(state)
     elseif is(head, :tomask)
-        return lookup(state, args[1].name)
+        return lookup(state, toSymGen(args[1]))
     elseif is(head, :ranges)
         return NotArray
     elseif is(head, :reduce)
@@ -293,12 +303,14 @@ function from_expr(state, env, ast)
         dl :: DomainLambda = args[2]
         n_outputs = length(dl.outputs)
         assert(n_outputs == 1) # unless we support multi-return
-        return lookup(state, args[1][1].name)
+        return lookup(state, toSymGen(args[1][1]))
     elseif is(head, :stencil!)
         return from_stencil!(state, env, args)
     elseif is(head, :parfor)
         assert(length(args) == 1) # unless we support multi-return
         return from_parfor(state, env, args[1])
+    elseif is(head, :arraysize)
+        return NotArray
     elseif is(head, :assertEqShape)
         return NotArray
     elseif is(head, :tuple)
@@ -353,8 +365,8 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
   dprintln(2, "AA locals=", state.locals)
   from_expr(state, Nothing, body)
   dprintln(2, "AA locals=", state.locals)
-  local revmap = Dict{Int, Union{Symbol,GenSym}}()
-  local unique = Set{Union{Symbol,GenSym}}()
+  local revmap = Dict{Int, SymGen}()
+  local unique = Set{SymGen}()
   # keep only variables that have unique object IDs.
   # TODO: should consider liveness either here or during analysis,
   #       since its ok to alias dead vars.
