@@ -2,6 +2,7 @@ module ParallelIR
 export num_threads_mode
 
 using CompilerTools
+using CompilerTools.LambdaHandling
 using ..DomainIR
 using ..AliasAnalysis
 using ..IntelPSE
@@ -141,12 +142,6 @@ Clear an equivalence class.
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
   empty!(ec.data)
 end
-
-# A type union to be precise that some data structures can now use a GenSym in addition to a Symbol but nothing else.
-SymGen = Union{Symbol, GenSym}
-SymNodeGen = Union{SymbolNode, GenSym}
-SymAllGen = Union{Symbol, SymbolNode, GenSym}
-SymAll = Union{Symbol, SymbolNode}
 
 @doc """
 The parfor AST node type.
