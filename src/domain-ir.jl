@@ -838,7 +838,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       args = normalize_args(state, env_, args)
       assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
       local dimExp = args[end]     # last argument is the dimension tuple
-      assert(isa(dimExp, SymbolNode))
+      assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
       dimExp = lookupConstDefForArg(state, dimExp)
       dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
       assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
@@ -854,7 +854,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
         assert(length(m) > 0)
         mapExp = m[1].func.code
-      elseif isa(mapExp, SymbolNode)
+      elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
         mapExp = lookupConstDefForArg(state, mapExp)
       end
       assert(isa(mapExp, LambdaStaticData))
