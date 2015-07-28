@@ -2517,8 +2517,8 @@ function fuse(body, body_index, cur, state)
         dprintln(2,"prev was assignment and is staying an assignment")
         # The new lhs is not empty and so this is the normal case where "prev" stays an assignment expression and we update types here and if necessary FusionSentinel.
         prev.args[1] = new_lhs
-        prev.typ = new_lhs.typ
-        prev.args[2].typ = new_lhs.typ
+        prev.typ = getType(new_lhs, state.lambdaInfo)
+        prev.args[2].typ = prev.typ
         # Strip off a previous FusionSentinel() if it exists in the expression.
         prev.args = prev.args[1:2]
         if !single
@@ -5208,7 +5208,8 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
   elseif isa(node, SymbolNode)
     if haskey(data.copies, node.name)
       dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
-      return [SymbolNode(data.copies[node.name], node.typ)]
+      tmp_node = data.copies[node.name]
+      return isa(tmp_node, Symbol) ? [SymbolNode(tmp_node, node.typ)] : tmp_node
     end
   elseif isa(node, GenSym)
     if haskey(data.copies, node)
