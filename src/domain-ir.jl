@@ -492,6 +492,8 @@ end
 
 function typeOfOpr(state, x)
   if isa(x, Expr) x.typ
+  elseif isa(x, Symbol) 
+    getType(x, state.linfo) 
   elseif isa(x, SymbolNode) 
     typ1 = getType(x.name, state.linfo) 
     assert(x.typ == typ1)
@@ -867,14 +869,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       # dprintln(env, "ast = ", ast)
       # create tmp arrays to store results
       arrtyps = Type[ Array{t, ndim} for t in etys ]
-      tmpNodes = Array(SymbolNode, length(arrtyps))
+      tmpNodes = Array(GenSym, length(arrtyps))
       # allocate the tmp array
       for i = 1:length(arrtyps)
         arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
         tmparr = addGenSym(arrtyps[i], state.linfo)
         updateDef(state, tmparr, arrdef)
         emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
-        tmpNodes[i] = SymbolNode(tmparr, arrtyps[i])
+        tmpNodes[i] = tmparr
       end
       # produce a DomainLambda
       body = ast.args[3]
@@ -882,7 +884,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       # dprintln(env, "params = ", params)
       #locals = metaToVarDef(ast.args[2][2])
       #escapes = metaToVarDef(ast.args[2][3])
-      linfo = lambdaExprToLambdaInfo(ast.args[2])
+      linfo = lambdaExprToLambdaInfo(ast)
       assert(isa(body, Expr) && is(body.head, :body))
       # fix the return in body
       lastExp = body.args[end]
@@ -912,8 +914,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       else
         lastExp.head = :tuple
       end
-      bodyF(args)=replaceWithDict(body, Dict{Symbol,Any}(zip(params, args[1+length(etys):end]))).args
-      domF = DomainLambda([etys, argstyp], etys, bodyF, linfo)
+      bodyF(args)=replaceExprWithDict(body, Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))).args
+      domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
       expr = mk_mmap!(tmpNodes, domF, true)
       expr.typ = length(arrtyps) == 1 ? arrtyps[1] : tuple(arrtyps...)
     elseif is(fun, :runStencil)
