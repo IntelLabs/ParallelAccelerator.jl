@@ -885,6 +885,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   end
 
   def = m[1].func.code
+  global previouslyOptimized 
   if in((function_name, signature), previouslyOptimized)
     dprintln(2, "method ", function_name, " already offloaded")
     return
