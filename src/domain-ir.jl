@@ -643,6 +643,7 @@ function from_assignment(state, env, expr::Any)
      (is(lhs, rhs.args[1][1]) || (isa(rhs.args[1][1], SymbolNode) && is(lhs, rhs.args[1][1].name)))
     rhs.head = :mmap!
     # NOTE that we keep LHS to avoid a bug (see issue #...)
+    typ = getType(lhs, state.linfo)
     lhs = addGenSym(typ, state.linfo) 
   end
   updateDef(state, lhs, rhs)
