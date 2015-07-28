@@ -5209,7 +5209,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     if haskey(data.copies, node.name)
       dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
       tmp_node = data.copies[node.name]
-      return isa(tmp_node, Symbol) ? [SymbolNode(tmp_node, node.typ)] : tmp_node
+      return isa(tmp_node, Symbol) ? [SymbolNode(tmp_node, node.typ)] : [tmp_node]
     end
   elseif isa(node, GenSym)
     if haskey(data.copies, node)
