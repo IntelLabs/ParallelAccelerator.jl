@@ -5000,6 +5000,9 @@ function from_assignment(ast::Array{Any,1}, depth, state)
   lhsName = toSymGen(lhs)
   # Get liveness information for the current statement.
   statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+  if statement_live_info == nothing
+    dprintln(0, state.top_level_number, " ", state.block_lives)
+  end
   assert(statement_live_info != nothing)
 
   dprintln(3,statement_live_info)
@@ -6136,6 +6139,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
       topo_sort = StatementWithDeps[]
       dfsVisit(livein, 1, topo_sort)
     else
+      dprintln(3, "Doing maxFusion in block ", bb)
       # A bubble-sort style of coalescing domain nodes together in the AST.
       earliest_parfor = 1
       found_change = true
@@ -6347,14 +6351,25 @@ function from_expr(function_name, ast::Any, input_arrays)
 
   start_time = time_ns()
 
+  # Create CFG from AST.  This will automatically filter out dead basic blocks.
+  cfg = CompilerTools.CFGs.from_ast(ast)
+  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+  body = CompilerTools.LambdaHandling.getBody(ast)
+  # Re-create the body minus any dead basic blocks.
+  body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+  # Re-create the lambda minus any dead basic blocks.
+  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
+  dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
+ 
   #CompilerTools.LivenessAnalysis.set_debug_level(3)
 
-  dprintln(1,"Starting liveness analysis.")
+  dprintln(1,"Starting liveness analysis. function = ", function_name)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+ 
 #  udinfo = CompilerTools.UDChains.getUDChains(lives)
   dprintln(3,"lives = ", lives)
 #  dprintln(3,"udinfo = ", udinfo)
-  dprintln(1,"Finished liveness analysis.")
+  dprintln(1,"Finished liveness analysis. function = ", function_name)
 
   dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
 
@@ -6368,7 +6383,7 @@ function from_expr(function_name, ast::Any, input_arrays)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
     mmapToMmap!(ast, lives, uniqSet)
-    dprintln(1, "Finished mmap to mmap! transformation.")
+    dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
 #    dprintln(3, "AST = ", ast)
     printLambda(3, ast)
   end
@@ -6385,7 +6400,7 @@ function from_expr(function_name, ast::Any, input_arrays)
       push!(non_array_params, param)
     end
   end
-  dprintln(3,"Non-array params = ", non_array_params)
+  dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
   # find out max_label
   body = ast.args[3]
@@ -6395,54 +6410,54 @@ function from_expr(function_name, ast::Any, input_arrays)
   rep_start = time_ns()
 
   for i = 1:rearrange_passes
-    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
+    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
     rnd_state = RemoveNoDepsState(lives, non_array_params)
     ast = get_one(AstWalk(ast, remove_no_deps, rnd_state))
-    dprintln(3,"ast after no dep stmts removed = ")
+    dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
     printLambda(3, ast)
       
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
-    dprintln(1,"Adding statements with no dependencies to the start of the AST.")
+    dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
     ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
-    dprintln(3,"ast after no dep stmts re-inserted = ")
+    dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
     printLambda(3, ast)
 
-    dprintln(1,"Re-starting liveness analysis.")
+    dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    dprintln(1,"Finished liveness analysis.")
+    dprintln(1,"Finished liveness analysis.", " function = ", function_name)
   end
 
   dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
   processAndUpdateBody(ast, removeNothingStmts, nothing)
-  dprintln(3,"ast after removing nothing stmts = ")
+  dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
   ast   = get_one(AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}())))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after copy_propagate = ")
+  dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
   printLambda(3, ast)
 
   ast   = get_one(AstWalk(ast, remove_dead, RemoveDeadState(lives)))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after remove_dead = ")
+  dprintln(3,"ast after remove_dead = ", " function = ", function_name)
   printLambda(3, ast)
 
   eq_start = time_ns()
 
   new_vars = expr_state(lives, max_label, input_arrays)
-  dprintln(3,"Creating equivalence classes.")
+  dprintln(3,"Creating equivalence classes.", " function = ", function_name)
   AstWalk(ast, create_equivalence_classes, new_vars)
-  dprintln(3,"Done creating equivalence classes.")
+  dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
   dprintln(3,"symbol_correlations = ", new_vars.symbol_array_correlation)
   dprintln(3,"array_correlations  = ", new_vars.array_length_correlation)
 
   dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
  
   processAndUpdateBody(ast, removeAssertEqShape, new_vars)
-  dprintln(3,"ast after removing assertEqShape = ")
+  dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
@@ -6450,12 +6465,12 @@ function from_expr(function_name, ast::Any, input_arrays)
     maxFusion(lives)
     # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
     ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    dprintln(3,"ast after maxFusion = ")
+    dprintln(3,"ast after maxFusion = ", " function = ", function_name)
     printLambda(3, ast)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
   end
 
-  dprintln(1,"Doing conversion to parallel IR.")
+  dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
 
   new_vars.block_lives = lives
 
