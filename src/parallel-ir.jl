@@ -663,7 +663,7 @@ end
 If we somehow determine that two arrays must be the same length then 
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
-function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state)
+function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: expr_state)
   dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
   old_corr = getOrAddArrayCorrelation(old_sym, state)
   new_corr = getOrAddArrayCorrelation(new_sym, state)
@@ -674,7 +674,7 @@ end
 @doc """
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
-function getOrAddArrayCorrelation(x :: SymGen, state)
+function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
   if !haskey(state.array_length_correlation, x)
     dprintln(3,"Correlation for array not found = ", x)
     addUnknownArray(x, state)
@@ -685,7 +685,7 @@ end
 @doc """
 A new array is being created with an explicit size specification in dims.
 """
-function getOrAddSymbolCorrelation(array :: GenSym, state, dims)
+function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{SymGen,1})
   if !haskey(state.symbol_array_correlation, dims)
     # We haven't yet seen this combination of dims used to create an array.
     dprintln(3,"Correlation for symbol set not found, dims = ", dims)
@@ -2065,6 +2065,9 @@ end
 Add to the map of symbol names to types.
 """
 function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
+  if typ == Any
+    dprintln(0, "rememberTypeForSym: sym = ", sym, " typ = ", typ)
+  end
   assert(typ != Any)
   sym_to_type[sym] = typ
 end
@@ -5055,7 +5058,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
             if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
               dprintln(3, "Will establish array length correlation for const size ", dim1)
-              getOrAddSymbolCorrelation(lhsName, state, [dim1.name])
+              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
             end
           end
         elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
@@ -5067,7 +5070,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
             if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
               dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-              getOrAddSymbolCorrelation(lhsName, state, [dim1.name, dim2.name])
+              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
               dprintln(3, "correlations = ", state.array_length_correlation)
             end
           end
@@ -5135,7 +5138,7 @@ State to aide in the copy propagation phase.
 """
 type CopyPropagateState
   lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-  copies :: Dict{Symbol,Symbol}
+  copies :: Dict{SymGen, SymGen}
 
   function CopyPropagateState(l, c)
     new(l,c)
@@ -5180,7 +5183,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
 
     if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
       # Only copy propagate within a basic block.  this is now a new basic block.
-      data.copies = Dict{Symbol,Symbol}() 
+      data.copies = Dict{SymGen, SymGen}() 
     elseif isAssignmentNode(node)
       dprintln(3,"Is an assignment node.")
       lhs = node.args[1] = get_one(AstWalk(node.args[1], copy_propagate, data))
@@ -5188,10 +5191,10 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
       rhs = node.args[2] = get_one(AstWalk(node.args[2], copy_propagate, data))
       dprintln(4,rhs)
 
-      if typeof(rhs) == Symbol || typeof(rhs) == SymbolNode
+      if isa(rhs, SymAllGen)
         dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
         # Record that the left-hand side is a copy of the right-hand side.
-        data.copies[getSName(lhs)] = getSName(rhs)
+        data.copies[toSymGen(lhs)] = toSymGen(rhs)
       end
       return [node]
     end
@@ -5206,6 +5209,11 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     if haskey(data.copies, node.name)
       dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
       return [SymbolNode(data.copies[node.name], node.typ)]
+    end
+  elseif isa(node, GenSym)
+    if haskey(data.copies, node)
+      dprintln(3,"Replacing ", node, " with ", data.copies[node])
+      return [data.copies[node]]
     end
   elseif isa(node, DomainLambda)
     dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
@@ -5486,8 +5494,8 @@ Make sure all the dimensions are SymbolNodes.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
-function checkAndAddSymbolCorrelation(lhs, state, dim_array)
-  dim_names = Symbol[]
+function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
+  dim_names = SymGen[]
   for i = 1:length(dim_array)
     if typeof(dim_array[i]) != SymbolNode
       return false
@@ -6557,7 +6565,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         appTypExpr = Expr(:call1, TopNode(:apply_type), :Array, elemTyp, n)
         appTypExpr.typ = Type{Array{elemTyp,n}}
         tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-        tupExpr.typ = ntuple(n+1, i -> (i==1) ? Type{Any} : Type{Int})
+        tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
         realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
         for i=1:n
           push!(realArgs, sizes[i])
