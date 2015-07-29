@@ -1,4 +1,4 @@
-import ..DomainIR.freshsym
+import ..DomainIR
 
 function relabel(exprs::Array{Any}, irState)
   labelDict = Dict{Int, Int}()
@@ -26,7 +26,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   assert(length(args) == 4)
   local stat = args[1]
   local border = stat.borderSty
-  local border_inloop = false, oob_dst_zero = false, oob_src_zero = false
+  local border_inloop = false
+  local oob_dst_zero = false
+  local oob_src_zero = false
+  local oob_wraparound = false
   if isa(border, QuoteNode)
     local b = border.value
     oob_dst_zero = is(b, :oob_dst_zero)
@@ -34,25 +37,28 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     oob_wraparound = is(b, :oob_wraparound)
   end
   local iterations = args[2]
+  # convert all SymbolNode in bufs to just Symbol
   local bufs = args[3]
-  local kernelF = args[4]
+  local kernelF :: DomainLambda = args[4] 
+  local linfo = irState.lambdaInfo
   # println(stat)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
-  main_length_correlation = getOrAddArrayCorrelation(bufs[1].name, irState)
+  local toSymGen(x) = isa(x, SymbolNode) ? x.name : x 
+  main_length_correlation = getOrAddArrayCorrelation(toSymGen(bufs[1]), irState)
   local n = stat.dimension
-  local sizeNodes = [ SymbolNode(freshsym(string("len", string(i))), Int) for i = 1:n ]
-  local sizeInitExpr = [ TypedExpr(Int, :(=), sizeNodes[i].name,
+  local sizeNodes = [ addGenSym(Int, linfo) for i = 1:n ]
+  local sizeInitExpr = [ TypedExpr(Int, :(=), sizeNodes[i],
                                    TypedExpr(Int, :call, TopNode(:arraysize), buf, i))
                          for i in 1:n ]
-  local strideNodes = [ SymbolNode(freshsym(string(s)), Int) for s in stat.strideSym ]
+  local strideNodes = [ addGenSym(Int, linfo) for s in stat.strideSym ]
   local strideInitExpr = Array(Any, n)
-  strideInitExpr[1] = TypedExpr(Int, :(=), strideNodes[1].name, 1)
+  strideInitExpr[1] = TypedExpr(Int, :(=), strideNodes[1], 1)
   # the following assumes contiguous column major layout for multi-dimensional arrays
   for i = 2:n
-    strideInitExpr[i] = TypedExpr(Int, :(=), strideNodes[i].name,
+    strideInitExpr[i] = TypedExpr(Int, :(=), strideNodes[i],
                                   TypedExpr(Int, :call, TopNode(:mul_int), strideNodes[i-1], sizeNodes[i-1]))
   end
-  local idxNodes = [ SymbolNode(freshsym(string(s)), Int) for s in stat.idxSym ]
+  local idxNodes = Any[ DomainIR.addFreshLocalVariable(string("i",s.id), Int, ISASSIGNED | ISASSIGNEDONCE, linfo) for s in stat.idxSym ]
   local loopNest = [ PIRLoopNest(idxNodes[i],
                                  border_inloop ? 1 : 1-stat.shapeMin[i],
                                  border_inloop ? sizeNodes[i] : TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[i], stat.shapeMax[i]),
@@ -61,12 +67,13 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local nbufs = length(bufs)
   tmpBufs = Array(SymbolNode, nbufs)
   for i = 1:length(bufs)
-    elmTyp = DomainIR.elmTypOf(bufs[i].typ)
+    elmTyp = DomainIR.elmTypOf(getType(bufs[i], linfo))
     arrTyp = Array{elmTyp, n}
-    bufs[i].typ = arrTyp
-    tmpBufs[i] = SymbolNode(freshsym("tmp"), arrTyp)
+    # TODO: enforce buffer type
+    # bufs[i].typ = arrTyp
+    tmpBufs[i] = DomainIR.addFreshLocalVariable("tmp", arrTyp, ISASSIGNED, linfo)
 
-    this_correlation = getOrAddArrayCorrelation(bufs[i].name, irState)
+    this_correlation = getOrAddArrayCorrelation(toSymGen(bufs[i]), irState)
     if this_correlation != main_length_correlation
       merge_correlations(irState, main_length_correlation, this_correlation)
     end
@@ -85,12 +92,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     rets = bodyExpr[end].args
     assert(length(rets) == nbufs)
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(rets[i].typ, :(=), tmpBufs[i].name, rets[i]))
-      push!(revertExpr, TypedExpr(rets[i].typ, :(=), tmpBufs[i].name, bufs[i]))
+      push!(rotateExpr, TypedExpr(rets[i].typ, :(=), toSymGen(tmpBufs[i]), rets[i]))
+      push!(revertExpr, TypedExpr(rets[i].typ, :(=), toSymGen(tmpBufs[i]), bufs[i]))
     end
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(tmpBufs[i].typ, :(=), bufs[i].name, tmpBufs[i]))
-      push!(revertExpr, TypedExpr(tmpBufs[i].typ, :(=), rets[i].name, tmpBufs[i]))
+      push!(rotateExpr, TypedExpr(tmpBufs[i].typ, :(=), toSymGen(bufs[i]), tmpBufs[i]))
+      push!(revertExpr, TypedExpr(tmpBufs[i].typ, :(=), toSymGen(rets[i]), tmpBufs[i]))
     end
   end
   bodyExpr = bodyExpr[1:end-1]
@@ -106,7 +113,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
-  borderExpr = Any[ TypedExpr(Int, :(=), idxNodes[1].name,
+  borderExpr = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
                       TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
@@ -160,43 +167,29 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   push!(borderExpr, LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = TypedExpr(Void, head,
-        PIRParForAst([lowerGotos, upperGotos, borderExpr],
+        PIRParForAst(vcat(lowerGotos, upperGotos, borderExpr),
         [],
         [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
         PIRReduction[],
         [], [], irState.top_level_number, get_unique_num()))
 
-  stepNode = SymbolNode(freshsym("step"), Int)
+  stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
   iterPre  = (isa(iterations, Number) && iterations == 1) ?
-            Any[] : [ Expr(:loophead, stepNode.name, 1, iterations) ]
+            Any[] : Any[ Expr(:loophead, stepNode.name, 1, iterations) ]
   iterPost = (isa(iterations, Number) && iterations == 1) ?
-            Any[] : [ rotateExpr, Expr(:loopend, stepNode.name) ]
-  preExpr = [
-      sizeInitExpr,
-      strideInitExpr,
-      iterPre,
-      borderCond ]
-  postExpr = [
-      iterPost,
-      # length(bufs) > 2 ? tuple(bufs...) : bufs[1]
-    ]
+            Any[] : vcat(rotateExpr, Expr(:loopend, stepNode.name))
+  preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
+  postExpr = vcat(iterPost)
   expr = PIRParForAst(relabel(bodyExpr, irState),
     [],
     loopNest,
     PIRReduction[],
-    [ length(bufs) > 2 ? tuple(bufs...) : bufs[1] ],
-    [DomainOperation(:stencil!, args)],
+    Any[ length(bufs) > 2 ? tuple(bufs...) : bufs[1] ],
+    DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
     get_unique_num())
-  for (v,d) in kernelF.locals
-    addStateVar(irState, new_var(v, d.typ, d.flag | ISPRIVATEPARFORLOOP))
-  end
-  for v in [stepNode, idxNodes, sizeNodes, strideNodes]
-    addStateVar(irState, new_var(v.name, v.typ, ISASSIGNEDONCE | ISASSIGNED))
-  end
-  for v in [tmpBufs]
-    addStateVar(irState, new_var(v.name, v.typ, ISASSIGNED))
-  end
-  return [ preExpr, TypedExpr(typ, head, expr), postExpr ]
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
+  expr = CompilerTools.LambdaHandling.replaceExprWithDict(expr, gensym_map)   
+  return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

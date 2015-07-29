@@ -2,6 +2,7 @@ module ParallelIR
 export num_threads_mode
 
 using CompilerTools
+using CompilerTools.LambdaHandling
 using ..DomainIR
 using ..AliasAnalysis
 using ..IntelPSE
@@ -141,12 +142,6 @@ Clear an equivalence class.
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
   empty!(ec.data)
 end
-
-# A type union to be precise that some data structures can now use a GenSym in addition to a Symbol but nothing else.
-SymGen = Union{Symbol, GenSym}
-SymNodeGen = Union{SymbolNode, GenSym}
-SymAllGen = Union{Symbol, SymbolNode, GenSym}
-SymAll = Union{Symbol, SymbolNode}
 
 @doc """
 The parfor AST node type.
@@ -315,6 +310,13 @@ end
 
 function mk_assignment_expr(lhs :: SymbolNode, rhs)
     TypedExpr(lhs.typ, symbol('='), lhs, rhs)
+end
+
+@doc """
+Only used to create fake expression to force lhs to be seen as written rather than read.
+"""
+function mk_untyped_assignment(lhs, rhs)
+    Expr(symbol('='), lhs, rhs)
 end
 
 @doc """
@@ -668,7 +670,7 @@ end
 If we somehow determine that two arrays must be the same length then 
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
-function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state)
+function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: expr_state)
   dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
   old_corr = getOrAddArrayCorrelation(old_sym, state)
   new_corr = getOrAddArrayCorrelation(new_sym, state)
@@ -679,7 +681,7 @@ end
 @doc """
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
-function getOrAddArrayCorrelation(x :: SymGen, state)
+function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
   if !haskey(state.array_length_correlation, x)
     dprintln(3,"Correlation for array not found = ", x)
     addUnknownArray(x, state)
@@ -690,7 +692,7 @@ end
 @doc """
 A new array is being created with an explicit size specification in dims.
 """
-function getOrAddSymbolCorrelation(array :: GenSym, state, dims)
+function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{SymGen,1})
   if !haskey(state.symbol_array_correlation, dims)
     # We haven't yet seen this combination of dims used to create an array.
     dprintln(3,"Correlation for symbol set not found, dims = ", dims)
@@ -859,7 +861,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   mergeLambdaIntoOuterState(state, nested_lambda)
 
   #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-  out_body = [reduce_body, mk_assignment_expr(reduction_output_snode, temp_body, state)]
+  out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
 
   fallthroughLabel = next_label(state)
   condExprs = Any[]
@@ -869,7 +871,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     end
   end
   if length(condExprs) > 0
-    out_body = [ condExprs, out_body, LabelNode(fallthroughLabel) ]
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
   end
   #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
   dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
@@ -1420,6 +1422,13 @@ function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_num
 end
 
 @doc """
+Just call the AST walker for symbol for parallel IR nodes with no state.
+"""
+function pir_live_cb_def(x)
+  pir_live_cb(x, nothing)
+end
+
+@doc """
 Process a :lambda Expr.
 """
 function from_lambda(lambda :: Expr, depth, state)
@@ -1436,6 +1445,7 @@ function from_lambda(lambda :: Expr, depth, state)
   dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
   body = get_one(from_expr(body, depth, state, false))
   dprintln(4,"from_lambda after from_expr")
+  dprintln(3,"After processing lambda body = ", state.lambdaInfo)
 
   # Count the number of static assignments per var.
   symbol_assigns = Dict{Symbol, Int}()
@@ -1444,6 +1454,8 @@ function from_lambda(lambda :: Expr, depth, state)
   # After counting static assignments, update the lambdaInfo for those vars
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
+
+  CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, pir_live_cb_def)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -2070,6 +2082,9 @@ end
 Add to the map of symbol names to types.
 """
 function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
+  if typ == Any
+    dprintln(0, "rememberTypeForSym: sym = ", sym, " typ = ", typ)
+  end
   assert(typ != Any)
   sym_to_type[sym] = typ
 end
@@ -2519,8 +2534,8 @@ function fuse(body, body_index, cur, state)
         dprintln(2,"prev was assignment and is staying an assignment")
         # The new lhs is not empty and so this is the normal case where "prev" stays an assignment expression and we update types here and if necessary FusionSentinel.
         prev.args[1] = new_lhs
-        prev.typ = new_lhs.typ
-        prev.args[2].typ = new_lhs.typ
+        prev.typ = getType(new_lhs, state.lambdaInfo)
+        prev.args[2].typ = prev.typ
         # Strip off a previous FusionSentinel() if it exists in the expression.
         prev.args = prev.args[1:2]
         if !single
@@ -4805,7 +4820,7 @@ function pir_live_cb(ast, cbdata)
       append!(expr_to_process, this_parfor.preParFor)
       for i = 1:length(this_parfor.loopNests)
         # force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_assignment_expr(this_parfor.loopNests[i].indexVariable, 1, state))
+        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
         push!(expr_to_process, this_parfor.loopNests[i].lower)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
@@ -4835,7 +4850,7 @@ function pir_live_cb(ast, cbdata)
 
       for i = 1:length(this_parfor.loopNests)
         # Force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_assignment_expr(this_parfor.loopNests[i].indexVariable, 1, state))
+        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
         push!(expr_to_process, this_parfor.loopNests[i].lower)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
@@ -4857,7 +4872,7 @@ function pir_live_cb(ast, cbdata)
         if cur_task.args[i].options == ARG_OPT_IN
           push!(expr_to_process, cur_task.args[i].value)
         else
-          push!(expr_to_process, mk_assignment_expr(cur_task.args[i].value, 1, state))
+          push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
         end
       end
 
@@ -4867,7 +4882,7 @@ function pir_live_cb(ast, cbdata)
       assert(length(args) == 3)
 
       expr_to_process = Any[]
-      push!(expr_to_process, mk_assignment_expr(SymbolNode(args[1], Int64), 1, state))  # force args[1] to be seen as an rvalue
+      push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
       push!(expr_to_process, args[2])
       push!(expr_to_process, args[3])
 
@@ -5002,6 +5017,9 @@ function from_assignment(ast::Array{Any,1}, depth, state)
   lhsName = toSymGen(lhs)
   # Get liveness information for the current statement.
   statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+  if statement_live_info == nothing
+    dprintln(0, state.top_level_number, " ", state.block_lives)
+  end
   assert(statement_live_info != nothing)
 
   dprintln(3,statement_live_info)
@@ -5060,7 +5078,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
             if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
               dprintln(3, "Will establish array length correlation for const size ", dim1)
-              getOrAddSymbolCorrelation(lhsName, state, [dim1.name])
+              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
             end
           end
         elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
@@ -5072,7 +5090,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
             si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
             if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
               dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-              getOrAddSymbolCorrelation(lhsName, state, [dim1.name, dim2.name])
+              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
               dprintln(3, "correlations = ", state.array_length_correlation)
             end
           end
@@ -5140,7 +5158,7 @@ State to aide in the copy propagation phase.
 """
 type CopyPropagateState
   lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-  copies :: Dict{Symbol,Symbol}
+  copies :: Dict{SymGen, SymGen}
 
   function CopyPropagateState(l, c)
     new(l,c)
@@ -5185,7 +5203,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
 
     if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
       # Only copy propagate within a basic block.  this is now a new basic block.
-      data.copies = Dict{Symbol,Symbol}() 
+      data.copies = Dict{SymGen, SymGen}() 
     elseif isAssignmentNode(node)
       dprintln(3,"Is an assignment node.")
       lhs = node.args[1] = get_one(AstWalk(node.args[1], copy_propagate, data))
@@ -5193,10 +5211,10 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
       rhs = node.args[2] = get_one(AstWalk(node.args[2], copy_propagate, data))
       dprintln(4,rhs)
 
-      if typeof(rhs) == Symbol || typeof(rhs) == SymbolNode
+      if isa(rhs, SymAllGen)
         dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
         # Record that the left-hand side is a copy of the right-hand side.
-        data.copies[getSName(lhs)] = getSName(rhs)
+        data.copies[toSymGen(lhs)] = toSymGen(rhs)
       end
       return [node]
     end
@@ -5210,7 +5228,13 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
   elseif isa(node, SymbolNode)
     if haskey(data.copies, node.name)
       dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
-      return [SymbolNode(data.copies[node.name], node.typ)]
+      tmp_node = data.copies[node.name]
+      return isa(tmp_node, Symbol) ? [SymbolNode(tmp_node, node.typ)] : [tmp_node]
+    end
+  elseif isa(node, GenSym)
+    if haskey(data.copies, node)
+      dprintln(3,"Replacing ", node, " with ", data.copies[node])
+      return [data.copies[node]]
     end
   elseif isa(node, DomainLambda)
     dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
@@ -5491,8 +5515,8 @@ Make sure all the dimensions are SymbolNodes.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
-function checkAndAddSymbolCorrelation(lhs, state, dim_array)
-  dim_names = Symbol[]
+function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
+  dim_names = SymGen[]
   for i = 1:length(dim_array)
     if typeof(dim_array[i]) != SymbolNode
       return false
@@ -5751,14 +5775,13 @@ function mmapInline(ast, lives, uniqSet)
       krnStat = expr.args[1]
       iterations = expr.args[2]
       bufs = expr.args[3]
-      for j in krnStat.modified
-        k = krnStat.modified[j]
+      for k in krnStat.modified
         s = bufs[k]
         if isa(s, SymbolNode) s = s.name end
         modify!(modifiedAt, s, i)
       end
       if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
-        for j in 1:min(krnStat.rotatNum, length(bufs))
+        for j in 1:min(krnStat.rotateNum, length(bufs))
           s = bufs[j]
           if isa(s, SymbolNode) s = s.name end
           modify!(modifiedAt, s, i)
@@ -6133,6 +6156,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
       topo_sort = StatementWithDeps[]
       dfsVisit(livein, 1, topo_sort)
     else
+      dprintln(3, "Doing maxFusion in block ", bb)
       # A bubble-sort style of coalescing domain nodes together in the AST.
       earliest_parfor = 1
       found_change = true
@@ -6344,14 +6368,25 @@ function from_expr(function_name, ast::Any, input_arrays)
 
   start_time = time_ns()
 
+  # Create CFG from AST.  This will automatically filter out dead basic blocks.
+  cfg = CompilerTools.CFGs.from_ast(ast)
+  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+  body = CompilerTools.LambdaHandling.getBody(ast)
+  # Re-create the body minus any dead basic blocks.
+  body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+  # Re-create the lambda minus any dead basic blocks.
+  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
+  dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
+ 
   #CompilerTools.LivenessAnalysis.set_debug_level(3)
 
-  dprintln(1,"Starting liveness analysis.")
+  dprintln(1,"Starting liveness analysis. function = ", function_name)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+ 
 #  udinfo = CompilerTools.UDChains.getUDChains(lives)
   dprintln(3,"lives = ", lives)
 #  dprintln(3,"udinfo = ", udinfo)
-  dprintln(1,"Finished liveness analysis.")
+  dprintln(1,"Finished liveness analysis. function = ", function_name)
 
   dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
 
@@ -6365,7 +6400,7 @@ function from_expr(function_name, ast::Any, input_arrays)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
     mmapToMmap!(ast, lives, uniqSet)
-    dprintln(1, "Finished mmap to mmap! transformation.")
+    dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
 #    dprintln(3, "AST = ", ast)
     printLambda(3, ast)
   end
@@ -6382,7 +6417,7 @@ function from_expr(function_name, ast::Any, input_arrays)
       push!(non_array_params, param)
     end
   end
-  dprintln(3,"Non-array params = ", non_array_params)
+  dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
   # find out max_label
   body = ast.args[3]
@@ -6392,54 +6427,54 @@ function from_expr(function_name, ast::Any, input_arrays)
   rep_start = time_ns()
 
   for i = 1:rearrange_passes
-    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
+    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
     rnd_state = RemoveNoDepsState(lives, non_array_params)
     ast = get_one(AstWalk(ast, remove_no_deps, rnd_state))
-    dprintln(3,"ast after no dep stmts removed = ")
+    dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
     printLambda(3, ast)
       
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
-    dprintln(1,"Adding statements with no dependencies to the start of the AST.")
+    dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
     ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
-    dprintln(3,"ast after no dep stmts re-inserted = ")
+    dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
     printLambda(3, ast)
 
-    dprintln(1,"Re-starting liveness analysis.")
+    dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    dprintln(1,"Finished liveness analysis.")
+    dprintln(1,"Finished liveness analysis.", " function = ", function_name)
   end
 
   dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
   processAndUpdateBody(ast, removeNothingStmts, nothing)
-  dprintln(3,"ast after removing nothing stmts = ")
+  dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
   ast   = get_one(AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}())))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after copy_propagate = ")
+  dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
   printLambda(3, ast)
 
   ast   = get_one(AstWalk(ast, remove_dead, RemoveDeadState(lives)))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after remove_dead = ")
+  dprintln(3,"ast after remove_dead = ", " function = ", function_name)
   printLambda(3, ast)
 
   eq_start = time_ns()
 
   new_vars = expr_state(lives, max_label, input_arrays)
-  dprintln(3,"Creating equivalence classes.")
+  dprintln(3,"Creating equivalence classes.", " function = ", function_name)
   AstWalk(ast, create_equivalence_classes, new_vars)
-  dprintln(3,"Done creating equivalence classes.")
+  dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
   dprintln(3,"symbol_correlations = ", new_vars.symbol_array_correlation)
   dprintln(3,"array_correlations  = ", new_vars.array_length_correlation)
 
   dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
  
   processAndUpdateBody(ast, removeAssertEqShape, new_vars)
-  dprintln(3,"ast after removing assertEqShape = ")
+  dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
@@ -6447,12 +6482,12 @@ function from_expr(function_name, ast::Any, input_arrays)
     maxFusion(lives)
     # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
     ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    dprintln(3,"ast after maxFusion = ")
+    dprintln(3,"ast after maxFusion = ", " function = ", function_name)
     printLambda(3, ast)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
   end
 
-  dprintln(1,"Doing conversion to parallel IR.")
+  dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
 
   new_vars.block_lives = lives
 
@@ -6563,7 +6598,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         appTypExpr = Expr(:call1, TopNode(:apply_type), :Array, elemTyp, n)
         appTypExpr.typ = Type{Array{elemTyp,n}}
         tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-        tupExpr.typ = ntuple(n+1, i -> (i==1) ? Type{Any} : Type{Int})
+        tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
         realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
         for i=1:n
           push!(realArgs, sizes[i])

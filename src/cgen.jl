@@ -837,7 +837,7 @@ function isInlineable(f, args)
 end
 
 function arrayToTuple(a)
-	ntuple(length(a), (i)->a[i])
+	ntuple((i)->a[i], length(a))
 end
 
 function from_symbol(ast)
