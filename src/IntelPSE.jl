@@ -2,7 +2,7 @@ module IntelPSE
 
 export DomainIR, ParallelIR, AliasAnalysis, LD 
 export decompose, offload, set_debug_level, getenv, getPackageRoot
-export cartesianarray, runStencil
+export cartesianarray, runStencil, @runStencil
 
 using CompilerTools
 using CompilerTools.LambdaHandling
