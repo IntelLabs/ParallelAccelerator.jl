@@ -36,9 +36,6 @@ if haskey(ENV,"INTEL_PSE_MODE")
   else
     println("Unknown INTEL_PSE_MODE = ", mode)
   end
-else
-	#default
- client_intel_pse_mode = 1
 end
 
 @doc """
