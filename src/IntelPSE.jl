@@ -1,8 +1,8 @@
 module IntelPSE
 
-export DomainIR, ParallelIR, AliasAnalysis, LD
+export DomainIR, ParallelIR, AliasAnalysis, LD 
 export decompose, offload, set_debug_level, getenv
-using CompilerTools.LambdaHandling
+export cartesianarray, runStencil
 
 # MODE for offload
 const TOPLEVEL=1
@@ -90,11 +90,14 @@ julia_root      = IntelPSE.getJuliaRoot()
 runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
 
 using CompilerTools
+using CompilerTools.LambdaHandling
+include("api.jl")
 include("domain-ir.jl")
 include("alias-analysis.jl")
 include("parallel-ir.jl")
 include("cgen.jl")
 
+using .API
 import .DomainIR.isarray
 import .cgen.from_root, .cgen.writec, .cgen.compile, .cgen.link
 
@@ -874,7 +877,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   end
   start_time = time_ns()
 
-  dprintln(2, "Starting offload for ", function_name)
+  dprintln(2, "Starting offload for ", function_name, " with signature ", signature)
   if !isgeneric(function_name)
     dprintln(1, "method ", function_name, " is not generic.")
     return nothing
@@ -886,6 +889,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
 
   def = m[1].func.code
   global previouslyOptimized 
+  dprintln(3, "previouslyOptimized = ", previouslyOptimized)
   if in((function_name, signature), previouslyOptimized)
     dprintln(2, "method ", function_name, " already offloaded")
     return
