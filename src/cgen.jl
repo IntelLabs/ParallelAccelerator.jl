@@ -295,7 +295,6 @@ function from_lambda(ast, args)
 		v = vars[k] # v is a VarDef
 		lstate.symboltable[k] = v.typ
 		# If we have user defined types, record them
-		#if in(k, locals) && (v.desc & 32 != 0)
 		if in(k, vars) && !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
 		end 
@@ -307,7 +306,6 @@ function from_lambda(ast, args)
 	end
 	debugp("Done with ompvars")
 	bod = from_expr(args[3])
-	#debugp("lambda locals = ", locals)
 	debugp("lambda params = ", params)
 	debugp("lambda vars = ", vars)
 	debugp("symboltable here = ")
@@ -317,7 +315,6 @@ function from_lambda(ast, args)
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
 			debugp("About to check for composite type: ", lstate.symboltable[k])
 			if isCompositeType(lstate.symboltable[k])
-				#globalUDTs, from_decl(_symbolTable[k])
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
 				end
@@ -429,16 +426,7 @@ function toCtype(typ)
 	end
 end
 
-function genName()
-	global _symPre
-	_symPre += 1
-	"anon" * string(_symPre)
-end
-
-
-
 function canonicalize_re(tok)
-	debugp("Canonicalizing ", tok, " : ", string(tok)) 
 	s = string(tok)
 	name = ""
 	for c in 1:length(s)
@@ -457,11 +445,9 @@ function canonicalize(tok)
 	global _replacedTokens
 	global _scrubbedTokens
 	s = string(tok)
-	debugp("Canonicalizing ", tok, " : ", string(tok)) 
 	s = replace(s, _scrubbedTokens, "")
 	s = replace(s, r"^[^a-zA-Z]", "_")
 	s = replace(s, _replacedTokens, "p")
-	debugp("Canonicalized token = ", s) 
 	s
 end
 
