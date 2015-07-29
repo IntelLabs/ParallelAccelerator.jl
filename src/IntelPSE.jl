@@ -83,7 +83,7 @@ end
 =#
 
 function getPackageRoot()
-	path = ENV["HOME"]*"/.julia/v0.4/IntelPSE"
+	path = joinpath(dirname(@__FILE__), "..")
 end
 
 function __init__()
