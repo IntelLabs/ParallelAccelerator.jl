@@ -1,29 +1,98 @@
 # A prototype Julia to C++ generator
 # jaswanth.sreeram@intel.com
+# 
 
 module cgen
 using ..ParallelIR
-using ..IntelPSE
+using CompilerTools
 export generate, from_root, writec, compile, link
-import IntelPSE.getPackageRoot
+
+#=
+type ASTDispatcher
+	nodes::Array{Any, 1}
+	dt::Dict{Any, Any}
+	m::Module
+	function ASTDispatcher()
+		d = Dict{Any, Any}()
+		n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
+			GotoNode, TopNode, QuoteNode, NewvarNode,
+			isdefined(:GetfieldNode) ? GetfieldNode : 
+				(isdefined(:GlobalRef) ? GlobalRef :
+				throw(string("Neither GetfieldNode or GlobalRef defined."))), 
+			:block, :body, :new, :lambda, :(=), :call, :call1,
+			:return, :line, :gotoifnot, :parfor_start, :parfor_end,
+			:boundscheck, :loophead, :loopend]
+		for x in n
+			assert(isa(x, DataType) || isa(x, Symbol))
+			d[x] = symbol("from_" * lowercase(string(x)))
+		end
+		new(n, d, current_module())
+	end	
+end
+
+
+function dispatch(a::ASTDispatcher, node::Any, args)
+	tgt = typeof(node)
+	if !haskey(a.dt, tgt)
+		#dumpSymbolTable(a.dt)
+		debugp("ERROR: Unexpected node: ", node, " with type = ", tgt)
+		throw("Could not dispatch node")
+	end
+	debugp("Dispatching to call: ", a.dt[tgt], " with args: ", args)
+	getfield(a.m, a.dt[tgt])(args)
+end
+=#
+
+type LambdaGlobalData
+	#adp::ASTDispatcher
+	ompprivatelist::Array{Any, 1}
+	globalUDTs::Dict{Any, Any}
+	symboltable::Dict{Any, Any}
+	compiledfunctions::Array{Any, 1}
+	worklist::Array{Any, 1}
+	jtypes::Dict{Any, Any}
+	ompdepth::Int64
+	function LambdaGlobalData()
+		_j = Dict(
+			Int8	=>	"int8_t",
+			UInt8	=>	"uint8_t",
+			Int16	=>	"int16_t",
+			UInt16	=>	"uint16_t",
+			Int32	=>	"int32_t",
+			UInt32	=>	"uint32_t",
+			Int64	=>	"int64_t",
+			UInt64	=>	"uint64_t",
+			Float16	=>	"float",
+			Float32	=>	"float",
+			Float64	=>	"double",
+			Bool	=>	"bool",
+			Char	=>	"char"
+	)
+
+		#new(ASTDispatcher(), [], Dict(), Dict(), [], [])
+		new([], Dict(), Dict(), [], [], _j, 0)
+	end
+end
+
+
+
+# Globals
 
 verbose = true
 _symPre = 0
-_jtypesToctypes = Dict(
-		Int8	=>	"int8_t",
-		UInt8	=>	"uint8_t",
-		Int16	=>	"int16_t",
-		UInt16	=>	"uint16_t",
-		Int32	=>	"int32_t",
-		UInt32	=>	"uint32_t",
-		Int64	=>	"int64_t",
-		UInt64	=>	"uint64_t",
-		Float16	=>	"float",
-		Float32	=>	"float",
-		Float64	=>	"double",
-		Bool	=>	"bool",
-		Char	=>	"char"
-	)
+inEntryPoint = false
+lstate = nothing
+
+function resetLambdaState(l::LambdaGlobalData)
+	empty!(l.ompprivatelist)
+	empty!(l.globalUDTs)
+	empty!(l.symboltable)
+	#empty!(l.compiledfunctions)
+	empty!(l.worklist)
+	inEntryPoint = false
+	l.ompdepth = 0
+end
+
 
 # These are primitive operators on scalars and arrays
 _operators = ["*", "/", "+", "-", "<", ">"]
@@ -31,6 +100,7 @@ _operators = ["*", "/", "+", "-", "<", ">"]
 _builtins = ["getindex", "setindex", "arrayref", "top", "box", 
 			"unbox", "tuple", "arraysize", "arraylen", "ccall",
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
+			"safe_arrayref", "safe_arrayset", "tupleref",
 			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d"]
 
 # Intrinsics
@@ -39,20 +109,33 @@ _Intrinsics = [
 		"box", "unbox",
         #arithmetic
         "neg_int", "add_int", "sub_int", "mul_int", "sle_int",
+		"xor_int", "and_int", "or_int",
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
 		"rem_float", "sqrt_llvm", "fma_float", "muladd_float",
+		"le_float", "ne_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
 		"nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
-		"fptrunc", "fpext"
+		"fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm", 
+		"trunc", "ceil_llvm", "ceil", "pow", "powf"
 ]
+
+tokenXlate = Dict(
+	'*' => "star",
+	'/' => "slash",
+	'-' => "minus",
+	'!' => "bang",
+	'.' => "dot"
+)
+_replacedTokens = Set("(,)#")
+_scrubbedTokens = Set("{}:")
+
+#### End of globals ####
 
 function debugp(a...)
 	#verbose && println(a...)
 end
 
-inEntryPoint = false
-ompPrivateList = []
 
 function getenv(var::String)
   ENV[var]
@@ -67,7 +150,6 @@ end
 	package_root
 end =#
 
-globalUDTs = Dict()
 
 function from_header(isEntryPoint::Bool)
 	s = from_UDTs()
@@ -90,8 +172,11 @@ function from_includes()
 end
 
 function from_UDTs()
-	global globalUDTs
-	isempty(globalUDTs) ? "" : mapfoldl((a) -> from_decl(a), (a, b) -> "$a; $b", keys(globalUDTs))
+	#global globalUDTs
+	global lstate
+	debugp("UDT Table is: ")
+	debugp(lstate.globalUDTs)
+	isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
 end
 
 
@@ -102,35 +187,65 @@ function from_decl(k::Tuple)
 		s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
 	end
 	s *= "} Tuple_" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", k) * ";\n"
+	if haskey(lstate.globalUDTs, k)
+		lstate.globalUDTs[k] = 0
+	end
 	s
 end
 
 function from_decl(k::DataType)
 	debugp("from_decl: Defining data type ", k)
 	if is(k, UnitRange{Int64})
+		if haskey(lstate.globalUDTs, k)
+			lstate.globalUDTs[k] = 0
+		end
 		btyp, ptyp = parseParametricType(k)
 		s = "typedef struct {\n\t"
 		s *= toCtype(ptyp[1]) * " start;\n"
 		s *= toCtype(ptyp[1]) * " stop;\n"
 		s *= "} " * canonicalize(k) * ";\n"
 		return s
+	elseif issubtype(k, StepRange)
+		if haskey(lstate.globalUDTs, k)
+			lstate.globalUDTs[k] = 0
+		end
+		btyp, ptyp = parseParametricType(k)
+		s = "typedef struct {\n\t"
+		s *= toCtype(ptyp[1]) * " start;\n"
+		s *= toCtype(ptyp[1]) * " step;\n"
+		s *= toCtype(ptyp[2]) * " stop;\n"
+		s *= "} " * canonicalize(k) * ";\n"
+		return s
+	elseif k.name == Tuple.name
+		if haskey(lstate.globalUDTs, k)
+			lstate.globalUDTs[k] = 0
+		end
+		btyp, ptyp = parseParametricType(k)
+		s = "typedef struct {\n"
+		for i in 1:length(ptyp)
+			s *= toCtype(ptyp[i]) * " " * "f" * string(i-1) * ";\n"
+		end
+		s *= "} Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", ptyp) * ";\n"
+		return s
 	end
+	throw("Could not translate Julia Type: ", k)
 	return ""
 end
 
 function from_decl(k)
 	debugp("from_decl: Defining type ", k)
-	return toCtype(_symbolTable[k]) * " " * canonicalize(k) * ";\n"
+	return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 end
 
 function isCompositeType(t)
 	# TODO: Expand this to real UDTs
-	b = isa(t, Tuple) || is(t, UnitRange{Int64})
+	b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
+	b |= isa(t, DataType) && t.name == Tuple.name
 	debugp("Is ", t, " a composite type: ", b)
 	b
 end
 
-function from_lambda(args)
+function from_lambda_old(args)
 	s = ""
 	params	=	length(args) != 0 ? args[1] : []
 	env		=	length(args) >=2 ? args[2] : []
@@ -141,15 +256,16 @@ function from_lambda(args)
 	debugp("locals are: ", locals)
 	debugp("vars are: ", vars)
 	debugp("Typ is ", typ)
-	global ompPrivateList
-	global globalUDTs
-	debugp("ompPrivateList is: ", ompPrivateList)
+	#global ompPrivateList
+	#global globalUDTs
+	global lstate
+	debugp("ompPrivateList is: ", lstate.ompprivatelist)
 	for k in 1:length(vars)
 		v = vars[k]
-		_symbolTable[v[1]] = v[2]
+		lstate.symboltable[v[1]] = v[2]
 		# If we have user defined types, record them
 		if in(v[1], locals) && (v[3] & 32 != 0)
-			push!(ompPrivateList, v[1])
+			push!(lstate.ompprivatelist, v[1])
 		end 
 	end
 	debugp("Done with ompvars")
@@ -157,24 +273,80 @@ function from_lambda(args)
 	debugp("lambda locals = ", locals)
 	debugp("lambda params = ", params)
 	debugp("symboltable here = ")
-	dumpSymbolTable(_symbolTable)
+	dumpSymbolTable(lstate.symboltable)
 	
-	for k in keys(_symbolTable)
+	for k in keys(lstate.symboltable)
 		if (has(locals, k) && !has(params, k)) || (!has(locals, k) && !has(params, k))
 			#decls *= from_decl(k)
 			#if isa(_symbolTable[k], Tuple)
 			#if !isPrimitiveJuliaType(_symbolTable[k])
-			debugp("About to check for composite type: ", _symbolTable[k])
-			if isCompositeType(_symbolTable[k])
+			debugp("About to check for composite type: ", lstate.symboltable[k])
+			if isCompositeType(lstate.symboltable[k])
 				#globalUDTs, from_decl(_symbolTable[k])
-				globalUDTs[_symbolTable[k]] = 1
+				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
+					lstate.globalUDTs[lstate.symboltable[k]] = 1
+				end
 			end
-			decls *= toCtype(_symbolTable[k]) * " " * canonicalize(k) * ";\n"
+			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 			#end
 		end
 	end
 	decls * bod
 end
+
+function from_lambda(ast, args)
+	s = ""
+	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+	params = linfo.input_params
+	vars = linfo.var_defs
+	gensyms = linfo.gen_sym_typs
+
+	decls = ""
+	global lstate
+	debugp("ompPrivateList is: ", lstate.ompprivatelist)
+	for k in keys(vars)
+		v = vars[k] # v is a VarDef
+		lstate.symboltable[k] = v.typ
+		# If we have user defined types, record them
+		#if in(k, locals) && (v.desc & 32 != 0)
+		if in(k, vars) && !in(k, params) && (v.desc & 32 != 0)
+			push!(lstate.ompprivatelist, k)
+		end 
+	end
+	debugp("Emitting gensyms")
+	for k in 1:length(gensyms)
+		debugp("gensym: ", k, " is of type: ", gensyms[k])
+		lstate.symboltable["GenSym" * string(k-1)] = gensyms[k]
+	end
+	debugp("Done with ompvars")
+	bod = from_expr(args[3])
+	#debugp("lambda locals = ", locals)
+	debugp("lambda params = ", params)
+	debugp("lambda vars = ", vars)
+	debugp("symboltable here = ")
+	dumpSymbolTable(lstate.symboltable)
+	
+	for k in keys(lstate.symboltable)
+		#if (in(k, vars) && !in(k, params)) #|| (!in(k, locals) && !in(k, params))
+		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
+			#decls *= from_decl(k)
+			#if isa(_symbolTable[k], Tuple)
+			#if !isPrimitiveJuliaType(_symbolTable[k])
+			debugp("About to check for composite type: ", lstate.symboltable[k])
+			if isCompositeType(lstate.symboltable[k])
+				#globalUDTs, from_decl(_symbolTable[k])
+				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
+					lstate.globalUDTs[lstate.symboltable[k]] = 1
+				end
+			end
+			debugp("Adding ", k, " to decls with type ", lstate.symboltable[k]) 
+			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
+			#end
+		end
+	end
+	decls * bod
+end
+
 
 function from_exprs(args::Array)
 	s = ""
@@ -187,9 +359,6 @@ function from_exprs(args::Array)
 	s
 end
 
-_symbolTable = Dict{Any, Any}()
-_compiledFunctions = []
-_worklist = []
 
 function dumpSymbolTable(a::Dict{Any, Any})
 	debugp("SymbolTable: ")
@@ -210,7 +379,7 @@ function has(a, b)
 end
 
 function hasfield(a, f)
-	return has(fieldnames(a), f)
+	return has(names(a), f)
 end
 
 function typeAvailable(a)
@@ -225,13 +394,13 @@ function from_assignment(args::Array)
 
 	if !typeAvailable(lhs)
 		if typeAvailable(rhs)
-			_symbolTable[lhs] = rhs.typ
-		elseif haskey(_symbolTable, rhs)
-			_symbolTable[lhs] = _symbolTable[rhs]
+			lstate.symboltable[lhs] = rhs.typ
+		elseif haskey(lstate.symboltable, rhs)
+			lstate.symboltable[lhs] = lstate.symboltable[rhs]
 		elseif isPrimitiveJuliaType(typeof(rhs))
-			_symbolTable[lhs] = typeof(rhs)
+			lstate.symboltable[lhs] = typeof(rhs)
 		elseif isPrimitiveJuliaType(typeof(rhsO))
-			_symbolTable[lhs] = typeof(rhs0)
+			lstate.symboltable[lhs] = typeof(rhs0)
 		else
 			debugp("Unknown type in assignment: ", args)
 			throw("FATAL error....exiting")
@@ -245,13 +414,11 @@ function parseArrayType(arrayType)
 end
 
 function isPrimitiveJuliaType(t)
-	haskey(_jtypesToctypes, t)
+	haskey(lstate.jtypes, t)
 end
 
 function isArrayType(typ)
-	#ndims(typ) > 0
-	#TODO: use parseParametricType instead
-	startswith(string(typ), "Array")
+	isa(typ, DataType) && ((typ.name == Array.name) || (typ.name == BitArray.name))
 end
 
 function toCtype(typ::Tuple)
@@ -260,17 +427,17 @@ end
 
 function toCtype(typ)
 	debugp("Converting type: ", typ, " to ctype")
-	if haskey(_jtypesToctypes, typ)
-		debugp("Found simple type: ", typ, " returning ctype: ", _jtypesToctypes[typ])
-		return _jtypesToctypes[typ]
+	if haskey(lstate.jtypes, typ)
+		debugp("Found simple type: ", typ, " returning ctype: ", lstate.jtypes[typ])
+		return lstate.jtypes[typ]
 	elseif isArrayType(typ)	
 		atyp, dims = parseArrayType(typ)
 		debugp("Found array type: ", atyp, " with dims: ", dims)
 		atyp = toCtype(atyp)
 		debugp("Atyp is: ", atyp)
 		assert(dims >= 0)
-		return "j2c_array<$(atyp)>"
-	elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
+		return " j2c_array< $(atyp) > "
+	elseif in(:parameters, names(typ)) && length(typ.parameters) != 0
 		# For parameteric types, for now assume we have equivalent C++
 		# implementations
 		btyp, ptyps = parseParametricType(typ)
@@ -287,13 +454,7 @@ function genName()
 	"anon" * string(_symPre)
 end
 
-tokenXlate = Dict(
-	'*' => "star",
-	'/' => "slash",
-	'-' => "minus",
-	'!' => "bang",
-	'.' => "dot"
-)
+
 
 function canonicalize_re(tok)
 	debugp("Canonicalizing ", tok, " : ", string(tok)) 
@@ -311,8 +472,6 @@ function canonicalize_re(tok)
 	return name
 end
 
-_replacedTokens = Set("(,)#")
-_scrubbedTokens = Set("{}:")
 function canonicalize(tok)
 	global _replacedTokens
 	global _scrubbedTokens
@@ -350,6 +509,23 @@ end
 
 function toCName(a)
 	return string(a)
+end
+
+function from_tupleref(args)
+	# TODO generate std::tuples instead of structs
+	from_expr(args[1]) * ".f" * string(int(from_expr(args[2]))-1)
+end
+
+function from_safegetindex(args)
+	s = ""
+	src = from_expr(args[1])
+	s *= src * ".SAFEARRAYELEM("
+	idxs = map((i)->from_expr(i), args[2:end])
+	for i in 1:length(idxs)
+		s *= idxs[i] * (i < length(idxs) ? "," : "")
+	end
+	s *= ")"
+	s
 end
 
 function from_getindex(args)
@@ -405,10 +581,12 @@ function from_ccall(args)
 	debugp("return type: ", args[2])
 	debugp("input types tuple: ", args[3])
 	debugp("inputs tuple: ", args[4:end])
+	#m, s, t = resolveCallTarget(args)
+	#debugp("Attempted to resolve ccall target: got m = ", m, " and s = ", s, " and t = ", t)
 	for i in 1:length(args)
 		debugp(args[i])
 	end
-	debugp("Done with ccall args")
+	debugp("End of ccall args")
 	fun = args[1]
 	#s = from_expr(fun)	
 	if isInlineable(fun, args)
@@ -417,8 +595,9 @@ function from_ccall(args)
 
 	if isa(fun, QuoteNode)
 		s = from_expr(fun)
-	elseif isa(fun, Expr) && ( is(fun.head, :call1) || is(fun.head, :call))
-		s = string(fun.args[2]) #* "/*" * from_expr(fun.args[3]) * "*/"
+	elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
+		s = canonicalize(string(fun.args[2])) #* "/*" * from_expr(fun.args[3]) * "*/"
+		debugp("ccall target: ", s)
 	else
 		throw("Invalid ccall format...")
 	end
@@ -427,12 +606,22 @@ function from_ccall(args)
 	debugp("Ccall args start: ", round(Int, (length(args)-1)/2)+2)
 	debugp("Ccall args end: ", length(args))
 	numInputs = length(args[3].args)-1
-	argsStart = round(Int, (length(args)-1)/2)+2
-	argsEnd = argsStart + numInputs - 1
+	#argsStart = round(Int, (length(args)-1)/2)+2
+	argsStart = 4
+	#argsEnd = argsStart + numInputs - 1
+	argsEnd = length(args)
 	#for i in round(Int, (length(args)-1)/2)+2:length(args)
-	for i in argsStart : argsEnd
+	debugp("Emitting args:")
+	for i in argsStart:2:argsEnd
+		debugp(args[i])
+	end
+	debugp("End of ccall args:")
+	#=
+	for i in argsStart : 2 : argsEnd
 		s *= from_expr(args[i]) * (i < argsEnd ? ", " : "")
 	end
+	=#
+	s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
 	s *= ")"
 	debugp("from_ccall: ", s)
 	s
@@ -504,6 +693,8 @@ function from_builtins(f, args)
 		return from_box(args)
 	elseif tgt == "arrayref"
 		return from_getindex(args)
+	elseif tgt == "tupleref"
+		return from_tupleref(args)
 	elseif tgt == "tuple"
 		return from_tuple(args)
 	elseif tgt == "arraylen"
@@ -523,8 +714,10 @@ function from_builtins(f, args)
 		debugp("args are: ", args)
 		return from_getfield(args)
 	elseif tgt == "unsafe_arrayref"
-		return from_getindex(args)
-	elseif tgt == "unsafe_arrayset"
+		return from_getindex(args) 
+	elseif tgt == "safe_arrayref"
+		return from_safegetindex(args) 
+	elseif tgt == "unsafe_arrayset" || tgt == "safe_arrayset"
 		return from_setindex(args)
 	end
 	
@@ -544,15 +737,18 @@ function from_intrinsic(f, args)
 	intr = string(f)
 	debugp("Intrinsic ", intr, ", args are ", args)
 
-	#from_expr(args[1]) * @eval("from_" * string($f) * "( " * $args) * from_expr(args[2])
 	if intr == "mul_int"
-		s = from_expr(args[1]) * " * " * from_expr(args[2])
-		return s
+		return from_expr(args[1]) * " * " * from_expr(args[2])
 	elseif intr == "mul_float"
-		s = from_expr(args[1]) * " * " * from_expr(args[2])
-		return s;
+		return from_expr(args[1]) * " * " * from_expr(args[2])
 	elseif intr == "add_int"
 		return from_expr(args[1]) * " + " * from_expr(args[2])
+	elseif intr == "or_int"
+		return from_expr(args[1]) * " | " * from_expr(args[2])
+	elseif intr == "xor_int"
+		return from_expr(args[1]) * " ^ " * from_expr(args[2])
+	elseif intr == "and_int"
+		return from_expr(args[1]) * " & " * from_expr(args[2])
 	elseif intr == "sub_int"
 		return from_expr(args[1]) * " - " * from_expr(args[2])
 	elseif intr == "slt_int"
@@ -563,11 +759,15 @@ function from_intrinsic(f, args)
 		return "(" * from_expr(args[1]) * ")" * " ? " *
 		"(" * from_expr(args[2]) * ") : " * "(" * from_expr(args[3]) * ")"
 	elseif intr == "not_int"
-		return "~" * "(" * from_expr(args[1]) * ")"
+		return "!" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "add_float"
 		return from_expr(args[1]) * " + " * from_expr(args[2])
 	elseif intr == "lt_float"
 		return from_expr(args[1]) * " < " * from_expr(args[2])
+	elseif intr == "ne_float"
+		return from_expr(args[1]) * " != " * from_expr(args[2])
+	elseif intr == "le_float"
+		return from_expr(args[1]) * " <= " * from_expr(args[2])
 	elseif intr == "neg_float"
 		return "-" * from_expr(args[1])
 	elseif intr == "abs_float"
@@ -583,8 +783,20 @@ function from_intrinsic(f, args)
 		return from_expr(args[1]) * from_expr(args[2])
 	elseif intr == "fptrunc" || intr == "fpext"
 		return from_expr(args[1]) * from_expr(args[2])
+	elseif intr == "trunc_llvm" || intr == "trunc"
+		return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
+	elseif intr == "floor_llvm" || intr == "floor"
+		return "floor(" * from_expr(args[1]) * ")"
+	elseif intr == "ceil_llvm" || intr == "ceil"
+		return "ceil(" * from_expr(args[1]) * ")"
+	elseif intr == "rint_llvm" || intr == "rint"
+		return "round(" * from_expr(args[1]) * ")"
 	elseif f == :(===)
 		return "(" * from_expr(args[1]) * " == " * from_expr(args[2]) * ")"
+	elseif f == "pow"
+		return "pow(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
+	elseif f == "powf"
+		return "powf(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
 	elseif intr == "nan_dom_err"
 		debugp("nan_dom_err is: ")
 		for i in 1:length(args)
@@ -625,7 +837,7 @@ function isInlineable(f, args)
 end
 
 function arrayToTuple(a)
-	ntuple(length(a), (i)->a[i])
+	ntuple((i)->a[i], length(a))
 end
 
 function from_symbol(ast)
@@ -657,7 +869,7 @@ end
 
 function isPendingCompilation(list, tgt)
 	for i in 1:length(list)
-		ast, name, typs = _worklist[i]
+		ast, name, typs = lstate.worklist[i]
 		if name == tgt
 			return true
 		end
@@ -692,6 +904,14 @@ function resolveCallTarget(args::Array{Any, 1})
 	f = args[1]
 	if isa(f, Symbol) && isInlineable(f, args[2:end])
 		return M, string(f), from_inlineable(f, args[2:end])
+	elseif isa(f, Symbol) && is(f, :call)
+		#This means, we have a Base.call - if f is not a Function, this is translated to f(args)
+		arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[3:end])
+		if isa(args[2], DataType)
+			t = "{" * arglist * "}" 
+		else
+			t = from_expr(args[2]) * "(" * arglist * ")"	
+		end
 	elseif isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) && is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
 			s = f.args[3].value
@@ -780,13 +1000,14 @@ function from_call(ast::Array{Any, 1})
 	# we fallthru and simply emit the call.
 	# Else we lookup the function Symbol and enqueue it
 	# TODO: This needs to specialize on types
-	skipCompilation = has(_compiledFunctions, funStr) ||
-		isPendingCompilation(_worklist, funStr)
+	skipCompilation = has(lstate.compiledfunctions, funStr) ||
+		isPendingCompilation(lstate.worklist, funStr)
 	#compiledPreviously = has(_compiledFunctions, string(fun)) || has(_worklist, string(fun))
 	s = ""
-	debugp("Worklist: ", _worklist)
-	debugp("Compiled functionslist: ", _compiledFunctions)
-	map((i)->debugp(i), _compiledFunctions)
+	debugp("Worklist: ")
+	map((i)->debugp(i[2]), lstate.worklist)
+	debugp("Compiled functionslist: ", lstate.compiledfunctions)
+	map((i)->debugp(i), lstate.compiledfunctions)
 	debugp("Translating call, target is ", funStr, " args are : ", args)
 	s *= "_" * from_expr(fun) * "("
 	debugp("After call translation, target is ", s)
@@ -807,8 +1028,18 @@ function from_call(ast::Array{Any, 1})
 	debugp("Finished translating call : ", s)
 	debugp(ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
 	if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function))
+		debugp("Worklist is: ")
+		for i in 1:length(lstate.worklist)
+			ast, name, typs = lstate.worklist[i]
+			debugp(name);
+		end
+		debugp("Compiled Functions are: ")
+		for i in 1:length(lstate.compiledfunctions)
+			name = lstate.compiledfunctions[i]
+			debugp(name);
+		end
 		debugp("Inserting: ", fun, " : ", "_" * canonicalize(fun), " : ", arrayToTuple(argTyps))
-		insert(fun, "_" * canonicalize(fun), arrayToTuple(argTyps))
+		insert(fun, mod, "_" * canonicalize(fun), arrayToTuple(argTyps))
 	end
 	s
 end
@@ -885,14 +1116,16 @@ function from_line(args)
 end
 
 function from_parforend(args)
+	global lstate
 	s = ""
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	for i in 1:length(lpNests)
 		s *= "}\n"	
 	end
-	s *= "}\n}/*parforend*/\n" # end block introduced by private list
+	s *= lstate.ompdepth <=1 ? "}\n}/*parforend*/\n" : "" # end block introduced by private list
 	debugp("Parforend = ", s)
+	lstate.ompdepth -= 1
 	s
 end
 
@@ -900,6 +1133,25 @@ function loopNestCount(loop)
 	"(((" * from_expr(loop.upper) * ") + 1 - (" * from_expr(loop.lower) * ")) / (" * from_expr(loop.step) * "))"
 end
 
+
+function from_insert_divisible_task(args)
+	inserttasknode = args[1]
+	debugp("Ranges: ", inserttasknode.ranges)
+	debugp("Args: ", inserttasknode.args)
+	debugp("Task Func: ", inserttasknode.task_func)
+	debugp("Join Func: ", inserttasknode.join_func)
+	debugp("Task Options: ", inserttasknode.task_options)
+	debugp("Host Grain Size: ", inserttasknode.host_grain_size)
+	debugp("Phi Grain Size: ", inserttasknode.phi_grain_size)
+	throw("Task mode is not supported yet")	
+end
+
+function from_loopnest(ivs, starts, stops, steps)
+	mapfoldl(
+		(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+		(a, b) -> "$a $b",
+		1:length(ivs))
+end
 
 # If the parfor body is too complicated then DIR or PIR will set
 # instruction_count_expr = nothing
@@ -910,19 +1162,46 @@ end
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
 
 function from_parforstart(args)
+	global lstate
 	num_threads_mode = ParallelIR.num_threads_mode
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
-	global ompPrivateList
-	s = ""
-	privatevars = isempty(ompPrivateList) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", ompPrivateList) * ")"
 
+	# Translate metadata for the loop nests
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
 	starts = map((a)->from_expr(a.lower), lpNests)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
 
+	loopheaders = from_loopnest(ivs, starts, stops, steps)
+
+	lstate.ompdepth += 1
+	if lstate.ompdepth > 1
+		return loopheaders
+	end
+	
+	s = ""
+
+	# Generate initializers and OpenMP clauses for reductions
+	rds = parfor.reductions
+	rdvars = rdinis = rdops = ""
+	if !isempty(rds)
+		rdvars = map((a)->from_expr(a.reductionVar), rds)
+		rdinis = map((a)->from_expr(a.reductionVarInit), rds)
+		rdops  = map((a)->string(a.reductionFunc), rds)
+	end
+	rdsprolog = rdsclause = ""
+	for i in 1:length(rds)
+		rdsprolog *= "$(rdvars[i]) = $(rdinis[i]);\n"
+		rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) " 
+	end
+	
+
+	# Check if there are private vars and emit the |private| clause
+	privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+
+	
 	lcountexpr = ""
 	for i in 1:length(lpNests)
 		lcountexpr *= "(((" * starts[i] * ") + 1 - (" * stops[i] * ")) / (" * steps[i] * "))" * (i == length(lpNests) ? "" : " * ")
@@ -954,62 +1233,32 @@ function from_parforstart(args)
 		nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads(j2c_block_region_thread_count.getUsed()) ";
 	end
 
-	s *= "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
-	s *= "#pragma omp for private($(ivs[1]))\n"
-	s *= mapfoldl(
+	s *= rdsprolog * "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
+	#s *= "#pragma omp for private($(ivs[1]))\n"
+	s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
+	s *= loopheaders
+	s
+end
+
+function from_parforstart_serial(args)
+	parfor = args[1]
+	lpNests = parfor.loopNests
+	global lstate
+	#ompPrivateList
+	s = ""
+	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+
+	ivs = map((a)->from_expr(a.indexVariable), lpNests)
+	starts = map((a)->from_expr(a.lower), lpNests)
+	stops = map((a)->from_expr(a.upper), lpNests)
+	steps = map((a)->from_expr(a.step), lpNests)
+
+	s *= "{\n{\n" * mapfoldl(
 			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
 			(a, b) -> "$a $b",
 			1:length(lpNests))
 	s
 end
-#=
-
-	debugp("Got Parfor start, args = ", args)
-	debugp("insns count Expr is: ", parfor.instruction_count_expr)
-	debugp("After translation, insns count Expr is: ", from_expr(parfor.instruction_count_expr))
-	lpNests = parfor.loopNests
-	debugp("In parforstart, ompPrivateList is: ", ompPrivateList)
-	s *= isempty(ompPrivateList) ? "" : "#pragma omp parallel private(" * privateVars * ")\n{\n"
-	for i in 1:length(lpNests)
-		iv = from_expr(lpNests[i].indexVariable)
-		start = from_expr(lpNests[i].lower)
-		stop = from_expr(lpNests[i].upper)
-		step = from_expr(lpNests[i].step)
-		s *= (i == 1) ? "#pragma omp for private($iv)\n" : ""
-		s *= "for ($iv =  $start;$iv <= $stop; ($iv) += $step) {\n"
-	end
-	debugp("Parforstart = ", s)
-	s
-end
-=#
-
-#gnumthreads_mode = 2
-#=
-function from_parforstart(args)
-	
-	if(gnumthreads_mode != 0)
-		return from_parforstart(args, global_num_threads_mode)
-	s = ""
-	parfor = args[1]
-	debugp("Got Parfor start, args = ", args)
-	debugp("insns count Expr is: ", parfor.instruction_count_expr)
-	debugp("After translation, insns count Expr is: ", from_expr(parfor.instruction_count_expr))
-	global ompPrivateList
-	debugp("In parforstart, ompPrivateList is: ", ompPrivateList)
-	privateVars = isempty(ompPrivateList) ? "" : mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", ompPrivateList)
-	s *= isempty(ompPrivateList) ? "" : "#pragma omp parallel private(" * privateVars * ")\n{\n"
-	for i in 1:length(lpNests)
-		iv = from_expr(lpNests[i].indexVariable)
-		start = from_expr(lpNests[i].lower)
-		stop = from_expr(lpNests[i].upper)
-		step = from_expr(lpNests[i].step)
-		s *= (i == 1) ? "#pragma omp for private($iv)\n" : ""
-		s *= "for ($iv =  $start;$iv <= $stop; ($iv) += $step) {\n"
-	end
-	debugp("Parforstart = ", s)
-	s
-end
-=#
 
 # TODO: Should simple objects be heap allocated ?
 # For now, we stick with stack allocation
@@ -1044,6 +1293,7 @@ function from_loopend(args)
 	"}\n"
 end
 
+
 function from_expr(ast::Expr)
 	s = ""
 	head = ast.head
@@ -1064,7 +1314,7 @@ function from_expr(ast::Expr)
 
 	elseif head == :lambda
 		debugp("Compiling lambda")
-		s *= from_lambda(args)
+		s *= from_lambda(ast, args)
 
 	elseif head == :(=)
 		debugp("Compiling assignment")
@@ -1095,6 +1345,9 @@ function from_expr(ast::Expr)
 	elseif head == :parfor_end
 		s *= from_parforend(args)
 
+	elseif head == :insert_divisible_task
+		s *= from_insert_divisible_task(args)
+
 	elseif head == :boundscheck
 		# Nothing
 
@@ -1118,13 +1371,44 @@ function from_expr(ast::Any)
 	debugp("With type: ", asttyp)
 
 	if isPrimitiveJuliaType(asttyp)
-		s *= "(" * toCtype(asttyp) * ")" * string(ast)
+		#s *= "(" * toCtype(asttyp) * ")" * string(ast)
+		s *= string(ast)
 	elseif isPrimitiveJuliaType(ast)
 		s *= "(" * toCtype(ast) * ")"
+	elseif asttyp == Expr
+		s *= from_expr(ast)
+	elseif asttyp == Symbol
+		s *= from_symbol(ast)
+	elseif asttyp == SymbolNode
+		s *= from_symbolnode(ast)
+	elseif asttyp == LineNumberNode
+		s *= from_linenumbernode(ast)
+	elseif asttyp == LabelNode
+		s *= from_labelnode(ast)
+	elseif asttyp == GotoNode
+		s *= from_gotonode(ast)
+	elseif asttyp == TopNode
+		s *= from_topnode(ast)
+	elseif asttyp == QuoteNode
+		s *= from_quotenode(ast)
+	elseif isdefined(:NewvarNode) && asttyp == NewvarNode
+		s *= from_newvarnode(ast)
+	elseif isdefined(:GetfieldNode) && asttyp == GetfieldNode
+		s *= from_getfieldnode(ast)
+	elseif isdefined(:GlobalRef) && asttyp == GlobalRef
+		s *= from_getfieldnode(ast)
+	elseif asttyp == GenSym
+		s *= "GenSym" * string(ast.id)
 	else
-		s *= dispatch(adp, ast, ast)
+		#s *= dispatch(lstate.adp, ast, ast)
+		debugp("Unknown node type encountered: ", ast, " with type: ", asttyp)
+		throw("Fatal Error: Could not translate node")
 	end
 	s
+end
+
+function resolveFunction(func::Symbol, mod::Module, typs)
+	return Base.getfield(mod, func)
 end
 
 function resolveFunction(func::Symbol, typs)
@@ -1155,10 +1439,10 @@ function from_formalargs(params, unaliased=false)
 	ql = unaliased ? "__restrict" : ""
 	debugp("Compiling formal args: ", params)
 	for p in 1:length(params)
-		if haskey(_symbolTable, params[p])
-			s *= (toCtype(_symbolTable[params[p]])
-				* (isArrayType(_symbolTable[params[p]]) ? "&" : "")
-				* (isArrayType(_symbolTable[params[p]]) ? " $ql " : " ")
+		if haskey(lstate.symboltable, params[p])
+			s *= (toCtype(lstate.symboltable[params[p]])
+				* (isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
+				* (isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
 				* canonicalize(params[p])
 				* (p < length(params) ? ", " : ""))
 		end
@@ -1166,6 +1450,10 @@ function from_formalargs(params, unaliased=false)
 	debugp("Formal args are: ", s)
 	debugp("Packege root is: ", IntelPSE.getPackageRoot())
 	s
+end
+
+function from_newvarnode(args...)
+	""
 end
 
 function from_callee(ast::Expr, functionName::ASCIIString)
@@ -1180,45 +1468,12 @@ function from_callee(ast::Expr, functionName::ASCIIString)
 	f = Dict(ast => functionName)
 	bod = from_expr(ast)
 	args = from_formalargs(params)
-	dumpSymbolTable(_symbolTable)
+	dumpSymbolTable(lstate.symboltable)
 	s::ASCIIString = "$typ $functionName($args) { $bod } "
 	s
 end
 
-type ASTDispatcher
-	nodes::Array{Any, 1}
-	dt::Dict{Any, Any}
-	m::Module
-	function ASTDispatcher()
-		d = Dict{Any, Any}()
-		n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
-			GotoNode, TopNode, QuoteNode,
-			isdefined(:GetfieldNode) ? GetfieldNode : 
-				(isdefined(:GlobalRef) ? GlobalRef :
-				throw(string("Neither GetfieldNode or GlobalRef defined."))), 
-			:block, :body, :new, :lambda, :(=), :call, :call1,
-			:return, :line, :gotoifnot, :parfor_start, :parfor_end,
-			:boundscheck, :loophead, :loopend]
-		for x in n
-			assert(isa(x, DataType) || isa(x, Symbol))
-			d[x] = symbol("from_" * lowercase(string(x)))
-		end
-		new(n, d, current_module())
-	end	
-end
 
-function dispatch(a::ASTDispatcher, node::Any, args)
-	tgt = typeof(node)
-	if !haskey(a.dt, tgt)
-		#dumpSymbolTable(a.dt)
-		debugp("ERROR: Unexpected node: ", node, " with type = ", tgt)
-		throw("Could not dispatch node")
-	end
-	debugp("Dispatching to call: ", a.dt[tgt], " with args: ", args)
-	getfield(a.m, a.dt[tgt])(args)
-end
-
-adp = ASTDispatcher()
 
 function isScalarType(typ)
 	!isArrayType(typ) && !isCompositeType(typ)
@@ -1262,18 +1517,24 @@ end
 function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	global inEntryPoint
 	inEntryPoint = isEntryPoint
+	global lstate
+	if isEntryPoint
+		#adp = ASTDispatcher()
+		lstate = LambdaGlobalData()
+	end
 	debugp("Ast = ", ast)
 	verbose && debugp("Starting processing for $ast")
 	params	=	ast.args[1]
 	env		=	ast.args[2]
 	bod		=	ast.args[3]
+	debugp("Processing body: ", bod)
 	returnType = bod.typ
 	typ = returnType
 	#f = Dict(ast => functionName)
 	bod = from_expr(ast)
 	args = from_formalargs(params)
 	argsunal = from_formalargs(params, true)
-	dumpSymbolTable(_symbolTable)
+	dumpSymbolTable(lstate.symboltable)
 	hdr = ""
 	wrapper = ""
 	if !isa(returnType, Tuple)
@@ -1299,10 +1560,28 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		rtyp = toCtype(typ)
 	end
 	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
+	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
 	if inEntryPoint
 		inEntryPoint = false
 	end
-	hdr * from_worklist() * s * wrapper
+	push!(lstate.compiledfunctions, functionName)
+	c = hdr * forwarddecl * from_worklist() * s * wrapper
+	if isEntryPoint
+		#global lstate
+		#resetEntryPoint()
+		resetLambdaState(lstate)
+	end	
+	c
+end
+
+function insert(func::Symbol, mod::Any, name, typs)
+	if mod == ""
+		insert(func, name, typs)
+		return
+	end
+	target = resolveFunction(func, mod, typs)
+	debugp("Resolved function ", func, " : ", name, " : ", typs)
+	insert(target, name, typs)
 end
 
 function insert(func::Symbol, name, typs)
@@ -1312,27 +1591,34 @@ function insert(func::Symbol, name, typs)
 end
 
 function insert(func::Function, name, typs)
+	global lstate
 	#ast = code_typed(func, typs; optimize=true)
 	ast = code_typed(func, typs)
-	if !has(_compiledFunctions, name)
-		push!(_worklist, (ast, name, typs))
+	if !has(lstate.compiledfunctions, name)
+		push!(lstate.worklist, (ast, name, typs))
 	end
 end
 
 function from_worklist()
 	s = ""
 	si = ""
-	while !isempty(_worklist)
-		a, fname, typs = pop!(_worklist)
-		if has(_compiledFunctions, fname)
+	global lstate
+	while !isempty(lstate.worklist)
+		#a, fname, typs = pop!(lstate.worklist)
+		a, fname, typs = splice!(lstate.worklist, 1)
+		debugp("Checking if we compiled ", fname, " before")
+		debugp(lstate.compiledfunctions)
+		if has(lstate.compiledfunctions, fname)
 			continue
 		end
-		empty!(_symbolTable)
-		empty!(globalUDTs)
-		empty!(ompPrivateList)
+		debugp("No, compiling it now")
+		empty!(lstate.symboltable)
+		#empty!(globalUDTs)
+		empty!(lstate.ompprivatelist)
 		if isa(a, Symbol)
 			a = code_typed(a, typs; optimize=true)
 		end
+		#push!(lstate.compiledfunctions, fname)
 		debugp("============ Compiling AST for ", fname, " ============") 
 		debugp(a)
 		length(a) >= 1 ? debugp(a[1].args) : ""
@@ -1342,8 +1628,9 @@ function from_worklist()
 		debugp(si)
 		debugp("============== End of C++ for ", fname, " ===========")
 		debugp("Adding ", fname, " to compiledFunctions")
-		debugp(_compiledFunctions)
-		push!(_compiledFunctions, fname)
+		debugp(lstate.compiledfunctions)
+		debugp("Added ", fname, " to compiledFunctions")
+		debugp(lstate.compiledfunctions)
 		s *= si
 	end
 	s
