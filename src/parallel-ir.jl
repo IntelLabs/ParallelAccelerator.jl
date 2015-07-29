@@ -313,6 +313,13 @@ function mk_assignment_expr(lhs :: SymbolNode, rhs)
 end
 
 @doc """
+Only used to create fake expression to force lhs to be seen as written rather than read.
+"""
+function mk_untyped_assignment(lhs, rhs)
+    Expr(symbol('='), lhs, rhs)
+end
+
+@doc """
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x, dim)
@@ -854,7 +861,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   mergeLambdaIntoOuterState(state, nested_lambda)
 
   #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-  out_body = [reduce_body, mk_assignment_expr(reduction_output_snode, temp_body, state)]
+  out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
 
   fallthroughLabel = next_label(state)
   condExprs = Any[]
@@ -864,7 +871,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     end
   end
   if length(condExprs) > 0
-    out_body = [ condExprs, out_body, LabelNode(fallthroughLabel) ]
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
   end
   #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
   dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
@@ -1415,6 +1422,13 @@ function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_num
 end
 
 @doc """
+Just call the AST walker for symbol for parallel IR nodes with no state.
+"""
+function pir_live_cb_def(x)
+  pir_live_cb(x, nothing)
+end
+
+@doc """
 Process a :lambda Expr.
 """
 function from_lambda(lambda :: Expr, depth, state)
@@ -1431,6 +1445,7 @@ function from_lambda(lambda :: Expr, depth, state)
   dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
   body = get_one(from_expr(body, depth, state, false))
   dprintln(4,"from_lambda after from_expr")
+  dprintln(3,"After processing lambda body = ", state.lambdaInfo)
 
   # Count the number of static assignments per var.
   symbol_assigns = Dict{Symbol, Int}()
@@ -1439,6 +1454,8 @@ function from_lambda(lambda :: Expr, depth, state)
   # After counting static assignments, update the lambdaInfo for those vars
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
+
+  CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, pir_live_cb_def)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -4803,7 +4820,7 @@ function pir_live_cb(ast, cbdata)
       append!(expr_to_process, this_parfor.preParFor)
       for i = 1:length(this_parfor.loopNests)
         # force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_assignment_expr(this_parfor.loopNests[i].indexVariable, 1, state))
+        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
         push!(expr_to_process, this_parfor.loopNests[i].lower)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
@@ -4833,7 +4850,7 @@ function pir_live_cb(ast, cbdata)
 
       for i = 1:length(this_parfor.loopNests)
         # Force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_assignment_expr(this_parfor.loopNests[i].indexVariable, 1, state))
+        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
         push!(expr_to_process, this_parfor.loopNests[i].lower)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
@@ -4855,7 +4872,7 @@ function pir_live_cb(ast, cbdata)
         if cur_task.args[i].options == ARG_OPT_IN
           push!(expr_to_process, cur_task.args[i].value)
         else
-          push!(expr_to_process, mk_assignment_expr(cur_task.args[i].value, 1, state))
+          push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
         end
       end
 
@@ -4865,7 +4882,7 @@ function pir_live_cb(ast, cbdata)
       assert(length(args) == 3)
 
       expr_to_process = Any[]
-      push!(expr_to_process, mk_assignment_expr(SymbolNode(args[1], Int64), 1, state))  # force args[1] to be seen as an rvalue
+      push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
       push!(expr_to_process, args[2])
       push!(expr_to_process, args[3])
 
