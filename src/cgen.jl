@@ -77,11 +77,10 @@ end
 
 
 # Globals
-
 verbose = true
-_symPre = 0
 inEntryPoint = false
 lstate = nothing
+#packageroot = nothing
 
 function resetLambdaState(l::LambdaGlobalData)
 	empty!(l.ompprivatelist)
@@ -126,10 +125,15 @@ tokenXlate = Dict(
 	'!' => "bang",
 	'.' => "dot"
 )
-_replacedTokens = Set("(,)#")
-_scrubbedTokens = Set("{}:")
+
+replacedTokens = Set("(,)#")
+scrubbedTokens = Set("{}:")
 
 #### End of globals ####
+
+function __init__()
+	packageroot = joinpath(dirname(@__FILE__), "..")
+end
 
 function debugp(a...)
 	verbose && println(a...)
@@ -141,7 +145,7 @@ function getenv(var::String)
 end
 
 function getPackageRoot()
-    path = joinpath(dirname(@__FILE__), "..")
+   	joinpath(dirname(@__FILE__), "..")
 end
 
 function from_header(isEntryPoint::Bool)
@@ -150,17 +154,17 @@ function from_header(isEntryPoint::Bool)
 end
 
 function from_includes()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	reduce(*, "", (
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$package_root/src/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/j2c-array.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/j2c-array-pert.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/pse-types.h\"\n")
+		"#include \"$packageroot/src/intel-runtime/include/pse-runtime.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/j2c-array.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/j2c-array-pert.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/pse-types.h\"\n")
 	)
 end
 
@@ -442,12 +446,12 @@ function canonicalize_re(tok)
 end
 
 function canonicalize(tok)
-	global _replacedTokens
-	global _scrubbedTokens
+	global replacedTokens
+	global scrubbedTokens
 	s = string(tok)
-	s = replace(s, _scrubbedTokens, "")
+	s = replace(s, scrubbedTokens, "")
 	s = replace(s, r"^[^a-zA-Z]", "_")
-	s = replace(s, _replacedTokens, "p")
+	s = replace(s, replacedTokens, "p")
 	s
 end
 
@@ -1551,8 +1555,8 @@ function from_worklist()
 end
 import Base.write
 function writec(s)
-	package_root = getPackageRoot()
-	cgenOutput = "$package_root/src/intel-runtime/tmp.cpp"
+	packageroot = getPackageRoot()
+	cgenOutput = "$packageroot/src/intel-runtime/tmp.cpp"
 	cf = open(cgenOutput, "w")
 	write(cf, s)
 	debugp("Done committing cgen code")
@@ -1560,28 +1564,27 @@ function writec(s)
 end
 
 function compile()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	
-	cgenOutputTmp = "$package_root/src/intel-runtime/tmp.cpp"
-	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+	cgenOutputTmp = "$packageroot/src/intel-runtime/tmp.cpp"
+	cgenOutput = "$packageroot/src/intel-runtime/out.cpp"
 
 	# make cpp code readable
 	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
 	run(beautifyCommand)
 
 	iccOpts = "-O3"
-#	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
 	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs`
+	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
 function link()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	#linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
-	linkCommand = `icc -shared -qopenmp -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o`
+	linkCommand = `icc -shared -qopenmp -o $packageroot/src/intel-runtime/libout.so.1.0 $packageroot/src/intel-runtime/out.o`
 	run(linkCommand)
 	debugp("Done cgen linking")
 end
