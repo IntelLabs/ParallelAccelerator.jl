@@ -3511,7 +3511,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     dprintln(3, body[j])
   end
 
-  fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+  fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
   dprintln(3,"fake_body = ", fake_body)
   new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
   dprintln(1,"Starting loop analysis.")
@@ -3520,7 +3520,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
   if hoist_allocation == 1
     body = hoistAllocation(body, new_lives, loop_info, state)
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
     dprintln(1,"Starting loop analysis again.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
@@ -4070,7 +4070,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   end
 
   if shortcut_array_assignment != 0
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
 
     for i = 1:length(body)
@@ -4826,7 +4826,7 @@ function pir_live_cb(ast, cbdata)
         push!(expr_to_process, this_parfor.loopNests[i].step)
       end
       emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, this_parfor.body)
+      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body))
 
       body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
       live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
