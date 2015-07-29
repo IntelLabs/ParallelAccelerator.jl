@@ -663,9 +663,27 @@ function from_call(state, env, expr::Any)
   local args = ast[2:end]
   dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
   fun = from_expr(state, env_, fun)
+  # Special Handling for parallel comprehension.  Because of GenSym node hack, we use a typeassert
+  # so that Julia can properly infer the type of the output.  We then remove this typeassert.
+  # FIXME: Once GenSym nodes are properly implemented this should be removed, as well as the
+  # explicit typeassert in the generated code for parallel comprehensions
+  remove_typeassert = false
+  if isa(fun, TopNode) && 
+    fun.name == :typeassert && 
+    isa(args[1], Expr) &&
+    args[1].head == :call &&
+    isa(args[1].args[1], GlobalRef) &&
+    args[1].args[1].name == :cartesianarray
+      remove_typeassert = true
+  end
   dprintln(env,"from_call: new fun=", fun)
   (fun_, args_) = normalize_callname(state, env, fun, args)
-  return translate_call(state, env, typ, :call, fun, args, fun_, args_)
+  result = translate_call(state, env, typ, :call, fun, args, fun_, args_)
+  # FIXME: Remove this when GenSym handling is implemented
+  if remove_typeassert
+    return result.args[2]
+  end
+  result
 end
 
 # turn Exprs in args into variable names, and put their definition into state
@@ -849,21 +867,32 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       ndim = length(dimExp)   # num of dimensions
       argstyp = Any[ Int for i in 1:ndim ] 
       local mapExp = args[1]     # first argument is the lambda
-      if isa(mapExp, GlobalRef) 
+      #println("mapExp ", mapExp)
+      #dump(mapExp,1000)
+      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == IntelPSE)
         mapExp = mapExp.name
       end
-      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && isdefined(env.cur_module, mapExp) && !isdefined(Base, mapExp) # only handle functions in current or Main module
-        dprintln(env,"function for cartesianarray: ", mapExp, " methods=", methods(getfield(env.cur_module, mapExp)), " argstyp=", argstyp)
-        m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+
+	if(isdefined(IntelPSE, mapExp))
+		m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+	else
+          m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+        end
+	dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
         assert(length(m) > 0)
         mapExp = m[1].func.code
       elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
         mapExp = lookupConstDefForArg(state, mapExp)
       end
-      assert(isa(mapExp, LambdaStaticData))
+      @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
       # call typeinf since Julia doesn't do it for us
       # and we can figure out the element type from mapExp's return type
       (ast, ety) = lambdaTypeinf(mapExp, to_tuple_type(tuple(argstyp...)))
+      # Element type is specified as an argument to cartesianarray
+      # This allows us to cast the return type, but inference still needs to be
+      # called on the mapExp ast.
+      ety = eval(args[2])
       etys = isa(ety, Tuple) ? Type[ t for t in ety ] : Type[ ety ]
       ast = from_expr("anonymous", env.cur_module, ast)
       # dprintln(env, "ast = ", ast)

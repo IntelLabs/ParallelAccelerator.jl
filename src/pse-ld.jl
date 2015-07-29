@@ -8,7 +8,7 @@ import ..IntelPSE
 import ..IntelPSE.getenv
 import ..IntelPSE.pert_init
 
-libpath = string(getenv("JULIA_ROOT"), "/intel-runtime/lib/libintel-runtime.so")
+libpath = string(IntelPSE.getPackageRoot(), "src/intel-runtime/lib/libintel-runtime.so")
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0

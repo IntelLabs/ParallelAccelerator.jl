@@ -3,7 +3,10 @@
 
 module cgen
 using ..ParallelIR
+using ..IntelPSE
 export generate, from_root, writec, compile, link
+import IntelPSE.getPackageRoot
+
 verbose = true
 _symPre = 0
 _jtypesToctypes = Dict(
@@ -45,7 +48,7 @@ _Intrinsics = [
 ]
 
 function debugp(a...)
-	verbose && println(a...)
+	#verbose && println(a...)
 end
 
 inEntryPoint = false
@@ -55,14 +58,14 @@ function getenv(var::String)
   ENV[var]
 end
 
-function getJuliaRoot()
-	julia_root = getenv("JULIA_ROOT")
-	len_root     = endof(julia_root)
-	if(julia_root[len_root] == '/')
-		julia_root = julia_root[1:len_root-1]
+#= function getPackageRoot()
+	package_root = getenv("JULIA_ROOT")
+	len_root     = endof(package_root)
+	if(package_root[len_root] == '/')
+		package_root = package_root[1:len_root-1]
   	end
-	julia_root
-end
+	package_root
+end =#
 
 globalUDTs = Dict()
 
@@ -72,17 +75,17 @@ function from_header(isEntryPoint::Bool)
 end
 
 function from_includes()
-	julia_root = getJuliaRoot()
+	package_root = getPackageRoot()
 	reduce(*, "", (
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$julia_root/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/j2c-array.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/j2c-array-pert.h\"\n",
-		"#include \"$julia_root/usr/include/j2c/pse-types.h\"\n")
+		"#include \"$package_root/src/intel-runtime/include/pse-runtime.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/j2c-array.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/j2c-array-pert.h\"\n",
+		"#include \"$package_root/src/intel-runtime/include/pse-types.h\"\n")
 	)
 end
 
@@ -411,10 +414,10 @@ function from_ccall(args)
 	if isInlineable(fun, args)
 		return from_inlineable(fun, args)
 	end
-	
+
 	if isa(fun, QuoteNode)
 		s = from_expr(fun)
-	elseif isa(fun, Expr) && is(fun.head, :call1)
+	elseif isa(fun, Expr) && ( is(fun.head, :call1) || is(fun.head, :call))
 		s = string(fun.args[2]) #* "/*" * from_expr(fun.args[3]) * "*/"
 	else
 		throw("Invalid ccall format...")
@@ -730,7 +733,27 @@ function resolveCallTarget(args::Array{Any, 1})
 	return M, s, t
 end
 
+function pattern_match_call(ast::Array{Any, 1})
+	# math functions 
+	libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+
+	debugp("pattern matching ",ast)
+	s = ""
+	if( length(ast)==2 && typeof(ast[1])==Symbol && in(ast[1],libm_math_functions) && typeof(ast[2])==SymbolNode && (ast[2].typ==Float64 || ast[2].typ==Float32))
+	  debugp("FOUND ", ast[1])
+	  s = string(ast[1])*"("*from_expr(ast[2].name)*");"
+	end
+	s
+end
+
+
 function from_call(ast::Array{Any, 1})
+	# pattern match math functions to avoid overheads
+	s = pattern_match_call(ast)
+	if(s != "")
+		return s;
+	end
+
 	debugp("Compiling call: ast = ", ast, " args are: ")
 	for i in 1:length(ast)
 		debugp("Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
@@ -1141,7 +1164,7 @@ function from_formalargs(params, unaliased=false)
 		end
 	end
 	debugp("Formal args are: ", s)
-	debugp("Julia root is: ", getenv("JULIA_ROOT"))
+	debugp("Packege root is: ", IntelPSE.getPackageRoot())
 	s
 end
 
@@ -1204,11 +1227,17 @@ end
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp)
-	actualParams = 
-		mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * 
-		", " * foldl((a, b) -> "$a, $b",
+  if length(params) > 0
+    params = mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * ", "
+  else
+    params = ""
+  end
+	actualParams = params * foldl((a, b) -> "$a, $b",
 		[(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
-	wrapperParams = "int run_where, $args"
+	wrapperParams = "int run_where"
+  if length(args) > 0
+    wrapperParams *= ", $args"
+  end
 	allocResult = ""
 	retSlot = ""
 	for i in 1:length(jtyp)
@@ -1255,11 +1284,16 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
 			createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
-		retargs = ", " * foldl((a, b) -> "$a, $b",
+		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
 
-		args *= retargs
-		argsunal *= retargs
+    if length(args) > 0
+		  args *= ", " * retargs
+		argsunal *= ", "*retargs
+    else
+		  args = retargs
+		  argsunal = retargs
+    end
 	else
 		
 		rtyp = toCtype(typ)
@@ -1273,7 +1307,7 @@ end
 
 function insert(func::Symbol, name, typs)
 	target = resolveFunction(func, typs)
-	debugp("Resolved function ", func, " : ", name, " : ", typs)
+	debugp("Resolved function ", func, " : ", name, " : ", typs, " target ", target)
 	insert(target, name, typs)
 end
 
@@ -1316,8 +1350,8 @@ function from_worklist()
 end
 import Base.write
 function writec(s::ASCIIString)
-	julia_root = getJuliaRoot()
-	cgenOutput = "$julia_root/j2c/out.cpp"
+	package_root = getPackageRoot()
+	cgenOutput = "$package_root/src/intel-runtime/tmp.cpp"
 	cf = open(cgenOutput, "w")
 	write(cf, s)
 	debugp("Done committing cgen code")
@@ -1325,18 +1359,28 @@ function writec(s::ASCIIString)
 end
 
 function compile()
-	julia_root = getJuliaRoot()
-	cgenOutput = "$julia_root/j2c/out.cpp"
+	package_root = getPackageRoot()
+	
+	cgenOutputTmp = "$package_root/src/intel-runtime/tmp.cpp"
+	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+
+	# make cpp code readable
+	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+	run(beautifyCommand)
+
 	iccOpts = "-O3"
+#	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $julia_root/j2c/out.o $cgenOutput $otherArgs -I$julia_root/src/arena_allocator -qoffload-attribute-target=mic`
+	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
+	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
 function link()
-	julia_root = getJuliaRoot()
-	linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $julia_root/j2c/libout.so.1.0 $julia_root/j2c/out.o -lc $julia_root/intel-runtime/lib/libintel-runtime.so`
+	package_root = getPackageRoot()
+	#linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
+	linkCommand = `icc -shared -qopenmp -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o`
 	run(linkCommand)
 	debugp("Done cgen linking")
 end
