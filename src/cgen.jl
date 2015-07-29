@@ -216,6 +216,17 @@ function from_decl(k::DataType)
 		s *= toCtype(ptyp[2]) * " stop;\n"
 		s *= "} " * canonicalize(k) * ";\n"
 		return s
+	elseif k.name == Tuple.name
+		if haskey(lstate.globalUDTs, k)
+			lstate.globalUDTs[k] = 0
+		end
+		btyp, ptyp = parseParametricType(k)
+		s = "typedef struct {\n"
+		for i in 1:length(ptyp)
+			s *= toCtype(ptyp[i]) * " " * "f" * string(i-1) * ";\n"
+		end
+		s *= "} Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", ptyp) * ";\n"
+		return s
 	end
 	throw("Could not translate Julia Type: ", k)
 	return ""
@@ -229,6 +240,7 @@ end
 function isCompositeType(t)
 	# TODO: Expand this to real UDTs
 	b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
+	b |= isa(t, DataType) && t.name == Tuple.name
 	debugp("Is ", t, " a composite type: ", b)
 	b
 end
@@ -284,24 +296,12 @@ end
 
 function from_lambda(ast, args)
 	s = ""
-#=
-	params	=	length(args) != 0 ? args[1] : []
-	env		=	length(args) >=2 ? args[2] : []
-	locals	=	length(env) > 0 ? env[1] : []
-	vars	=	length(env) >=2 ? env[2] : []
-	typ		=	length(env) >= 4 ? env[4] : []
-=#
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
 	params = linfo.input_params
 	vars = linfo.var_defs
 	gensyms = linfo.gen_sym_typs
-	#locals = setdiff(vars, params)
 
 	decls = ""
-	#debugp("locals are: ", locals)
-	#debugp("Typ is ", typ)
-	#global ompPrivateList
-	#global globalUDTs
 	global lstate
 	debugp("ompPrivateList is: ", lstate.ompprivatelist)
 	for k in keys(vars)
