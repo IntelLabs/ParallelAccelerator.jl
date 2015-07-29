@@ -957,6 +957,8 @@ function from_call(ast::Array{Any, 1})
 				push!(argTyps, args[a].typ)
 			elseif isPrimitiveJuliaType(typeof(args[a]))
 				push!(argTyps, typeof(args[a]))
+			elseif haskey(lstate.symboltable, args[a])
+				push!(argTyps, lstate.symboltable[args[a]])
 			end
 		end
 	end
