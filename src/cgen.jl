@@ -6,6 +6,7 @@ module cgen
 using ..ParallelIR
 using CompilerTools
 export generate, from_root, writec, compile, link
+using IntelPSE
 
 #=
 type ASTDispatcher
@@ -379,7 +380,7 @@ function has(a, b)
 end
 
 function hasfield(a, f)
-	return has(names(a), f)
+	return has(fieldnames(a), f)
 end
 
 function typeAvailable(a)
@@ -437,7 +438,7 @@ function toCtype(typ)
 		debugp("Atyp is: ", atyp)
 		assert(dims >= 0)
 		return " j2c_array< $(atyp) > "
-	elseif in(:parameters, names(typ)) && length(typ.parameters) != 0
+	elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
 		# For parameteric types, for now assume we have equivalent C++
 		# implementations
 		btyp, ptyps = parseParametricType(typ)
