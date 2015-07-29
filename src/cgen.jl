@@ -78,17 +78,15 @@ end
 
 
 # Globals
-
 verbose = true
-_symPre = 0
 inEntryPoint = false
 lstate = nothing
+#packageroot = nothing
 
 function resetLambdaState(l::LambdaGlobalData)
 	empty!(l.ompprivatelist)
 	empty!(l.globalUDTs)
 	empty!(l.symboltable)
-	#empty!(l.compiledfunctions)
 	empty!(l.worklist)
 	inEntryPoint = false
 	l.ompdepth = 0
@@ -128,13 +126,18 @@ tokenXlate = Dict(
 	'!' => "bang",
 	'.' => "dot"
 )
-_replacedTokens = Set("(,)#")
-_scrubbedTokens = Set("{}:")
+
+replacedTokens = Set("(,)#")
+scrubbedTokens = Set("{}:")
 
 #### End of globals ####
 
+function __init__()
+	packageroot = joinpath(dirname(@__FILE__), "..")
+end
+
 function debugp(a...)
-	#verbose && println(a...)
+	verbose && println(a...)
 end
 
 
@@ -142,15 +145,9 @@ function getenv(var::String)
   ENV[var]
 end
 
-#= function getPackageRoot()
-	package_root = getenv("JULIA_ROOT")
-	len_root     = endof(package_root)
-	if(package_root[len_root] == '/')
-		package_root = package_root[1:len_root-1]
-  	end
-	package_root
-end =#
-
+function getPackageRoot()
+   	joinpath(dirname(@__FILE__), "..")
+end
 
 function from_header(isEntryPoint::Bool)
 	s = from_UDTs()
@@ -158,22 +155,21 @@ function from_header(isEntryPoint::Bool)
 end
 
 function from_includes()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	reduce(*, "", (
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$package_root/src/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/j2c-array.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/j2c-array-pert.h\"\n",
-		"#include \"$package_root/src/intel-runtime/include/pse-types.h\"\n")
+		"#include \"$packageroot/src/intel-runtime/include/pse-runtime.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/j2c-array.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/j2c-array-pert.h\"\n",
+		"#include \"$packageroot/src/intel-runtime/include/pse-types.h\"\n")
 	)
 end
 
 function from_UDTs()
-	#global globalUDTs
 	global lstate
 	debugp("UDT Table is: ")
 	debugp(lstate.globalUDTs)
@@ -257,8 +253,6 @@ function from_lambda_old(args)
 	debugp("locals are: ", locals)
 	debugp("vars are: ", vars)
 	debugp("Typ is ", typ)
-	#global ompPrivateList
-	#global globalUDTs
 	global lstate
 	debugp("ompPrivateList is: ", lstate.ompprivatelist)
 	for k in 1:length(vars)
@@ -278,9 +272,6 @@ function from_lambda_old(args)
 	
 	for k in keys(lstate.symboltable)
 		if (has(locals, k) && !has(params, k)) || (!has(locals, k) && !has(params, k))
-			#decls *= from_decl(k)
-			#if isa(_symbolTable[k], Tuple)
-			#if !isPrimitiveJuliaType(_symbolTable[k])
 			debugp("About to check for composite type: ", lstate.symboltable[k])
 			if isCompositeType(lstate.symboltable[k])
 				#globalUDTs, from_decl(_symbolTable[k])
@@ -309,7 +300,6 @@ function from_lambda(ast, args)
 		v = vars[k] # v is a VarDef
 		lstate.symboltable[k] = v.typ
 		# If we have user defined types, record them
-		#if in(k, locals) && (v.desc & 32 != 0)
 		if in(k, vars) && !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
 		end 
@@ -321,28 +311,21 @@ function from_lambda(ast, args)
 	end
 	debugp("Done with ompvars")
 	bod = from_expr(args[3])
-	#debugp("lambda locals = ", locals)
 	debugp("lambda params = ", params)
 	debugp("lambda vars = ", vars)
 	debugp("symboltable here = ")
 	dumpSymbolTable(lstate.symboltable)
 	
 	for k in keys(lstate.symboltable)
-		#if (in(k, vars) && !in(k, params)) #|| (!in(k, locals) && !in(k, params))
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-			#decls *= from_decl(k)
-			#if isa(_symbolTable[k], Tuple)
-			#if !isPrimitiveJuliaType(_symbolTable[k])
 			debugp("About to check for composite type: ", lstate.symboltable[k])
 			if isCompositeType(lstate.symboltable[k])
-				#globalUDTs, from_decl(_symbolTable[k])
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
 				end
 			end
 			debugp("Adding ", k, " to decls with type ", lstate.symboltable[k]) 
 			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-			#end
 		end
 	end
 	decls * bod
@@ -442,23 +425,13 @@ function toCtype(typ)
 		# For parameteric types, for now assume we have equivalent C++
 		# implementations
 		btyp, ptyps = parseParametricType(typ)
-		#return toCtype(b) * toCtype(p[1]) * " * "
 		return canonicalize(btyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
 	else
 		return canonicalize(typ)
 	end
 end
 
-function genName()
-	global _symPre
-	_symPre += 1
-	"anon" * string(_symPre)
-end
-
-
-
 function canonicalize_re(tok)
-	debugp("Canonicalizing ", tok, " : ", string(tok)) 
 	s = string(tok)
 	name = ""
 	for c in 1:length(s)
@@ -474,14 +447,12 @@ function canonicalize_re(tok)
 end
 
 function canonicalize(tok)
-	global _replacedTokens
-	global _scrubbedTokens
+	global replacedTokens
+	global scrubbedTokens
 	s = string(tok)
-	debugp("Canonicalizing ", tok, " : ", string(tok)) 
-	s = replace(s, _scrubbedTokens, "")
+	s = replace(s, scrubbedTokens, "")
 	s = replace(s, r"^[^a-zA-Z]", "_")
-	s = replace(s, _replacedTokens, "p")
-	debugp("Canonicalized token = ", s) 
+	s = replace(s, replacedTokens, "p")
 	s
 end
 
@@ -558,7 +529,6 @@ function from_tuple(args)
 	s = "{"
 	for i in 1:length(args)
 		debugp("Arg: ", i, " : ", args[i], " is type ", typeof(args[i])) 
-		#s *= from_expr(args[i]) * (i < length(args) ? ", " : "")
 	end
 	s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}" 
 	debugp("Returning: ", s)
@@ -582,14 +552,11 @@ function from_ccall(args)
 	debugp("return type: ", args[2])
 	debugp("input types tuple: ", args[3])
 	debugp("inputs tuple: ", args[4:end])
-	#m, s, t = resolveCallTarget(args)
-	#debugp("Attempted to resolve ccall target: got m = ", m, " and s = ", s, " and t = ", t)
 	for i in 1:length(args)
 		debugp(args[i])
 	end
 	debugp("End of ccall args")
 	fun = args[1]
-	#s = from_expr(fun)	
 	if isInlineable(fun, args)
 		return from_inlineable(fun, args)
 	end
@@ -607,21 +574,13 @@ function from_ccall(args)
 	debugp("Ccall args start: ", round(Int, (length(args)-1)/2)+2)
 	debugp("Ccall args end: ", length(args))
 	numInputs = length(args[3].args)-1
-	#argsStart = round(Int, (length(args)-1)/2)+2
 	argsStart = 4
-	#argsEnd = argsStart + numInputs - 1
 	argsEnd = length(args)
-	#for i in round(Int, (length(args)-1)/2)+2:length(args)
 	debugp("Emitting args:")
 	for i in argsStart:2:argsEnd
 		debugp(args[i])
 	end
 	debugp("End of ccall args:")
-	#=
-	for i in argsStart : 2 : argsEnd
-		s *= from_expr(args[i]) * (i < argsEnd ? ", " : "")
-	end
-	=#
 	s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
 	s *= ")"
 	debugp("from_ccall: ", s)
@@ -630,20 +589,15 @@ end
 
 function from_arrayset(args)
 	debugp("arrayset args are: ", args, length(args))
-	#idxs = map((i) -> from_expr(i), args[3:end])
 	idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end]) 
 	src = from_expr(args[1])
 	val = from_expr(args[2])
-	#src, val, idx = map((i)->from_expr(i), args)
-	#s = "$(src).SETELEM($(idx), $(val))"
 	"$src.ARRAYELEM($idxs) = $val"
 end
 
 function from_getfield(args)
 	debugp("Getfield, args are: ", length(args))
-	#assert(length(args) == 2)
 	mod, tgt = resolveCallTarget(args[1], args[2:end])
-	#rcvr = from_expr(args[1])
 	if mod == "Intrinsics"
 		return from_expr(tgt)
 	elseif isInlineable(tgt, args[2:end])
@@ -877,20 +831,7 @@ function isPendingCompilation(list, tgt)
 	end
 	return false
 end
-#=
-function resolveCallTarget(ast)
-	debugp("In call, ast is: ", ast)
-	topn = false
-	if typeof(ast[1]) == TopNode
-		#fun = from_top(ast[1])
-		fun = ast[1].name
-		topn = true
-		debugp("Got topnode, setting target to ", fun)
-	else
-		fun = ast[1]
-	end
-end
-=#
+
 function resolveCallTarget(args::Array{Any, 1})
 	debugp("Trying to resolve target with args: ", args)
 	M = ""
@@ -954,6 +895,7 @@ function resolveCallTarget(args::Array{Any, 1})
 	return M, s, t
 end
 
+#=
 function pattern_match_call(ast::Array{Any, 1})
 	# math functions 
 	libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
@@ -966,20 +908,14 @@ function pattern_match_call(ast::Array{Any, 1})
 	end
 	s
 end
-
+=#
 
 function from_call(ast::Array{Any, 1})
-	# pattern match math functions to avoid overheads
-	s = pattern_match_call(ast)
-	if(s != "")
-		return s;
-	end
 
 	debugp("Compiling call: ast = ", ast, " args are: ")
 	for i in 1:length(ast)
 		debugp("Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
 	end
-	#mod, fun = resolveCallTarget(ast[1], ast[2:end])
 	mod, fun, t = resolveCallTarget(ast)
 	if !isempty(t)
 		return t;
@@ -1003,7 +939,6 @@ function from_call(ast::Array{Any, 1})
 	# TODO: This needs to specialize on types
 	skipCompilation = has(lstate.compiledfunctions, funStr) ||
 		isPendingCompilation(lstate.worklist, funStr)
-	#compiledPreviously = has(_compiledFunctions, string(fun)) || has(_worklist, string(fun))
 	s = ""
 	debugp("Worklist: ")
 	map((i)->debugp(i[2]), lstate.worklist)
@@ -1048,13 +983,11 @@ end
 function from_return(args)
 	global inEntryPoint
 	debugp("Return args are: ", args)
-	#debugp("Type of ret are: ", retTyps)
 	retExp = ""
 	if inEntryPoint
 		if typeAvailable(args[1]) && isa(args[1].typ, Tuple)
 			retTyps = args[1].typ
 			for i in 1:length(retTyps)
-			#retExp *= "*ret" * string(i-1) * " = " * from_expr(args[1].args[i+1]) * ";\n"
 				retExp *= "*ret" * string(i-1) * " = " * from_expr(args[1]) * ".f" * string(i-1) * ";\n"
 			end
 		else
@@ -1235,7 +1168,6 @@ function from_parforstart(args)
 	end
 
 	s *= rdsprolog * "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
-	#s *= "#pragma omp for private($(ivs[1]))\n"
 	s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
 	s *= loopheaders
 	s
@@ -1245,9 +1177,7 @@ function from_parforstart_serial(args)
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	global lstate
-	#ompPrivateList
 	s = ""
-	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
 
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
 	starts = map((a)->from_expr(a.lower), lpNests)
@@ -1267,14 +1197,8 @@ function from_new(args)
 	typ = args[1] #type of the object
 	assert(isa(typ, DataType))
 	objtyp, ptyps = parseParametricType(typ)
-	#ctyp = objtyp * join(ptyps)
-	#ctyp = canonicalize(objtyp) * mapfoldl((a) -> toCtype(a), (a, b) -> a * b, ptyps)
 	ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
-	#s = "new " * ctyp * "("
 	s = ctyp * "{"
-	#for a in 2:length(args)
-	#	s *= from_expr(args[a]) * (a < length(args) ? ", " : "")
-	#end
 	s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}" 
 	s
 end
@@ -1449,7 +1373,6 @@ function from_formalargs(params, unaliased=false)
 		end
 	end
 	debugp("Formal args are: ", s)
-	debugp("Packege root is: ", IntelPSE.getPackageRoot())
 	s
 end
 
@@ -1531,7 +1454,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	debugp("Processing body: ", bod)
 	returnType = bod.typ
 	typ = returnType
-	#f = Dict(ast => functionName)
 	bod = from_expr(ast)
 	args = from_formalargs(params)
 	argsunal = from_formalargs(params, true)
@@ -1550,11 +1472,11 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
 
     if length(args) > 0
-		  args *= ", " * retargs
+		args *= ", " * retargs
 		argsunal *= ", "*retargs
     else
-		  args = retargs
-		  argsunal = retargs
+		args = retargs
+		argsunal = retargs
     end
 	else
 		
@@ -1568,8 +1490,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	push!(lstate.compiledfunctions, functionName)
 	c = hdr * forwarddecl * from_worklist() * s * wrapper
 	if isEntryPoint
-		#global lstate
-		#resetEntryPoint()
 		resetLambdaState(lstate)
 	end	
 	c
@@ -1614,12 +1534,10 @@ function from_worklist()
 		end
 		debugp("No, compiling it now")
 		empty!(lstate.symboltable)
-		#empty!(globalUDTs)
 		empty!(lstate.ompprivatelist)
 		if isa(a, Symbol)
 			a = code_typed(a, typs; optimize=true)
 		end
-		#push!(lstate.compiledfunctions, fname)
 		debugp("============ Compiling AST for ", fname, " ============") 
 		debugp(a)
 		length(a) >= 1 ? debugp(a[1].args) : ""
@@ -1637,9 +1555,9 @@ function from_worklist()
 	s
 end
 import Base.write
-function writec(s::ASCIIString)
-	package_root = getPackageRoot()
-	cgenOutput = "$package_root/src/intel-runtime/tmp.cpp"
+function writec(s)
+	packageroot = getPackageRoot()
+	cgenOutput = "$packageroot/src/intel-runtime/tmp.cpp"
 	cf = open(cgenOutput, "w")
 	write(cf, s)
 	debugp("Done committing cgen code")
@@ -1647,28 +1565,27 @@ function writec(s::ASCIIString)
 end
 
 function compile()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	
-	cgenOutputTmp = "$package_root/src/intel-runtime/tmp.cpp"
-	cgenOutput = "$package_root/src/intel-runtime/out.cpp"
+	cgenOutputTmp = "$packageroot/src/intel-runtime/tmp.cpp"
+	cgenOutput = "$packageroot/src/intel-runtime/out.cpp"
 
 	# make cpp code readable
 	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
 	run(beautifyCommand)
 
 	iccOpts = "-O3"
-#	iccOpts = "-O3"
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
 	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/src/intel-runtime/out.o $cgenOutput $otherArgs`
+	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
 function link()
-	package_root = getPackageRoot()
+	packageroot = getPackageRoot()
 	#linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
-	linkCommand = `icc -shared -qopenmp -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o`
+	linkCommand = `icc -shared -qopenmp -o $packageroot/src/intel-runtime/libout.so.1.0 $packageroot/src/intel-runtime/out.o`
 	run(linkCommand)
 	debugp("Done cgen linking")
 end
