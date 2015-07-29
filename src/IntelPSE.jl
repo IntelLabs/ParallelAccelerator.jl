@@ -4,6 +4,9 @@ export DomainIR, ParallelIR, AliasAnalysis, LD
 export decompose, offload, set_debug_level, getenv, getPackageRoot
 export cartesianarray, runStencil
 
+using CompilerTools
+using CompilerTools.LambdaHandling
+
 # MODE for offload
 const TOPLEVEL=1
 const PROXYONLY=3
@@ -19,6 +22,7 @@ client_intel_pse_mode = 1
 client_intel_task_graph = false
 import Base.show
 
+# Read the mode flag from the environment variable INTEL_PSE_MODE, if it is defined.
 if haskey(ENV,"INTEL_PSE_MODE")
   mode = ENV["INTEL_PSE_MODE"]
   if mode == 0 || mode == "none"
@@ -61,9 +65,7 @@ type FunctionInfo
   array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
   can_parallelize :: Bool              # false if a global is written in this function
   recursive_parallelize :: Bool
-  params
-  locals
-  types
+  lambdaInfo :: LambdaInfo
 end
 
 function getenv(var::String)
@@ -231,20 +233,18 @@ type extractStaticCallGraphState
 
   calls :: Array{CallInfo,1}
   globalWrites :: Set
-  params
-  locals
-  types
+  lambdaInfo   :: Union{LambdaInfo, Nothing}
   array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
   cant_analyze :: Bool
 
   local_lambdas :: Dict{Symbol,LambdaStaticData}
 
   function extractStaticCallGraphState(fs, mnfi, ftp)
-    new(fs, mnfi, ftp, CallInfo[], Set(), nothing, nothing, nothing, Set(), false, Dict{Symbol,LambdaStaticData}())
+    new(fs, mnfi, ftp, CallInfo[], Set(), nothing, Set(), false, Dict{Symbol,LambdaStaticData}())
   end
 
   function extractStaticCallGraphState(fs, mnfi, ftp, calls, gw, ll)
-    new(fs, mnfi, ftp, calls, gw, nothing, nothing, nothing, Set(), false, ll)
+    new(fs, mnfi, ftp, calls, gw, nothing, Set(), false, ll)
   end
 end
 
@@ -382,22 +382,16 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
   end
 end
 
-function extractStaticCallGraphWalk(node, state, top_level_number, is_top_level, read)
+function extractStaticCallGraphWalk(node, state :: extractStaticCallGraphState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   asttyp = typeof(node)
   dprintln(4,"escgw: ", node, " type = ", asttyp)
   if asttyp == Expr
     head = node.head
     args = node.args
     if head == :lambda
-      if state.params == nothing
-        param = args[1]
-        meta  = args[2]
-        state.params = args[1]
-        state.locals = ParallelIR.createVarSet(meta[1])
-        state.types  = ParallelIR.createVarDict(meta[2])
-        dprintln(3,"params = ", state.params)
-        dprintln(3,"locals = ", state.locals)
-        dprintln(3,"types = ", state.types)
+      if state.lambdaInfo == nothing
+        state.lambdaInfo = lambdaExprToLambdaInfo(node)
+        dprintln(3, "lambdaInfo = ", state.lambdaInfo)
       else
         new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
         AstWalker.AstWalk(node, extractStaticCallGraphWalk, new_lambda_state)
@@ -407,7 +401,7 @@ function extractStaticCallGraphWalk(node, state, top_level_number, is_top_level,
       func_expr = args[1]
       call_args = args[2:end]
       call_sig = Expr(:tuple)
-      call_sig.args = map(DomainIR.typeOfOpr, call_args)
+      call_sig.args = map(x -> DomainIR.typeOfOpr(state.lambdaInfo, x), call_args)
       call_sig_arg_tuple = eval(call_sig)
       dprintln(4,"func_expr = ", func_expr)
       dprintln(4,"Arg tuple = ", call_sig_arg_tuple)
@@ -620,7 +614,7 @@ function extractStaticCallGraph(func, sig)
       state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
       AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
       dprintln(4,state)
-      mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.params, state.locals, state.types)
+      mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.lambdaInfo)
     elseif ftyp == LambdaStaticData
       dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
       ast = ParallelIR.uncompressed_ast(the_func)
@@ -628,7 +622,7 @@ function extractStaticCallGraph(func, sig)
       state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
       AstWalker.AstWalk(ast, extractStaticCallGraphWalk, state)
       dprintln(4,state)
-      mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.params, state.locals, state.types)
+      mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.lambdaInfo)
     end
   end
 
@@ -925,20 +919,22 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
 
   cur_module   = def.module
   ct           = code_typed(function_name, signature)      # get information about code for the given function and signature
+  assert(length(ct) == 1)
+  ct = ct[1]
+  lambdaInfo   = lambdaExprToLambdaInfo(ct)
   
-#  dprintln(3,"before remove_gensym()",ct[1])
-#  remove_gensym(ct[1])
-#  dprintln(3,"after remove_gensym()",ct[1])
+#  dprintln(3,"before remove_gensym()",ct)
+#  remove_gensym(ct)
+#  dprintln(3,"after remove_gensym()",ct)
 
   if offload_mode & PROXYONLY != PROXYONLY
     push!(previouslyOptimized, (function_name, signature))
     dprintln(3, "Initial typed code = ", ct)
     domain_start = time_ns()
-    domain_ir    = DomainIR.from_expr(string(function_name), cur_module, ct[1])     # convert that code to domain IR
+    domain_ir    = DomainIR.from_expr(string(function_name), cur_module, ct)     # convert that code to domain IR
     dir_time = time_ns() - domain_start
     dprintln(3, "domain code = ", domain_ir)
     dprintln(1, "offload: DomainIR conversion time = ", ns_to_sec(dir_time))
-    lambdaInfo = lambdaExprToLambdaInfo(ct[1])
     input_arrays = get_input_arrays(lambdaInfo)
     pir_start = time_ns()
     if DEBUG_LVL >= 5
@@ -953,7 +949,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
   else
     dprintln(1, "IntelPSE code optimization skipped")
-    code = ct[1]
+    code = ct
   end
 
   if client_intel_pse_mode == 5
@@ -987,27 +983,10 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     dyn_lib      = string(package_root, "/src/intel-runtime/libout.so.1.0")
     dprintln(2, "dyn_lib = ", dyn_lib)
   
-    # Same the number of statements so we can get the last one.
-    num_stmts    = length(ct[1].args[3].args)
-    # Get the return type of the function by looking at the last statement of the lambda and getting its type.
-    n            = num_stmts
-    ret_typs     = nothing
-    while n > 0
-       last_stmt = ct[1].args[3].args[n]
-       if isa(last_stmt, LabelNode)
-         n = n - 1
-       elseif isa(last_stmt, Expr) && is(last_stmt.head, :return)
-         typ = DomainIR.typeOfOpr(last_stmt.args[1])
-         dprintln(3,"offload return typ = ", typ, " typeof(typ) = ", typeof(typ), " last_stmt = ", last_stmt)
-         ret_typs = isa(typ, Tuple) ? [ (x, isarray(x)) for x in typ ] : [ (typ, isarray(typ)) ]
-         break
-       else
-         error("Last statement is not a return: ", last_stmt)
-       end
-    end
-    if ret_typs == nothing
-      error("Cannot figure out function return type")
-    end
+    ret_type     = CompilerTools.LambdaHandling.getReturnType(lambdaInfo)
+    # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
+    ret_typs     = isa(ret_type, Tuple) ? [ (x, isarray(x)) for x in ret_type ] : [ (ret_type, isarray(ret_type)) ]
+
     # Convert Arrays in signature to Ptr and add extra arguments for array dimensions
     (modified_sig, sig_dims) = convert_sig(signature)
     dprintln(2, "modified_sig = ", modified_sig)
@@ -1044,7 +1023,6 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     end
   
     num_rets = length(ret_typs)
-    assert(n > 0)
     ret_arg_exps = Array(Any, 0)
     extra_sig = Array(Type, 0)
     for i = 1:num_rets
