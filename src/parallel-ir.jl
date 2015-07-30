@@ -6,7 +6,7 @@ using CompilerTools.LambdaHandling
 using ..DomainIR
 using ..AliasAnalysis
 using ..IntelPSE
-#if IntelPSE.client_intel_pse_mode == 5
+#if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
 #using Base.Threading
 #end
 
@@ -847,9 +847,11 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_inputs = [reduction_output_snode, atm]
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
-  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inptus), gensym_map)
+  dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  temp_body = CompilerTools.LambdaHandling.replaceExprWithDict(temp_body, gensym_map)
   state.max_label = max_label
   assert(isa(temp_body,Array))
   assert(length(temp_body) == 1)
@@ -1049,9 +1051,11 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
   dprintln(3,"dl_inputs = ", dl_inputs)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
-  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(dl_inputs), gensym_map)
+  dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -1247,10 +1251,12 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   #for (v, d) in dl.locals
   #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
   #end
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, dl.linfo)
-  dl_body = CompilerTools.LambdaHandling.replaceExprWithDict(dl.genBody(indexed_arrays), gensym_map)
+  dl_body = dl.genBody(indexed_arrays)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
+  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -3511,7 +3517,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     dprintln(3, body[j])
   end
 
-  fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
+  fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
   dprintln(3,"fake_body = ", fake_body)
   new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
   dprintln(1,"Starting loop analysis.")
@@ -3520,7 +3526,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
   if hoist_allocation == 1
     body = hoistAllocation(body, new_lives, loop_info, state)
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
+    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
     dprintln(1,"Starting loop analysis again.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
@@ -3530,7 +3536,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   dprintln(3,"new_lives = ", new_lives)
   dprintln(3,"loop_info = ", loop_info)
 
-  if IntelPSE.client_intel_pse_mode == 5 || IntelPSE.client_intel_task_graph || run_as_task()
+  if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE || IntelPSE.getTaskMode() > 0 || run_as_task()
     task_start = time_ns()
 
     # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
@@ -3753,7 +3759,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     for i = 1:length(rr)
       dprintln(2, rr[i])
 
-      if IntelPSE.client_intel_pse_mode == 5
+      if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
         # new body starts with the pre-task graph portion
         new_body = body[1:rr[i].start_index-1]
         copy_back = Any[]
@@ -4070,7 +4076,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   end
 
   if shortcut_array_assignment != 0
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body))
+    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
 
     for i = 1:length(body)
@@ -4173,7 +4179,7 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
   # MULTI_PARFOR_SEQ_NO mode converts parfors to tasks but leaves non-parfors as non-tasks.  This implies that the code calling this function has ensured
   #     that none of the non-parfor stmts depend on the completion of a parfor in the batch.
 
-  if IntelPSE.client_intel_pse_mode != 5
+  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
     if task_graph_mode == SEQUENTIAL_TASKS
       task_finish = false
     elseif task_graph_mode == ONE_AT_A_TIME
@@ -4213,7 +4219,7 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
     end
   end
   
-  if IntelPSE.client_intel_pse_mode != 5
+  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
     # If each task doesn't wait to finish then add a call to pert_wait_all_task to wait for the batch to finish.
     if !task_finish
       #julia_root      = IntelPSE.getJuliaRoot()
@@ -4545,8 +4551,17 @@ function parforToTask(parfor_index, bb_statements, body, state)
   end
   # Convert Set to Array
   locals_array = CompilerTools.LambdaHandling.VarDef[]
+  gensyms = Any[]
+  gensyms_table = Dict{SymGen, Any}()
   for i in locals
-    push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.lambdaInfo))
+    if isa(i, Symbol) 
+      push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.lambdaInfo))
+    elseif isa(i, GenSym) 
+      push!(gensyms, CompilerTools.LambdaHandling.getType(i,state.lambdaInfo))
+      gensyms_table[i] = GenSym(length(gensyms) - 1)
+    else
+      assert(false)
+    end
   end
 
   # Form an array of argument access flags for each argument.
@@ -4570,6 +4585,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3,"io_symbols = ", io_symbols)
   dprintln(3,"reduction_vars = ", reduction_vars)
   dprintln(3,"locals_array = ", locals_array)
+  dprintln(3,"gensyms = ", gensyms)
+  dprintln(3,"gensyms_table = ", gensyms_table)
   dprintln(3,"arg_types = ", arg_types)
 
   # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
@@ -4587,7 +4604,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
                               map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
   all_arg_type = eval(all_arg_types_tuple)
   # Forms VarDef's for the local variables to the task function.
-  args_var = Array{CompilerTools.LambdaHandling.VarDef,1}[]
+  args_var = CompilerTools.LambdaHandling.VarDef[]
   push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
   append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names),
                       map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols),
@@ -4616,6 +4633,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
   CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
   CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaInfo)
+  newLambdaInfo.gen_sym_typs = gensyms
 
   # Creating the new body for the task function.
   task_body = TypedExpr(Int, :body)
@@ -4638,7 +4656,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
                                                 TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i),
                                                 1)
     end
-  elseif IntelPSE.client_intel_pse_mode == 5
+  elseif IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
     for i = 1:length(the_parfor.loopNests)
       # Put outerloop first in the loopNest
       j = length(the_parfor.loopNests) - i + 1
@@ -4650,14 +4668,14 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3, "Before recreation or flattening")
 
   # Add the parfor stmt to the task function body.
-  if IntelPSE.client_intel_pse_mode == 5
+  if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
     recreateLoops(task_body.args, the_parfor)
   else
     flattenParfor(task_body.args, the_parfor)
   end
 
   push!(task_body.args, TypedExpr(Int, :return, 0))
-
+  task_body = CompilerTools.LambdaHandling.replaceExprWithDict(task_body, gensyms_table)
   # Create the new :lambda Expr for the task function.
   code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
 
@@ -4676,7 +4694,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
   m = methods(task_func, all_arg_type)
   def = m[1].func.code
-  if IntelPSE.client_intel_pse_mode != 5
+  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
     def.j2cflag = convert(Int32,6)
     ccall(:set_j2c_task_arg_types, Void, (Ptr{Uint8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
   end
@@ -4826,7 +4844,7 @@ function pir_live_cb(ast, cbdata)
         push!(expr_to_process, this_parfor.loopNests[i].step)
       end
       emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body))
+      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
 
       body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
       live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
@@ -6244,9 +6262,12 @@ function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   pirPrintDl(3, domain_lambda)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
   CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
+  newLambdaInfo.var_defs = deepcopy(domain_lambda.linfo.var_defs)
+  newLambdaInfo.gen_sym_typs = deepcopy(domain_lambda.linfo.gen_sym_typs)
+  #CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   #CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
   #CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
-  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(domain_lambda.linfo, Expr(:body, stmts...))
   return (ast, input_arrays) 
 end
 

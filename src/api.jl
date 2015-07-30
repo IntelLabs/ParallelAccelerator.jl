@@ -3,7 +3,7 @@ baremodule API
 using Base
 import Base: call, getindex, setindex!
 
-#export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, log10, sin, cos, exp
+export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, log10, sin, cos, exp
 export cartesianarray, runStencil, @runStencil
 
 eval(x) = Core.eval(API, x)

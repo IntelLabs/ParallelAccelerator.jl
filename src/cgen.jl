@@ -6,7 +6,7 @@ module cgen
 using ..ParallelIR
 using CompilerTools
 export generate, from_root, writec, compile, link
-using IntelPSE
+import IntelPSE, ..getPackageRoot
 
 #=
 type ASTDispatcher
@@ -143,10 +143,6 @@ end
 
 function getenv(var::String)
   ENV[var]
-end
-
-function getPackageRoot()
-   	joinpath(dirname(@__FILE__), "..")
 end
 
 function from_header(isEntryPoint::Bool)
@@ -300,7 +296,7 @@ function from_lambda(ast, args)
 		v = vars[k] # v is a VarDef
 		lstate.symboltable[k] = v.typ
 		# If we have user defined types, record them
-		if in(k, vars) && !in(k, params) && (v.desc & 32 != 0)
+		if !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
 		end 
 	end

@@ -4,11 +4,8 @@ import Base.LinAlg: BlasInt
 
 #require("intel-pse.jl")
 #importall IntelPSE
-import ..IntelPSE
-import ..IntelPSE.getenv
-import ..IntelPSE.pert_init
-
-libpath = string(IntelPSE.getPackageRoot(), "src/intel-runtime/lib/libintel-runtime.so")
+import ..getPackageRoot
+import ..Pert
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
@@ -119,14 +116,14 @@ end
 # Decompose ccalls among the expressions in the body of a lambda.
 # Modification is made in place.
 function decompose(ast)
-  julia_root   = getenv("JULIA_ROOT")
+  julia_root   = ENV("JULIA_ROOT")
   # Strip trailing /
   len_root     = endof(julia_root)
   if(julia_root[len_root] == '/')
     julia_root = julia_root[1:len_root-1]
   end
   # LD mode, pert_init with double buffer
-  pert_init(julia_root, true)
+  Pert.pert_init(julia_root, true)
   if isa(ast, LambdaStaticData)
       ast = uncompressed_ast(ast)
   end
@@ -149,138 +146,142 @@ function decompose(ast)
 end
 
 
-# general LD interface
+function __init__()
+  libpath = string(getPackageRoot(), "src/intel-runtime/lib/libintel-runtime.so")
+  @eval begin
 
-@eval function divisible(obj)
-  ccall((:divisible, $(libpath)), BlasInt, (Ptr{Void},), obj)
-end  
+    function divisible(obj)
+      ccall((:divisible, $(libpath)), BlasInt, (Ptr{Void},), obj)
+    end  
 
-@eval function best_tiles(obj, proc_ID, tiles)
-  ccall((:best_titles, $(libpath)), BlasInt, (Ptr{Void}, BlasInt, Ptr{Void}),
-        obj, proc_ID, tiles)
-end
+    function best_tiles(obj, proc_ID, tiles)
+      ccall((:best_titles, $(libpath)), BlasInt, (Ptr{Void}, BlasInt, Ptr{Void}),
+            obj, proc_ID, tiles)
+    end
 
-@eval function compute_bound(obj)
-  ccall((:compute_bound, $(libpath)), BlasInt, (Ptr{Void},), obj)
-end  
+    function compute_bound(obj)
+      ccall((:compute_bound, $(libpath)), BlasInt, (Ptr{Void},), obj)
+    end  
 
-@eval function coproc_biased(obj)
-  ccall((:coproc_biased, $(libpath)), BlasInt, (Ptr{Void},), obj)
-end  
+    function coproc_biased(obj)
+      ccall((:coproc_biased, $(libpath)), BlasInt, (Ptr{Void},), obj)
+    end  
 
-@eval function static_sched_preferred(obj)
-  ccall((:static_sched_preferred, $(libpath)), BlasInt, (Ptr{Void},), obj)
-end  
+    function static_sched_preferred(obj)
+      ccall((:static_sched_preferred, $(libpath)), BlasInt, (Ptr{Void},), obj)
+    end  
 
-@eval function cpu_perf(obj, num_threads)
-  ccall((:cpu_perf, $(libpath)), BlasInt, (Ptr{Void}, BlasInt), obj, num_threads)
-end
+    function cpu_perf(obj, num_threads)
+      ccall((:cpu_perf, $(libpath)), BlasInt, (Ptr{Void}, BlasInt), obj, num_threads)
+    end
 
-@eval function coproc_perf(obj, num_threads)
-  ccall((:coproc_perf, $(libpath)), BlasInt, (Ptr{Void},BlasInt), obj, num_threads)
-end
+    function coproc_perf(obj, num_threads)
+      ccall((:coproc_perf, $(libpath)), BlasInt, (Ptr{Void},BlasInt), obj, num_threads)
+    end
 
-@eval function cpu_coproc_communication_time(obj, size)
-  ccall((:cpu_coproc_communication_time, $(libpath)), BlasInt, (Ptr{Void},BlasInt), obj, size)
-end
+    function cpu_coproc_communication_time(obj, size)
+      ccall((:cpu_coproc_communication_time, $(libpath)), BlasInt, (Ptr{Void},BlasInt), obj, size)
+    end
 
-@eval function best_chunks(obj, chunks)
-  ccall((:best_chunks, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, chunks)
-end
+    function best_chunks(obj, chunks)
+      ccall((:best_chunks, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, chunks)
+    end
 
-@eval function reusable(obj, p_chunk, p_dimension)
-  ccall((:reusable, $(libpath)), BlasInt, (Ptr{Void}, Ptr(Void), Ptr{Void}), obj, p_chunk, p_dimension)
-end
+    function reusable(obj, p_chunk, p_dimension)
+      ccall((:reusable, $(libpath)), BlasInt, (Ptr{Void}, Ptr(Void), Ptr{Void}), obj, p_chunk, p_dimension)
+    end
 
-@eval function SWP_non_pipelined_data(obj, data)
-  ccall((:SWP_non_pipelined_data, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, data)
-end
+    function SWP_non_pipelined_data(obj, data)
+      ccall((:SWP_non_pipelined_data, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, data)
+    end
 
-@eval function SWP_pipelined_data(obj, data)
-  ccall((:SWP_pipelined_data, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, data)
-end
+    function SWP_pipelined_data(obj, data)
+      ccall((:SWP_pipelined_data, $(libpath)), BlasInt, (Ptr{Void}, Ptr{Void}), obj, data)
+    end
 
-@eval function SWP_perf_drop_with_communication(obj, chunk_size, num_chunks)
-  ccall((:SWP_perf_drop_with_communication, $(libpath)), BlasInt, (Ptr{Void}, BlasInt, BlasInt), obj, chunk_size, num_chunks)
-end
+    function SWP_perf_drop_with_communication(obj, chunk_size, num_chunks)
+      ccall((:SWP_perf_drop_with_communication, $(libpath)), BlasInt, (Ptr{Void}, BlasInt, BlasInt), obj, chunk_size, num_chunks)
+    end
 
-@eval function insert_task(obj, flag)
-  ccall((:insert_task, $(libpath)), BlasInt, (Ptr{Void},Cint), obj, flag)
-end 
+    function insert_task(obj, flag)
+      ccall((:insert_task, $(libpath)), BlasInt, (Ptr{Void},Cint), obj, flag)
+    end 
 
 
 # constructors for each LD functions
-
-@eval function new_dgemm(order::BlasChar, transA::BlasChar, transB::BlasChar, 
-    M::BlasInt, N::BlasInt, K::BlasInt, alpha::Float64, 
-    Ap::Ptr{Float64}, lda::BlasInt, Bp::Ptr{Float64}, ldb::BlasInt, 
-    beta::Float64, Cp::Ptr{Float64}, ldc::BlasInt)
-  ccall((:new_dgemm_LD, $(libpath)), Ptr{Void}, 
+    function new_dgemm(order::BlasChar, transA::BlasChar, transB::BlasChar, 
+        M::BlasInt, N::BlasInt, K::BlasInt, alpha::Float64, 
+        Ap::Ptr{Float64}, lda::BlasInt, Bp::Ptr{Float64}, ldb::BlasInt, 
+        beta::Float64, Cp::Ptr{Float64}, ldc::BlasInt)
+      ccall((:new_dgemm_LD, $(libpath)), Ptr{Void}, 
         (Uint8, Uint8, Uint8, BlasInt, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
          Ptr{Float64}, BlasInt, Float64, Ptr{Float64}, BlasInt),
         order, transA, transB, M, N, K, alpha, Ap, lda, Bp, ldb, beta, Cp, ldc)
-end
+    end
 
-@eval function new_dgetrf(matrix_layout::Int, m::BlasInt, n::BlasInt, a::Ptr{Float64}, lda::BlasInt, ipiv::Ptr{BlasInt})
-  ccall((:new_dgetrf_LD, $(libpath)), Ptr{Void}, 
+    function new_dgetrf(matrix_layout::Int, m::BlasInt, n::BlasInt, a::Ptr{Float64}, 
+        lda::BlasInt, ipiv::Ptr{BlasInt})
+      ccall((:new_dgetrf_LD, $(libpath)), Ptr{Void}, 
           (Int, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{BlasInt}),
           matrix_layout, m, n, a, lda, ipiv)
-end
-			   
-@eval function new_dlaswp(matrix_order::Int, n::BlasInt, a::Ptr{Float64}, lda::BlasInt, k1::BlasInt, k2::BlasInt, ipiv::Ptr{BlasInt}, incx::BlasInt)
-  ccall((:new_dlaswp_LD, $(libpath)), Ptr{Void},
+    end
+
+    function new_dlaswp(matrix_order::Int, n::BlasInt, a::Ptr{Float64}, lda::BlasInt, 
+        k1::BlasInt, k2::BlasInt, ipiv::Ptr{BlasInt}, incx::BlasInt)
+      ccall((:new_dlaswp_LD, $(libpath)), Ptr{Void},
         (Int, BlasInt, Ptr{Float64}, BlasInt, BlasInt, BlasInt, Ptr{BlasInt}, BlasInt),
         matrix_order, n, a, lda, k1, k2, ipiv, incx);
-end
+    end
 
-@eval function new_dtrsm(layout::BlasChar, side::BlasChar, uplo::BlasChar, transa::BlasChar, diag::BlasChar, 
-	m::BlasInt, n::BlasInt, alpha::Float64, a::Ptr{Float64}, lda::BlasInt, b::Ptr{Float64}, ldb::BlasInt)
-  ccall((:new_dtrsm_LD, $(libpath)), Ptr{Void}, 
+    function new_dtrsm(layout::BlasChar, side::BlasChar, uplo::BlasChar, transa::BlasChar, diag::BlasChar, 
+        m::BlasInt, n::BlasInt, alpha::Float64, a::Ptr{Float64}, lda::BlasInt, b::Ptr{Float64}, ldb::BlasInt)
+      ccall((:new_dtrsm_LD, $(libpath)), Ptr{Void}, 
         (BlasChar, BlasChar, BlasChar, BlasChar, BlasChar, BlasInt, BlasInt, Float64, Ptr{Float64}, 
-	  BlasInt, Ptr{Float64}, BlasInt),
+         BlasInt, Ptr{Float64}, BlasInt),
         layout, side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb);
-end
+    end
 
-@eval function new_dpotrf(matrix_layout::Int, uplo::BlasChar, n::BlasInt, a::Ptr{Float64}, lda::BlasInt)
-  ccall((:new_dpotrf_LD, $(libpath)), Ptr{Void}, 
+    function new_dpotrf(matrix_layout::Int, uplo::BlasChar, n::BlasInt, a::Ptr{Float64}, lda::BlasInt)
+      ccall((:new_dpotrf_LD, $(libpath)), Ptr{Void}, 
         (Int, BlasChar, BlasInt, Ptr{Float64}, BlasInt ),
         matrix_layout, uplo, n, a, lda);
-end
+    end
 
-@eval function new_dsyrk(layout::BlasChar, uplo::BlasChar, trans::BlasChar, N::BlasInt, 
-      	       K::BlasInt, alpha::Float64, Ap::Ptr{Float64}, lda::BlasInt, beta::Float64, 
-	       Cp::Ptr{Float64}, ldc::BlasInt)
-  ccall((:new_dsyrk_LD, $(libpath)), Ptr{Void}, 
+    function new_dsyrk(layout::BlasChar, uplo::BlasChar, trans::BlasChar, N::BlasInt, 
+        K::BlasInt, alpha::Float64, Ap::Ptr{Float64}, lda::BlasInt, beta::Float64, 
+        Cp::Ptr{Float64}, ldc::BlasInt)
+      ccall((:new_dsyrk_LD, $(libpath)), Ptr{Void}, 
         (Uint8, Uint8, Uint8, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
         Float64, Ptr{Float64}, BlasInt), 
-	layout, uplo, trans, N, K, alpha, Ap, lda, beta, Cp, ldc)
+        layout, uplo, trans, N, K, alpha, Ap, lda, beta, Cp, ldc)
+    end
+
+    function new_dgeqr2( matrix_layout::Int, m::BlasInt, n::BlasInt,
+        a::Ptr{Float64}, lda::BlasInt, tau::Ptr{Float64} )
+      ccall((:new_dgeqr2_LD, $(libpath)), Ptr{Void}, 
+        (Int, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}),
+        matrix_layout, m, n, a, lda, tau )
+    end
+
+    function new_dlarft( matrix_layout::Int, direct::BlasChar, storev::BlasChar,
+        n::BlasInt, k::BlasInt,  v::Ptr{Float64},
+        ldv::BlasInt, tau::Ptr{Float64}, t::Ptr{Float64},
+        ldt::BlasInt )
+      ccall((:new_dlarft_LD, $(libpath)), Ptr{Void}, 
+        (Int,  Uint8, Uint8, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, Ptr{Float64},		BlasInt ),
+        matrix_layout, direct, storev, n, k, v, ldv, tau, t, ldt )
+    end
+
+    function new_dlarfb( matrix_layout::Int, side::BlasChar, trans::BlasChar, direct::BlasChar, 
+        storev::BlasChar, m::BlasInt, n::BlasInt, k::BlasInt,  v::Ptr{Float64},
+        ldv::BlasInt, t::Ptr{Float64}, ldt::BlasInt, c::Ptr{Float64}, 
+        ldc::BlasInt )
+      ccall((:new_dlarfb_LD, $(libpath)), Ptr{Void}, 
+        (Int, Uint8, Uint8, Uint8, Uint8,  BlasInt, BlasInt, BlasInt, Ptr{Float64}, 
+        BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, BlasInt ),
+        matrix_layout, side, trans, direct, storev, m, n, k, v, ldv, t, ldt, c, ldc )
+    end
+  end
 end
 
-@eval function new_dgeqr2( matrix_layout::Int, m::BlasInt, n::BlasInt,
-                 a::Ptr{Float64}, lda::BlasInt, tau::Ptr{Float64} )
-  ccall((:new_dgeqr2_LD, $(libpath)), Ptr{Void}, 
-  	(Int, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}),
-	matrix_layout, m, n, a, lda, tau )
 end
-
-@eval function new_dlarft( matrix_layout::Int, direct::BlasChar, storev::BlasChar,
-                           n::BlasInt, k::BlasInt,  v::Ptr{Float64},
-                           ldv::BlasInt, tau::Ptr{Float64}, t::Ptr{Float64},
-                           ldt::BlasInt )
-  ccall((:new_dlarft_LD, $(libpath)), Ptr{Void}, 
-  	(Int,  Uint8, Uint8, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, Ptr{Float64},		BlasInt ),
-	matrix_layout, direct, storev, n, k, v, ldv, tau, t, ldt )
-end
-
-@eval function new_dlarfb( matrix_layout::Int, side::BlasChar, trans::BlasChar, direct::BlasChar, 
-      	       storev::BlasChar, m::BlasInt, n::BlasInt, k::BlasInt,  v::Ptr{Float64},
-                           ldv::BlasInt, t::Ptr{Float64}, ldt::BlasInt, c::Ptr{Float64}, 
-                           ldc::BlasInt )
-  ccall((:new_dlarfb_LD, $(libpath)), Ptr{Void}, 
-  	(Int, Uint8, Uint8, Uint8, Uint8,  BlasInt, BlasInt, BlasInt, Ptr{Float64}, 
-	BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, BlasInt ),
-	matrix_layout, side, trans, direct, storev, m, n, k, v, ldv, t, ldt, c, ldc )
-end
-
-end
-
