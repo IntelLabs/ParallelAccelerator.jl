@@ -217,7 +217,7 @@ type KernelStat
   shapeMin  :: Array{Int,1}    # min extent of the stencil for each dimension
   idxSym    :: Array{Symbol,1} # (fresh) symbol of index variable 
   bufSym    :: Array{Symbol,1} # (fresh) symbol of buffer variables
-  swaps     :: Union{Nothing, Array{Symbol, 1}}
+  swapSym   :: Union{Nothing, Array{Symbol, 1}}
 end
 
 # Analyze a stencil kernel specified as a lambda expression.
@@ -259,14 +259,25 @@ function analyze_kernel(krn)
         end
       end
     elseif is(expr.head, :return)
-      swaps = Symbol[]
-      for s in expr.args
-        @assert (isa(s, Symbol)) "return value must be plain variable"
-        @assert (haskey(bufMap, s)) "return value must be one of the kernel parameters"
-        push!(swaps, s)
+      swapSym = Symbol[]
+      args = expr.args[1]
+      if isa(args, Expr) && is(args.head, :tuple)
+        args = args.args
+      elseif isa(args, Symbol)
+        args = Symbol[args]
       end
-      @assert (length(swaps) == nbufs) "number of return values must match number parameters"
-      stat.swaps = swaps
+      for s in args
+        @assert (isa(s, Symbol)) "return value must be plain variable"
+        i = 1
+        while i <= nbufs
+          if bufs[i] == s break end
+          i += 1
+        end
+        @assert (i <= nbufs) "return value must be one of the kernel parameters"
+        push!(swapSym, bufSym[i])
+      end
+      @assert (length(swapSym) == nbufs) "number of return values must match number parameters"
+      stat.swapSym = swapSym
        # turn it into something harmless
       expr.head = :block
       expr.args = Any[]
@@ -355,9 +366,10 @@ macro runStencil(krn, args...)
   end
   @assert isa(borderSty, Symbol) "Expect border style to be :oob_src_zero, :oob_dst_zero, :oob_wraparound, or :oob_skip"
   # produce the expanded stencil loop
-  local tmps = [ gensym("tmp") for i = 1:nbufs ]
+  local tmpSym  = [ gensym("tmp") for i = 1:nbufs ]
   local idxSym  = stat.idxSym
   local bufSym  = stat.bufSym
+  local swapSym = stat.swapSym
   local sizeSym = [ gensym(string("len", i)) for i = 1:stat.dimension ]
   local stepSym = gensym("step")
   local bufInitExpr = liftQuote([ :($(bufSym[i]) = $(esc(bufs[i]))) for i = 1:nbufs ])
@@ -374,9 +386,9 @@ macro runStencil(krn, args...)
                     nestedLoop(stat.dimension, idxSym, borderIterExpr, :(if $(innerCheckF(idxSym)) else $(borderKrnExpr) end))
   # inner region
   local loopExpr = nestedLoop(stat.dimension, stat.idxSym, innerIterExpr, krnExpr)
-  local swapExpr = is(stat.swaps, nothing) ? :() :
-                     liftQuote(vcat([ :($(tmpSym[i]) = $(stat.swaps[i])) for i = 1:nbufs ],
-                                    [ :($(bufSym[i]) = $(tmps[i])) for i = 1:nbufs ]))
+  local swapExpr = is(swapSym, nothing) ? :() :
+                     liftQuote(vcat([ :($(tmpSym[i]) = $(swapSym[i])) for i = 1:nbufs ],
+                                    [ :($(bufSym[i]) = $(tmpSym[i])) for i = 1:nbufs ]))
   local expr = quote
     $(bufInitExpr)
     $(sizeInitExpr)
@@ -386,6 +398,7 @@ macro runStencil(krn, args...)
       $(swapExpr)
     end
   end
+  #println(expr)
   return expr
 end
 
