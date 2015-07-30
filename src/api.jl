@@ -282,9 +282,14 @@ function analyze_kernel(krn)
       expr.head = :block
       expr.args = Any[]
     else                        # recurse when expr is not array ref 
-      for e in expr.args
-        if typeof(e) == Expr 
+      for i in 1:length(expr.args)
+        e = expr.args[i]
+        if isa(e, Expr)
           traverse(e)
+        elseif isa(e, Symbol)
+          if !(expr.head == :line || expr.head == :method) && !(expr.head == :call && i == 1) && !haskey(bufMap, e)
+            expr.args[i] = Expr(:escape, e)
+          end
         end
       end
     end
