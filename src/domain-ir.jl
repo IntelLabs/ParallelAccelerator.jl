@@ -461,12 +461,13 @@ end
 # It returns the list of arguments that are specialized into the body function,
 # the remaining arguments (that are of array type), their types, and
 # the specialized body function.
-function specialize(args::Array{Any,1}, typs::Array{Type,1}, bodyf::Function)
+function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bodyf::Function)
   local j = 0
   local len = length(typs)
   local idx = Array(Int, len)
   local args_ = Array(Any, len)
   local nonarrays = Array(Any, 0)
+  local repldict = Dict{SymGen, Any}()
   for i = 1:len
     local typ = typs[i]
     if isarray(typ) || isbitarray(typ)
@@ -475,6 +476,12 @@ function specialize(args::Array{Any,1}, typs::Array{Type,1}, bodyf::Function)
       args_[j] = args[i]
       idx[j] = i
     else
+      if isa(args[i], GenSym) # cannot put GenSym into lambda! Add a temp variable to do it
+        tmpv = addFreshLocalVariable(string(args[i]), getType(args[i], state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, args[i]))
+        repldict[args[i]] = tmpv
+        args[i] = tmpv
+      end
       push!(nonarrays, args[i])
     end
   end
@@ -485,7 +492,7 @@ function specialize(args::Array{Any,1}, typs::Array{Type,1}, bodyf::Function)
     for i=1:j
       myArgs[idx[i]] = params[i]
     end
-    bodyf(myArgs)
+    replaceExprWithDict(bodyf(myArgs), repldict)
   end
   return (nonarrays, args_[1:j], typs[1:j], mkFun)
 end
@@ -833,7 +840,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       typs = reorder(typs)
       args = reorder(args)
       dprintln(env,"from_lambda: before specialize, opr=", opr, " args=", args, " typs=", typs)
-      (nonarrays, args, typs, f) = specialize(args, typs, 
+      (nonarrays, args, typs, f) = specialize(state, args, typs, 
                           as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
       dprintln(env,"from_lambda: after specialize, typs=", typs)
       elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
@@ -1100,7 +1107,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       assert(length(args) == 3)
       typs = Type[typeOfOpr(state, a) for a in args]
-      (nonarrays, args, typs, f) = specialize(args, typs, 
+      (nonarrays, args, typs, f) = specialize(state, args, typs, 
             as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
       elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
       linfo = LambdaInfo()
@@ -1119,13 +1126,18 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       arr = args[1]
       ival = args[2]
       typs = Type[typeOfOpr(state, arr)]
-      f = as -> [ Expr(:tuple, ival) ]
       linfo = LambdaInfo()
+      if isa(ival, GenSym)
+        tmpv = addFreshLocalVar(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
+        ival = tmpv
+      end
       if isa(ival, SymbolNode)
         def = getVarDef(ival.name, state.linfo)
         flag = def == nothing ? 0 : def.desc
         addEscapingVariable(ival.name, ival.typ, flag, linfo)
       end
+      f = as -> [ Expr(:tuple, ival) ]
       domF = DomainLambda(typs, typs, f, linfo)
       expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
       expr.typ = typ

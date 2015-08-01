@@ -5863,6 +5863,13 @@ function mmapInline(ast, lives, uniqSet)
         g_inps = length(inputs) 
         inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
         linfo = g.linfo
+        # add escaping variables from f into g, since mergeLambdaInfo only deals
+        # with nesting lambda, but not parallel ones.
+        for (v, d) in f.linfo.escaping_defs
+          if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
+            CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
+          end
+        end
         gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
         tmp_t = f.outputs[1]
         tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
