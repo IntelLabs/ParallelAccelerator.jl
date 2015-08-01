@@ -303,7 +303,11 @@ function from_expr(state, env, ast)
         dl :: DomainLambda = args[2]
         n_outputs = length(dl.outputs)
         assert(n_outputs == 1) # unless we support multi-return
-        return lookup(state, toSymGen(args[1][1]))
+        tmp = args[1][1]
+        if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
+          tmp = tmp.args[1]
+        end
+        return lookup(state, toSymGen(tmp))
     elseif is(head, :stencil!)
         return from_stencil!(state, env, args)
     elseif is(head, :parfor)

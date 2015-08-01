@@ -341,12 +341,31 @@ function issteprange(typ)
   isa(typ, DataType) && is(typ.name, StepRange.name)
 end
 
+function isrange(typ)
+  isunitrange(typ) || issteprange(typ)
+end
+
+function remove_typenode(expr)
+  if isa(expr, Expr)
+    if is(expr.head, :(::))
+       return remove_typenode(expr.args[1])
+    else
+      args = Any[]
+      for i = 1:length(expr.args)
+        push!(args, remove_typenode(expr.args[i]))
+      end
+      return mk_expr(expr.typ, expr.head, args...)
+    end
+  end
+  expr
+end
+
 function from_range(rhs)
   if isa(rhs, Expr) && is(rhs.head, :new) && isunitrange(rhs.args[1]) &&
      isa(rhs.args[3], Expr) && is(rhs.args[3].head, :call) &&
      isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
      is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
-     is(rhs.args[3].args[1].args[2], :Intrinsics) &&
+     is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
      is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))
     # only look at final value in select_value of UnitRange
     start = rhs.args[2]
@@ -364,17 +383,18 @@ function from_range(rhs)
 end
 
 function rangeToMask(state, r)
-  if isa(r, SymbolNode)
-    if isbitarray(r.typ)
+  if isa(r, SymbolNode) || isa(r, GenSym)
+    typ = getType(r, state.linfo)
+    if isbitarray(typ)
       mk_tomask(r)
-    elseif isunitrange(r.typ)
+    elseif isunitrange(typ)
       r = lookupConstDefForArg(state, r)
       (start, step, final) = from_range(r)
       mk_range(start, step, final)
-    elseif isinttyp(r.typ) 
-      mk_range(r, convert(r.typ, 0), r)
+    elseif isinttyp(typ) 
+      mk_range(r, convert(typ, 1), r)
     else
-        error("Unhandled range object: ", r)
+      error("Unhandled range object: ", r)
     end
   elseif isa(r, Int)
     mk_range(r, r, 1)
@@ -1081,6 +1101,23 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
     elseif is(fun, :sitofp)
       typ = args[1]
+    elseif is(fun, :getindex) || is(fun, :setindex!) 
+      args = normalize_args(state, env_, args)
+      lhs = args[1]
+      ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
+      typ = getType(lhs, state.linfo)
+      if any(Bool[ isrange(getType(range, state.linfo)) for range in ranges])
+        dprintln(env, "got :getindex with ", args)
+        dprintln(env, "ranges is ", ranges)
+        newsize = addGenSym(Int, state.linfo)
+        newlhs = addGenSym(typ, state.linfo)
+        etyp = elmTypOf(typ)
+        ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
+        expr = is(fun, :getindex) ? 
+                 mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, as...)], LambdaInfo())) :
+                 mk_mmap!([mk_select(lhs, ranges), args[2]], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, args[2])], LambdaInfo()))
+        expr.typ = typ
+      end
     elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
            is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray) 
       etyp = elmTypOf(typ)
