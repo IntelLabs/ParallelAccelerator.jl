@@ -1105,17 +1105,30 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       args = normalize_args(state, env_, args)
       lhs = args[1]
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-      typ = getType(lhs, state.linfo)
-      if any(Bool[ isrange(getType(range, state.linfo)) for range in ranges])
+      typ = typeOfOpr(state, lhs)
+      if any(Bool[ isrange(typeOfOpr(state, range)) for range in ranges])
         dprintln(env, "got :getindex with ", args)
         dprintln(env, "ranges is ", ranges)
         newsize = addGenSym(Int, state.linfo)
         newlhs = addGenSym(typ, state.linfo)
         etyp = elmTypOf(typ)
         ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
-        expr = is(fun, :getindex) ? 
-                 mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, as...)], LambdaInfo())) :
-                 mk_mmap!([mk_select(lhs, ranges), args[2]], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, args[2])], LambdaInfo()))
+        if is(fun, :getindex) 
+          expr = mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, as...)], LambdaInfo())) 
+        else
+           args = Any[mk_select(lhs, ranges), args[2]]
+           typs = Type[typ, typeOfOpr(state, args[2])]
+           (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
+           elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+           linfo = LambdaInfo()
+           for i=1:length(nonarrays)
+             # At this point, they are either symbol nodes, or constants
+             if isa(nonarrays[i], SymbolNode)
+               addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+             end
+           end
+           expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
+        end
         expr.typ = typ
       end
     elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
