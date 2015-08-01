@@ -4,6 +4,8 @@ import ..getPackageRoot
 
 pert_inited = false
 
+eval(x) = Core.eval(Pert, x)
+
 function __init__()
   package_root    = getPackageRoot()
   runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")

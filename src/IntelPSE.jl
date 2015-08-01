@@ -46,6 +46,11 @@ const HOST_TASK_MODE = 1
 const PHI_TASK_MODE = 2
 const DYNAMIC_TASK_MODE = 3
 
+@doc """
+Return internal mode number by looking up environment variable "INTEL_TASK_MODE".
+If not specified, it defaults to NO_TASK_MODE, or DYNAMIC_TASK_MODE when 
+getPseMode() is TASK_MODE.
+"""
 function getTaskMode()
   if haskey(ENV,"INTEL_TASK_MODE")
      mode = ENV["INTEL_TASK_MODE"]
@@ -56,7 +61,7 @@ function getTaskMode()
       mode = "none"
     end
   end
-  if mode == "none"
+  if mode == "none" || mode == "off"
     NO_TASK_MODE
   elseif mode == "task"
     HOST_TASK_MODE
