@@ -305,7 +305,7 @@ function addFreshLocalVariable(s::String, t::DataType, desc, linfo::LambdaInfo)
   global unique_id
   name = :tmpvar
   unique = false
-  while (unique)
+  while (!unique)
     unique_id = unique_id + 1
     name = symbol(string(s, "##", unique_id))
     unique = !isLocalVariable(name, linfo)
@@ -1128,7 +1128,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       typs = Type[typeOfOpr(state, arr)]
       linfo = LambdaInfo()
       if isa(ival, GenSym)
-        tmpv = addFreshLocalVar(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+        tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
         emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
         ival = tmpv
       end
