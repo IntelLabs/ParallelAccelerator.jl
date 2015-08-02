@@ -1441,9 +1441,19 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
         args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
       end
       return [x]
-    elseif head == :assert
+    elseif head == :assert 
       for i = 1:length(args)
         AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+      end
+      return [x]
+    elseif head == :select
+      for i = 1:length(args)
+          args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
+      end
+      return [x]
+    elseif head == :range
+      for i = 1:length(args)
+          args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
       end
       return [x]
     end
@@ -1537,6 +1547,18 @@ function dir_live_cb(ast, cbdata)
       expr_to_process = Any[]
       push!(expr_to_process, symbol_or_gensym(args[1]))
       push!(expr_to_process, symbol_or_gensym(args[2]))
+      return expr_to_process
+    elseif head == :select
+      expr_to_process = Any[]
+      for i = 1:length(args)
+          push!(expr_to_process, args[i])
+      end
+      return expr_to_process
+    elseif head == :range
+      expr_to_process = Any[]
+      for i = 1:length(args)
+          push!(expr_to_process, args[i])
+      end
       return expr_to_process
     end
   elseif asttyp == KernelStat
