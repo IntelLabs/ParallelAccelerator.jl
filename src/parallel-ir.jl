@@ -167,14 +167,15 @@ type PIRParForAst
     # This will be "nothing" if we don't know how to estimate.  If not "nothing" then it is an expression which may
     # include calls.
     instruction_count_expr
+    simply_indexed :: Bool
 
-    function PIRParForAst(b, pre, nests, red, post, orig, t, unique)
+    function PIRParForAst(b, pre, nests, red, post, orig, t, unique, si)
       r = CompilerTools.ReadWriteSet.from_exprs(b)
-      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing)
+      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 
-    function PIRParForAst(b, pre, nests, red, post, orig, t, r, unique)
-      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing)
+    function PIRParForAst(b, pre, nests, red, post, orig, t, r, unique, si)
+      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 end
 
@@ -320,10 +321,57 @@ function mk_untyped_assignment(lhs, rhs)
 end
 
 @doc """
+Holds the information from one Domain IR :range Expr.
+"""
+type RangeData
+  start
+  skip
+  last
+
+  function RangeData(s, sk, l)
+    new(s, sk, l)
+  end
+end
+
+@doc """
+Type used by mk_parfor_args... functions to hold information about input arrays.
+"""
+type InputInfo
+  array                                # The name of the array.
+  range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
+  range_offset :: Array{SymbolNode,1}  # New temp variables to hold offset from iteration space for each dimension.
+  elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
+  pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
+
+  function InputInfo()
+    new(nothing, RangeData[], SymbolNode[], nothing)
+  end
+end
+
+@doc """
+Compute size of a range.
+"""
+function rangeSize(start, skip, last)
+  # TODO: do something with skip!
+  return last - start + 1
+end
+
+@doc """
 Create an expression whose value is the length of the input array.
 """
-function mk_arraylen_expr(x, dim)
-    TypedExpr(Int, :call, TopNode(:arraysize), :($x), dim)
+function mk_arraylen_expr(x :: SymAllGen, dim :: Int64)
+    TypedExpr(Int64, :call, TopNode(:arraysize), :($x), dim)
+end
+
+@doc """
+Create an expression whose value is the length of the input array.
+"""
+function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
+    if dim <= length(x.range)
+        return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
+    else
+        return mk_arraylen_expr(x.array, dim)
+    end 
 end
 
 @doc """
@@ -462,25 +510,37 @@ end
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
-function augment_sn(x)
-  xtyp = typeof(x)
+function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
+  dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
+  xtyp = typeof(index_vars[dim])
 
   if xtyp == Int64 || xtyp == GenSym
-    return x
+    base = index_vars[dim]
   else
-    return SymbolNode(x,Int)
+    base = SymbolNode(index_vars[dim],Int64)
   end
+
+  dprintln(3,"pre-base = ", base)
+
+  if dim <= length(range_var)
+    base = TypedExpr(Int64, :call, GlobalRef(Base, :add_int), base, range_var[dim])
+  end
+
+  dprintln(3,"post-base = ", base)
+
+  return base
 end
 
 @doc """
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
-function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state)
+function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
   dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)
   dprintln(3,"mk_arrayref1 element type = ", elem_typ)
+  dprintln(3,"mk_arrayref1 range_var = ", range_var)
 
   if inbounds
     fname = :unsafe_arrayref
@@ -488,7 +548,8 @@ function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state)
     fname = :arrayref
   end
 
-  indsyms = map(x -> augment_sn(x), index_vars)
+  indsyms = cartesianarray(x -> augment_sn(x,index_vars,range_var), Any, (length(index_vars),))
+  dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
 
   TypedExpr(
        elem_typ,
@@ -505,7 +566,7 @@ Returns a symbol node of the new variable.
 function createStateVar(state, name, typ, access)
   new_temp_sym = symbol(name)
   CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
-  SymbolNode(new_temp_sym, typ)
+  return SymbolNode(new_temp_sym, typ)
 end
 
 function convert(dt :: DataType, x :: GenSym)
@@ -518,13 +579,35 @@ end
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForArray(array_sn, unique_id :: Int64, state :: expr_state, temp_map :: Dict{SymGen,SymbolNode})
+function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state)
   key = toSymGen(array_sn) 
-  if !haskey(temp_map, key)
-    temp_type = getArrayElemType(array_sn, state)
-    temp_map[key] = createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+  temp_type = getArrayElemType(array_sn, state)
+  return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+end
+
+@doc """
+Create a variable to hold the offset of a range offset from the start of the array.
+"""
+function createTempForRangeOffset(ranges :: Array{RangeData,1}, unique_id :: Int64, state :: expr_state)
+  range_array = SymbolNode[]
+
+  for i = 1:length(ranges)
+    range = ranges[i]
+
+    push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
   end
-  return temp_map[key]
+
+  return range_array
+end
+
+@doc """
+Create a temporary variable that is parfor private to hold the value of an element of an array.
+"""
+function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymbolNode,1}, unique_id :: Int64, state :: expr_state)
+  key = toSymGen(array_sn) 
+  temp_type = getArrayElemType(array_sn, state)
+  # Is it okay to just use range[1] here instead of all the ranges?
+  return createStateVar(state, string("parallel_ir_temp_", key, "_", range[1].name, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 @doc """
@@ -540,11 +623,12 @@ end
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
-function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state)
+function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
   dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
   dprintln(3,"mk_arrayset1 element type = ", elem_typ)
+  dprintln(3,"mk_arrayset1 range_var = ", range_var)
 
   # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
   if inbounds
@@ -555,7 +639,8 @@ function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_sta
 
   # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
   # a SymbolNode containing the index expression type "Int".
-  indsyms = map(x -> augment_sn(x), index_vars)
+  indsyms = cartesianarray(x -> augment_sn(x,index_vars,range_var), Any, (length(index_vars),))
+  dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
 
   TypedExpr(
        elem_typ,
@@ -782,9 +867,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
   assert(argtyp == SymbolNode)
 
-  array_temp_map = Dict{SymGen,SymbolNode}()
   reduce_body = Any[]
-  atm = createTempForArray(input_array, 1, state, array_temp_map)
+  atm = createTempForArray(input_array, 1, state)
   push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true, state), state))
 
   # Create an expression to access one element of this input array with index symbols parfor_index_syms
@@ -882,15 +966,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
  
   # Make sure that for reduce that the array indices are all of the simple variety
-  if(!simpleIndex(rws.readSet.arrays))
-    throw(string("mk_parfor_args_from_reduce readSet arrays are all not simply indexed"))
-  end
-  if(!simpleIndex(rws.writeSet.arrays))
-    throw(string("mk_parfor_args_from_reduce writeSet arrays are all not simply indexed"))
-  end
+  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
-
-  dprintln(2,"mk_parfor_args_from_reduce with out_type = ", out_type)
 
   reduce_func = nothing
 
@@ -933,24 +1010,53 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
       [DomainOperation(:reduce, input_args)],
       state.top_level_number,
       rws,
-      unique_node_id)
+      unique_node_id,
+      simply_indexed)
 
-  dprintln(3,"array_temp_map = ", array_temp_map)
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  [new_parfor], out_type
+  [new_parfor]
 end
 
 
 # ===============================================================================================================================
 
 @doc """
+Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
+"""
+function rangeToRangeData(range :: Expr)
+  assert(range.head == :range)
+
+  return RangeData(range.args[1], range.args[2], range.args[3])
+end
+
+@doc """
+Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.
+"""
+function selectToRangeData(select :: Expr)
+  assert(select.head == :select)
+
+  input_array_ranges = select.args[2] # range object
+
+  range_array = RangeData[]
+
+  if input_array_ranges.head == :ranges
+    for i = 1:length(input_array_ranges.args)
+      push!(range_array, rangeToRangeData(input_array_ranges.args[i]))
+    end
+  else
+    push!(range_array, rangeToRangeData(input_array_ranges))
+  end
+ 
+  return range_array
+end
+
+@doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Make sure we get what we expect from domain IR.
-  # There should be two entries in the array, another array of input array
-  # symbols and a DomainLambda type
+  # There should be two entries in the array, another array of input array symbols and a DomainLambda type
   if(length(input_args) < 2)
     throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(input_args)))
   end
@@ -959,7 +1065,28 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   input_arrays = input_args[1]
   len_input_arrays = length(input_args[1])
   dprintln(1,"Number of input arrays: ", len_input_arrays)
+  dprintln(2,"input arrays: ", input_arrays)
   assert(len_input_arrays > 0)
+
+  # handle range selector
+  inputInfo = InputInfo[]
+  for i = 1 : length(input_arrays)
+    thisInfo = InputInfo()
+
+    if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
+      thisInfo.array = input_arrays[i].args[1]
+      thisInfo.range = selectToRangeData(input_arrays[i])
+      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+    else
+      thisInfo.array = input_arrays[i]
+      thisInfo.range = RangeData[]
+      thisInfo.range_offset = SymbolNode[]
+      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+    end
+
+    push!(inputInfo, thisInfo)
+  end
 
   # Second arg is a DomainLambda
   ftype = typeof(input_args[2])
@@ -971,19 +1098,19 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # third arg is withIndices
   with_indices = length(input_args) >= 3 ? input_args[3] : false
 
+  # Make the DomainLambda easier to access
+  dl::DomainLambda = input_args[2]
+  # verify the number of input arrays matches the number of input types in dl
+  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
+
   indexed_arrays = Any[]
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
 
-  first_input = input_arrays[1]
+  first_input    = inputInfo[1].array
   num_dim_inputs = getArrayNumDims(first_input, state)
   loopNests = Array(PIRLoopNest, num_dim_inputs)
-
-  # Make the DomainLambda easier to access
-  dl::DomainLambda = input_args[2]
-  # verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
 
   # Create variables to use for the loop indices.
   parfor_index_syms = Symbol[]
@@ -994,42 +1121,29 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     push!(parfor_index_syms, parfor_index_sym)
   end
 
-  # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
-
-  array_temp_map = Dict{SymGen,SymbolNode}()
   out_body = Any[]
-
-  # Make sure each input array is a SymbolNode
-  # Also, create indexed versions of those symbols for the loop body
-  for i = 1:len_input_arrays
-    argtyp = typeof(input_arrays[i])
-    dprintln(3,"mk_parfor_args_from_mmap! input_array[i] = ", input_arrays[i], " type = ", argtyp)
-    assert(isa(input_arrays[i], SymNodeGen))
-
-    atm = createTempForArray(input_arrays[i], 1, state, array_temp_map)
-    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true, state), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays, atm)
-
-    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
-    # Verify that all the inputs are the same size by verifying they are in the same correlation set.
-    if this_correlation != main_length_correlation
-      merge_correlations(state, main_length_correlation, this_correlation)
-    end
-  end
-
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-
   save_array_lens = String[]
+
+  # Make sure each input array is a SymbolNode
+  # Also, create indexed versions of those symbols for the loop body
+  for(i = 1:length(inputInfo))
+    argtyp = typeof(inputInfo[i].array)
+    dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", isa(argtyp, SymAllGen))
+#    assert(isa(argtyp, SymAllGen))
+
+    push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+
+    # Create an expression to access one element of this input array with index symbols parfor_index_syms
+    push!(indexed_arrays, inputInfo[i].elementTemp)
+  end
 
   # Insert a statement to assign the length of the input arrays to a var
   for i = 1:num_dim_inputs
     save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_arrays[1],i), state)
+    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
     # add that assignment to the set of statements to execute before the parfor
     push!(pre_statements,array1_len)
     CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
@@ -1073,31 +1187,28 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   printBody(3,out_body)
 
   out_body = out_body[1:oblen-1]
-  array_temp_map2 = Dict{SymGen,SymbolNode}()
   for i = 1:length(dl.outputs)
-    tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
+    tfa = createTempForArray(inputInfo[i].array, 2, state)
+    #tfa = createTempForArray(dl.outputs[i], 2, state)
+    #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-    push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
+    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state))
+    #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
+    #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
   rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
 
   # Make sure that for mmap! that the array indices are all of the simple variety
-  if(!simpleIndex(rws.readSet.arrays))
-    throw(string("mk_parfor_args_from_mmap! readSet arrays are all not simply indexed"))
-  end
-  if(!simpleIndex(rws.writeSet.arrays))
-    throw(string("mk_parfor_args_from_mmap! writeSet arrays are all not simply indexed"))
-  end
+  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
   # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
   #if(len_input_arrays == 1)
   if length(dl.outputs) == 1
     # If there is only one output then put that output in the post_statements
-    push!(post_statements,input_arrays[1])
-    out_type = CompilerTools.LambdaHandling.getType(input_arrays[1], state.lambdaInfo)
+    push!(post_statements, input_arrays[1])
   else
     # FIXME: multi mmap! return values are not handled properly below
     tt = Expr(:tuple)
@@ -1106,16 +1217,11 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
     new_temp_name  = string("parallel_ir_tuple_ret_",get_unique_num())
     new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-    out_type = temp_type
     dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
     CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
     append!(post_statements, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(map( x -> x.name, input_arrays), temp_type), state), new_temp_snode])
   end
-
-  dprintln(2,"mk_parfor_args_from_mmap! with out_type = ", out_type)
-
-#  makeLhsPrivate(out_body, state)
 
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
       out_body,
@@ -1126,42 +1232,72 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
       [DomainOperation(:mmap!, input_args)],
       state.top_level_number,
       rws,
-      unique_node_id)
-  dprintln(3,"array_temp_map = ", merge(array_temp_map, array_temp_map2))
+      unique_node_id,
+      simply_indexed)
+
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  [new_parfor], out_type
+  [new_parfor]
 end
 
 # ===============================================================================================================================
 
+function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, ranges :: Array{RangeData,1})
+  assert(length(range_offsets) == length(ranges))
+
+  ret = Expr[]
+
+  for i = 1:length(ranges)
+    range = ranges[i]
+    range_offset = range_offsets[i]
+
+    dprintln(3,"range = ", range)
+    dprintln(3,"range_offset = ", range_offset)
+
+    range_expr = mk_assignment_expr(range_offset, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
+    push!(ret, range_expr)
+  end
+
+  return ret
+end
+
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
-  # Make sure we get what we expect from domain IR.
-  # There should be two entries in the array, another array of input array
-  # symbols and a DomainLambda type
+function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state) 
+  # Make sure we get what we expect from domain IR.  
+  # There should be two entries in the array, another array of input array symbols and a DomainLambda type
   if(length(input_args) != 2)
     throw(string("mk_parfor_args_from_mmap input_args length should be 2 but is ", length(input_args)))
   end
 
   # First arg is an array of input arrays to the mmap
   input_arrays = input_args[1]
-  dprintln(2,"Number of input arrays: ",length(input_arrays))
-  assert(length(input_arrays) > 0)
+  len_input_arrays = length(input_args[1])
+  dprintln(2,"Number of input arrays: ", len_input_arrays)
+  dprintln(2,"input arrays: ", input_arrays)
+  assert(len_input_arrays > 0)
 
   # handle range selector
-  input_array_ranges = nothing
-  if isa(input_arrays[1], Expr) && is(input_arrays[1].head, :select)
-    input_array_ranges = input_arrays[1].args[2] # range object
-    input_arrays[1] = input_arrays[1].args[1]
-    assert(isa(input_array_ranges, Expr)) # TODO: may need to handle SymbolNodes in the future
-    if input_array_ranges.head == :ranges
-      input_array_ranges = input_array_ranges.args
+  inputInfo = InputInfo[]
+  for i = 1 : length(input_arrays)
+    thisInfo = InputInfo()
+
+    if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
+      thisInfo.array = input_arrays[i].args[1]
+      thisInfo.range = selectToRangeData(input_arrays[i])
+      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
     else
-      input_array_ranges = Any[ input_array_ranges ]
+      thisInfo.array = input_arrays[i]
+      thisInfo.range = RangeData[]
+      thisInfo.range_offset = SymbolNode[]
+      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+      thisInfo.pre_offsets = Expr[]
     end
+
+    push!(inputInfo, thisInfo)
   end
 
   # Second arg is a DomainLambda
@@ -1173,18 +1309,17 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
   # Make the DomainLambda easier to access
   dl::DomainLambda = input_args[2]
-  # verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == length(input_arrays))
+  # Verify the number of input arrays matches the number of input types in dl
+  assert(length(dl.inputs) == length(inputInfo))
 
   indexed_arrays = Any[]
-  input_element_sizes = 0
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
 
-  first_input = input_arrays[1]
+  first_input    = inputInfo[1].array
   num_dim_inputs = getArrayNumDims(first_input, state)
-  loopNests = Array(PIRLoopNest, num_dim_inputs)
+  loopNests      = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
   parfor_index_syms = Symbol[]
@@ -1195,48 +1330,36 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     push!(parfor_index_syms, parfor_index_sym)
   end
 
-  # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
-
-  array_temp_map = Dict{SymGen,SymbolNode}()
   out_body = Any[]
-
-  # Make sure each input array is a SymbolNode
-  # Also, create indexed versions of those symbols for the loop body
-  for(i = 1:length(input_arrays))
-    argtyp = typeof(input_arrays[i])
-    dprintln(3,"mk_parfor_args_from_mmap input_array[i] = ", input_arrays[i], " type = ", argtyp)
-    assert(argtyp == SymbolNode)
-
-    atm = createTempForArray(input_arrays[i], 1, state, array_temp_map)
-    push!(out_body, mk_assignment_expr(atm, mk_arrayref1(input_arrays[i], parfor_index_syms, true, state), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays,atm)
-    # Keep a sum of the size of each arrays individual element sizes.
-    input_element_sizes = input_element_sizes + sizeof(argtyp)
-
-    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
-    # Verify that all the inputs are the same size by verifying they are in the same correlation set.
-    if this_correlation != main_length_correlation
-      merge_correlations(state, main_length_correlation, this_correlation)
-    end
-  end
-
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
   # To hold the names of newly created output arrays.
   new_array_symbols = Symbol[]
+  save_array_lens   = String[]
 
-  save_array_lens = String[]
+  # Make sure each input array is a SymbolNode.
+  # Also, create indexed versions of those symbols for the loop body.
+  for(i = 1:length(inputInfo))
+    argtyp = typeof(inputInfo[i].array)
+    dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", isa(argtyp, SymAllGen))
+    #assert(isa(argtyp, SymAllGen))
+
+    push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+
+    # Create an expression to access one element of this input array with index symbols parfor_index_syms
+    push!(indexed_arrays, inputInfo[i].elementTemp)
+  end
+
+  # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
+  # TODO - extract the lower bound of the range into a variable
 
   # Insert a statement to assign the length of the input arrays to a var
   for i = 1:num_dim_inputs
     save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_arrays[1],i), state)
+    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
     # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements,array1_len)
+    push!(pre_statements, array1_len)
     CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
     push!(save_array_lens, save_array_len)
 
@@ -1245,6 +1368,10 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
                   1,
                   SymbolNode(symbol(save_array_len),Int),
                   1)
+  end
+
+  for i in inputInfo
+    append!(pre_statements, i.pre_offsets)
   end
 
   # add local vars to state
@@ -1298,7 +1425,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     push!(new_array_symbols,nans)
     nans_sn = SymbolNode(nans, Array{dl.outputs[i], num_dim_inputs})
 
-    tfa = createTempForArray(nans_sn, 1, state, array_temp_map)
+    tfa = createTempForArray(nans_sn, 1, state)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
     push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
 
@@ -1311,20 +1438,14 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
 
   # Make sure that for mmap that the array indices are all of the simple variety
-  if(!simpleIndex(rws.readSet.arrays))
-    throw(string("mk_parfor_args_from_mmap readSet arrays are all not simply indexed"))
-  end
-  if(!simpleIndex(rws.writeSet.arrays))
-    throw(string("mk_parfor_args_from_mmap writeSet arrays are all not simply indexed"))
-  end
+  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
   # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
   if(number_output_arrays == 1)
     # If there is only one output then put that output in the post_statements
     push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-    out_type = Array{dl.outputs[1],num_dim_inputs}
-    state.array_length_correlation[new_array_symbols[1]] = main_length_correlation
+    #state.array_length_correlation[new_array_symbols[1]] = main_length_correlation
   else
     tt = Expr(:tuple)
     tt.args = map( x -> Array{x,num_dim_inputs}, dl.outputs)
@@ -1340,10 +1461,6 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     throw(string("mk_parfor_args_from_mmap with multiple output not fully implemented."))
   end
 
-  dprintln(2,"mk_parfor_args_from_mmap with out_type = ", out_type)
-
-#  makeLhsPrivate(out_body, state)
-
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
       out_body,
       pre_statements,
@@ -1353,12 +1470,12 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
       [DomainOperation(:mmap, input_args)],
       state.top_level_number,
       rws,
-      unique_node_id)
+      unique_node_id,
+      simply_indexed)
 
-  dprintln(3,"array_temp_map = ", array_temp_map)
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  [new_parfor], out_type
+  [new_parfor]
 end
 
 # ===============================================================================================================================
@@ -2166,7 +2283,7 @@ function getParforCorrelation(parfor, state)
       end
     end
   end
-  assert(false)
+  return nothing
 end
 
 @doc """
@@ -2296,7 +2413,13 @@ function fuse(body, body_index, cur, state)
   dprintln(2, "cur_input_set = ", cur_input_set)
   first_in = first(cur_input_set)
   out_correlation = getParforCorrelation(prev_parfor, state)
+  if out_correlation == nothing
+    return false
+  end
   in_correlation  = state.array_length_correlation[first_in]
+  if in_correlation == nothing
+    return false
+  end
   dprintln(3,"first_in = ", first_in)
   dprintln(3,"Fusion correlations ", out_correlation, " ", in_correlation)
 
@@ -2335,7 +2458,9 @@ function fuse(body, body_index, cur, state)
   if prev_iei &&
      cur_iei  &&
      out_correlation == in_correlation &&
-    !reduction_var_used
+    !reduction_var_used &&
+     prev_parfor.simply_indexed &&
+     cur_parfor.simply_indexed   
     assert(prev_num_dims == cur_num_dims)
 
     dprintln(3, "Fusion will happen here.")
@@ -5501,6 +5626,7 @@ function extractArrayEquivalencies(node, state)
   input_arrays = input_args[1]
   len_input_arrays = length(input_arrays)
   dprintln(2,"Number of input arrays: ", len_input_arrays)
+  dprintln(3,"input_arrays =  ", input_arrays)
   assert(len_input_arrays > 0)
 
   # Second arg is a DomainLambda
@@ -5508,6 +5634,11 @@ function extractArrayEquivalencies(node, state)
   dprintln(2,"extractArrayEquivalencies function = ",input_args[2])
   if(ftype != DomainLambda)
     throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
+  end
+
+  if !isa(input_arrays[1], SymAllGen)
+    dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
+    return nothing
   end
 
   # Get the correlation set of the first input array.
@@ -5678,7 +5809,7 @@ function create_equivalence_classes(node, state :: expr_state, top_level_number 
           # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
           rhs_corr = extractArrayEquivalencies(rhs, state)
           dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
-          if isa(lhs, SymAllGen)
+          if rhs_corr != nothing && isa(lhs, SymAllGen)
             lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
             dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
@@ -6597,15 +6728,15 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         # skip
     elseif head == :mmap
         head = :parfor
-        args, typ = mk_parfor_args_from_mmap(args, state)
+        args = mk_parfor_args_from_mmap(args, state)
         dprintln(1,"switching to parfor node for mmap")
     elseif head == :mmap!
         head = :parfor
-        args, typ = mk_parfor_args_from_mmap!(args, state)
+        args = mk_parfor_args_from_mmap!(args, state)
         dprintln(1,"switching to parfor node for mmap!")
     elseif head == :reduce
         head = :parfor
-        args, typ = mk_parfor_args_from_reduce(args, state)
+        args = mk_parfor_args_from_reduce(args, state)
         dprintln(1,"switching to parfor node for reduce")
     elseif head == :copy
         # turn array copy back to plain Julia call
