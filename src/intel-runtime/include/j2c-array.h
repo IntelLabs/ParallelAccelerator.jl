@@ -596,7 +596,7 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
         uint64_t ret = dims[0];
         int i;
         for(i = 1; i < num_dim; ++i) {
-            ret *= dims[1];
+            ret *= dims[i];
         }
         return ret;
     }
