@@ -1099,6 +1099,7 @@ function from_parforstart(args)
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
+    private_vars = parfor.private_vars
 
 	# Translate metadata for the loop nests
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
@@ -1131,7 +1132,8 @@ function from_parforstart(args)
 	
 
 	# Check if there are private vars and emit the |private| clause
-	privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
 
 	
 	lcountexpr = ""

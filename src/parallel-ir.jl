@@ -189,6 +189,7 @@ type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
+    private_vars :: Set{SymAllGen}
 end
 
 @doc """
@@ -1506,42 +1507,44 @@ end
 
 # ===============================================================================================================================
 
+@doc """
+The AstWalk callback function for getPrivateSet.
+For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
+"""
+function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+  # If the node is an assignment node or a loop head node.
+  if isAssignmentNode(x) || isLoopheadNode(x)
+    lhs = x.args[1]
+    assert(isa(lhs, SymAllGen))
+    if isa(lhs, GenSym)
+      push!(state, lhs)
+    else
+      sname = getSName(lhs)
+      red_var_start = "parallel_ir_reduction_output_"
+      red_var_len = length(red_var_start)
+      sstr = string(sname)
+      if length(sstr) >= red_var_len
+        if sstr[1:red_var_len] == red_var_start
+          # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
+          return nothing
+        end
+      end
+      push!(state, sname)
+    end
+  end
+  nothing
+end
 
-# @doc """
-# The AstWalk callback function for makeLhsPrivate.
-# For each AST in a parfor body, add the private parfor descriptor to the lambdaInfo for all
-# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-# """
-# function makeLhsPrivateInner(x, state, top_level_number, is_top_level, read)
-#   # If the node is an assignment node or a loop head node.
-#   if isAssignmentNode(x) || isLoopheadNode(x)
-#     lhs = x.args[1]
-#     sname = getSName(lhs)
-#     red_var_start = "parallel_ir_reduction_output_"
-#     red_var_len = length(red_var_start)
-#     sstr = string(sname)
-#     if length(sstr) >= red_var_len
-#       if sstr[1:red_var_len] == red_var_start
-#         # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-#         return nothing
-#       end
-#     end
-#     makePrivateParfor(sname, state)
-#   end
-#   nothing
-# end
-
-
-# @doc """
-# Go through the body of a parfor and add the private parfor descriptor to the lambdaInfo for all
-# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-# Reduction variables are not included in this process.
-# """
-# function makeLhsPrivate(body, state)
-#   for i = 1:length(body)
-#     AstWalk(body[i], makeLhsPrivateInner, state)
-#   end
-# end
+@doc """
+Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
+"""
+function getPrivateSet(body :: Array{Any,1})
+  private_set = Set{SymAllGen}()
+  for i = 1:length(body)
+    AstWalk(body[i], getPrivateSetInner, private_set)
+  end
+  return private_set
+end
 
 # ===============================================================================================================================
 
@@ -4100,7 +4103,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
               end
               for l = 1:mod_len
                 dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
-                #if isa(cur_task.modified_inputs[l], Array)
                 if cur_task.modified_inputs[l].typ.name == Array.name
                   dprintln(3, "is array")
                   push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
@@ -4646,12 +4648,15 @@ form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
 function flattenParfor(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
   dprintln(2,"Flattening ", the_parfor)
+
+  private_set = getPrivateSet(the_parfor.body)
+
   # Output to the new body that this is the start of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr)))
+  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
   # Output the body of the parfor as top-level statements in the new function body.
   append!(new_body, the_parfor.body)
   # Output to the new body that this is the end of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr)))
+  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
   nothing
 end
 
@@ -6155,7 +6160,7 @@ function mmapToMmap!(ast, lives, uniqSet)
       lhs = expr.args[1]
       rhs = expr.args[2]
       # right now assume all
-      assert(isa(lhs, Symbol) || isa(lhs, SymbolNode) || isa(lhs, GenSym))
+      assert(isa(lhs, SymAllGen))
       # If the right-hand side is an mmap.
       if isa(rhs, Expr) && is(rhs.head, :mmap)
         args = rhs.args[1]
