@@ -368,7 +368,9 @@ Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
     if dim <= length(x.range)
-        return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
+        #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
+        # TODO: do something with skip!
+        return mk_add_int_expr(mk_sub_int_expr(x.range[dim].last,x.range[dim].start), 1)
     else
         return mk_arraylen_expr(x.array, dim)
     end 
@@ -508,6 +510,20 @@ function getArrayNumDims(array :: GenSym, state :: expr_state)
 end
 
 @doc """
+Returns a :call expression to add_int for two operands.
+"""
+function mk_add_int_expr(op1, op2)
+  return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
+end
+
+@doc """
+Returns a :call expression to sub_int for two operands.
+"""
+function mk_sub_int_expr(op1, op2)
+  return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
+end
+
+@doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
@@ -523,7 +539,7 @@ function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
   dprintln(3,"pre-base = ", base)
 
   if dim <= length(range_var)
-    base = TypedExpr(Int64, :call, GlobalRef(Base, :add_int), base, range_var[dim])
+    base = mk_add_int_expr(base, range_var[dim])
   end
 
   dprintln(3,"post-base = ", base)
@@ -1078,11 +1094,13 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
       thisInfo.range = selectToRangeData(input_arrays[i])
       thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
       thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
       thisInfo.range_offset = SymbolNode[]
       thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+      thisInfo.pre_offsets = Expr[]
     end
 
     push!(inputInfo, thisInfo)
@@ -1156,6 +1174,10 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
                   1)
   end
 
+  for i in inputInfo
+    append!(pre_statements, i.pre_offsets)
+  end
+
   # add local vars to state
   #for (v, d) in dl.locals
   #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
@@ -1188,11 +1210,15 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   out_body = out_body[1:oblen-1]
   for i = 1:length(dl.outputs)
-    tfa = createTempForArray(inputInfo[i].array, 2, state)
+    if length(inputInfo[i].range) != 0
+      tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
+    else
+      tfa = createTempForArray(inputInfo[i].array, 2, state)
+    end
     #tfa = createTempForArray(dl.outputs[i], 2, state)
     #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state))
+    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
