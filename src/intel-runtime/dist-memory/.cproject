@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+	<storageModule moduleId="org.eclipse.cdt.core.settings">
+		<cconfiguration id="intel.toolchain.composerxe.base.1101101133">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="intel.toolchain.composerxe.base.1101101133" moduleId="org.eclipse.cdt.core.settings" name="Default">
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.MakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.ICCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration buildProperties="" description="" id="intel.toolchain.composerxe.base.1101101133" name="Default" parent="org.eclipse.cdt.build.core.emptycfg">
+					<folderInfo id="intel.toolchain.composerxe.base.1101101133.647229793" name="/" resourcePath="">
+						<toolChain id="intel.toolchain.composerxe.base.288984460" name="Intel(R) C++ Compiler XE" superClass="intel.toolchain.composerxe.base">
+							<targetPlatform binaryParser="org.eclipse.cdt.core.ELF" id="intel.platform.composerxe.base.403972062" isAbstract="false" name="intel.platform.base" superClass="intel.platform.composerxe.base"/>
+							<builder id="intel.builder.composerxe.makebuilder.1184784850" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="intel.builder.composerxe.makebuilder"/>
+							<tool id="intel.tool.archiver.composerxe.base.85880508" name="Intel Archiver" superClass="intel.tool.archiver.composerxe.base"/>
+							<tool id="intel.tool.cpp.compiler.composerxe.base.1146872843" name="Intel C++ Compiler" superClass="intel.tool.cpp.compiler.composerxe.base">
+								<option id="intel.compilestep.preprocessor.includedirectories.273977922" name="Additional Include Directories (-I)" superClass="intel.compilestep.preprocessor.includedirectories" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/etotoni/pse-hpc/pse-julia/julia/intel-runtime/include"/>
+									<listOptionValue builtIn="false" value="/opt/intel/impi_latest/intel64/include"/>
+								</option>
+								<inputType id="intel.cpp.c.compilestep.input.892081131" name="C++ Sources" superClass="intel.cpp.c.compilestep.input"/>
+								<inputType id="intel.cpp.compilestep.input.1220830573" name="C Sources" superClass="intel.cpp.compilestep.input"/>
+							</tool>
+							<tool id="intel.tool.c.compiler.composerxe.base.1318146581" name="Intel C Compiler" superClass="intel.tool.c.compiler.composerxe.base"/>
+							<tool id="intel.tool.cpp.linker.composerxe.base.1424369486" name="Intel C++ Linker" superClass="intel.tool.cpp.linker.composerxe.base">
+								<inputType id="intel.linkstep.input.1915738699" superClass="intel.linkstep.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
+							<tool id="intel.tool.c.linker.composerxe.base.1335305713" name="Intel C Linker" superClass="intel.tool.c.linker.composerxe.base"/>
+						</toolChain>
+					</folderInfo>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+	</storageModule>
+	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+		<project id="DistMemRTS.null.859354925" name="DistMemRTS"/>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope"/>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="intel.toolchain.composerxe.base.1101101133;intel.toolchain.composerxe.base.1101101133.647229793;intel.tool.cpp.compiler.composerxe.base.1146872843;intel.cpp.compilestep.input.1220830573">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.intel.compiler.cdt.managedbuilder.core.ICCManagedMakePerProjectProfile"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="intel.toolchain.composerxe.base.1101101133;intel.toolchain.composerxe.base.1101101133.647229793;intel.tool.cpp.compiler.composerxe.base.1146872843;intel.cpp.c.compilestep.input.892081131">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="com.intel.compiler.cdt.managedbuilder.core.ICCManagedMakePerProjectProfile"/>
+		</scannerConfigBuildInfo>
+	</storageModule>
+</cproject>
