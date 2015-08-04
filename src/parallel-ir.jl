@@ -1119,8 +1119,6 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   # Make the DomainLambda easier to access
   dl::DomainLambda = input_args[2]
-  # verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
 
   indexed_arrays = Any[]
 
@@ -1129,6 +1127,8 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   first_input    = inputInfo[1].array
   num_dim_inputs = getArrayNumDims(first_input, state)
+  # verify the number of input arrays matches the number of input types in dl
+  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
   loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
