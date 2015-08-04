@@ -173,13 +173,14 @@ emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothi
 newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
 
 @doc """
-update the definition of a variable.
+Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
   s = isa(s, SymbolNode) ? s.name : s
-  dprintln(3, "updateDef: s = ", s, " rhs = ", rhs)
+  dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
   @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
-           (isa(s, Symbol) && isLocalVariable(s, state.linfo)))
+           (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
+           (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
   s = isa(s, GenSym) ? s.id : s
   state.defs[s] = rhs
 end
@@ -905,12 +906,12 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
 
-	if(isdefined(IntelPSE, mapExp))
-		m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
-	else
+        if(isdefined(IntelPSE, mapExp))
+          m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+        else
           m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
         end
-	dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
+        dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
         assert(length(m) > 0)
         mapExp = m[1].func.code
       elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
