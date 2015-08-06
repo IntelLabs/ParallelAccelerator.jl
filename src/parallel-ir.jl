@@ -6294,6 +6294,8 @@ function mustRemainLastStatementInBlock(node)
     return true
   elseif typeof(node) == Expr && node.head == :gotoifnot
     return true
+  elseif typeof(node) == Expr && node.head == :return
+    return true
   end
   return false
 end
