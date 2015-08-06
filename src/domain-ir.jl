@@ -1481,14 +1481,15 @@ function dir_live_cb(ast, cbdata)
     args = ast.args
     if head == :mmap
       expr_to_process = Any[]
+      assert(isa(args[2], DomainLambda))
+      dl = args[2]
 
       assert(length(args) == 2)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
         push!(expr_to_process, input_arrays[i])
       end
-      assert(isa(args[2], DomainLambda))
-      for (v, d) in args[2].linfo.escaping_defs
+      for (v, d) in dl.linfo.escaping_defs
         push!(expr_to_process, v)
       end 
 
@@ -1496,15 +1497,20 @@ function dir_live_cb(ast, cbdata)
       return expr_to_process
     elseif head == :mmap!
       expr_to_process = Any[]
+      assert(isa(args[2], DomainLambda))
+      dl = args[2]
 
       assert(length(args) >= 2)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
-        # Need to make input_arrays[1] written?
-        push!(expr_to_process, input_arrays[i])
+        if i <= length(dl.outputs)
+          push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
+        else
+          # Need to make input_arrays[1] written?
+          push!(expr_to_process, input_arrays[i])
+        end
       end
-      assert(isa(args[2], DomainLambda))
-      for (v, d) in args[2].linfo.escaping_defs
+      for (v, d) in dl.linfo.escaping_defs
         push!(expr_to_process, v)
       end 
 
@@ -1531,7 +1537,7 @@ function dir_live_cb(ast, cbdata)
 
       sbufs = args[3]
       for i = 1:length(sbufs)
-        push!(expr_to_process, sbufs[i])
+        push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
       end
 
       dl = args[4]
