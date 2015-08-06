@@ -695,26 +695,9 @@ function from_call(state, env, expr::Any)
   local args = ast[2:end]
   dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
   fun = from_expr(state, env_, fun)
-  # Special Handling for parallel comprehension.  Because of GenSym node hack, we use a typeassert
-  # so that Julia can properly infer the type of the output.  We then remove this typeassert.
-  # FIXME: Once GenSym nodes are properly implemented this should be removed, as well as the
-  # explicit typeassert in the generated code for parallel comprehensions
-  remove_typeassert = false
-  if isa(fun, TopNode) && 
-    fun.name == :typeassert && 
-    isa(args[1], Expr) &&
-    args[1].head == :call &&
-    isa(args[1].args[1], GlobalRef) &&
-    args[1].args[1].name == :cartesianarray
-      remove_typeassert = true
-  end
   dprintln(env,"from_call: new fun=", fun)
   (fun_, args_) = normalize_callname(state, env, fun, args)
   result = translate_call(state, env, typ, :call, fun, args, fun_, args_)
-  # FIXME: Remove this when GenSym handling is implemented
-  if remove_typeassert
-    return result.args[2]
-  end
   result
 end
 
