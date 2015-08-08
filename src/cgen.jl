@@ -238,50 +238,6 @@ function isCompositeType(t)
 	b
 end
 
-function from_lambda_old(args)
-	s = ""
-	params	=	length(args) != 0 ? args[1] : []
-	env		=	length(args) >=2 ? args[2] : []
-	locals	=	length(env) > 0 ? env[1] : []
-	vars	=	length(env) >=2 ? env[2] : []
-	typ		=	length(env) >= 4 ? env[4] : []
-	decls = ""
-	debugp("locals are: ", locals)
-	debugp("vars are: ", vars)
-	debugp("Typ is ", typ)
-	global lstate
-	debugp("ompPrivateList is: ", lstate.ompprivatelist)
-	for k in 1:length(vars)
-		v = vars[k]
-		lstate.symboltable[v[1]] = v[2]
-		# If we have user defined types, record them
-		if in(v[1], locals) && (v[3] & 32 != 0)
-			push!(lstate.ompprivatelist, v[1])
-		end 
-	end
-	debugp("Done with ompvars")
-	bod = from_expr(args[3])
-	debugp("lambda locals = ", locals)
-	debugp("lambda params = ", params)
-	debugp("symboltable here = ")
-	dumpSymbolTable(lstate.symboltable)
-	
-	for k in keys(lstate.symboltable)
-		if (has(locals, k) && !has(params, k)) || (!has(locals, k) && !has(params, k))
-			debugp("About to check for composite type: ", lstate.symboltable[k])
-			if isCompositeType(lstate.symboltable[k])
-				#globalUDTs, from_decl(_symbolTable[k])
-				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-					lstate.globalUDTs[lstate.symboltable[k]] = 1
-				end
-			end
-			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-			#end
-		end
-	end
-	decls * bod
-end
-
 function from_lambda(ast, args)
 	s = ""
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
