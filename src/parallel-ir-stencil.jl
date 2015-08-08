@@ -171,7 +171,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
         [],
         [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
         PIRReduction[],
-        [], [], irState.top_level_number, get_unique_num()))
+        [], [], irState.top_level_number, get_unique_num(), false))
 
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
@@ -188,7 +188,8 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     Any[ length(bufs) > 2 ? tuple(bufs...) : bufs[1] ],
     DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
-    get_unique_num())
+    get_unique_num(), 
+    false)
   gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
   expr = CompilerTools.LambdaHandling.replaceExprWithDict(expr, gensym_map)   
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)

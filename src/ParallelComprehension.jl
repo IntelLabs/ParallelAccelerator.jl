@@ -9,14 +9,8 @@ end
 
 function parallelize(comp, typ)
 	(isa(comp, Expr) && comp.head == :comprehension) || throw("comprehension expected")
-	cRank = @rank(comp)
-	compreFun = gensym("compreFun")
-  block = quote
-    function $compreFun()
-      $(comp.args[1])
-    end
-  end
-  curr_body = block.args[2].args[2].args
+	# cRank = @rank(comp)
+  # curr_body = block.args[2].args[2].args
   # We insert into the body of the function logic to transform the coordinates
   # based on the range specified.  Cartesian array expects the size of the
   # array in the initializer, so the function should offset the coordinates
@@ -30,27 +24,25 @@ function parallelize(comp, typ)
   #                                    for var in comp.args[2:end]]
   # new_body[length(comp.args):end] = curr_body
   # block.args[2].args[2].args = new_body
-  orig = block.args[2].args[1].args[1]
+
+#  esc(block)
+
+  constructor = :(cartesianarray($typ, ()) do i
+    $(comp.args[1])
+  end)
 
   # We add an argument to the initialization function for every variable in our
   # comprehension, allowing us to support n-dimensional comprehensions.
-  block.args[2].args[1].args = Array(Any, length(comp.args))
-  block.args[2].args[1].args[1] = orig
-  block.args[2].args[1].args[2:end] = [var.args[1] for var in comp.args[2:end]]
-
-#  esc(block)
-#  @eval Main.$compreFun(1)
-  @eval $block
-
-	constructor = :(cartesianarray($compreFun, $typ, ())::Array{$typ, $(length(comp.args[2:end]))})
+  constructor.args[2].args[1].args = [var.args[1] for var in comp.args[2:end]]
 
   # The dimensions of the cartesian array are the end of the range minus the
   # start of the range plus one.
-  constructor.args[1].args[4].args = [:($(range.args[2].args[2]) - $(range.args[2].args[1]) + 1)
+  constructor.args[4].args = [:($(range.args[2].args[2]) - $(range.args[2].args[1]) + 1)
                                       for range in comp.args[2:end]]
   return constructor
 end
 
+# FIXME: Replace this with Core.typeinf
 function infer_comprehension_type(comp)
   eval(quote
     function _tmp()
@@ -74,7 +66,7 @@ function infer_comprehension_type(comp)
 end
 
 function process_node(node, state, top_level_number, is_top_level, read)
-	if !isa(node,Expr)
+  if !isa(node,Expr)
     return nothing
   end
   if node.head == :typed_comprehension
@@ -87,15 +79,13 @@ function process_node(node, state, top_level_number, is_top_level, read)
     typ = infer_comprehension_type(node)
   end
   if (node.head == :comprehension)
-    return parallelize(node, typ)
+    return [parallelize(node, typ)]
   end
 end
 
 macro replace_comprehensions(func)
-	func = CompilerTools.constant_fold(func)
-	println(func)
-	AstWalker.AstWalk(func, process_node, nothing)
-  println(func)
+  func = CompilerTools.constant_fold(func)
+  AstWalker.AstWalk(func, process_node, nothing)
   return esc(func)
 end
 #=

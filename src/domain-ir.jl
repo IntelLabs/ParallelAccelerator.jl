@@ -173,13 +173,14 @@ emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothi
 newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
 
 @doc """
-update the definition of a variable.
+Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
   s = isa(s, SymbolNode) ? s.name : s
-  dprintln(3, "updateDef: s = ", s, " rhs = ", rhs)
+  dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
   @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
-           (isa(s, Symbol) && isLocalVariable(s, state.linfo)))
+           (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
+           (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
   s = isa(s, GenSym) ? s.id : s
   state.defs[s] = rhs
 end
@@ -694,26 +695,9 @@ function from_call(state, env, expr::Any)
   local args = ast[2:end]
   dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
   fun = from_expr(state, env_, fun)
-  # Special Handling for parallel comprehension.  Because of GenSym node hack, we use a typeassert
-  # so that Julia can properly infer the type of the output.  We then remove this typeassert.
-  # FIXME: Once GenSym nodes are properly implemented this should be removed, as well as the
-  # explicit typeassert in the generated code for parallel comprehensions
-  remove_typeassert = false
-  if isa(fun, TopNode) && 
-    fun.name == :typeassert && 
-    isa(args[1], Expr) &&
-    args[1].head == :call &&
-    isa(args[1].args[1], GlobalRef) &&
-    args[1].args[1].name == :cartesianarray
-      remove_typeassert = true
-  end
   dprintln(env,"from_call: new fun=", fun)
   (fun_, args_) = normalize_callname(state, env, fun, args)
   result = translate_call(state, env, typ, :call, fun, args, fun_, args_)
-  # FIXME: Remove this when GenSym handling is implemented
-  if remove_typeassert
-    return result.args[2]
-  end
   result
 end
 
@@ -905,12 +889,12 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
 
-	if(isdefined(IntelPSE, mapExp))
-		m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
-	else
+        if(isdefined(IntelPSE, mapExp))
+          m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+        else
           m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
         end
-	dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
+        dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
         assert(length(m) > 0)
         mapExp = m[1].func.code
       elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
@@ -1480,14 +1464,15 @@ function dir_live_cb(ast, cbdata)
     args = ast.args
     if head == :mmap
       expr_to_process = Any[]
+      assert(isa(args[2], DomainLambda))
+      dl = args[2]
 
       assert(length(args) == 2)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
         push!(expr_to_process, input_arrays[i])
       end
-      assert(isa(args[2], DomainLambda))
-      for (v, d) in args[2].linfo.escaping_defs
+      for (v, d) in dl.linfo.escaping_defs
         push!(expr_to_process, v)
       end 
 
@@ -1495,15 +1480,20 @@ function dir_live_cb(ast, cbdata)
       return expr_to_process
     elseif head == :mmap!
       expr_to_process = Any[]
+      assert(isa(args[2], DomainLambda))
+      dl = args[2]
 
       assert(length(args) >= 2)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
-        # Need to make input_arrays[1] written?
-        push!(expr_to_process, input_arrays[i])
+        if i <= length(dl.outputs)
+          push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
+        else
+          # Need to make input_arrays[1] written?
+          push!(expr_to_process, input_arrays[i])
+        end
       end
-      assert(isa(args[2], DomainLambda))
-      for (v, d) in args[2].linfo.escaping_defs
+      for (v, d) in dl.linfo.escaping_defs
         push!(expr_to_process, v)
       end 
 
@@ -1530,7 +1520,7 @@ function dir_live_cb(ast, cbdata)
 
       sbufs = args[3]
       for i = 1:length(sbufs)
-        push!(expr_to_process, sbufs[i])
+        push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
       end
 
       dl = args[4]

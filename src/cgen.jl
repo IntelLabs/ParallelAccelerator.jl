@@ -78,7 +78,8 @@ end
 
 
 # Globals
-verbose = true
+# verbose = true
+verbose = false 
 inEntryPoint = false
 lstate = nothing
 #packageroot = nothing
@@ -1053,14 +1054,22 @@ function from_parforstart(args)
 	global lstate
 	num_threads_mode = ParallelIR.num_threads_mode
 
+	println("args: ",args);
+
 	parfor = args[1]
 	lpNests = parfor.loopNests
+    private_vars = parfor.private_vars
 
 	# Translate metadata for the loop nests
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
 	starts = map((a)->from_expr(a.lower), lpNests)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
+
+	println("ivs ",ivs);
+	println("starts ", starts);
+	println("stops ", stops);
+	println("steps ", steps);
 
 	loopheaders = from_loopnest(ivs, starts, stops, steps)
 
@@ -1087,7 +1096,8 @@ function from_parforstart(args)
 	
 
 	# Check if there are private vars and emit the |private| clause
-	privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
 
 	
 	lcountexpr = ""
@@ -1149,7 +1159,7 @@ end
 # For now, we stick with stack allocation
 function from_new(args)
 	typ = args[1] #type of the object
-	assert(isa(typ, DataType))
+	@assert isa(typ, DataType) "typ:$typ is not DataType"
 	objtyp, ptyps = parseParametricType(typ)
 	ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
 	s = ctyp * "{"

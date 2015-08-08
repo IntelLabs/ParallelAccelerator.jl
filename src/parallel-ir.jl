@@ -189,6 +189,7 @@ type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
+    private_vars :: Set{SymAllGen}
 end
 
 @doc """
@@ -368,7 +369,9 @@ Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
     if dim <= length(x.range)
-        return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
+        #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
+        # TODO: do something with skip!
+        return mk_add_int_expr(mk_sub_int_expr(x.range[dim].last,x.range[dim].start), 1)
     else
         return mk_arraylen_expr(x.array, dim)
     end 
@@ -508,6 +511,20 @@ function getArrayNumDims(array :: GenSym, state :: expr_state)
 end
 
 @doc """
+Returns a :call expression to add_int for two operands.
+"""
+function mk_add_int_expr(op1, op2)
+  return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
+end
+
+@doc """
+Returns a :call expression to sub_int for two operands.
+"""
+function mk_sub_int_expr(op1, op2)
+  return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
+end
+
+@doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
@@ -523,7 +540,7 @@ function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
   dprintln(3,"pre-base = ", base)
 
   if dim <= length(range_var)
-    base = TypedExpr(Int64, :call, GlobalRef(Base, :add_int), base, range_var[dim])
+    base = mk_add_int_expr(base, range_var[dim])
   end
 
   dprintln(3,"post-base = ", base)
@@ -1078,11 +1095,13 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
       thisInfo.range = selectToRangeData(input_arrays[i])
       thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
       thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
       thisInfo.range_offset = SymbolNode[]
       thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+      thisInfo.pre_offsets = Expr[]
     end
 
     push!(inputInfo, thisInfo)
@@ -1100,8 +1119,6 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   # Make the DomainLambda easier to access
   dl::DomainLambda = input_args[2]
-  # verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
 
   indexed_arrays = Any[]
 
@@ -1110,6 +1127,8 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   first_input    = inputInfo[1].array
   num_dim_inputs = getArrayNumDims(first_input, state)
+  # verify the number of input arrays matches the number of input types in dl
+  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
   loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
@@ -1156,6 +1175,10 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
                   1)
   end
 
+  for i in inputInfo
+    append!(pre_statements, i.pre_offsets)
+  end
+
   # add local vars to state
   #for (v, d) in dl.locals
   #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
@@ -1188,11 +1211,15 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   out_body = out_body[1:oblen-1]
   for i = 1:length(dl.outputs)
-    tfa = createTempForArray(inputInfo[i].array, 2, state)
+    if length(inputInfo[i].range) != 0
+      tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
+    else
+      tfa = createTempForArray(inputInfo[i].array, 2, state)
+    end
     #tfa = createTempForArray(dl.outputs[i], 2, state)
     #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state))
+    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
@@ -1480,42 +1507,44 @@ end
 
 # ===============================================================================================================================
 
+@doc """
+The AstWalk callback function for getPrivateSet.
+For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
+"""
+function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+  # If the node is an assignment node or a loop head node.
+  if isAssignmentNode(x) || isLoopheadNode(x)
+    lhs = x.args[1]
+    assert(isa(lhs, SymAllGen))
+    if isa(lhs, GenSym)
+      push!(state, lhs)
+    else
+      sname = getSName(lhs)
+      red_var_start = "parallel_ir_reduction_output_"
+      red_var_len = length(red_var_start)
+      sstr = string(sname)
+      if length(sstr) >= red_var_len
+        if sstr[1:red_var_len] == red_var_start
+          # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
+          return nothing
+        end
+      end
+      push!(state, sname)
+    end
+  end
+  nothing
+end
 
-# @doc """
-# The AstWalk callback function for makeLhsPrivate.
-# For each AST in a parfor body, add the private parfor descriptor to the lambdaInfo for all
-# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-# """
-# function makeLhsPrivateInner(x, state, top_level_number, is_top_level, read)
-#   # If the node is an assignment node or a loop head node.
-#   if isAssignmentNode(x) || isLoopheadNode(x)
-#     lhs = x.args[1]
-#     sname = getSName(lhs)
-#     red_var_start = "parallel_ir_reduction_output_"
-#     red_var_len = length(red_var_start)
-#     sstr = string(sname)
-#     if length(sstr) >= red_var_len
-#       if sstr[1:red_var_len] == red_var_start
-#         # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-#         return nothing
-#       end
-#     end
-#     makePrivateParfor(sname, state)
-#   end
-#   nothing
-# end
-
-
-# @doc """
-# Go through the body of a parfor and add the private parfor descriptor to the lambdaInfo for all
-# symbols on the left-hand side of an assignment or set implicitly in a loop head node.
-# Reduction variables are not included in this process.
-# """
-# function makeLhsPrivate(body, state)
-#   for i = 1:length(body)
-#     AstWalk(body[i], makeLhsPrivateInner, state)
-#   end
-# end
+@doc """
+Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
+"""
+function getPrivateSet(body :: Array{Any,1})
+  private_set = Set{SymAllGen}()
+  for i = 1:length(body)
+    AstWalk(body[i], getPrivateSetInner, private_set)
+  end
+  return private_set
+end
 
 # ===============================================================================================================================
 
@@ -4074,7 +4103,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
               end
               for l = 1:mod_len
                 dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
-                #if isa(cur_task.modified_inputs[l], Array)
                 if cur_task.modified_inputs[l].typ.name == Array.name
                   dprintln(3, "is array")
                   push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
@@ -4620,12 +4648,15 @@ form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
 function flattenParfor(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
   dprintln(2,"Flattening ", the_parfor)
+
+  private_set = getPrivateSet(the_parfor.body)
+
   # Output to the new body that this is the start of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr)))
+  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
   # Output the body of the parfor as top-level statements in the new function body.
   append!(new_body, the_parfor.body)
   # Output to the new body that this is the end of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr)))
+  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
   nothing
 end
 
@@ -6129,7 +6160,7 @@ function mmapToMmap!(ast, lives, uniqSet)
       lhs = expr.args[1]
       rhs = expr.args[2]
       # right now assume all
-      assert(isa(lhs, Symbol) || isa(lhs, SymbolNode) || isa(lhs, GenSym))
+      assert(isa(lhs, SymAllGen))
       # If the right-hand side is an mmap.
       if isa(rhs, Expr) && is(rhs.head, :mmap)
         args = rhs.args[1]
@@ -6262,6 +6293,8 @@ function mustRemainLastStatementInBlock(node)
   if typeof(node) == GotoNode
     return true
   elseif typeof(node) == Expr && node.head == :gotoifnot
+    return true
+  elseif typeof(node) == Expr && node.head == :return
     return true
   end
   return false
