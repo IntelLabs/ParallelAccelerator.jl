@@ -1474,20 +1474,20 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	hdr = from_header(isEntryPoint)
 	if isEntryPoint
 		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
-			createEntryPointWrapper(functionName, params, args, returnType)
+		createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
 		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
 
-    if length(args) > 0
-		args *= ", " * retargs
-		argsunal *= ", "*retargs
-    else
-		args = retargs
-		argsunal = retargs
-    end
+		if length(args) > 0
+			args *= ", " * retargs
+			argsunal *= ", "*retargs
+		else
+			args = retargs
+			argsunal = retargs
+		end
 	else
-		
+
 		rtyp = toCtype(typ)
 	end
 	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
