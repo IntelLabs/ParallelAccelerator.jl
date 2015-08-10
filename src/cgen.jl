@@ -1430,20 +1430,20 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	hdr = from_header(isEntryPoint)
 	if isEntryPoint
 		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
-			createEntryPointWrapper(functionName, params, args, returnType)
+		createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
 		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
 
-    if length(args) > 0
-		args *= ", " * retargs
-		argsunal *= ", "*retargs
-    else
-		args = retargs
-		argsunal = retargs
-    end
+		if length(args) > 0
+			args *= ", " * retargs
+			argsunal *= ", "*retargs
+		else
+			args = retargs
+			argsunal = retargs
+		end
 	else
-		
+
 		rtyp = toCtype(typ)
 	end
 	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
@@ -1458,6 +1458,64 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	end	
 	c
 end
+
+
+function from_root_dist(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
+	global inEntryPoint
+	inEntryPoint = isEntryPoint
+	global lstate
+	if isEntryPoint
+		#adp = ASTDispatcher()
+		lstate = LambdaGlobalData()
+	end
+	debugp("Ast = ", ast)
+	verbose && debugp("Starting processing for $ast")
+	params	=	ast.args[1]
+	env		=	ast.args[2]
+	bod		=	ast.args[3]
+	debugp("Processing body: ", bod)
+	returnType = bod.typ
+	typ = returnType
+	bod = from_expr(ast)
+	args = from_formalargs(params)
+	argsunal = from_formalargs(params, true)
+	dumpSymbolTable(lstate.symboltable)
+	hdr = ""
+	wrapper = ""
+	if !isa(returnType, Tuple)
+		returnType = (returnType,)
+	end
+	hdr = from_header(isEntryPoint)
+	if isEntryPoint
+		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) 
+		rtyp = "void"
+		retargs = foldl((a, b) -> "$a, $b",
+		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
+
+		if length(args) > 0
+			args *= ", " * retargs
+			argsunal *= ", "*retargs
+		else
+			args = retargs
+			argsunal = retargs
+		end
+	else
+
+		rtyp = toCtype(typ)
+	end
+	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
+	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
+	if inEntryPoint
+		inEntryPoint = false
+	end
+	push!(lstate.compiledfunctions, functionName)
+	c = hdr * forwarddecl * from_worklist() * s * wrapper
+	if isEntryPoint
+		resetLambdaState(lstate)
+	end	
+	c
+end
+
 
 function insert(func::Symbol, mod::Any, name, typs)
 	if mod == ""

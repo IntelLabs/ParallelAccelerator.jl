@@ -1237,17 +1237,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     # If there is only one output then put that output in the post_statements
     push!(post_statements, input_arrays[1])
   else
-    # FIXME: multi mmap! return values are not handled properly below
-    tt = Expr(:tuple)
-    tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), input_arrays)
-    temp_type = eval(tt)
-
-    new_temp_name  = string("parallel_ir_tuple_ret_",get_unique_num())
-    new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-    dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
-    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
-
-    append!(post_statements, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(map( x -> x.name, input_arrays), temp_type), state), new_temp_snode])
+    push!(post_statements, input_arrays[1:length(dl.outputs)])
   end
 
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
@@ -1472,20 +1462,13 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   if(number_output_arrays == 1)
     # If there is only one output then put that output in the post_statements
     push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-    #state.array_length_correlation[new_array_symbols[1]] = main_length_correlation
   else
-    tt = Expr(:tuple)
-    tt.args = map( x -> Array{x,num_dim_inputs}, dl.outputs)
-    temp_type = eval(tt)
-
-    new_temp_name  = string("parallel_ir_tuple_ret_",get_unique_num())
-    new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-    dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
-    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
-
-    append!(post_statements, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(new_array_symbols, temp_type), state), new_temp_snode])
-
-    throw(string("mk_parfor_args_from_mmap with multiple output not fully implemented."))
+    all_sn = SymbolNode[]
+    assert(length(dl.outputs) == length(new_array_symbols))
+    for i = 1:length(dl.outputs)
+      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+    end
+    push!(post_statements, all_sn)
   end
 
   new_parfor = IntelPSE.ParallelIR.PIRParForAst(
@@ -1607,7 +1590,7 @@ function from_lambda(lambda :: Expr, depth, state)
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, pir_live_cb_def)
+  body = CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, pir_live_cb_def)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -1807,7 +1790,7 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     for i in output_map
       new_lhs = nameToSymbolNode(i[1], sym_to_type)
       new_rhs = nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type)
-      return (new_lhs, [new_lhs], true, new_rhs, [new_rhs])
+      return (new_lhs, [new_lhs], true, [new_rhs])
     end
   end
 
@@ -1828,16 +1811,7 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
   end
   temp_type = eval(tt)
 
-  # Create a new variable to hold the return tuple for this new parfor node.
-  new_temp_name  = string("parallel_ir_tuple_ret_", unique_id)
-  new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-  dprintln(3, "Creating variable for tuple return from parfor = ", new_temp_snode)
-  # Add the new var to the list of variables for the function.
-  CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
-
-  # Two postParFor statements are needed.  The first to assign a newly created tuple with the outputs
-  # into a tuple variable and then in the second to return that tuple variable.
-  ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, [mk_assignment_expr(new_temp_snode, mk_tuple_expr(rhs_order, temp_type), state), new_temp_snode], rhs_order)
+  ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
 end
 
 @doc """
@@ -2330,20 +2304,26 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
   map_lhs_post_reduction = Dict{SymGen, SymGen}()
 
   if is_multi
+    last_post = the_parfor.postParFor[end]
+    assert(isa(last_post, Array)) 
+    dprintln(3,"multi postParFor = ", the_parfor.postParFor, " last_post = ", last_post)
+
     # In our special AST node format for assignment to make fusion easier, args[3] is a FusionSentinel node
     # and additional args elements are the real symbol to be assigned to in the left-hand side.
     for i = 4:length(parfor_assignment.args)
+      corresponding_elem = last_post[i-3]
+
       assert(isa(parfor_assignment.args[i], SymNodeGen))
       rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
-      rememberTypeForSym(sym_to_type, toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2]), CompilerTools.LambdaHandling.getType(the_parfor.postParFor[end-1].args[2].args[i-2], state.lambdaInfo))
+      rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.lambdaInfo))
       if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
         # For fused parfors, the last post statement is a tuple variable.
         # That tuple variable is declared in the previous statement (end-1).
         # The statement is an Expr with head == :call and top(:tuple) as the first arg.
         # So, the first member of the tuple is at offset 2 which corresponds to index 4 of this loop, ergo the "i-2".
-        map_lhs_post_array[toSymGen(parfor_assignment.args[i])]     = toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2])
+        map_lhs_post_array[toSymGen(parfor_assignment.args[i])]     = toSymGen(corresponding_elem)
       else
-        map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(the_parfor.postParFor[end-1].args[2].args[i-2])
+        map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(corresponding_elem)
       end
     end
   else
@@ -2407,6 +2387,17 @@ Debugging feature to specify the number of tasks to create and to stop thereafte
 """
 function PIRRunAsTasks(x)
   global run_as_tasks = x
+end
+
+@doc """
+Returns a single element of an array if there is only one or the array otherwise.
+"""
+function oneIfOnly(x)
+    if length(x) == 1
+      return x[1]
+    else
+      return x
+    end
 end
 
 @doc """
@@ -2589,7 +2580,11 @@ function fuse(body, body_index, cur, state)
     # postParFor - can merge everything but the last entry in the postParFor's.
     # The last entries themselves need to be merged extending the tuple if the prev parfor's output stays live and
     # just keeping the cur parfor output if the prev parfor output dies.
-    (new_lhs, all_rets, single, merged_output, output_items) = create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
+    (new_lhs, all_rets, single, output_items) = create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
+    dprintln(3,"new_lhs = ", new_lhs)
+    dprintln(3,"all_rets = ", all_rets)
+    dprintln(3,"single = ", single)
+    dprintln(3,"output_items = ", output_items)
     output_items_set = live_out_cur
     output_items_with_aliases = getAllAliases(output_items_set, prev_parfor.array_aliases)
 
@@ -2663,18 +2658,8 @@ function fuse(body, body_index, cur, state)
     append!(prev_parfor.reductions, cur_parfor.reductions)
     dprintln(2,"New reductions = ", prev_parfor.reductions)
 
-    dprintln(3,"merged_output = ", merged_output)
-    if is_prev_multi
-      num_prev_sub = 2
-    else
-      num_prev_sub = 1
-    end
-    if is_cur_multi
-      num_cur_sub = 2
-    else
-      num_cur_sub = 1
-    end
-    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-num_prev_sub]; cur_parfor.postParFor[1:end-num_cur_sub]; merged_output ]
+    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-1]; cur_parfor.postParFor[1:end-1]]
+    push!(prev_parfor.postParFor, oneIfOnly(output_items))
     dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
 
     # original_domain_nodes - simple append
@@ -3519,7 +3504,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         # Do this transformation:  a = ...; b = a; becomes b = ...
         # Eliminate the variable a if it is never used again.
         for expr in new_exprs
-          if isAssignmentNode(last_node) &&
+          if false && isAssignmentNode(last_node) &&
              isAssignmentNode(expr)
             # Detected two assignments in a row.
             new_lhs  = expr.args[1]    # The left-hand side of the second assignment.
@@ -3630,9 +3615,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
       # The regular part of the post parfor is just added.
       # The part that indicates the return values creates individual assignment statements for each thing returned.
       if isFusionAssignment(parfor_assignment)
-        append!(expanded_body, the_parfor.postParFor[1:end-2])
+        append!(expanded_body, the_parfor.postParFor[1:end-1])
         for j = 4:length(parfor_assignment.args)
-          push!(expanded_body, mk_assignment_expr(parfor_assignment.args[j], the_parfor.postParFor[end-1].args[2].args[j-2], state))
+          push!(expanded_body, mk_assignment_expr(parfor_assignment.args[j], the_parfor.postParFor[end][j-3], state))
         end
       else
         append!(expanded_body, the_parfor.postParFor[1:end-1])
@@ -5219,7 +5204,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
       if length(ast) > 2
         assert(typeof(ast[3]) == FusionSentinel)
         for i = 4:length(ast)
-          rhs_entry = the_parfor.postParFor[end-1].args[2].args[i-2]
+          rhs_entry = the_parfor.postParFor[end][i-3]
           assert(typeof(ast[i]) == SymbolNode)
           assert(typeof(rhs_entry) == SymbolNode)
           if rhs_entry.typ.name == Array.name
@@ -6490,7 +6475,7 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
   end
   dprintln(3,"Non-array params = ", non_array_params)
 
-  # find out max_label
+  # Find out max_label.
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
   max_label = getMaxLabel(max_label, body.args)
@@ -6540,6 +6525,9 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
   #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
   (new_vars.max_label, ast, ast.args[3].args)
 end
+
+doRemoveAssertEqShape = true
+generalSimplification = true
 
 @doc """
 The main ENTRY point into ParallelIR.
@@ -6615,6 +6603,7 @@ function from_expr(function_name, ast::Any, input_arrays)
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
   max_label = getMaxLabel(0, body.args)
+  dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
 
   rep_start = time_ns()
 
@@ -6644,10 +6633,12 @@ function from_expr(function_name, ast::Any, input_arrays)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
+  if generalSimplification
   ast   = get_one(AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}())))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
   dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
   printLambda(3, ast)
+  end
 
   ast   = get_one(AstWalk(ast, remove_dead, RemoveDeadState(lives)))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
@@ -6665,10 +6656,12 @@ function from_expr(function_name, ast::Any, input_arrays)
 
   dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
  
+  if doRemoveAssertEqShape
   processAndUpdateBody(ast, removeAssertEqShape, new_vars)
   dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
   printLambda(3, ast)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+  end
 
   if bb_reorder != 0
     maxFusion(lives)
@@ -6682,6 +6675,8 @@ function from_expr(function_name, ast::Any, input_arrays)
   dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
 
   new_vars.block_lives = lives
+  dprintln(3,"Lives before main Parallel IR = ")
+  dprintln(3,lives)
 
   # Do the main work of Parallel IR.
   ast = from_expr(ast, 1, new_vars, false)

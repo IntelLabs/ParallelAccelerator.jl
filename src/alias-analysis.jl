@@ -329,11 +329,17 @@ function from_expr(state, env, ast)
         # skip
     elseif is(head, :new)
         # skip
+    elseif is(head, :boundscheck)
+        # skip?
+    elseif is(head, :type_goto)
+        # skip?
     elseif is(head, :gotoifnot)
         # skip
     elseif is(head, :loophead)
         # skip
     elseif is(head, :loopend)
+        # skip
+    elseif is(head, :meta)
         # skip
     else
         throw(string("from_expr: unknown Expr head :", head))
