@@ -1519,7 +1519,6 @@ function from_worklist()
 	si = ""
 	global lstate
 	while !isempty(lstate.worklist)
-		#a, fname, typs = pop!(lstate.worklist)
 		a, fname, typs = splice!(lstate.worklist, 1)
 		debugp("Checking if we compiled ", fname, " before")
 		debugp(lstate.compiledfunctions)
@@ -1572,14 +1571,12 @@ function compile()
 	vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
-	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
 	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
 function link()
 	packageroot = getPackageRoot()
-	#linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
 	linkCommand = `icc -shared -qopenmp -o $packageroot/src/intel-runtime/libout.so.1.0 $packageroot/src/intel-runtime/out.o`
 	run(linkCommand)
 	debugp("Done cgen linking")
