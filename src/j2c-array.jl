@@ -6,9 +6,15 @@ import ..getPackageRoot
 
 eval(x) = Core.eval(J2CArray, x)
 
+package_root = getPackageRoot()
+dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
+if !isfile(dyn_lib)
+  error("libj2carray not compiled, build with: julia -e 'Pkg.build(\"IntelPSE\")'")
+end
+
 function __init__()
   package_root = getPackageRoot()
-  dyn_lib = string(package_root, "/src/intel-runtime/libout.so.1.0")
+  dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
 
   @eval begin
     # Create a new j2c array object with element size in bytes and given dimension.

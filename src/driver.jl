@@ -249,22 +249,19 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     package_root   = IntelPSE.getPackageRoot()
 
 	# cgen path
-  #  if client_intel_pse_cgen == 1
-        cgen.writec(cgen.from_root(code, string(function_name)))
-        cgen.compile()
-        cgen.link()
- #   end 
+    outfile_name = cgen.writec(cgen.from_root(code, string(function_name)))
+    cgen.compile(outfile_name)
+    dyn_lib = cgen.link(outfile_name)
  
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name,"_j2c_proxy")
     proxy_sym    = symbol(proxy_name)
     dprintln(2, "IntelPSE.offload for ", proxy_name)
+    dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
+    dprintln(2, "dyn_lib = ", dyn_lib)
   
     # This is the name of the function that j2c generates.
     j2c_name     = string("_",function_name,"_")
-    # This is where the j2c dynamic library should be.
-    dyn_lib      = string(package_root, "/src/intel-runtime/libout.so.1.0")
-    dprintln(2, "dyn_lib = ", dyn_lib)
   
     ret_type     = CompilerTools.LambdaHandling.getReturnType(lambdaInfo)
     # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.

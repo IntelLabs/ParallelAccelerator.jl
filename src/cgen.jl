@@ -145,7 +145,30 @@ tokenXlate = Dict(
 replacedTokens = Set(",#")
 scrubbedTokens = Set("({}):")
 
+file_counter = -1
+
 #### End of globals ####
+
+function generate_new_file_name()
+    global file_counter
+    file_counter += 1
+    return "cgen_output$file_counter"
+end
+
+function cleanup_generated_files()
+    package_root = getPackageRoot()
+    # TODO: Check debug level and save generated files
+    if false
+        for file in readdir("$package_root/deps/generated")
+            if file == ".gitignore"
+                continue
+            end
+            rm("$package_root/deps/generated/$file")
+        end
+    end
+end
+
+atexit(cleanup_generated_files)
 
 function __init__()
 	packageroot = joinpath(dirname(@__FILE__), "..")
@@ -173,10 +196,10 @@ function from_includes()
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$packageroot/src/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/j2c-array.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/j2c-array-pert.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/pse-types.h\"\n")
+		"#include \"$packageroot/deps/include/pse-runtime.h\"\n",
+		"#include \"$packageroot/deps/include/j2c-array.h\"\n",
+		"#include \"$packageroot/deps/include/j2c-array-pert.h\"\n",
+		"#include \"$packageroot/deps/include/pse-types.h\"\n")
 	)
 end
 
@@ -1555,20 +1578,24 @@ function from_worklist()
 	s
 end
 import Base.write
-function writec(s)
-	packageroot = getPackageRoot()
-	cgenOutput = "$packageroot/src/intel-runtime/tmp.cpp"
-	cf = open(cgenOutput, "w")
-	write(cf, s)
-	debugp("Done committing cgen code")
-	close(cf)
+function writec(s, outfile_name=nothing)
+    if outfile_name == nothing
+        outfile_name = generate_new_file_name()
+    end
+    packageroot = getPackageRoot()
+    cgenOutput = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+    cf = open(cgenOutput, "w")
+    write(cf, s)
+    debugp("Done committing cgen code")
+    close(cf)
+    return outfile_name
 end
 
-function compile()
+function compile(outfile_name)
 	packageroot = getPackageRoot()
 	
-	cgenOutputTmp = "$packageroot/src/intel-runtime/tmp.cpp"
-	cgenOutput = "$packageroot/src/intel-runtime/out.cpp"
+	cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+	cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
 
 	# make cpp code readable
 	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
@@ -1578,15 +1605,17 @@ function compile()
 	vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
-	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
+	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/deps/generated/$outfile_name.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
-function link()
-	packageroot = getPackageRoot()
-	linkCommand = `icc -shared -qopenmp -o $packageroot/src/intel-runtime/libout.so.1.0 $packageroot/src/intel-runtime/out.o`
-	run(linkCommand)
-	debugp("Done cgen linking")
+function link(outfile_name)
+    packageroot = getPackageRoot()
+    lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
+    linkCommand = `icc -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    run(linkCommand)
+    debugp("Done cgen linking")
+    return lib
 end
 
 # When in standalone mode, this is the entry point to cgen
