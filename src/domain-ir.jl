@@ -1487,6 +1487,8 @@ function dir_live_cb(ast, cbdata)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
         if i <= length(dl.outputs)
+          # We need both a read followed by a write.
+          push!(expr_to_process, input_arrays[i])
           push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
         else
           # Need to make input_arrays[1] written?
@@ -1520,6 +1522,8 @@ function dir_live_cb(ast, cbdata)
 
       sbufs = args[3]
       for i = 1:length(sbufs)
+        # sbufs both read and possibly written
+        push!(expr_to_process, sbufs[i])
         push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
       end
 
