@@ -75,13 +75,13 @@ type LambdaGlobalData
 	end
 end
 
-# Auto-vec level - this can be one of:
-# 0 default autovec - icc -O3
-# 1 disable autovec - icc -no-vec
-# 2 force autovec   - icc with #pragma simd
+# Auto-vec level. These determine what vectorization
+# flags are emitted in the code or passed to icc. These
+# levels are one of:
 
-# Wouldn't it be nice if Julia enums actually worked ?
-#@enum veclevel DEFAULT = 0 DISABLE = 1 FORCE = 2
+# 0: default autovec - icc 
+# 1: disable autovec - icc -no-vec
+# 2: force autovec   - icc with #pragma simd at OpenMP loops
 
 const VECDEFAULT = 0
 const VECDISABLE = 1
@@ -274,7 +274,6 @@ function from_lambda(ast, args)
 	debugp("Emitting gensyms")
 	for k in 1:length(gensyms)
 		debugp("gensym: ", k, " is of type: ", gensyms[k])
-		#lstate.symboltable["GenSym(" * string(k-1) * ")"] = gensyms[k]
 		lstate.symboltable[GenSym(k-1)] = gensyms[k]
 	end
 	debugp("Done with ompvars")
@@ -359,7 +358,6 @@ function from_assignment(args::Array)
 			throw("FATAL error....exiting")
 		end
 	end
-	debugp("After assignment, type of", lhsO, " is ", lstate.symboltable[lhs])
 	lhsO * " = " * rhsO
 end
 
@@ -680,6 +678,8 @@ function from_intrinsic(f, args)
 		return from_expr(args[1]) * " < " * from_expr(args[2])
 	elseif intr == "sle_int"
 		return from_expr(args[1]) * " <= " * from_expr(args[2])
+	elseif intr == "srem_int"
+        return from_expr(args[1]) * " % " * from_expr(args[2])
 	elseif intr == "select_value"
 		return "(" * from_expr(args[1]) * ")" * " ? " *
 		"(" * from_expr(args[2]) * ") : " * "(" * from_expr(args[3]) * ")"
@@ -1075,7 +1075,7 @@ function from_parforstart(args)
 	global lstate
 	num_threads_mode = ParallelIR.num_threads_mode
 
-	println("args: ",args);
+	debugp("args: ",args);
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
@@ -1087,10 +1087,10 @@ function from_parforstart(args)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
 
-	println("ivs ",ivs);
-	println("starts ", starts);
-	println("stops ", stops);
-	println("steps ", steps);
+	debugp("ivs ",ivs);
+	debugp("starts ", starts);
+	debugp("stops ", stops);
+	debugp("steps ", steps);
 
 	loopheaders = from_loopnest(ivs, starts, stops, steps)
 
