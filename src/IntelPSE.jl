@@ -79,8 +79,14 @@ function getPackageRoot()
 end
 
 function __init__()
-   package_root = getPackageRoot()
-   ENV["LD_LIBRARY_PATH"] = string(ENV["LD_LIBRARY_PATH"], ":" , package_root, "bin")
+    package_root = getPackageRoot()
+    @linux_only ld_env_key = "LD_LIBRARY_PATH"
+    @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
+    prefix = ""
+    if haskey(ENV, ld_env_key)
+        prefix = ENV[ld_env_key] * ":"
+    end
+    ENV[ld_env_key] = string(prefix, package_root, "bin")
 end
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
