@@ -5,7 +5,7 @@
 module cgen
 using ..ParallelIR
 using CompilerTools
-export generate, from_root, writec, compile, link
+export setvectorizationlevel, generate, from_root, writec, compile, link
 import IntelPSE, ..getPackageRoot
 
 #=
@@ -75,14 +75,28 @@ type LambdaGlobalData
 	end
 end
 
+# Auto-vec level - this can be one of:
+# 0 default autovec - icc -O3
+# 1 disable autovec - icc -no-vec
+# 2 force autovec   - icc with #pragma simd
 
+# Wouldn't it be nice if Julia enums actually worked ?
+#@enum veclevel DEFAULT = 0 DISABLE = 1 FORCE = 2
+
+const VECDEFAULT = 0
+const VECDISABLE = 1
+const VECFORCE = 2
 
 # Globals
 # verbose = true
 verbose = false 
 inEntryPoint = false
 lstate = nothing
-#packageroot = nothing
+
+vectorizationlevel = VECDEFAULT
+function setvectorizationlevel(x)
+    global vectorizationlevel = x
+end
 
 function resetLambdaState(l::LambdaGlobalData)
 	empty!(l.ompprivatelist)
@@ -1036,10 +1050,14 @@ function from_insert_divisible_task(args)
 end
 
 function from_loopnest(ivs, starts, stops, steps)
+	vecclause = (vectorizationlevel == VECFORCE) ? "#pragma simd\n" : ""
 	mapfoldl(
-		(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
-		(a, b) -> "$a $b",
-		1:length(ivs))
+        (i) ->
+            (i == length(ivs) ? vecclause : "") *
+            "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+            (a, b) -> "$a $b",
+            1:length(ivs)
+    )
 end
 
 # If the parfor body is too complicated then DIR or PIR will set
@@ -1406,9 +1424,13 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	global inEntryPoint
 	inEntryPoint = isEntryPoint
 	global lstate
+	emitunaliasedroots = false
 	if isEntryPoint
 		#adp = ASTDispatcher()
 		lstate = LambdaGlobalData()
+		# If we are forcing vectorization then we wont emit the unaliased versions
+        # of the roots
+		emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 	end
 	debugp("Ast = ", ast)
 	verbose && debugp("Starting processing for $ast")
@@ -1418,9 +1440,15 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	debugp("Processing body: ", bod)
 	returnType = bod.typ
 	typ = returnType
+
+	# Translate the body
 	bod = from_expr(ast)
+
+	# Translate arguments
 	args = from_formalargs(params)
-	argsunal = from_formalargs(params, true)
+
+	# If emitting unaliased versions, get "restrict"ed decls for arguments
+	argsunal = emitunaliasedroots ? from_formalargs(params, true) : ""
 	dumpSymbolTable(lstate.symboltable)
 	hdr = ""
 	wrapper = ""
@@ -1428,9 +1456,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		returnType = (returnType,)
 	end
 	hdr = from_header(isEntryPoint)
+
+	# Create an entry point that will be called by the Julia code.
 	if isEntryPoint
-		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
-		createEntryPointWrapper(functionName, params, args, returnType)
+		wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
 		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
@@ -1446,7 +1475,8 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
 		rtyp = toCtype(typ)
 	end
-	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
+	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+	s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
 	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
 	if inEntryPoint
 		inEntryPoint = false
@@ -1458,64 +1488,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	end	
 	c
 end
-
-
-function from_root_dist(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
-	global inEntryPoint
-	inEntryPoint = isEntryPoint
-	global lstate
-	if isEntryPoint
-		#adp = ASTDispatcher()
-		lstate = LambdaGlobalData()
-	end
-	debugp("Ast = ", ast)
-	verbose && debugp("Starting processing for $ast")
-	params	=	ast.args[1]
-	env		=	ast.args[2]
-	bod		=	ast.args[3]
-	debugp("Processing body: ", bod)
-	returnType = bod.typ
-	typ = returnType
-	bod = from_expr(ast)
-	args = from_formalargs(params)
-	argsunal = from_formalargs(params, true)
-	dumpSymbolTable(lstate.symboltable)
-	hdr = ""
-	wrapper = ""
-	if !isa(returnType, Tuple)
-		returnType = (returnType,)
-	end
-	hdr = from_header(isEntryPoint)
-	if isEntryPoint
-		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) 
-		rtyp = "void"
-		retargs = foldl((a, b) -> "$a, $b",
-		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
-
-		if length(args) > 0
-			args *= ", " * retargs
-			argsunal *= ", "*retargs
-		else
-			args = retargs
-			argsunal = retargs
-		end
-	else
-
-		rtyp = toCtype(typ)
-	end
-	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
-	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
-	if inEntryPoint
-		inEntryPoint = false
-	end
-	push!(lstate.compiledfunctions, functionName)
-	c = hdr * forwarddecl * from_worklist() * s * wrapper
-	if isEntryPoint
-		resetLambdaState(lstate)
-	end	
-	c
-end
-
 
 function insert(func::Symbol, mod::Any, name, typs)
 	if mod == ""
@@ -1597,10 +1569,11 @@ function compile()
 	run(beautifyCommand)
 
 	iccOpts = "-O3"
+	vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
 	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
+	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
