@@ -88,7 +88,7 @@ const VECDISABLE = 1
 const VECFORCE = 2
 
 # Globals
-# verbose = true
+#verbose = true
 verbose = false 
 inEntryPoint = false
 lstate = nothing
@@ -142,8 +142,8 @@ tokenXlate = Dict(
 	'.' => "dot"
 )
 
-replacedTokens = Set("(,)#")
-scrubbedTokens = Set("{}:")
+replacedTokens = Set(",#")
+scrubbedTokens = Set("({}):")
 
 #### End of globals ####
 
@@ -274,7 +274,8 @@ function from_lambda(ast, args)
 	debugp("Emitting gensyms")
 	for k in 1:length(gensyms)
 		debugp("gensym: ", k, " is of type: ", gensyms[k])
-		lstate.symboltable["GenSym" * string(k-1)] = gensyms[k]
+		#lstate.symboltable["GenSym(" * string(k-1) * ")"] = gensyms[k]
+		lstate.symboltable[GenSym(k-1)] = gensyms[k]
 	end
 	debugp("Done with ompvars")
 	bod = from_expr(args[3])
@@ -338,6 +339,7 @@ function typeAvailable(a)
 end
 
 function from_assignment(args::Array)
+	global lstate
 	lhs = args[1]
 	rhs = args[2]
 	lhsO = from_expr(lhs)
@@ -357,6 +359,7 @@ function from_assignment(args::Array)
 			throw("FATAL error....exiting")
 		end
 	end
+	debugp("After assignment, type of", lhsO, " is ", lstate.symboltable[lhs])
 	lhsO * " = " * rhsO
 end
 
@@ -1054,7 +1057,7 @@ function from_loopnest(ivs, starts, stops, steps)
 	mapfoldl(
         (i) ->
             (i == length(ivs) ? vecclause : "") *
-            "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+            "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= (int64_t)$(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
             (a, b) -> "$a $b",
             1:length(ivs)
     )
@@ -1115,6 +1118,10 @@ function from_parforstart(args)
 
 	# Check if there are private vars and emit the |private| clause
 	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	debugp("Private Vars: ")
+	debugp("-----")
+	debugp(private_vars)
+	debugp("-----")
 	privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
 
 	
