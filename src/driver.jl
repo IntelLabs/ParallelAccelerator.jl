@@ -173,6 +173,11 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   end
   start_time = time_ns()
 
+  bt = backtrace() ;
+  s = sprint(io->Base.show_backtrace(io, bt))
+  dprintln(3, "offload backtrace ")
+  dprintln(3, s)
+
   dprintln(2, "Starting offload for ", function_name, " with signature ", signature)
   if !isgeneric(function_name)
     dprintln(1, "method ", function_name, " is not generic.")
