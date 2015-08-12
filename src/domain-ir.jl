@@ -1069,19 +1069,28 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       assert(length(args) == 2)
       args = normalize_args(state, env_, args)
       typ = typeOfOpr(state, args[1])
-      if !isinttyp(typ)
-        error("Unhandled bound in checkbounds: ", args[1])
-      end
-      if isinttyp(typeOfOpr(state, args[2]))
-        expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
-                                      mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
-      elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
-        def = lookupConstDefForArg(state, args[2])
-        (start, step, final) = from_range(def)
-        expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
-                                      mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
+      if isarray(typ)
+        typ_second_arg = typeOfOpr(state, args[2])
+        if isarray(typ_second_arg) || isbitarray(typ_second_arg)
+          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
+        else
+          dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
+          error("Unhandled bound in checkbounds: ", args[2])
+        end
+      elseif isinttyp(typ)
+        if isinttyp(typeOfOpr(state, args[2]))
+          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
+                                        mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
+        elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
+          def = lookupConstDefForArg(state, args[2])
+          (start, step, final) = from_range(def)
+          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
+                                        mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
+        else
+          error("Unhandled bound in checkbounds: ", args[2])
+        end
       else
-        error("Unhandled bound in checkbounds: ", args[2])
+        error("Unhandled bound in checkbounds: ", args[1])
       end
     elseif is(fun, :sitofp)
       typ = args[1]
@@ -1201,6 +1210,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
     elseif in(fun, ignoreSet)
     else
       args_typ = map(x -> typeOfOpr(state, x), args)
+      dprintln(3,"args = ", args, " args_typ = ", args_typ)
       if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
         dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
         _offload(getfield(env.cur_module, fun), tuple(args_typ...))
@@ -1541,6 +1551,12 @@ function dir_live_cb(ast, cbdata)
       expr_to_process = Any[]
       push!(expr_to_process, symbol_or_gensym(args[1]))
       push!(expr_to_process, symbol_or_gensym(args[2]))
+      return expr_to_process
+    elseif head == :assert
+      expr_to_process = Any[]
+      for i = 1:length(args)
+          push!(expr_to_process, args[i])
+      end
       return expr_to_process
     elseif head == :select
       expr_to_process = Any[]
