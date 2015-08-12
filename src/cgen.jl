@@ -5,7 +5,7 @@
 module cgen
 using ..ParallelIR
 using CompilerTools
-export generate, from_root, writec, compile, link
+export setvectorizationlevel, generate, from_root, writec, compile, link
 import IntelPSE, ..getPackageRoot
 
 #=
@@ -75,14 +75,28 @@ type LambdaGlobalData
 	end
 end
 
+# Auto-vec level. These determine what vectorization
+# flags are emitted in the code or passed to icc. These
+# levels are one of:
 
+# 0: default autovec - icc 
+# 1: disable autovec - icc -no-vec
+# 2: force autovec   - icc with #pragma simd at OpenMP loops
+
+const VECDEFAULT = 0
+const VECDISABLE = 1
+const VECFORCE = 2
 
 # Globals
-# verbose = true
+#verbose = true
 verbose = false 
 inEntryPoint = false
 lstate = nothing
-#packageroot = nothing
+
+vectorizationlevel = VECDEFAULT
+function setvectorizationlevel(x)
+    global vectorizationlevel = x
+end
 
 function resetLambdaState(l::LambdaGlobalData)
 	empty!(l.ompprivatelist)
@@ -128,10 +142,33 @@ tokenXlate = Dict(
 	'.' => "dot"
 )
 
-replacedTokens = Set("(,)#")
-scrubbedTokens = Set("{}:")
+replacedTokens = Set(",#")
+scrubbedTokens = Set("({}):")
+
+file_counter = -1
 
 #### End of globals ####
+
+function generate_new_file_name()
+    global file_counter
+    file_counter += 1
+    return "cgen_output$file_counter"
+end
+
+function cleanup_generated_files()
+    package_root = getPackageRoot()
+    # TODO: Check debug level and save generated files
+    if false
+        for file in readdir("$package_root/deps/generated")
+            if file == ".gitignore"
+                continue
+            end
+            rm("$package_root/deps/generated/$file")
+        end
+    end
+end
+
+atexit(cleanup_generated_files)
 
 function __init__()
 	packageroot = joinpath(dirname(@__FILE__), "..")
@@ -159,10 +196,10 @@ function from_includes()
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
 		"#include <iostream>\n",
-		"#include \"$packageroot/src/intel-runtime/include/pse-runtime.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/j2c-array.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/j2c-array-pert.h\"\n",
-		"#include \"$packageroot/src/intel-runtime/include/pse-types.h\"\n")
+		"#include \"$packageroot/deps/include/pse-runtime.h\"\n",
+		"#include \"$packageroot/deps/include/j2c-array.h\"\n",
+		"#include \"$packageroot/deps/include/j2c-array-pert.h\"\n",
+		"#include \"$packageroot/deps/include/pse-types.h\"\n")
 	)
 end
 
@@ -239,50 +276,6 @@ function isCompositeType(t)
 	b
 end
 
-function from_lambda_old(args)
-	s = ""
-	params	=	length(args) != 0 ? args[1] : []
-	env		=	length(args) >=2 ? args[2] : []
-	locals	=	length(env) > 0 ? env[1] : []
-	vars	=	length(env) >=2 ? env[2] : []
-	typ		=	length(env) >= 4 ? env[4] : []
-	decls = ""
-	debugp("locals are: ", locals)
-	debugp("vars are: ", vars)
-	debugp("Typ is ", typ)
-	global lstate
-	debugp("ompPrivateList is: ", lstate.ompprivatelist)
-	for k in 1:length(vars)
-		v = vars[k]
-		lstate.symboltable[v[1]] = v[2]
-		# If we have user defined types, record them
-		if in(v[1], locals) && (v[3] & 32 != 0)
-			push!(lstate.ompprivatelist, v[1])
-		end 
-	end
-	debugp("Done with ompvars")
-	bod = from_expr(args[3])
-	debugp("lambda locals = ", locals)
-	debugp("lambda params = ", params)
-	debugp("symboltable here = ")
-	dumpSymbolTable(lstate.symboltable)
-	
-	for k in keys(lstate.symboltable)
-		if (has(locals, k) && !has(params, k)) || (!has(locals, k) && !has(params, k))
-			debugp("About to check for composite type: ", lstate.symboltable[k])
-			if isCompositeType(lstate.symboltable[k])
-				#globalUDTs, from_decl(_symbolTable[k])
-				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-					lstate.globalUDTs[lstate.symboltable[k]] = 1
-				end
-			end
-			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-			#end
-		end
-	end
-	decls * bod
-end
-
 function from_lambda(ast, args)
 	s = ""
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
@@ -304,7 +297,7 @@ function from_lambda(ast, args)
 	debugp("Emitting gensyms")
 	for k in 1:length(gensyms)
 		debugp("gensym: ", k, " is of type: ", gensyms[k])
-		lstate.symboltable["GenSym" * string(k-1)] = gensyms[k]
+		lstate.symboltable[GenSym(k-1)] = gensyms[k]
 	end
 	debugp("Done with ompvars")
 	bod = from_expr(args[3])
@@ -368,6 +361,7 @@ function typeAvailable(a)
 end
 
 function from_assignment(args::Array)
+	global lstate
 	lhs = args[1]
 	rhs = args[2]
 	lhsO = from_expr(lhs)
@@ -707,6 +701,8 @@ function from_intrinsic(f, args)
 		return from_expr(args[1]) * " < " * from_expr(args[2])
 	elseif intr == "sle_int"
 		return from_expr(args[1]) * " <= " * from_expr(args[2])
+	elseif intr == "srem_int"
+        return from_expr(args[1]) * " % " * from_expr(args[2])
 	elseif intr == "select_value"
 		return "(" * from_expr(args[1]) * ")" * " ? " *
 		"(" * from_expr(args[2]) * ") : " * "(" * from_expr(args[3]) * ")"
@@ -1080,10 +1076,14 @@ function from_insert_divisible_task(args)
 end
 
 function from_loopnest(ivs, starts, stops, steps)
+	vecclause = (vectorizationlevel == VECFORCE) ? "#pragma simd\n" : ""
 	mapfoldl(
-		(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
-		(a, b) -> "$a $b",
-		1:length(ivs))
+        (i) ->
+            (i == length(ivs) ? vecclause : "") *
+            "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= (int64_t)$(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+            (a, b) -> "$a $b",
+            1:length(ivs)
+    )
 end
 
 # If the parfor body is too complicated then DIR or PIR will set
@@ -1098,7 +1098,7 @@ function from_parforstart(args)
 	global lstate
 	num_threads_mode = ParallelIR.num_threads_mode
 
-	println("args: ",args);
+	debugp("args: ",args);
 
 	parfor = args[1]
 	lpNests = parfor.loopNests
@@ -1110,10 +1110,10 @@ function from_parforstart(args)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
 
-	println("ivs ",ivs);
-	println("starts ", starts);
-	println("stops ", stops);
-	println("steps ", steps);
+	debugp("ivs ",ivs);
+	debugp("starts ", starts);
+	debugp("stops ", stops);
+	debugp("steps ", steps);
 
 	loopheaders = from_loopnest(ivs, starts, stops, steps)
 
@@ -1141,6 +1141,10 @@ function from_parforstart(args)
 
 	# Check if there are private vars and emit the |private| clause
 	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
+	debugp("Private Vars: ")
+	debugp("-----")
+	debugp(private_vars)
+	debugp("-----")
 	privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
 
 	
@@ -1450,9 +1454,13 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	global inEntryPoint
 	inEntryPoint = isEntryPoint
 	global lstate
+	emitunaliasedroots = false
 	if isEntryPoint
 		#adp = ASTDispatcher()
 		lstate = LambdaGlobalData()
+		# If we are forcing vectorization then we wont emit the unaliased versions
+        # of the roots
+		emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 	end
 	debugp("Ast = ", ast)
 	verbose && debugp("Starting processing for $ast")
@@ -1462,9 +1470,15 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	debugp("Processing body: ", bod)
 	returnType = bod.typ
 	typ = returnType
+
+	# Translate the body
 	bod = from_expr(ast)
+
+	# Translate arguments
 	args = from_formalargs(params)
-	argsunal = from_formalargs(params, true)
+
+	# If emitting unaliased versions, get "restrict"ed decls for arguments
+	argsunal = emitunaliasedroots ? from_formalargs(params, true) : ""
 	dumpSymbolTable(lstate.symboltable)
 	hdr = ""
 	wrapper = ""
@@ -1472,9 +1486,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		returnType = (returnType,)
 	end
 	hdr = from_header(isEntryPoint)
+
+	# Create an entry point that will be called by the Julia code.
 	if isEntryPoint
-		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) * 
-		createEntryPointWrapper(functionName, params, args, returnType)
+		wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType)
 		rtyp = "void"
 		retargs = foldl((a, b) -> "$a, $b",
 		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
@@ -1490,7 +1505,8 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
 		rtyp = toCtype(typ)
 	end
-	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
+	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+	s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
 	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
 	if inEntryPoint
 		inEntryPoint = false
@@ -1502,64 +1518,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	end	
 	c
 end
-
-
-function from_root_dist(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
-	global inEntryPoint
-	inEntryPoint = isEntryPoint
-	global lstate
-	if isEntryPoint
-		#adp = ASTDispatcher()
-		lstate = LambdaGlobalData()
-	end
-	debugp("Ast = ", ast)
-	verbose && debugp("Starting processing for $ast")
-	params	=	ast.args[1]
-	env		=	ast.args[2]
-	bod		=	ast.args[3]
-	debugp("Processing body: ", bod)
-	returnType = bod.typ
-	typ = returnType
-	bod = from_expr(ast)
-	args = from_formalargs(params)
-	argsunal = from_formalargs(params, true)
-	dumpSymbolTable(lstate.symboltable)
-	hdr = ""
-	wrapper = ""
-	if !isa(returnType, Tuple)
-		returnType = (returnType,)
-	end
-	hdr = from_header(isEntryPoint)
-	if isEntryPoint
-		wrapper = createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) 
-		rtyp = "void"
-		retargs = foldl((a, b) -> "$a, $b",
-		[toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
-
-		if length(args) > 0
-			args *= ", " * retargs
-			argsunal *= ", "*retargs
-		else
-			args = retargs
-			argsunal = retargs
-		end
-	else
-
-		rtyp = toCtype(typ)
-	end
-	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n" * (isEntryPoint ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : "")
-	forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
-	if inEntryPoint
-		inEntryPoint = false
-	end
-	push!(lstate.compiledfunctions, functionName)
-	c = hdr * forwarddecl * from_worklist() * s * wrapper
-	if isEntryPoint
-		resetLambdaState(lstate)
-	end	
-	c
-end
-
 
 function insert(func::Symbol, mod::Any, name, typs)
 	if mod == ""
@@ -1591,7 +1549,6 @@ function from_worklist()
 	si = ""
 	global lstate
 	while !isempty(lstate.worklist)
-		#a, fname, typs = pop!(lstate.worklist)
 		a, fname, typs = splice!(lstate.worklist, 1)
 		debugp("Checking if we compiled ", fname, " before")
 		debugp(lstate.compiledfunctions)
@@ -1621,39 +1578,44 @@ function from_worklist()
 	s
 end
 import Base.write
-function writec(s)
-	packageroot = getPackageRoot()
-	cgenOutput = "$packageroot/src/intel-runtime/tmp.cpp"
-	cf = open(cgenOutput, "w")
-	write(cf, s)
-	debugp("Done committing cgen code")
-	close(cf)
+function writec(s, outfile_name=nothing)
+    if outfile_name == nothing
+        outfile_name = generate_new_file_name()
+    end
+    packageroot = getPackageRoot()
+    cgenOutput = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+    cf = open(cgenOutput, "w")
+    write(cf, s)
+    debugp("Done committing cgen code")
+    close(cf)
+    return outfile_name
 end
 
-function compile()
+function compile(outfile_name)
 	packageroot = getPackageRoot()
 	
-	cgenOutputTmp = "$packageroot/src/intel-runtime/tmp.cpp"
-	cgenOutput = "$packageroot/src/intel-runtime/out.cpp"
+	cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+	cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
 
 	# make cpp code readable
 	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
 	run(beautifyCommand)
 
 	iccOpts = "-O3"
+	vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
 	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
 	# Generate dyn_lib
-	#compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $package_root/intel-runtime/out.o $cgenOutput $otherArgs -I$package_root/src/arena_allocator -qoffload-attribute-target=mic`
-	compileCommand = `icc $iccOpts -qopenmp -fpic -c -o $packageroot/src/intel-runtime/out.o $cgenOutput $otherArgs`
+	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/deps/generated/$outfile_name.o $cgenOutput $otherArgs`
 	run(compileCommand)	
 end
 
-function link()
-	packageroot = getPackageRoot()
-	#linkCommand = `icc -shared -Wl,-soname,libout.so.1 -o $package_root/src/intel-runtime/libout.so.1.0 $package_root/src/intel-runtime/out.o -lc $package_root/src/intel-runtime/lib/libintel-runtime.so`
-	linkCommand = `icc -shared -qopenmp -o $packageroot/src/intel-runtime/libout.so.1.0 $packageroot/src/intel-runtime/out.o`
-	run(linkCommand)
-	debugp("Done cgen linking")
+function link(outfile_name)
+    packageroot = getPackageRoot()
+    lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
+    linkCommand = `icc -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    run(linkCommand)
+    debugp("Done cgen linking")
+    return lib
 end
 
 # When in standalone mode, this is the entry point to cgen

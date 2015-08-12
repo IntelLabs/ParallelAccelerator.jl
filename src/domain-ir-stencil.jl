@@ -27,7 +27,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   local bufSyms = Array(GenSym, narrs)
   local arrSymDict = Dict{Symbol,GenSym}()
   for i in 1:length(arrSyms)
-    if isa(arrSyms[i], Expr) && isa(arrSym[i].head, :(::)) # Expr in the form (x :: t).
+    if isa(arrSyms[i], Expr) && arrSyms[i].head == :(::) # Expr in the form (x :: t).
       arrSyms[i] = arrSyms[i].args[1]
     end
     assert(isa(arrSyms[i], Symbol))
