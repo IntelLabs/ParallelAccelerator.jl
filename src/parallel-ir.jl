@@ -189,7 +189,7 @@ type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
-    private_vars :: Set{SymAllGen}
+    private_vars :: Array{SymAllGen,1}
 end
 
 @doc """
@@ -1522,10 +1522,13 @@ end
 Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
 """
 function getPrivateSet(body :: Array{Any,1})
+  dprintln(3,"getPrivateSet")
+  printBody(3, body)
   private_set = Set{SymAllGen}()
   for i = 1:length(body)
     AstWalk(body[i], getPrivateSetInner, private_set)
   end
+  dprintln(3,"private_set = ", private_set)
   return private_set
 end
 
@@ -1590,7 +1593,7 @@ function from_lambda(lambda :: Expr, depth, state)
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  body = CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, pir_live_cb_def)
+  body = CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, IntelPSE.ParallelIR.AstWalk)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -4635,13 +4638,14 @@ function flattenParfor(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
   dprintln(2,"Flattening ", the_parfor)
 
   private_set = getPrivateSet(the_parfor.body)
+  private_array = collect(private_set)
 
   # Output to the new body that this is the start of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
+  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
   # Output the body of the parfor as top-level statements in the new function body.
   append!(new_body, the_parfor.body)
   # Output to the new body that this is the end of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_set)))
+  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
   nothing
 end
 
@@ -6624,6 +6628,7 @@ function from_expr(function_name, ast::Any, input_arrays)
     dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     dprintln(1,"Finished liveness analysis.", " function = ", function_name)
+    dprintln(3,"lives = ", lives)
   end
 
   dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
@@ -6924,48 +6929,53 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
     if head == :parfor
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.preParFor)
-        #x.args[1].preParFor[i] = AstWalker.get_one(AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata))
-        AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
+        x.args[1].preParFor[i] = AstWalker.get_one(AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata))
+        #AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.loopNests)
+        x.args[1].loopNests[i].indexVariable = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata))
+        # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
         AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].lower = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].upper = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].step = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata))
       end
       for i = 1:length(cur_parfor.reductions)
-        AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionVar = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionVarInit = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionFunc = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata))
       end
       for i = 1:length(cur_parfor.body)
-        AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
+        x.args[1].body[i] = AstWalker.get_one(AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata))
       end
       for i = 1:length(cur_parfor.postParFor)-1
-        AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
+        x.args[1].postParFor[i] = AstWalker.get_one(AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata))
       end
       return [x]
-    elseif head == :parfor_start # || head == :parfor_end
+    elseif head == :parfor_start || head == :parfor_end
+      dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.loopNests)
+        x.args[1].loopNests[i].indexVariable = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata))
         AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].lower = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].upper = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].step = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata))
       end
       for i = 1:length(cur_parfor.reductions)
-        AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-        AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionVar = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionVarInit = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionFunc = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata))
       end
-      return [x]
-    elseif head == :parfor_end
-      # intentionally do nothing
+      #x.args[1].instruction_count_expr = AstWalker.get_one(AstWalk(cur_parfor.instruction_count_expr, dw.callback. dw.cbdata))
+      for i = 1:length(cur_parfor.private_vars)
+        x.args[1].private_vars[i] = AstWalker.get_one(AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata))
+      end
       return [x]
     elseif head == :insert_divisible_task
       cur_task = args[1]
       for i = 1:length(cur_task.args)
-        AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
+        x.args[1].value = AstWalker.get_one(AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata))
       end
       return [x]
     elseif head == :loophead
@@ -6977,8 +6987,8 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
     end
   elseif asttyp == pir_range_actual
     for i = 1:length(x.dim)
-      AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
-      AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
+      x.lower_bounds[i] = AstWalker.get_one(AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata))
+      x.upper_bounds[i] = AstWalker.get_one(AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata))
     end
     return [x]
   end
