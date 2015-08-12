@@ -317,6 +317,8 @@ function from_expr(state, env, ast)
         return NotArray
     elseif is(head, :assertEqShape)
         return NotArray
+    elseif is(head, :assert)
+        return NotArray
     elseif is(head, :tuple)
         return NotArray 
     elseif is(head, :alloc)
