@@ -1072,7 +1072,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       if isarray(typ)
         typ_second_arg = typeOfOpr(state, args[2])
         if isarray(typ_second_arg) || isbitarray(typ_second_arg)
-          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
+          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), deepcopy(args[1])), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), deepcopy(args[2]))))
         else
           dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
           error("Unhandled bound in checkbounds: ", args[2])
