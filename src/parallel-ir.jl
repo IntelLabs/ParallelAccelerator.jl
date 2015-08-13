@@ -980,7 +980,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
+  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
  
   # Make sure that for reduce that the array indices are all of the simple variety
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
@@ -1225,7 +1225,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
+  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
 
   # Make sure that for mmap! that the array indices are all of the simple variety
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
@@ -1452,7 +1452,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   dprintln(3,"out_body = ", out_body)
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, nothing)
+  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
 
   # Make sure that for mmap that the array indices are all of the simple variety
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
@@ -2673,7 +2673,7 @@ function fuse(body, body_index, cur, state)
     push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
 
     # rws
-    prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_live_cb, nothing)
+    prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_live_cb, state.lambdaInfo)
 
     dprintln(3,"New lhs = ", new_lhs)
     if prev_assignment
@@ -3661,7 +3661,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
   fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
   dprintln(3,"fake_body = ", fake_body)
-  new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
+  new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
   dprintln(1,"Starting loop analysis.")
   loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
   dprintln(1,"Finished loop analysis.")
@@ -3669,7 +3669,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   if hoist_allocation == 1
     body = hoistAllocation(body, new_lives, loop_info, state)
     fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
+    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
     dprintln(1,"Starting loop analysis again.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
     dprintln(1,"Finished loop analysis.")
@@ -4218,7 +4218,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
   if shortcut_array_assignment != 0
     fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
+    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
 
     for i = 1:length(body)
       node = body[i]
@@ -4988,10 +4988,12 @@ function pir_live_cb(ast, cbdata)
         push!(expr_to_process, this_parfor.loopNests[i].upper)
         push!(expr_to_process, this_parfor.loopNests[i].step)
       end
-      emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
+      #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
+      #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
+      assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
+      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
 
-      body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, nothing)
+      body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
       live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
       all_defs = Set()
       for bb in body_lives.basic_blocks
@@ -6421,13 +6423,15 @@ function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   dprintln(3,"DomainLambda is:")
   pirPrintDl(3, domain_lambda)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   newLambdaInfo.var_defs = deepcopy(domain_lambda.linfo.var_defs)
   newLambdaInfo.gen_sym_typs = deepcopy(domain_lambda.linfo.gen_sym_typs)
+  newLambdaInfo.escaping_defs = deepcopy(domain_lambda.linfo.escaping_defs)
+  CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   #CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   #CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
   #CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
-  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(domain_lambda.linfo, Expr(:body, stmts...))
+  #ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(domain_lambda.linfo, Expr(:body, stmts...))
+  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
   return (ast, input_arrays) 
 end
 
@@ -6436,7 +6440,8 @@ A routine similar to the main parallel IR entry put but designed to process the 
 domain IR AST nodes.
 """
 function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
-  dprintln(2,"nested_function_exprs called with ", stmts, " of type = ", typeof(stmts))
+  dprintln(2,"nested_function_exprs max_label = ", max_label, " stmts = ", stmts, " of type = ", typeof(stmts))
+  dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
   if !isa(stmts, Array)
     return stmts
   end
@@ -6504,7 +6509,8 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
     dprintln(1,"Adding statements with no dependencies to the start of the AST.")
-    ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
+    ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
+    #ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
     dprintln(3,"ast after no dep stmts re-inserted = ", ast)
 
     dprintln(1,"Re-starting liveness analysis.")
@@ -6530,6 +6536,14 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
   (new_vars.max_label, ast, ast.args[3].args)
 end
 
+function addStatementsToBeginning(lambda :: Expr, stmts :: Array{Any,1})
+  assert(lambda.head == :lambda)
+  assert(typeof(lambda.args[3]) == Expr)
+  assert(lambda.args[3].head == :body)
+  lambda.args[3].args = [stmts; lambda.args[3].args]
+  return lambda
+end
+
 doRemoveAssertEqShape = true
 generalSimplification = true
 
@@ -6545,8 +6559,7 @@ The main ENTRY point into ParallelIR.
    b) Fuse parallel IR nodes where possible.
    c) Convert to task IR nodes if task mode enabled.
 """
-function from_expr(function_name, ast::Any, input_arrays)
-  assert(typeof(ast) == Expr)
+function from_expr(function_name, ast :: Expr, input_arrays)
   assert(ast.head == :lambda)
   dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast, " input_arrays = ", input_arrays)
 
@@ -6585,7 +6598,6 @@ function from_expr(function_name, ast::Any, input_arrays)
     uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
     mmapToMmap!(ast, lives, uniqSet)
     dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
-#    dprintln(3, "AST = ", ast)
     printLambda(3, ast)
   end
 
@@ -6603,7 +6615,7 @@ function from_expr(function_name, ast::Any, input_arrays)
   end
   dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
-  # find out max_label
+  # Find out max_label
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
   max_label = getMaxLabel(0, body.args)
@@ -6621,7 +6633,8 @@ function from_expr(function_name, ast::Any, input_arrays)
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
     dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
-    ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
+#    ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
+    ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
     dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
     printLambda(3, ast)
 
