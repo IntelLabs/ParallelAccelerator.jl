@@ -120,7 +120,7 @@ end
 function decompose(ast)
   julia_root   = ENV("JULIA_ROOT")
   # Strip trailing /
-  len_root     = endof(julia_root)
+  len_root     = length(julia_root)
   if(julia_root[len_root] == '/')
     julia_root = julia_root[1:len_root-1]
   end
