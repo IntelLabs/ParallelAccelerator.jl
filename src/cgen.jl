@@ -88,8 +88,8 @@ const VECDISABLE = 1
 const VECFORCE = 2
 
 # Globals
-#verbose = true
-verbose = false 
+verbose = true
+#verbose = false 
 inEntryPoint = false
 lstate = nothing
 
@@ -205,14 +205,11 @@ end
 
 function from_UDTs()
 	global lstate
-	debugp("UDT Table is: ")
-	debugp(lstate.globalUDTs)
 	isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
 end
 
 
 function from_decl(k::Tuple)
-	debugp("from_decl: Defining tuple type ", k)
 	s = "typedef struct {\n"
 	for i in 1:length(k)
 		s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
@@ -225,7 +222,6 @@ function from_decl(k::Tuple)
 end
 
 function from_decl(k::DataType)
-	debugp("from_decl: Defining data type ", k)
 	if is(k, UnitRange{Int64})
 		if haskey(lstate.globalUDTs, k)
 			lstate.globalUDTs[k] = 0
@@ -264,7 +260,6 @@ function from_decl(k::DataType)
 end
 
 function from_decl(k)
-	debugp("from_decl: Defining type ", k)
 	return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 end
 
@@ -272,7 +267,7 @@ function isCompositeType(t)
 	# TODO: Expand this to real UDTs
 	b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
 	b |= isa(t, DataType) && t.name == Tuple.name
-	debugp("Is ", t, " a composite type: ", b)
+	#debugp("Is ", t, " a composite type: ", b)
 	b
 end
 
@@ -285,7 +280,6 @@ function from_lambda(ast, args)
 
 	decls = ""
 	global lstate
-	debugp("ompPrivateList is: ", lstate.ompprivatelist)
 	for k in keys(vars)
 		v = vars[k] # v is a VarDef
 		lstate.symboltable[k] = v.typ
@@ -294,27 +288,22 @@ function from_lambda(ast, args)
 			push!(lstate.ompprivatelist, k)
 		end 
 	end
-	debugp("Emitting gensyms")
+	
 	for k in 1:length(gensyms)
-		debugp("gensym: ", k, " is of type: ", gensyms[k])
 		lstate.symboltable[GenSym(k-1)] = gensyms[k]
 	end
-	debugp("Done with ompvars")
 	bod = from_expr(args[3])
 	debugp("lambda params = ", params)
 	debugp("lambda vars = ", vars)
-	debugp("symboltable here = ")
 	dumpSymbolTable(lstate.symboltable)
 	
 	for k in keys(lstate.symboltable)
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-			debugp("About to check for composite type: ", lstate.symboltable[k])
 			if isCompositeType(lstate.symboltable[k])
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
 				end
 			end
-			debugp("Adding ", k, " to decls with type ", lstate.symboltable[k]) 
 			decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 		end
 	end
@@ -324,9 +313,7 @@ end
 
 function from_exprs(args::Array)
 	s = ""
-	debugp("[From Exprs] : ", args)
 	for a in args
-		debugp("Doing arg a = ", a)
 		se = from_expr(a)
 		s *= se * (!isempty(se) ? ";\n" : "")
 	end
@@ -401,15 +388,11 @@ function toCtype(typ::Tuple)
 end
 
 function toCtype(typ)
-	debugp("Converting type: ", typ, " to ctype")
 	if haskey(lstate.jtypes, typ)
-		debugp("Found simple type: ", typ, " returning ctype: ", lstate.jtypes[typ])
 		return lstate.jtypes[typ]
 	elseif isArrayType(typ)	
 		atyp, dims = parseArrayType(typ)
-		debugp("Found array type: ", atyp, " with dims: ", dims)
 		atyp = toCtype(atyp)
-		debugp("Atyp is: ", atyp)
 		assert(dims >= 0)
 		return " j2c_array< $(atyp) > "
 	elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
@@ -453,7 +436,6 @@ function parseParametricType(typ)
 end
 
 function parseParametricType_s(typ)
-	debugp("Parsing parametric type: ", typ)
 	assert(isa(typ, DataType))
 	m = split(string(typ), "{"; keep=false)
 	assert(length(m) >= 1)
@@ -465,7 +447,6 @@ function parseParametricType_s(typ)
 	if endswith(last(pTyps), "}")
 		pTyps[length(pTyps)] = chop(last(pTyps))
 	end
-	debugp("Parsed type Base:", baseTyp, " and Parameter:", pTyps[1])
 	return baseTyp, pTyps
 end
 
@@ -516,14 +497,7 @@ function from_setindex(args)
 end
 
 function from_tuple(args)
-	debugp(args)
-	s = "{"
-	for i in 1:length(args)
-		debugp("Arg: ", i, " : ", args[i], " is type ", typeof(args[i])) 
-	end
-	s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}" 
-	debugp("Returning: ", s)
-	s
+	"{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}" 
 end
 
 function from_arraysize(args)
@@ -533,7 +507,6 @@ function from_arraysize(args)
 	else
 		s *= ".ARRAYSIZE(" * from_expr(args[2]) * ")"
 	end
-	debugp("Returning ", s)
 	s
 end
 
@@ -560,18 +533,10 @@ function from_ccall(args)
 	else
 		throw("Invalid ccall format...")
 	end
-	debugp("Length is ", length(args) )
 	s *= "("
-	debugp("Ccall args start: ", round(Int, (length(args)-1)/2)+2)
-	debugp("Ccall args end: ", length(args))
 	numInputs = length(args[3].args)-1
 	argsStart = 4
 	argsEnd = length(args)
-	debugp("Emitting args:")
-	for i in argsStart:2:argsEnd
-		debugp(args[i])
-	end
-	debugp("End of ccall args:")
 	s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
 	s *= ")"
 	debugp("from_ccall: ", s)
@@ -579,7 +544,6 @@ function from_ccall(args)
 end
 
 function from_arrayset(args)
-	debugp("arrayset args are: ", args, length(args))
 	idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end]) 
 	src = from_expr(args[1])
 	val = from_expr(args[2])
@@ -587,7 +551,6 @@ function from_arrayset(args)
 end
 
 function from_getfield(args)
-	debugp("Getfield, args are: ", length(args))
 	mod, tgt = resolveCallTarget(args[1], args[2:end])
 	if mod == "Intrinsics"
 		return from_expr(tgt)
@@ -609,8 +572,15 @@ function from_getfield(args)
 end
 =#
 function from_arrayalloc(args)
+	debugp("Array alloc args:")
+	map((i)->debugp(args[i]), 1:length(args))
+	debugp("----")
+	debugp("Parsing array type: ", args[4])
 	typ, dims = parseArrayType(args[4])
+	debugp("Array alloc typ = ", typ)
+	debugp("Array alloc dims = ", dims)
 	typ = toCtype(typ)
+	debugp("Array alloc after ctype conversion typ = ", typ)
 	shp = []
 	for i in 1:dims
 		push!(shp, from_expr(args[6+(i-1)*2]))
@@ -625,9 +595,6 @@ function from_builtins_comp(f, args)
 end
 
 function from_builtins(f, args)
-	debugp("from_builtins:");
-	debugp("function is: ", f)
-	debugp("Args are: ", args)
 	tgt = string(f)
 	if tgt == "getindex"
 		return from_getindex(args)
@@ -656,8 +623,6 @@ function from_builtins(f, args)
 	elseif tgt == ":jl_alloc_array_2d"
 		return from_arrayalloc(args)
 	elseif tgt == "getfield"
-		debugp("f is: ", f)
-		debugp("args are: ", args)
 		return from_getfield(args)
 	elseif tgt == "unsafe_arrayref"
 		return from_getindex(args) 
@@ -773,14 +738,9 @@ function from_inlineable(f, args)
 end
 
 function isInlineable(f, args)
-	debugp("Checking Isinlineable of function f=", f, " with args = ", args)
-	debugp("String representation of function: ", string(f), " : ", has(_builtins, string(f)))
-	debugp("AST: ", f)
-	debugp("Args = ", args, " length = ", length(args))
 	if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
 		return true
 	end
-	debugp("Typeof: ", typeof(f), " : ", typeof(f) == TopNode ? string(f.name) : "None")
 	return false
 end
 
@@ -830,11 +790,13 @@ function resolveCallTarget(args::Array{Any, 1})
 	M = ""
 	t = ""
 	s = ""
+	#=
 	debugp("Length of args is: ", length(args))
 	for i in 1:length(args)
 		debugp("Resolve: arg ", i , " is ", args[i], " type is: ", typeof(args[i]))
 		debugp("Head is: ", hasfield(args[i], :head) ? args[i].head : "")
 	end
+	=#
 	#case 0:
 	f = args[1]
 	if isa(f, Symbol) && isInlineable(f, args[2:end])
