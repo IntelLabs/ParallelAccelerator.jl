@@ -965,10 +965,12 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       else
         lastExp.head = :tuple
       end
-      dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
-      idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
-      dprintln(2,"cartesianarray idict = ", idict)
-      bodyF(args)=replaceExprWithDict(body, idict).args
+      function bodyF(args)
+        dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+        idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
+        dprintln(2,"cartesianarray idict = ", idict)
+        replaceExprWithDict(body, idict).args
+      end
       domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
       expr = mk_mmap!(tmpNodes, domF, true)
       expr.typ = length(arrtyps) == 1 ? arrtyps[1] : tuple(arrtyps...)
