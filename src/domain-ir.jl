@@ -507,13 +507,17 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
     end
   end
   function mkFun(params)
+    dprintln(2,"mkFun: params = ", params, " j = ", j, " repldict = ", repldict)
+    dprintln(2,"mkFun: bodyf = ", bodyf)
     local myArgs = copy(args)
     assert(length(params)==j)
     local i
     for i=1:j
       myArgs[idx[i]] = params[i]
     end
-    replaceExprWithDict(bodyf(myArgs), repldict)
+    ret = replaceExprWithDict(bodyf(myArgs), repldict)
+    dprintln(2,"mkFun: ret = ", ret)
+    ret
   end
   return (nonarrays, args_[1:j], typs[1:j], mkFun)
 end
@@ -781,7 +785,10 @@ function normalize_callname(state::IRState, env, fun, args)
       callee = lookupConstDefForArg(state, args[1])
       if isa(callee, QuoteNode) && (is(callee.value, :jl_alloc_array_1d) || is(callee.value, :jl_alloc_array_2d) || is(callee.value, :jl_alloc_array_3d))
         local realArgs = Any[]
-        for i = 4:2:length(args)
+        atype = args[4]
+        elemtyp = elmTypOf(atype)
+        push!(realArgs, elemtyp)
+        for i = 6:2:length(args)
           push!(realArgs, args[i])
         end
         fun  = :alloc
@@ -958,7 +965,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       else
         lastExp.head = :tuple
       end
-      bodyF(args)=replaceExprWithDict(body, Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))).args
+      dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+      idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
+      dprintln(2,"cartesianarray idict = ", idict)
+      bodyF(args)=replaceExprWithDict(body, idict).args
       domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
       expr = mk_mmap!(tmpNodes, domF, true)
       expr.typ = length(arrtyps) == 1 ? arrtyps[1] : tuple(arrtyps...)
