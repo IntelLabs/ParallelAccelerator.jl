@@ -966,10 +966,17 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         lastExp.head = :tuple
       end
       function bodyF(args)
+        bt = backtrace() ;
+        s = sprint(io->Base.show_backtrace(io, bt))
+        dprintln(3, "bodyF backtrace ")
+        dprintln(3, s)
+
         dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
         dprintln(2,"cartesianarray idict = ", idict)
-        replaceExprWithDict(body, idict).args
+        ret = replaceExprWithDict(body, idict).args
+        dprintln(2,"cartesianarray ret = ", ret)
+        ret
       end
       domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
       expr = mk_mmap!(tmpNodes, domF, true)
@@ -1037,17 +1044,23 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       expr = mk_copy(args[1])
       expr.typ = typ
     elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
-      dprintln(env, " args = ", args)
-      typ1 = typeOfOpr(state, args[1])
+      dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
+      a1 = args[1]
+      if typeof(a1) == GlobalRef
+        a1 = eval(a1)
+      end
+      typ1 = typeOfOpr(state, a1)
       if is(fun, :fptrunc)
-        if is(args[1], :Float32) typ1 = Float32
-        elseif is(args[1], :Float64) typ1 = Float64
-        else throw(string("unknown target type for fptrunc: ", typ1))
+        if     is(a1, Float32) typ1 = Float32
+        elseif is(a1, Float64) typ1 = Float64
+        else throw(string("unknown target type for fptrunc: ", typ1, " args[1] = ", args[1]))
         end
       elseif is(fun, :fpsiround)
-        if is(typ1, Float32) typ1 = Int32
-        elseif is(typ1, Float64) typ1 = Int64
-        else throw(string("unknown target type for fpsiround: ", typ1))
+        if     is(a1, Float32) typ1 = Int32
+        elseif is(a1, Float64) typ1 = Int64
+#        if is(typ1, Float32) typ1 = Int32
+#        elseif is(typ1, Float64) typ1 = Int64
+        else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
         end
       end
       dprintln(env,"fix type ", typ, " => ", typ1)
