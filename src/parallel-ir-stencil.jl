@@ -90,14 +90,15 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # warn(string("last return=", bodyExpr[end]))
   if bodyExpr[end].args[1] != nothing
     rets = bodyExpr[end].args
+    dprintln(3,"bodyExpr[end].args = ", rets)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(rets[i].typ, :(=), toSymGen(tmpBufs[i]), rets[i]))
-      push!(revertExpr, TypedExpr(rets[i].typ, :(=), toSymGen(tmpBufs[i]), bufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), rets[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), bufs[i]))
     end
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(tmpBufs[i].typ, :(=), toSymGen(bufs[i]), tmpBufs[i]))
-      push!(revertExpr, TypedExpr(tmpBufs[i].typ, :(=), toSymGen(rets[i]), tmpBufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toSymGen(bufs[i]), tmpBufs[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toSymGen(rets[i]), tmpBufs[i]))
     end
   end
   bodyExpr = bodyExpr[1:end-1]
@@ -191,6 +192,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     get_unique_num(), 
     false)
   gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
-  expr = CompilerTools.LambdaHandling.replaceExprWithDict(expr, gensym_map)   
+  expr = CompilerTools.LambdaHandling.replaceExprWithDict(expr, gensym_map, IntelPSE.ParallelIR.AstWalk) 
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end
