@@ -3161,8 +3161,9 @@ function call_instruction_count(args, state, debug_level)
   func  = args[1]
   fargs = args[2:end]
 
+  dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
   sig_expr = Expr(:tuple)
-  sig_expr.args = map(x -> DomainIR.typeOfOpr(x), fargs)
+  sig_expr.args = map(x -> DomainIR.typeOfOpr(state.lambdaInfo, x), fargs)
   signature = eval(sig_expr)
   fs = (func, signature)
 
