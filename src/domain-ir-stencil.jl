@@ -141,6 +141,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
   end 
   krnExpr = expr
   assert(stat != ())            # check if stat is indeed created
+
   # The genBody function returns the kernel computation.
   # It is supposed to be part of DomainLambda, and will have
   # to make fresh local variables (idxSym, strideSym, bufSym, etc)
@@ -153,8 +154,14 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
     local strideDict = Dict{SymGen, Any}(zip(stat.strideSym, strideSymNodes))
     local bufDict = Dict{SymGen, Any}(zip(bufSyms, bufSymNodes))
     local dict = merge(bufDict, idxDict, strideDict)
+    dprintln(3,"stencil genBody")
+    dprintln(3,"idxDict = ", idxDict)
+    dprintln(3,"strideDict = ", strideDict)
+    dprintln(3,"bufDict = ", bufDict)
+    dprintln(3,"dict = ", dict)
+    dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
+    CompilerTools.LambdaHandling.replaceExprWithDict(deepcopy(krnExpr), dict)
   end
   # Remove those with no definition from locals as a sanity cleanup.
   # Note that among those removed are the input arguments, but this
