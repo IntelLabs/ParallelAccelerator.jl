@@ -180,6 +180,24 @@ type PIRParForAst
 end
 
 @doc """
+Not currently used but might need it at some point.
+Search a whole PIRParForAst object and replace one SymAllGen with another.
+"""
+function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
+    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.body, gensym_map)
+    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.preParFor, gensym_map)
+    for i = 1:length(parfor.loopNests)
+        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].lower, gensym_map)
+        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].upper, gensym_map)
+        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].step, gensym_map)
+    end
+    for i = 1:length(parfor.reductions)
+        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.reductions[i].reductionVarInit, gensym_map)
+    end
+    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.postParFor, gensym_map)
+end
+
+@doc """
 After lowering, it is necessary to make the parfor body top-level statements so that basic blocks
 can be correctly identified and labels correctly found.  There is a phase in parallel IR where we 
 take a PIRParForAst node and split it into a parfor_start node followed by the body as top-level
@@ -1187,6 +1205,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(3,"indexed_arrays = ", indexed_arrays)
   dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
   dprintln(3,"dl_inputs = ", dl_inputs)
+  dprintln(3,"genBody = ", dl.genBody)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
