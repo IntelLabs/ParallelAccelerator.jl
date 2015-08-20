@@ -3124,6 +3124,7 @@ end
 type eic_state
   non_calls      :: Float64    # estimated instruction count for non-calls
   fully_analyzed :: Bool
+  lambdaInfo     :: CompilerTools.LambdaHandling.LambdaInfo
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3157,7 +3158,7 @@ call_costs[(:erf,(Float64,))] = 75.0
 @doc """
 Generate an instruction count estimate for a call instruction.
 """
-function call_instruction_count(args, state, debug_level)
+function call_instruction_count(args, state :: eic_state, debug_level)
   func  = args[1]
   fargs = args[2:end]
 
@@ -3265,7 +3266,7 @@ end
 @doc """
 AstWalk callback for estimating the instruction count.
 """
-function estimateInstrCount(ast, state, top_level_number, is_top_level, read)
+function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_level, read)
   debug_level = 2
 
   asttyp = typeof(ast)
@@ -3417,10 +3418,10 @@ end
 @doc """
 Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.
 """
-function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
+function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst, state :: expr_state)
   if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
     dprintln(2,"instruction count estimate for parfor = ", the_parfor)
-    state = eic_state(0, true)
+    state = eic_state(0, true, state.lambdaInfo)
     for i = 1:length(the_parfor.body)
       AstWalk(the_parfor.body[i], estimateInstrCount, state)
     end
@@ -3650,7 +3651,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
       end
       the_parfor.postParFor = Any[]
       push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor)
+      createInstructionCountEstimate(the_parfor, state)
     elseif isBareParfor(body[i])
       rhs = body[i]
       the_parfor = rhs.args[1]
@@ -3666,7 +3667,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
       the_parfor.postParFor = Any[]
       push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor)
+      createInstructionCountEstimate(the_parfor, state)
     else
       push!(expanded_body, body[i])
     end
