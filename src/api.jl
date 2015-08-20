@@ -44,6 +44,11 @@ end
 function cartesianarray(body, T, ndims)
   a = Array(T, ndims...)
   cartesianmap((idx...) -> a[idx...] = body(idx...), ndims)
+
+#  for I in CartesianRange(ndims)
+#    a[I.I...] = body(I.I...)
+#  end
+
   a
 end
 
@@ -55,6 +60,13 @@ function cartesianarray(body, T1, T2, ndims)
       a[idx...] = u
       b[idx...] = v
   end
+
+#  for I in CartesianRange(ndims)
+#    (u, v) = body(I.I...)
+#      a[I.I...] = u
+#      b[I.I...] = v
+#  end
+
   return a, b
 end
 
@@ -68,6 +80,14 @@ function cartesianarray(body, T1, T2, T3, ndims)
       b[idx...] = v
       c[idx...] = w
   end
+
+#  for I in CartesianRange(ndims)
+#    (u, v, w) = body(I.I...)
+#      a[I.I...] = u
+#      b[I.I...] = v
+#      c[I.I...] = w
+#  end
+
   return a, b, c
 end
 
