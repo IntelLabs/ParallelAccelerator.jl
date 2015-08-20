@@ -3062,6 +3062,12 @@ function PIRLimitTask(x)
   global limit_task = x
 end
 
+# These two functions are just to maintain the interface with the old PSE system for the moment.
+function PIRFlatParfor(x)
+end
+function PIRPreEq(x)
+end
+
 pir_stop = 0
 function PIRStop(x)
   global pir_stop = x
