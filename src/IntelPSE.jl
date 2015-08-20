@@ -2,6 +2,12 @@ module IntelPSE
 
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
+import Base.deepcopy_internal
+
+@doc """
+Overload deepcopy_internal() to just return a Module instead of trying to duplicate it.
+"""
+deepcopy_internal(x :: Module, stackdict::ObjectIdDict) = x
 
 #######################################################################
 # Constants and functions below this line are not exported, and should 
@@ -74,37 +80,54 @@ function getTaskMode()
   end
 end
 
+@doc """
+Generate a file path to the directory above the one containing this source file.
+This should be the root of the package.
+"""
 function getPackageRoot()
   joinpath(dirname(@__FILE__), "..")
 end
 
+@doc """
+Called when the package is loaded to do initialization.
+"""
 function __init__()
     package_root = getPackageRoot()
     @linux_only ld_env_key = "LD_LIBRARY_PATH"
     @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
     prefix = ""
+    # See if the LD_LIBRARY_PATH environment varible is already set.
     if haskey(ENV, ld_env_key)
+        # Prepare the current value to have a new path added to it.
         prefix = ENV[ld_env_key] * ":"
     end
+    # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 end
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
 
+@doc """
+Set the verbose of debugging print messages from this module.
+"""
 function set_debug_level(x)
     global DEBUG_LVL = x
 end
 
-# A debug print routine.
-function dprint(level,msgs...)
+@doc """
+Print a debug message if specified debug level is greater than or equal to this particular message's level.
+"""
+function dprint(level, msgs...)
     if(DEBUG_LVL >= level)
         print(msgs...)
     end
 end
 
-# A debug print routine.
-function dprintln(level,msgs...)
+@doc """
+Print a debug message if specified debug level is greater than or equal to this particular message's level.
+"""
+function dprintln(level, msgs...)
     if(DEBUG_LVL >= level)
         println(msgs...)
     end
@@ -125,7 +148,6 @@ include("callgraph.jl")
 # The following are intel-runtime specific
 include("pert.jl")
 include("pse-ld.jl")
-#
 include("driver.jl")
 
 importall .API
