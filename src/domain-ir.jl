@@ -144,6 +144,11 @@ type DomainLambda
   outputs :: Array{Type, 1}
   genBody :: Function
   linfo   :: LambdaInfo
+
+  function DomainLambda(i, o, gb, li)
+    licopy = deepcopy(li)
+    new(i, o, gb, licopy)
+  end
 end
 
 function arraySwap(arr, i, j)
