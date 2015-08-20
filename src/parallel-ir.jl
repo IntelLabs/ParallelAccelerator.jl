@@ -3074,9 +3074,6 @@ end
 
 num_threads_mode = 0
 function PIRNumThreadsMode(x)
-  if num_threads_mode != x
-    ccall(:set_j2c_num_threads_mode, Void, (Cint,), x)
-  end
   global num_threads_mode = x
 end
 
