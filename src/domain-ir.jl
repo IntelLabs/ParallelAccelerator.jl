@@ -520,7 +520,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
     for i=1:j
       myArgs[idx[i]] = params[i]
     end
-    ret = replaceExprWithDict(bodyf(myArgs), repldict)
+    ret = replaceExprWithDict(deepcopy(bodyf(myArgs)), repldict)
     dprintln(2,"mkFun: ret = ", ret)
     ret
   end
@@ -979,7 +979,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
         dprintln(2,"cartesianarray idict = ", idict)
-        ret = replaceExprWithDict(body, idict).args
+        ret = replaceExprWithDict(deepcopy(body), idict).args
         dprintln(2,"cartesianarray ret = ", ret)
         ret
       end
