@@ -94,10 +94,14 @@ inEntryPoint = false
 lstate = nothing
 
 vectorizationlevel = VECDEFAULT
+# Set what flags pertaining to vectorization to pass to the
+# C++ compiler.
 function setvectorizationlevel(x)
     global vectorizationlevel = x
 end
 
+# Reset and reuse the LambdaGlobalData object across function
+# frames
 function resetLambdaState(l::LambdaGlobalData)
 	empty!(l.ompprivatelist)
 	empty!(l.globalUDTs)
@@ -183,6 +187,7 @@ function getenv(var::String)
   ENV[var]
 end
 
+# Emit declarations and "include" directives
 function from_header(isEntryPoint::Bool)
 	s = from_UDTs()
 	isEntryPoint ? from_includes() * s : s
@@ -203,12 +208,14 @@ function from_includes()
 	)
 end
 
+# Iterate over all the user defined types (UDTs) in a function
+# and emit a C++ type declaration for each
 function from_UDTs()
 	global lstate
 	isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
 end
 
-
+# Tuples are represented as structs
 function from_decl(k::Tuple)
 	s = "typedef struct {\n"
 	for i in 1:length(k)
@@ -221,6 +228,7 @@ function from_decl(k::Tuple)
 	s
 end
 
+# Generic declaration emitter for non-primitive Julia DataTypes
 function from_decl(k::DataType)
 	if is(k, UnitRange{Int64})
 		if haskey(lstate.globalUDTs, k)
@@ -255,7 +263,7 @@ function from_decl(k::DataType)
 		s *= "} Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", ptyp) * ";\n"
 		return s
 	end
-	throw("Could not translate Julia Type: ", k)
+	throw(string("Could not translate Julia Type: " * string(k)))
 	return ""
 end
 
@@ -280,10 +288,10 @@ function from_lambda(ast, args)
 
 	decls = ""
 	global lstate
+	# Populate the symbol table	
 	for k in keys(vars)
 		v = vars[k] # v is a VarDef
 		lstate.symboltable[k] = v.typ
-		# If we have user defined types, record them
 		if !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
 		end 
@@ -299,6 +307,7 @@ function from_lambda(ast, args)
 	
 	for k in keys(lstate.symboltable)
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
+			# If we have user defined types, record them
 			if isCompositeType(lstate.symboltable[k])
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
@@ -495,6 +504,20 @@ function from_setindex(args)
 	s *= ") = " * from_expr(args[2])
 	s
 end
+#=
+for(int64_t i = 1; i < valPut0.ARRAYSIZE(1); i++) {
+	if(GenSym(4))
+		valPut0[i] = 1.0
+}
+=#
+function from_unsafe_setindex!(args)
+	@assert (length(args) == 4) "Array operation unsafe_setindex! has unexpected number of arguments"
+	@assert isArrayType(args[2]) "Array operation unsafe_setindex! has unexpected format"
+	src = from_expr(args[2])
+	v = from_expr(args[3])
+	mask = from_expr(args[3])
+	s *= "for(uint64_t i = 1; i < $(src).ARRAYLEN(); i++) {\n\t if($(mask)[i]) \n\t $(src)[i] = $(v);}\n"
+end
 
 function from_tuple(args)
 	"{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}" 
@@ -549,6 +572,7 @@ function from_arrayset(args)
 	val = from_expr(args[2])
 	"$src.ARRAYELEM($idxs) = $val"
 end
+
 
 function from_getfield(args)
 	mod, tgt = resolveCallTarget(args[1], args[2:end])
@@ -630,7 +654,10 @@ function from_builtins(f, args)
 		return from_safegetindex(args) 
 	elseif tgt == "unsafe_arrayset" || tgt == "safe_arrayset"
 		return from_setindex(args)
+	elseif tgt == "_unsafe_setindex!"
+		return from_unsafe_setindex(args) 
 	end
+
 	
 	debugp("Compiling ", string(f))
 	throw("Unimplemented builtin")
@@ -733,7 +760,7 @@ function from_inlineable(f, args)
 	elseif has(_Intrinsics, string(f))
 		return from_intrinsic(f, args)
 	else
-		throw("Unknown Operator or Method encountered: ", string(f))
+		throw("Unknown Operator or Method encountered: " * string(f))
 	end
 end
 
@@ -991,7 +1018,15 @@ function from_goto(exp, labelId)
 end
 =#
 function from_getfieldnode(ast)
-	throw("Unexpected node: ", ast)	
+	throw("Unexpected node: " * string(ast))
+end
+
+function from_globalref(ast)
+	mod = ast.mod
+	name = ast.name
+	debugp("Name is: ", name, " and its type is:", typeof(name))
+	from_expr(name)
+	#throw("Done")	
 end
 
 function from_topnode(ast)
@@ -1168,12 +1203,21 @@ end
 # TODO: Should simple objects be heap allocated ?
 # For now, we stick with stack allocation
 function from_new(args)
+	s = ""
 	typ = args[1] #type of the object
-	@assert isa(typ, DataType) "typ:$typ is not DataType"
-	objtyp, ptyps = parseParametricType(typ)
-	ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
-	s = ctyp * "{"
-	s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}" 
+	#map((i) -> debugp(string(i) * " --> " * string(args[i])), 1:length(args))
+	if isa(typ, DataType)
+		#@assert isa(typ, DataType) "typ:$typ is not DataType"
+		objtyp, ptyps = parseParametricType(typ)
+		ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
+		s = ctyp * "{"
+		s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}" 
+	else # Can be a topnode or a globalref too
+		for i in 1:length(typ.args)
+			debugp(typ.args[i], " with type: ", typeof(typ.args[i]))
+		end
+		throw("Unhandled type in call to |new|")
+	end
 	s
 end
 
@@ -1183,9 +1227,13 @@ end
 
 function from_loophead(args)
 	iv = from_expr(args[1])
+	decl = "uint64_t"
+	if haskey(lstate.symboltable, args[1])
+		decl = toCtype(lstate.symboltable[args[1]]) 
+	end
 	start = from_expr(args[2])
 	stop = from_expr(args[3])
-	"for($iv = $start; $iv <= $stop; $iv += 1) {\n"
+	"for($decl $iv = $start; $iv <= $stop; $iv += 1) {\n"
 end
 
 function from_loopend(args)
@@ -1295,7 +1343,7 @@ function from_expr(ast::Any)
 	elseif isdefined(:GetfieldNode) && asttyp == GetfieldNode
 		s *= from_getfieldnode(ast)
 	elseif isdefined(:GlobalRef) && asttyp == GlobalRef
-		s *= from_getfieldnode(ast)
+		s *= from_globalref(ast)
 	elseif asttyp == GenSym
 		s *= "GenSym" * string(ast.id)
 	else
