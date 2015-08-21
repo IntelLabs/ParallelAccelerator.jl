@@ -968,8 +968,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dl_inputs = [reduction_output_snode, atm]
   dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
-  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   temp_body = CompilerTools.LambdaHandling.replaceExprWithDict(temp_body, gensym_map)
   state.max_label = max_label
   assert(isa(temp_body,Array))
@@ -979,7 +978,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   assert(temp_body.head == :tuple)
   assert(length(temp_body.args) == 1)
   temp_body = temp_body.args[1]
-  mergeLambdaIntoOuterState(state, nested_lambda)
 
   #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
   out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
@@ -1137,6 +1135,8 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
   # Make the DomainLambda easier to access
   dl::DomainLambda = input_args[2]
+  dprintln(3,"dl = ", dl)
+  dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
 
   indexed_arrays = Any[]
 
@@ -1209,8 +1209,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
-  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
@@ -1223,7 +1222,6 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   lbexpr::Expr = last_body
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
-  mergeLambdaIntoOuterState(state, nested_lambda)
 
   dprintln(2,"out_body is of length ",length(out_body))
   printBody(3,out_body)
@@ -1417,8 +1415,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   dl_body = dl.genBody(indexed_arrays)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
-  nested_linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(nested_lambda) 
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, nested_linfo)
+  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
@@ -1431,7 +1428,6 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   lbexpr::Expr = last_body
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
-  mergeLambdaIntoOuterState(state, nested_lambda)
 
   dprintln(2,"out_body is of length ",length(out_body), " ", out_body)
 
@@ -1841,6 +1837,9 @@ Pull the information from the inner lambda into the outer lambda.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
   inner_lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(inner_lambda)
+  dprintln(3,"mergeLambdaIntoOuterState")
+  dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
+  dprintln(3,"inner_lambdaInfo = ", inner_lambdaInfo)
   CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, inner_lambdaInfo)
 end
 
@@ -3063,6 +3062,12 @@ function PIRLimitTask(x)
   global limit_task = x
 end
 
+# These two functions are just to maintain the interface with the old PSE system for the moment.
+function PIRFlatParfor(x)
+end
+function PIRPreEq(x)
+end
+
 pir_stop = 0
 function PIRStop(x)
   global pir_stop = x
@@ -3075,9 +3080,6 @@ end
 
 num_threads_mode = 0
 function PIRNumThreadsMode(x)
-  if num_threads_mode != x
-    ccall(:set_j2c_num_threads_mode, Void, (Cint,), x)
-  end
   global num_threads_mode = x
 end
 
@@ -3122,6 +3124,7 @@ end
 type eic_state
   non_calls      :: Float64    # estimated instruction count for non-calls
   fully_analyzed :: Bool
+  lambdaInfo     :: CompilerTools.LambdaHandling.LambdaInfo
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3155,12 +3158,13 @@ call_costs[(:erf,(Float64,))] = 75.0
 @doc """
 Generate an instruction count estimate for a call instruction.
 """
-function call_instruction_count(args, state, debug_level)
+function call_instruction_count(args, state :: eic_state, debug_level)
   func  = args[1]
   fargs = args[2:end]
 
+  dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
   sig_expr = Expr(:tuple)
-  sig_expr.args = map(x -> DomainIR.typeOfOpr(x), fargs)
+  sig_expr.args = map(x -> DomainIR.typeOfOpr(state.lambdaInfo, x), fargs)
   signature = eval(sig_expr)
   fs = (func, signature)
 
@@ -3262,7 +3266,7 @@ end
 @doc """
 AstWalk callback for estimating the instruction count.
 """
-function estimateInstrCount(ast, state, top_level_number, is_top_level, read)
+function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_level, read)
   debug_level = 2
 
   asttyp = typeof(ast)
@@ -3414,10 +3418,10 @@ end
 @doc """
 Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.
 """
-function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
+function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst, state :: expr_state)
   if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
     dprintln(2,"instruction count estimate for parfor = ", the_parfor)
-    state = eic_state(0, true)
+    state = eic_state(0, true, state.lambdaInfo)
     for i = 1:length(the_parfor.body)
       AstWalk(the_parfor.body[i], estimateInstrCount, state)
     end
@@ -3647,7 +3651,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
       end
       the_parfor.postParFor = Any[]
       push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor)
+      createInstructionCountEstimate(the_parfor, state)
     elseif isBareParfor(body[i])
       rhs = body[i]
       the_parfor = rhs.args[1]
@@ -3663,7 +3667,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
       the_parfor.postParFor = Any[]
       push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor)
+      createInstructionCountEstimate(the_parfor, state)
     else
       push!(expanded_body, body[i])
     end
@@ -5422,7 +5426,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     end
   elseif isa(node, DomainLambda)
     dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-    intersection_dict = Dict{Symbol,Any}()
+    intersection_dict = Dict{SymGen,Any}()
     for copy in data.copies
       if haskey(node.linfo.escaping_defs, copy[1])
         ed = node.linfo.escaping_defs[copy[1]]
@@ -5434,7 +5438,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     dprintln(3,"Intersection dict = ", intersection_dict)
     if !isempty(intersection_dict)
       origBody      = node.genBody
-      newBody(args) = DomainIR.replaceWithDict(origBody(args), intersection_dict)
+      newBody(args) = CompilerTools.LambdaHandling.replaceExprWithDict(deepcopy(origBody(args)), intersection_dict)
       node.genBody  = newBody
       return [node]
     end 
