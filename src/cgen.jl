@@ -1,6 +1,7 @@
+#
 # A prototype Julia to C++ generator
-# jaswanth.sreeram@intel.com
-# 
+# Jaswanth Sreeram (jaswanth.sreeram@intel.com)
+#
 
 module cgen
 using ..ParallelIR
@@ -93,9 +94,9 @@ verbose = true
 inEntryPoint = false
 lstate = nothing
 
-vectorizationlevel = VECDEFAULT
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
+vectorizationlevel = VECDEFAULT
 function setvectorizationlevel(x)
     global vectorizationlevel = x
 end
@@ -119,7 +120,9 @@ _builtins = ["getindex", "setindex", "arrayref", "top", "box",
 			"unbox", "tuple", "arraysize", "arraylen", "ccall",
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
-			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d"]
+			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
+			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex"
+]
 
 # Intrinsics
 _Intrinsics = [
@@ -135,7 +138,8 @@ _Intrinsics = [
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
 		"nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
 		"fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm", 
-		"trunc", "ceil_llvm", "ceil", "pow", "powf"
+		"trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
+		"checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int"
 ]
 
 tokenXlate = Dict(
@@ -146,8 +150,8 @@ tokenXlate = Dict(
 	'.' => "dot"
 )
 
-replacedTokens = Set(",#")
-scrubbedTokens = Set("({}):")
+replacedTokens = Set("#")
+scrubbedTokens = Set(",.({}):")
 
 file_counter = -1
 
@@ -221,7 +225,8 @@ function from_decl(k::Tuple)
 	for i in 1:length(k)
 		s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
 	end
-	s *= "} Tuple_" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", k) * ";\n"
+	s *= "} Tuple" * 
+		(!isempty(k) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", k) : "") * ";\n"
 	if haskey(lstate.globalUDTs, k)
 		lstate.globalUDTs[k] = 0
 	end
@@ -260,7 +265,19 @@ function from_decl(k::DataType)
 		for i in 1:length(ptyp)
 			s *= toCtype(ptyp[i]) * " " * "f" * string(i-1) * ";\n"
 		end
-		s *= "} Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", ptyp) * ";\n"
+		s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
+		return s
+	else
+		if haskey(lstate.globalUDTs, k)
+			lstate.globalUDTs[k] = 0
+		end
+		ftyps = k.types
+		fnames = fieldnames(k)
+		s = "typedef struct {\n"
+		for i in 1:length(ftyps)
+			s *= toCtype(ftyps[i]) * " " * canonicalize(fnames[i]) * ";\n"
+		end
+		s *= "} " * canonicalize(k) * ";\n" 
 		return s
 	end
 	throw(string("Could not translate Julia Type: " * string(k)))
@@ -279,10 +296,17 @@ function isCompositeType(t)
 	b
 end
 
+function lambdaparams(ast)
+	CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast).input_params
+end
+
 function from_lambda(ast, args)
 	s = ""
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
 	params = linfo.input_params
+	for i in 1:length(params)
+		debugp("lambda param ", i, " is ", params[i], " with type ", typeof(params[i]))
+	end
 	vars = linfo.var_defs
 	gensyms = linfo.gen_sym_typs
 
@@ -291,6 +315,7 @@ function from_lambda(ast, args)
 	# Populate the symbol table	
 	for k in keys(vars)
 		v = vars[k] # v is a VarDef
+		debugp("For var ", k, ", ", typeof(k), ", ", v.typ)
 		lstate.symboltable[k] = v.typ
 		if !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
@@ -308,7 +333,8 @@ function from_lambda(ast, args)
 	for k in keys(lstate.symboltable)
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
 			# If we have user defined types, record them
-			if isCompositeType(lstate.symboltable[k])
+			#if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+			if !isPrimitiveJuliaType(lstate.symboltable[k]) 
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
 				end
@@ -376,6 +402,21 @@ function from_assignment(args::Array)
 			debugp("Unknown type in assignment: ", args)
 			throw("FATAL error....exiting")
 		end
+		#elseif hasfield(rhs, :args) && is(rhs.head, :call)
+		if typeAvailable(rhs) && is(rhs.typ, Any) &&
+		hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
+			m, f, t = resolveCallTarget(rhs.args)
+			f = string(f)
+			#debugp("assignment: m=", m, " f=", f, " t=", t, " isequal: ", f == "fpext")
+			#throw("Done")
+			if f == "fpext"
+				debugp("Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
+				lstate.symboltable[lhs] = eval(rhs.args[2])
+				debugp("Emitting :", rhs.args[2])
+				debugp("Set type to : ", lstate.symboltable[lhs])
+				#throw("Could not infer type from call")
+			end
+		end
 	end
 	lhsO * " = " * rhsO
 end
@@ -393,7 +434,7 @@ function isArrayType(typ)
 end
 
 function toCtype(typ::Tuple)
-	return "Tuple_" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)_$(b)", typ)
+	return "Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", typ)
 end
 
 function toCtype(typ)
@@ -512,11 +553,11 @@ for(int64_t i = 1; i < valPut0.ARRAYSIZE(1); i++) {
 =#
 function from_unsafe_setindex!(args)
 	@assert (length(args) == 4) "Array operation unsafe_setindex! has unexpected number of arguments"
-	@assert isArrayType(args[2]) "Array operation unsafe_setindex! has unexpected format"
+	@assert !isArrayType(args[2]) "Array operation unsafe_setindex! has unexpected format"
 	src = from_expr(args[2])
 	v = from_expr(args[3])
-	mask = from_expr(args[3])
-	s *= "for(uint64_t i = 1; i < $(src).ARRAYLEN(); i++) {\n\t if($(mask)[i]) \n\t $(src)[i] = $(v);}\n"
+	mask = from_expr(args[4])
+	"for(uint64_t i = 1; i < $(src).ARRAYLEN(); i++) {\n\t if($(mask)[i]) \n\t $(src)[i] = $(v);}\n"
 end
 
 function from_tuple(args)
@@ -575,6 +616,14 @@ end
 
 
 function from_getfield(args)
+	debugp("from_getfield args are: ", args)
+	tgt = from_expr(args[1])
+	if args[1].typ.name == Tuple.name && isPrimitiveJuliaType(eltype(args[1].typ))
+		eltyp = toCtype(eltype(args[1].typ))
+		return "(($eltyp *)&$(tgt))[" * from_expr(args[2]) * " - 1]"
+	end
+	throw("Unhandled call to getfield")
+	#=
 	mod, tgt = resolveCallTarget(args[1], args[2:end])
 	if mod == "Intrinsics"
 		return from_expr(tgt)
@@ -582,19 +631,15 @@ function from_getfield(args)
 		return from_inlineable(tgt, args[2:end])
 	end
 	from_expr(mod) * "." * from_expr(tgt)
+	=#
 end
 
-#=
-function from_getfield(args)
-	debugp("Getfield, args are: ", length(args))
-	#assert(length(args) == 2)
-	rcvr = from_expr(args[1])
-	if rcvr == "Intrinsics"
-		return from_expr(args[2]) 
-	end
-	rcvr * "." * from_expr(args[2])
+function from_nfields(args)
+	debugp("Args are: ", args)
+	debugp("Args type = ", typeof(args))
+	string(nfields(args[1].typ))
 end
-=#
+
 function from_arrayalloc(args)
 	debugp("Array alloc args:")
 	map((i)->debugp(args[i]), 1:length(args))
@@ -642,7 +687,7 @@ function from_builtins(f, args)
 		return from_ccall(args)
 	elseif tgt == "arrayset"
 		return from_arrayset(args)
-	elseif tgt == ":jl_alloc_array_1d"
+	elseif tgt == ":jl_alloc_array_1d" || tgt == ":jl_new_array"
 		return from_arrayalloc(args)
 	elseif tgt == ":jl_alloc_array_2d"
 		return from_arrayalloc(args)
@@ -655,7 +700,9 @@ function from_builtins(f, args)
 	elseif tgt == "unsafe_arrayset" || tgt == "safe_arrayset"
 		return from_setindex(args)
 	elseif tgt == "_unsafe_setindex!"
-		return from_unsafe_setindex(args) 
+		return from_unsafe_setindex!(args) 
+	elseif tgt == "nfields"
+		return from_nfields(args) 
 	end
 
 	
@@ -677,8 +724,12 @@ function from_intrinsic(f, args)
 
 	if intr == "mul_int"
 		return from_expr(args[1]) * " * " * from_expr(args[2])
+	elseif intr == "neg_int"
+		return "-" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "mul_float"
 		return from_expr(args[1]) * " * " * from_expr(args[2])
+	elseif intr == "urem_int"
+		return from_expr(args[1]) * " % " * from_expr(args[2])
 	elseif intr == "add_int"
 		return from_expr(args[1]) * " + " * from_expr(args[2])
 	elseif intr == "or_int"
@@ -693,13 +744,39 @@ function from_intrinsic(f, args)
 		return from_expr(args[1]) * " < " * from_expr(args[2])
 	elseif intr == "sle_int"
 		return from_expr(args[1]) * " <= " * from_expr(args[2])
+	elseif intr == "lshr_int"
+		return from_expr(args[1]) * " >> " * from_expr(args[2])
+	elseif intr == "shl_int"
+		return from_expr(args[1]) * " << " * from_expr(args[2])
+	elseif intr == "checked_ssub"
+		return from_expr(args[1]) * " - " * from_expr(args[2])
+	elseif intr == "checked_sadd"
+		return from_expr(args[1]) * " + " * from_expr(args[2])
 	elseif intr == "srem_int"
         return from_expr(args[1]) * " % " * from_expr(args[2])
+	#TODO: Check if flip semantics are the same as Julia codegen.
+	# For now, we emit unary negation
+	elseif intr == "flipsign_int"
+        return "-" * "(" * from_expr(args[1]) * ")"
+	elseif intr == "check_top_bit"
+		#debugp("Check_top_bit: arg type = ", args[1].typ)
+		#@assert (hasfield(args[1], :typ) && isPrimitiveJuliaType(args[1].typ)) "Invalid type"
+		typ = typeof(args[1])
+		if !isPrimitiveJuliaType(typ)
+			if hasfield(args[1], :typ)
+				typ = args[1].typ
+			end
+		end
+		nshfts = 8*sizeof(typ) - 1
+		oprnd = from_expr(args[1])
+        return oprnd * " >> " * string(nshfts) * " == 0 ? " * oprnd * " : " * oprnd
 	elseif intr == "select_value"
 		return "(" * from_expr(args[1]) * ")" * " ? " *
 		"(" * from_expr(args[2]) * ") : " * "(" * from_expr(args[3]) * ")"
 	elseif intr == "not_int"
 		return "!" * "(" * from_expr(args[1]) * ")"
+	elseif intr == "ctpop_int"
+		return "__builtin_popcount" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "add_float"
 		return from_expr(args[1]) * " + " * from_expr(args[2])
 	elseif intr == "lt_float"
@@ -722,7 +799,8 @@ function from_intrinsic(f, args)
 	elseif intr == "sitofp"
 		return from_expr(args[1]) * from_expr(args[2])
 	elseif intr == "fptrunc" || intr == "fpext"
-		return from_expr(args[1]) * from_expr(args[2])
+		debugp("Args = ", args)
+		return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
 	elseif intr == "trunc_llvm" || intr == "trunc"
 		return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
 	elseif intr == "floor_llvm" || intr == "floor"
@@ -1026,7 +1104,6 @@ function from_globalref(ast)
 	name = ast.name
 	debugp("Name is: ", name, " and its type is:", typeof(name))
 	from_expr(name)
-	#throw("Done")	
 end
 
 function from_topnode(ast)
@@ -1083,7 +1160,7 @@ function from_loopnest(ivs, starts, stops, steps)
     )
 end
 
-# If the parfor body is too complicated then DIR or PIR will set
+# If the parfor body is too complicated then DomainIR or ParallelIR will set
 # instruction_count_expr = nothing
 
 # Meaning of num_threads_mode
@@ -1100,6 +1177,26 @@ function from_parforstart(args)
 	parfor = args[1]
 	lpNests = parfor.loopNests
     private_vars = parfor.private_vars
+
+	# Remove duplicate gensyms
+	vgs = Dict()
+	dups = []
+	for i in 1:length(private_vars)
+		p = private_vars[i]
+		if isa(p, GenSym)
+			if get(vgs, p.id, false)
+				#delete!(private_vars, p)
+				#splice!(private_vars, i)
+				#i -= 1
+				#debugp("Duplicate gensym: ", p.id)
+				#throw("Done")
+				push!(dups, i)
+			else
+				vgs[p.id] = true	
+			end
+		end
+	end
+	deleteat!(private_vars, dups)
 
 	# Translate metadata for the loop nests
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
@@ -1212,11 +1309,19 @@ function from_new(args)
 		ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
 		s = ctyp * "{"
 		s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}" 
-	else # Can be a topnode or a globalref too
+	elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
+		typ = getfield(typ.args[2], typ.args[3].value)
+		objtyp, ptyps = parseParametricType(typ)
+		ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps))
+		s = ctyp * "{"
+		s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}" 
+		#=
 		for i in 1:length(typ.args)
 			debugp(typ.args[i], " with type: ", typeof(typ.args[i]))
 		end
 		throw("Unhandled type in call to |new|")
+		=#
+		debugp("Emitting ", s)
 	end
 	s
 end
@@ -1296,6 +1401,12 @@ function from_expr(ast::Expr)
 		s *= from_insert_divisible_task(args)
 
 	elseif head == :boundscheck
+		# Nothing
+	elseif head == :assert
+		# Nothing
+	elseif head == :meta
+		# Nothing
+	elseif head == :simdloop
 		# Nothing
 
 	elseif head == :loophead
@@ -1381,17 +1492,49 @@ function resolveFunction_O(func::Symbol, typs)
 	throw(string("Unable to resolve function ", string(func)))
 end
 
-function from_formalargs(params, unaliased=false)
+# When a function has varargs, we specialize and destructure them
+# into normal singular args (ie., we get rid of the var args expression) to
+# match the signature at the callsite.
+# However, the body still expects a packed representation and may perform
+# operations such as |getfield|. So we pack them here again.
+
+function from_varargpack(vargs)
+	args = vargs[1]
+	vsym = canonicalize(args[1])
+	vtyps = args[2]
+	toCtype(vtyps) * " " * vsym * " = " * 
+		"{" * mapfoldl((i) -> vsym * string(i), (a, b) -> "$a, $b", 1:length(vtyps.types)) * "};"
+end
+
+function from_formalargs(params, vararglist, unaliased=false)
 	s = ""
 	ql = unaliased ? "__restrict" : ""
 	debugp("Compiling formal args: ", params)
+	dumpSymbolTable(lstate.symboltable)
 	for p in 1:length(params)
-		if haskey(lstate.symboltable, params[p])
-			s *= (toCtype(lstate.symboltable[params[p]])
-				* (isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
+		debugp("Doing param $p: ", params[p])
+		debugp("Type is: ", typeof(params[p]))
+		if get(lstate.symboltable, params[p], false) != false
+			ptyp = toCtype(lstate.symboltable[params[p]])
+			s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
 				* (isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
 				* canonicalize(params[p])
 				* (p < length(params) ? ", " : ""))
+		# We may have a varags expression
+		elseif isa(params[p], Expr)
+			assert(isa(params[p].args[1], Symbol))
+			debugp("varargs type: ", params[p], lstate.symboltable[params[p].args[1]])
+			varargtyp = lstate.symboltable[params[p].args[1]]
+			for i in 1:length(varargtyp.types)
+				vtyp = varargtyp.types[i]
+				cvtyp = toCtype(vtyp)
+				s *= cvtyp * ((isArrayType(vtyp) ? "&" : "")
+				* (isArrayType(vtyp) ? " $ql " : " ")
+				* canonicalize(params[p].args[1]) * string(i)
+				* (i < length(varargtyp.types) ? ", " : ""))
+			end
+		else
+			throw("Could not translate formal argument: " * string(params[p]))
 		end
 	end
 	debugp("Formal args are: ", s)
@@ -1413,7 +1556,7 @@ function from_callee(ast::Expr, functionName::ASCIIString)
 	debugp("Body type is ", bod.typ)
 	f = Dict(ast => functionName)
 	bod = from_expr(ast)
-	args = from_formalargs(params)
+	args = from_formalargs(params, [], false)
 	dumpSymbolTable(lstate.symboltable)
 	s::ASCIIString = "$typ $functionName($args) { $bod } "
 	s
@@ -1468,13 +1611,14 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	if isEntryPoint
 		#adp = ASTDispatcher()
 		lstate = LambdaGlobalData()
-		# If we are forcing vectorization then we wont emit the unaliased versions
+		# If we are forcing vectorization then we will not emit the unaliased versions
         # of the roots
 		emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 	end
 	debugp("Ast = ", ast)
 	verbose && debugp("Starting processing for $ast")
 	params	=	ast.args[1]
+	aparams	=	lambdaparams(ast)
 	env		=	ast.args[2]
 	bod		=	ast.args[3]
 	debugp("Processing body: ", bod)
@@ -1484,12 +1628,51 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	# Translate the body
 	bod = from_expr(ast)
 
+
+	for i in 1:length(params)
+		debugp("Param ", i, " is ", params[i], " with type ", typeof(params[i]))
+	end
+	# Find varargs expression if present
+	vararglist = []
+	for k in params
+		if isa(k, Expr) # If k is a vararg expression
+			debugp("var arg expr is: ", k, k.args[1], k.head)
+			if isa(k.args[1], Symbol) && haskey(lstate.symboltable, k.args[1])
+				push!(vararglist, (k.args[1], lstate.symboltable[k.args[1]]))
+				debugp(lstate.symboltable[k.args[1]])
+				debugp(vararglist)
+			end
+		end
+	end
+	#=
+	for k in aparams
+		if has(params, k) == false && isa(k, Expr)
+			debugp("aparams: ", k, k.args)
+			push!(vararglist, k.args)
+		end
+	end
+	=#
+	#=
+	debugp("Varargs = ", vararglist)
+	if !isempty(vararglist)
+		throw("Done")
+	end
+	=#
+
 	# Translate arguments
-	args = from_formalargs(params)
+	args = from_formalargs(params, vararglist, false)
 
 	# If emitting unaliased versions, get "restrict"ed decls for arguments
-	argsunal = emitunaliasedroots ? from_formalargs(params, true) : ""
-	dumpSymbolTable(lstate.symboltable)
+	argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
+
+	if verbose
+		dumpSymbolTable(lstate.symboltable)
+	end
+
+	if !isempty(vararglist)
+		bod = from_varargpack(vararglist) * bod
+	end
+
 	hdr = ""
 	wrapper = ""
 	if !isa(returnType, Tuple)
@@ -1563,6 +1746,7 @@ function from_worklist()
 		debugp("Checking if we compiled ", fname, " before")
 		debugp(lstate.compiledfunctions)
 		if has(lstate.compiledfunctions, fname)
+			debugp("Yes, skipping compilation...")
 			continue
 		end
 		debugp("No, compiling it now")
