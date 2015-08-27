@@ -292,7 +292,6 @@ function isCompositeType(t)
 	# TODO: Expand this to real UDTs
 	b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
 	b |= isa(t, DataType) && t.name == Tuple.name
-	#debugp("Is ", t, " a composite type: ", b)
 	b
 end
 
@@ -304,9 +303,6 @@ function from_lambda(ast, args)
 	s = ""
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
 	params = linfo.input_params
-	for i in 1:length(params)
-		debugp("lambda param ", i, " is ", params[i], " with type ", typeof(params[i]))
-	end
 	vars = linfo.var_defs
 	gensyms = linfo.gen_sym_typs
 
@@ -315,7 +311,6 @@ function from_lambda(ast, args)
 	# Populate the symbol table	
 	for k in keys(vars)
 		v = vars[k] # v is a VarDef
-		debugp("For var ", k, ", ", typeof(k), ", ", v.typ)
 		lstate.symboltable[k] = v.typ
 		if !in(k, params) && (v.desc & 32 != 0)
 			push!(lstate.ompprivatelist, k)
@@ -402,7 +397,8 @@ function from_assignment(args::Array)
 			debugp("Unknown type in assignment: ", args)
 			throw("FATAL error....exiting")
 		end
-		# Try to refine type
+		# Try to refine type for certain stmts with a call in the rhs
+		# that doesn't have a type
 		if typeAvailable(rhs) && is(rhs.typ, Any) &&
 		hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
 			m, f, t = resolveCallTarget(rhs.args)
@@ -497,13 +493,8 @@ function parseParametricType_s(typ)
 	return baseTyp, pTyps
 end
 
-
-function toCName(a)
-	return string(a)
-end
-
 function from_tupleref(args)
-	# TODO generate std::tuples instead of structs
+	# We could generate std::tuples instead of structs
 	from_expr(args[1]) * ".f" * string(int(from_expr(args[2]))-1)
 end
 
@@ -542,12 +533,14 @@ function from_setindex(args)
 	s *= ") = " * from_expr(args[2])
 	s
 end
-#=
-for(int64_t i = 1; i < valPut0.ARRAYSIZE(1); i++) {
-	if(GenSym(4))
-		valPut0[i] = 1.0
-}
-=#
+
+
+
+# unsafe_setindex! has several variations. Here we handle only one.
+# For this (and other related) array indexing methods we could just do
+# codegen but we would have to extend the j2c_array runtime to support
+# all the other operations allowed on Julia arrays
+
 function from_unsafe_setindex!(args)
 	@assert (length(args) == 4) "Array operation unsafe_setindex! has unexpected number of arguments"
 	@assert !isArrayType(args[2]) "Array operation unsafe_setindex! has unexpected format"
@@ -589,7 +582,7 @@ function from_ccall(args)
 	if isa(fun, QuoteNode)
 		s = from_expr(fun)
 	elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
-		s = canonicalize(string(fun.args[2])) #* "/*" * from_expr(fun.args[3]) * "*/"
+		s = canonicalize(string(fun.args[2])) 
 		debugp("ccall target: ", s)
 	else
 		throw("Invalid ccall format...")
@@ -756,8 +749,6 @@ function from_intrinsic(f, args)
 	elseif intr == "flipsign_int"
         return "-" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "check_top_bit"
-		#debugp("Check_top_bit: arg type = ", args[1].typ)
-		#@assert (hasfield(args[1], :typ) && isPrimitiveJuliaType(args[1].typ)) "Invalid type"
 		typ = typeof(args[1])
 		if !isPrimitiveJuliaType(typ)
 			if hasfield(args[1], :typ)
@@ -892,13 +883,6 @@ function resolveCallTarget(args::Array{Any, 1})
 	M = ""
 	t = ""
 	s = ""
-	#=
-	debugp("Length of args is: ", length(args))
-	for i in 1:length(args)
-		debugp("Resolve: arg ", i , " is ", args[i], " type is: ", typeof(args[i]))
-		debugp("Head is: ", hasfield(args[i], :head) ? args[i].head : "")
-	end
-	=#
 	#case 0:
 	f = args[1]
 	if isa(f, Symbol) && isInlineable(f, args[2:end])
@@ -997,16 +981,11 @@ function from_call(ast::Array{Any, 1})
 	skipCompilation = has(lstate.compiledfunctions, funStr) ||
 		isPendingCompilation(lstate.worklist, funStr)
 	s = ""
-	debugp("Worklist: ")
 	map((i)->debugp(i[2]), lstate.worklist)
-	debugp("Compiled functionslist: ", lstate.compiledfunctions)
 	map((i)->debugp(i), lstate.compiledfunctions)
-	debugp("Translating call, target is ", funStr, " args are : ", args)
 	s *= "_" * from_expr(fun) * "("
-	debugp("After call translation, target is ", s)
 	argTyps = []
 	for a in 1:length(args)
-		debugp("Doing arg: ", a)
 		s *= from_expr(args[a]) * (a < length(args) ? "," : "")
 		if !skipCompilation
 			# Attempt to find type
@@ -1023,6 +1002,7 @@ function from_call(ast::Array{Any, 1})
 	debugp("Finished translating call : ", s)
 	debugp(ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
 	if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function))
+		#=
 		debugp("Worklist is: ")
 		for i in 1:length(lstate.worklist)
 			ast, name, typs = lstate.worklist[i]
@@ -1033,6 +1013,7 @@ function from_call(ast::Array{Any, 1})
 			name = lstate.compiledfunctions[i]
 			debugp(name);
 		end
+		=#
 		debugp("Inserting: ", fun, " : ", "_" * canonicalize(fun), " : ", arrayToTuple(argTyps))
 		insert(fun, mod, "_" * canonicalize(fun), arrayToTuple(argTyps))
 	end
@@ -1182,11 +1163,6 @@ function from_parforstart(args)
 		p = private_vars[i]
 		if isa(p, GenSym)
 			if get(vgs, p.id, false)
-				#delete!(private_vars, p)
-				#splice!(private_vars, i)
-				#i -= 1
-				#debugp("Duplicate gensym: ", p.id)
-				#throw("Done")
 				push!(dups, i)
 			else
 				vgs[p.id] = true	
@@ -1206,6 +1182,7 @@ function from_parforstart(args)
 	debugp("stops ", stops);
 	debugp("steps ", steps);
 
+	# Generate the actual loop nest
 	loopheaders = from_loopnest(ivs, starts, stops, steps)
 
 	lstate.ompdepth += 1
@@ -1231,7 +1208,6 @@ function from_parforstart(args)
 	
 
 	# Check if there are private vars and emit the |private| clause
-	#privatevars = isempty(lstate.ompprivatelist) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", lstate.ompprivatelist) * ")"
 	debugp("Private Vars: ")
 	debugp("-----")
 	debugp(private_vars)
@@ -1299,9 +1275,7 @@ end
 function from_new(args)
 	s = ""
 	typ = args[1] #type of the object
-	#map((i) -> debugp(string(i) * " --> " * string(args[i])), 1:length(args))
 	if isa(typ, DataType)
-		#@assert isa(typ, DataType) "typ:$typ is not DataType"
 		objtyp, ptyps = parseParametricType(typ)
 		ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
 		s = ctyp * "{"
@@ -1312,13 +1286,6 @@ function from_new(args)
 		ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps))
 		s = ctyp * "{"
 		s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}" 
-		#=
-		for i in 1:length(typ.args)
-			debugp(typ.args[i], " with type: ", typeof(typ.args[i]))
-		end
-		throw("Unhandled type in call to |new|")
-		=#
-		debugp("Emitting ", s)
 	end
 	s
 end
@@ -1635,7 +1602,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	vararglist = []
 	for k in params
 		if isa(k, Expr) # If k is a vararg expression
-			debugp("var arg expr is: ", k, k.args[1], k.head)
+			debugp("vararg expr: ", k, k.args[1], k.head)
 			if isa(k.args[1], Symbol) && haskey(lstate.symboltable, k.args[1])
 				push!(vararglist, (k.args[1], lstate.symboltable[k.args[1]]))
 				debugp(lstate.symboltable[k.args[1]])
@@ -1643,21 +1610,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 			end
 		end
 	end
-	#=
-	for k in aparams
-		if has(params, k) == false && isa(k, Expr)
-			debugp("aparams: ", k, k.args)
-			push!(vararglist, k.args)
-		end
-	end
-	=#
-	#=
-	debugp("Varargs = ", vararglist)
-	if !isempty(vararglist)
-		throw("Done")
-	end
-	=#
-
+	
 	# Translate arguments
 	args = from_formalargs(params, vararglist, false)
 
