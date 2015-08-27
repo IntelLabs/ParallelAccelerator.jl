@@ -1409,6 +1409,10 @@ function from_expr(ast::Expr)
 	elseif head == :simdloop
 		# Nothing
 
+	# For now, we ignore meta nodes.
+	elseif head == :meta
+		# Nothing
+
 	elseif head == :loophead
 		s *= from_loophead(args)
 
