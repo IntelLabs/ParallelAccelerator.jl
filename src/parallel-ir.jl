@@ -424,8 +424,9 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 """
 function mk_alloc_array_1d_expr(elem_type, atype, length)
   dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
-  ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
-  arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
+  ret_type = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
+  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
+  #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
 
   if typeof(length) == SymbolNode
     length_expr = length
@@ -443,7 +444,8 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        TopNode(:ccall),
        QuoteNode(:jl_alloc_array_1d),
        ret_type,
-       arg_types,
+       new_svec,
+       #arg_types,
        atype,
        0,
        length_expr,
@@ -457,7 +459,8 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
   dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
   ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
-  arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
+  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+  #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
 
   TypedExpr(
        atype,
@@ -465,12 +468,39 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        TopNode(:ccall),
        QuoteNode(:jl_alloc_array_2d),
        ret_type,
-       arg_types,
+       new_svec,
+       #arg_types,
        atype,
        0,
        SymbolNode(length1,Int),
        0,
        SymbolNode(length2,Int),
+       0)
+end
+
+@doc """
+Return an expression that allocates and initializes a 3D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2" and "length3".
+"""
+function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
+  dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
+  ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 3)
+  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+
+  TypedExpr(
+       atype,
+       :call,
+       TopNode(:ccall),
+       QuoteNode(:jl_alloc_array_3d),
+       ret_type,
+       new_svec,
+       atype,
+       0,
+       SymbolNode(length1,Int),
+       0,
+       SymbolNode(length2,Int),
+       0,
+       SymbolNode(length3,Int),
        0)
 end
 
@@ -3124,7 +3154,7 @@ end
 type eic_state
   non_calls      :: Float64    # estimated instruction count for non-calls
   fully_analyzed :: Bool
-  lambdaInfo     :: CompilerTools.LambdaHandling.LambdaInfo
+  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Nothing}
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3250,7 +3280,7 @@ function generate_instr_count(function_name, signature)
   ct = code_typed(function_name, signature)      # get information about code for the given function and signature
 
   dprintln(2,"generate_instr_count ", function_name, " ", signature)
-  state = eic_state(0, true)
+  state = eic_state(0, true, nothing)
   # Try to estimate the instruction count for the other function.
   AstWalk(ct[1], estimateInstrCount, state)
   dprintln(2,"instruction count estimate for parfor = ", state)
@@ -3281,7 +3311,7 @@ function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_le
       dprintln(debug_level,head, " ", args)
     end
     if head == :lambda
-      # skip
+      state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     elseif head == :body
       # skip
     elseif head == :block
@@ -3421,13 +3451,13 @@ Takes a parfor and walks the body of the parfor and estimates the number of inst
 function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst, state :: expr_state)
   if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
     dprintln(2,"instruction count estimate for parfor = ", the_parfor)
-    state = eic_state(0, true, state.lambdaInfo)
+    new_state = eic_state(0, true, state.lambdaInfo)
     for i = 1:length(the_parfor.body)
-      AstWalk(the_parfor.body[i], estimateInstrCount, state)
+      AstWalk(the_parfor.body[i], estimateInstrCount, new_state)
     end
     # If fully_analyzed is true then there's nothing that couldn't be analyzed so store the instruction count estimate in the parfor.
-    if state.fully_analyzed
-      the_parfor.instruction_count_expr = state.non_calls
+    if new_state.fully_analyzed
+      the_parfor.instruction_count_expr = new_state.non_calls
     else
       the_parfor.instruction_count_expr = nothing
     end
@@ -5079,6 +5109,20 @@ function pir_live_cb(ast, cbdata)
       # There is nothing really interesting in the loopend node to signify something being read or written.
       assert(length(args) == 1)
       return Any[]
+    elseif head == :call
+      if args[1] == TopNode(:unsafe_arrayref)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayref)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      elseif args[1] == TopNode(:unsafe_arrayset)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayset)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      end
     elseif head == :(=)
       dprintln(3,"pir_live_cb for :(=)")
       if length(args) > 2
@@ -6823,11 +6867,12 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         n = length(sizes)
         assert(n >= 1 && n <= 3)
         name = symbol(string("jl_alloc_array_", n, "d"))
-        appTypExpr = Expr(:call1, TopNode(:apply_type), :Array, elemTyp, n)
-        appTypExpr.typ = Type{Array{elemTyp,n}}
-        tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-        tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-        realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
+        appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+        #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
+        #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
+        new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+        realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
+        #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
         for i=1:n
           push!(realArgs, sizes[i])
           push!(realArgs, 0)
