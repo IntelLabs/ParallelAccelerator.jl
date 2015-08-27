@@ -402,19 +402,16 @@ function from_assignment(args::Array)
 			debugp("Unknown type in assignment: ", args)
 			throw("FATAL error....exiting")
 		end
-		#elseif hasfield(rhs, :args) && is(rhs.head, :call)
+		# Try to refine type
 		if typeAvailable(rhs) && is(rhs.typ, Any) &&
 		hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
 			m, f, t = resolveCallTarget(rhs.args)
 			f = string(f)
-			#debugp("assignment: m=", m, " f=", f, " t=", t, " isequal: ", f == "fpext")
-			#throw("Done")
 			if f == "fpext"
 				debugp("Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
 				lstate.symboltable[lhs] = eval(rhs.args[2])
 				debugp("Emitting :", rhs.args[2])
 				debugp("Set type to : ", lstate.symboltable[lhs])
-				#throw("Could not infer type from call")
 			end
 		end
 	end
