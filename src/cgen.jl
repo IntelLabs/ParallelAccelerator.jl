@@ -1401,8 +1401,6 @@ function from_expr(ast::Expr)
 		# Nothing
 	elseif head == :assert
 		# Nothing
-	elseif head == :meta
-		# Nothing
 	elseif head == :simdloop
 		# Nothing
 
