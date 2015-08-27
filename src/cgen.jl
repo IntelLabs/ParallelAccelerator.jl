@@ -89,8 +89,8 @@ const VECDISABLE = 1
 const VECFORCE = 2
 
 # Globals
-#verbose = true
-verbose = false 
+verbose = true
+#verbose = false 
 inEntryPoint = false
 lstate = nothing
 
