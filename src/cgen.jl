@@ -430,6 +430,7 @@ function toCtype(typ::Tuple)
 	return "Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", typ)
 end
 
+# Generate a C++ type name for a Julia type
 function toCtype(typ)
 	if haskey(lstate.jtypes, typ)
 		return lstate.jtypes[typ]
@@ -957,13 +958,19 @@ function from_call(ast::Array{Any, 1})
 	for i in 1:length(ast)
 		debugp("Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
 	end
+	# Try and find the target of the call
 	mod, fun, t = resolveCallTarget(ast)
+
+	# resolveCallTarget will eagerly try to translate the call
+	# if it can. If it does, then we are done.
 	if !isempty(t)
 		return t;
 	end
+
 	if fun == ""
 		fun = ast[1]
 	end
+
 	args = ast[2:end]
 	debugp("fun is: ", fun)
 	debugp("call Args are: ", args)
@@ -974,12 +981,14 @@ function from_call(ast::Array{Any, 1})
 	end
 	debugp("Not inlinable")
 	funStr = "_" * string(fun)	
+
 	# If we have previously compiled this function
 	# we fallthru and simply emit the call.
 	# Else we lookup the function Symbol and enqueue it
 	# TODO: This needs to specialize on types
 	skipCompilation = has(lstate.compiledfunctions, funStr) ||
 		isPendingCompilation(lstate.worklist, funStr)
+
 	s = ""
 	map((i)->debugp(i[2]), lstate.worklist)
 	map((i)->debugp(i), lstate.compiledfunctions)
@@ -1019,6 +1028,12 @@ function from_call(ast::Array{Any, 1})
 	end
 	s
 end
+
+# Generate return statements. The way we handle multiple return
+# values is different depending on whether this return statement is in 
+# the entry point or not. If it is, then the multiple return values are 
+# pushed into spreallocated slots in the argument list (ret0, ret1...)
+# If not, just return a tuple.
 
 function from_return(args)
 	global inEntryPoint
@@ -1114,7 +1129,7 @@ function loopNestCount(loop)
 	"(((" * from_expr(loop.upper) * ") + 1 - (" * from_expr(loop.lower) * ")) / (" * from_expr(loop.step) * "))"
 end
 
-
+#TODO: Implement task mode support here
 function from_insert_divisible_task(args)
 	inserttasknode = args[1]
 	debugp("Ranges: ", inserttasknode.ranges)
@@ -1569,6 +1584,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 	s
 end
 
+# This is the entry point to cgen from the PSE driver
 function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	global inEntryPoint
 	inEntryPoint = isEntryPoint
@@ -1689,6 +1705,7 @@ function insert(func::Function, name, typs)
 	end
 end
 
+# Translate function nodes in breadth-first order
 function from_worklist()
 	s = ""
 	si = ""
@@ -1723,6 +1740,10 @@ function from_worklist()
 	end
 	s
 end
+
+#
+# Utility methods to write, compile and link generated code
+#
 import Base.write
 function writec(s, outfile_name=nothing)
     if outfile_name == nothing
@@ -1764,7 +1785,7 @@ function link(outfile_name)
     return lib
 end
 
-# When in standalone mode, this is the entry point to cgen
+# When in standalone mode, this is the entry point to cgen.
 function generate(func::Function, typs)
 	name = string(func.env.name)
 	insert(func, name, typs)
