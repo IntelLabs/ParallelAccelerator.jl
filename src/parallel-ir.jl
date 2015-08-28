@@ -3188,6 +3188,15 @@ call_costs[(:log10,(Float64,))] = 160.0
 call_costs[(:erf,(Float64,))] = 75.0
 
 @doc """
+A sentinel in the instruction count estimation process.
+Before recursively processing a call, we add a sentinel for that function so that if we see that
+sentinel later we know we've tried to recursively process it and so can bail out by setting
+fully_analyzed to false.
+"""
+type InProgress
+end
+
+@doc """
 Generate an instruction count estimate for a call instruction.
 """
 function call_instruction_count(args, state :: eic_state, debug_level)
@@ -3208,7 +3217,15 @@ function call_instruction_count(args, state :: eic_state, debug_level)
       state.fully_analyzed = false
       return nothing
     end
+    # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
+    if typeof(res) == InProgress
+      dprintln(debug_level, "Got recursive call to function ", func, " ", signature, " ", args)
+      state.fully_analyzed = false
+      return nothing
+    end
   else
+    # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
+    call_costs[fs] = InProgress()
     # If not then try to generate an instruction count estimated.
     res = generate_instr_count(func, signature)
     call_costs[fs] = res
@@ -3259,15 +3276,16 @@ function generate_instr_count(function_name, signature)
     dprintln(3,"eval'ing Expr to Function")
     function_name = eval(function_name)
   elseif ftyp == GlobalRef
-    dprintln(3,"Calling getfield")
-    function_name = getfield(function_name.mod, function_name.name)
+    #dprintln(3,"Calling getfield")
+    function_name = eval(function_name)
+    #function_name = getfield(function_name.mod, function_name.name)
   elseif ftyp == IntrinsicFunction
     dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
     call_costs[(function_name, signature)] = nothing
     return call_costs[(function_name, signature)]
   end
 
-  if typeof(function_name) != Function
+  if typeof(function_name) != Function || !isgeneric(function_name)
     dprintln(3, "generate_instr_count: function_name is not a Function = ", function_name)
     call_costs[(function_name, signature)] = nothing
     return call_costs[(function_name, signature)]
