@@ -1629,6 +1629,8 @@ function from_lambda(lambda :: Expr, depth, state)
   body = get_one(from_expr(body, depth, state, false))
   dprintln(4,"from_lambda after from_expr")
   dprintln(3,"After processing lambda body = ", state.lambdaInfo)
+  dprintln(3,"from_lambda: after body = ")
+  printBody(3, body)
 
   # Count the number of static assignments per var.
   symbol_assigns = Dict{Symbol, Int}()
@@ -4698,7 +4700,7 @@ function flattenParfor(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
   # Output the body of the parfor as top-level statements in the new function body.
   append!(new_body, the_parfor.body)
   # Output to the new body that this is the end of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
+  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
   nothing
 end
 
@@ -4985,10 +4987,14 @@ end
 @doc """
 Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".
 """
-function printBody(dlvl, body)
+function printBody(dlvl, body :: Array{Any,1})
   for i = 1:length(body)
     dprintln(dlvl, "    ", body[i])
   end
+end
+
+function printBody(dlvl, body :: Expr)
+  printBody(dlvl, body.args)
 end
 
 @doc """
@@ -7035,6 +7041,7 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
       return [x]
     elseif head == :parfor_start || head == :parfor_end
       dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
+      dprintln(3, "pre x = ", x)
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.loopNests)
         x.args[1].loopNests[i].indexVariable = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata))
@@ -7052,6 +7059,7 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
       for i = 1:length(cur_parfor.private_vars)
         x.args[1].private_vars[i] = AstWalker.get_one(AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata))
       end
+      dprintln(3, "post x = ", x)
       return [x]
     elseif head == :insert_divisible_task
       cur_task = args[1]
