@@ -930,7 +930,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   # Also, create indexed versions of those symbols for the loop body
   argtyp = typeof(input_array)
   dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
-  assert(argtyp == SymbolNode)
+  assert(argtyp <: SymNodeGen)
 
   reduce_body = Any[]
   atm = createTempForArray(input_array, 1, state)
@@ -1198,8 +1198,8 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Also, create indexed versions of those symbols for the loop body
   for(i = 1:length(inputInfo))
     argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", isa(argtyp, SymAllGen))
-#    assert(isa(argtyp, SymAllGen))
+    dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+    assert(argtyp <: SymAllGen)
 
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
@@ -1406,8 +1406,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   # Also, create indexed versions of those symbols for the loop body.
   for(i = 1:length(inputInfo))
     argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", isa(argtyp, SymAllGen))
-    #assert(isa(argtyp, SymAllGen))
+    dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+    assert(argtyp <: SymAllGen)
 
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
@@ -7086,10 +7086,14 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
       end
       return [x]
     elseif head == :loophead
-      # intentionally do nothing
+      for i = 1:length(args)
+        x.args[i] = AstWalker.get_one(AstWalk(x.args[i], dw.callback, dw.cbdata))
+      end
       return [x]
     elseif head == :loopend
-      # intentionally do nothing
+      for i = 1:length(args)
+        x.args[i] = AstWalker.get_one(AstWalk(x.args[i], dw.callback, dw.cbdata))
+      end
       return [x]
     end
   elseif asttyp == pir_range_actual
