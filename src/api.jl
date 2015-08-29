@@ -3,7 +3,8 @@ baremodule API
 using Base
 import Base: call, getindex, setindex!
 
-export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, log10, sin, cos, exp
+export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod
+
 export cartesianarray, runStencil, @runStencil
 
 eval(x) = Core.eval(API, x)
@@ -12,7 +13,7 @@ eval(x) = Core.eval(API, x)
 for f in (:-, :+, :cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech,
            :csch, :coth, :asech, :acsch, :cospi, :sinc, :cosd,
            :cotd, :cscd, :secd, :acosd, :acotd, :log, :log2, :log10,
-           :exp, :exp2, :exp10)
+           :exp, :exp2, :exp10, :sum, :prod)
     @eval begin
         @noinline function ($f){T<:Number}(A::DenseArray{T})
             (Base.$f)(A)
