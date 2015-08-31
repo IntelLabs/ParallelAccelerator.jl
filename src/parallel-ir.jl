@@ -2609,6 +2609,12 @@ function fuse(body, body_index, cur, state)
     end
 
     outputs = collect(values(output_map))
+    # return code 2 if there is no output in the fused parfor
+    # this means the parfor is dead and should be removed
+    if length(outputs)==0
+	    return 2;
+    end
+
     dprintln(3,"output_map = ", output_map)
     dprintln(3,"new_aliases = ", new_aliases)
 
@@ -2771,12 +2777,12 @@ function fuse(body, body_index, cur, state)
 
     #throw(string("not finished"))
 
-    return true
+    return 1
   else
     dprintln(3, "Fusion could not happen here.")
   end
 
-  return false
+  return 0
 
   false
 end
@@ -3571,7 +3577,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             new_parfor = getParforNode(new_exprs[1])
             new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
           end
-          if fuse(body, length(body), new_exprs[1], state)
+	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
+	  if fuse_ret>0
+		  # 2 means combination of old and new parfors has no output and both are dead
+		  if fuse_ret==2
+			  # remove last parfor and don't add anything new
+			  pop!(body)
+		  end
             pre_next_parfor = Any[]
             # If fused then the new node is consumed and no new node is added to the body.
             continue
