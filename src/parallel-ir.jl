@@ -16,6 +16,9 @@ import CompilerTools.ReadWriteSet
 import CompilerTools.LivenessAnalysis
 import CompilerTools.Loops
 
+# uncomment this line when using Debug.jl
+#using Debug
+
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
 
