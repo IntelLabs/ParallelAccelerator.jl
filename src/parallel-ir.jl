@@ -1950,7 +1950,6 @@ end
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
 function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
-  eliminated_allocations = Set()
   dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
   if typeof(x) == Expr
     dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
@@ -1961,13 +1960,6 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
       if isAllocation(rhs)
         dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
         if !in(lhs.name, all_aliased_outputs)
-          push!(eliminated_allocations, lhs.name)
-          dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
-          return true
-        end
-      elseif typeof(rhs) == SymbolNode
-        if in(rhs.name, eliminated_allocations)
-          push!(eliminated_allocations, lhs.name)
           dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
           return true
         end
