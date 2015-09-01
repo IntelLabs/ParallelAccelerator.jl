@@ -1978,6 +1978,18 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
   return false
 end
 
+function is_dead_arrayset(x, all_aliased_outputs :: Set)
+
+  if isArraysetCall(x)
+      array_to_set = x.args[2]
+        if !in(array_to_set.name, all_aliased_outputs)
+          return true
+        end
+  end
+
+  return false
+end
+
 @doc """
 Holds data for modifying arrayset calls.
 """
@@ -2449,7 +2461,7 @@ end
 Returns a single element of an array if there is only one or the array otherwise.
 """
 function oneIfOnly(x)
-    if length(x) == 1
+    if isa(x,Array) && length(x) == 1
       return x[1]
     else
       return x
@@ -2714,6 +2726,11 @@ function fuse(body, body_index, cur, state)
     prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
                               map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
     dprintln(2,"New preParFor = ", prev_parfor.preParFor)
+
+    # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
+    dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)
+    filter!( x -> !is_dead_arrayset(x, output_items_with_aliases), prev_parfor.body)
+    dprintln(4,"prev_parfor.body after_ removing dead arrayset: ", prev_parfor.body)
 
     # reductions - a simple append with the caveat that you can't fuse parfor where the first has a reduction that the second one uses
     # need to check this caveat above.
