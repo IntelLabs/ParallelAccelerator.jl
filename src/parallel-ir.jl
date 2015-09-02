@@ -6014,6 +6014,7 @@ function inline!(src, dst, lhs)
   end, linfo)
   DomainIR.mmapRemoveDupArg!(dst)
 end
+# mmapInline() helper function
 function eliminateShapeAssert(dict, lhs, body)
   if haskey(dict, lhs)
     for k in dict[lhs]
@@ -6073,6 +6074,7 @@ function mmapInline(ast, lives, uniqSet)
   modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
   shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
   assert(isa(body, Expr) && is(body.head, :body))
+
   # first do a loop to see which def is only referenced once
   for i =1:length(body.args)
     expr = body.args[i]
@@ -6145,7 +6147,8 @@ function mmapInline(ast, lives, uniqSet)
       j = usedAt[lhs]
       ok = true
       # dprintln(3, "MI: def of ", lhs, " at line ", i, " used by line ", j)
-      for v in src.args
+      for v in src.args[1]
+        @assert isa(v,Symbol) || isa(v,GenSym) || isa(v,SymbolNode) "mmapInline(): Arguments of mmap should be Symbol or GenSym or SymbolNode."
         if isa(v, SymbolNode) v = v.name end
         if haskey(modifiedAt, v)
           for k in modifiedAt[v]
