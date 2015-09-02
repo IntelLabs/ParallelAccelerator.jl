@@ -5964,6 +5964,102 @@ function create_equivalence_classes(node, state :: expr_state, top_level_number 
   nothing
 end
 
+# mmapInline() helper function
+function modify!(dict, lhs, i)
+  if haskey(dict, lhs)
+    push!(dict[lhs], i)
+  else
+    dict[lhs] = Int[i]
+  end
+end
+# function that inlines from src into dst
+function inline!(src, dst, lhs)
+  args = dst.args[1]
+  pos = 0
+  for k = 1:length(args)
+    s = args[k]
+    if isa(s, SymbolNode) s = s.name end
+    if s == lhs
+      pos = k
+      break
+    end
+  end
+  assert(pos > 0)
+  args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
+  f = src.args[2]
+  assert(length(f.outputs)==1)
+  dst.args[1] = args
+  g = dst.args[2]
+  inputs = g.inputs
+  g_inps = length(inputs) 
+  inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
+  linfo = g.linfo
+  # add escaping variables from f into g, since mergeLambdaInfo only deals
+  # with nesting lambda, but not parallel ones.
+  for (v, d) in f.linfo.escaping_defs
+    if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
+      CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
+    end
+  end
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+  tmp_t = f.outputs[1]
+  tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
+  dst.args[2] = DomainLambda(inputs, g.outputs, 
+  args -> begin
+    fb = f.genBody(args[g_inps:end])
+    fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
+    expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
+    gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
+    return [fb[1:end-1]; [expr]; gb]
+  end, linfo)
+  DomainIR.mmapRemoveDupArg!(dst)
+end
+function eliminateShapeAssert(dict, lhs, body)
+  if haskey(dict, lhs)
+    for k in dict[lhs]
+      dprintln(3, "MI: eliminate shape assert at line ", k)
+      body.args[k] = nothing
+    end
+  end
+end
+
+# mmapInline() helper function
+function check_used(defs, usedAt, shapeAssertAt, expr,i)
+  if isa(expr, Expr)
+    if is(expr.head, :assertEqShape)
+      # handle assertEqShape separately, do not consider them
+      # as valid references
+      for arg in expr.args
+        s = isa(arg, SymbolNode) ? arg.name : arg 
+        if isa(s, Symbol) || isa(s, GenSym)
+          modify!(shapeAssertAt, s, i)
+        end
+      end
+    else
+      for arg in expr.args
+        check_used(defs, usedAt, shapeAssertAt, arg,i)
+      end
+    end
+  elseif isa(expr, Symbol) || isa(expr, GenSym)
+    if haskey(usedAt, expr) # already used? remove from defs
+      delete!(defs, expr)
+    else
+      usedAt[expr] = i
+    end 
+  elseif isa(expr, SymbolNode)
+    if haskey(usedAt, expr.name) # already used? remove from defs
+      dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
+      delete!(defs, expr.name)
+    else
+      usedAt[expr.name] = i
+    end 
+  elseif isa(expr, Array) || isa(expr, Tuple)
+    for e in expr
+      check_used(defs, usedAt, shapeAssertAt, e, i)
+    end
+  end
+end
+
 
 @doc """
 # If a definition of a mmap is only used once and not aliased, it can be inlined into its
@@ -5976,59 +6072,17 @@ function mmapInline(ast, lives, uniqSet)
   usedAt = Dict{Union{Symbol, GenSym}, Int}()
   modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
   shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-  function modify!(dict, lhs, i)
-    if haskey(dict, lhs)
-      push!(dict[lhs], i)
-    else
-      dict[lhs] = Int[i]
-    end
-  end
   assert(isa(body, Expr) && is(body.head, :body))
   # first do a loop to see which def is only referenced once
   for i =1:length(body.args)
     expr = body.args[i]
     head = isa(expr, Expr) ? expr.head : nothing
-    function check_used(expr)
-      if isa(expr, Expr)
-        if is(expr.head, :assertEqShape)
-        # handle assertEqShape separately, do not consider them
-        # as valid references
-          for arg in expr.args
-            s = isa(arg, SymbolNode) ? arg.name : arg 
-            if isa(s, Symbol) || isa(s, GenSym)
-              modify!(shapeAssertAt, s, i)
-            end
-          end
-        else
-          for arg in expr.args
-            check_used(arg)
-          end
-        end
-      elseif isa(expr, Symbol) || isa(expr, GenSym)
-        if haskey(usedAt, expr) # already used? remove from defs
-          delete!(defs, expr)
-        else
-          usedAt[expr] = i
-        end 
-      elseif isa(expr, SymbolNode)
-        if haskey(usedAt, expr.name) # already used? remove from defs
-          dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
-          delete!(defs, expr.name)
-        else
-          usedAt[expr.name] = i
-        end 
-      elseif isa(expr, Array) || isa(expr, Tuple)
-        for e in expr
-          check_used(e)
-        end
-      end
-    end
     # record usedAt, and reject those used more than once
     # record definition
     if is(head, :(=))
       lhs = expr.args[1]
       rhs = expr.args[2]
-      check_used(rhs)
+      check_used(defs, usedAt, shapeAssertAt, rhs,i)
       assert(isa(lhs, Symbol) || isa(lhs, GenSym))
       modify!(modifiedAt, lhs, i)
       if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
@@ -6044,7 +6098,7 @@ function mmapInline(ast, lives, uniqSet)
         dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
       end
     else
-      check_used(expr)
+      check_used(defs, usedAt, shapeAssertAt, expr,i)
     end
     # check if args may be modified in place
     if is(head, :mmap!)
@@ -6109,61 +6163,11 @@ function mmapInline(ast, lives, uniqSet)
       if isa(dst, Expr) && is(dst.head, :(=))
         dst = dst.args[2]
       end
-      # function that inlines from src into dst
-      function inline!(src, dst)
-        args = dst.args[1]
-        pos = 0
-        for k = 1:length(args)
-          s = args[k]
-          if isa(s, SymbolNode) s = s.name end
-          if s == lhs
-            pos = k
-             break
-          end
-        end
-        assert(pos > 0)
-        args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
-        f = src.args[2]
-        assert(length(f.outputs)==1)
-        dst.args[1] = args
-        g = dst.args[2]
-        inputs = g.inputs
-        g_inps = length(inputs) 
-        inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
-        linfo = g.linfo
-        # add escaping variables from f into g, since mergeLambdaInfo only deals
-        # with nesting lambda, but not parallel ones.
-        for (v, d) in f.linfo.escaping_defs
-          if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
-            CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
-          end
-        end
-        gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
-        tmp_t = f.outputs[1]
-        tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
-        dst.args[2] = DomainLambda(inputs, g.outputs, 
-          args -> begin
-            fb = f.genBody(args[g_inps:end])
-            fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
-            expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-            gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
-            return [fb[1:end-1]; [expr]; gb]
-          end, linfo)
-        DomainIR.mmapRemoveDupArg!(dst)
-      end
-      function eliminateShapeAssert(dict, lhs)
-        if haskey(dict, lhs)
-          for k in dict[lhs]
-            dprintln(3, "MI: eliminate shape assert at line ", k)
-            body.args[k] = nothing
-          end
-        end
-      end
       if isa(dst, Expr) && is(dst.head, :mmap)
          # inline mmap into mmap
-        inline!(src, dst)
+        inline!(src, dst, lhs)
         body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs)
+        eliminateShapeAssert(shapeAssertAt, lhs, body)
         dprintln(3, "MI: result: ", body.args[j])
       elseif isa(dst, Expr) && is(dst.head, :mmap!)
         s = dst.args[1][1]
@@ -6171,14 +6175,14 @@ function mmapInline(ast, lives, uniqSet)
         if s == lhs 
           # when lhs is the inplace array that dst operates on
           # change dst to mmap
-          inline!(src, dst)
+          inline!(src, dst, lhs)
           dst.head = :mmap
         else
           # otherwise just normal inline
-          inline!(src, dst)
+          inline!(src, dst, lhs)
         end
         body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs)
+        eliminateShapeAssert(shapeAssertAt, lhs, body)
         # inline mmap into mmap!
         dprintln(3, "MI: result: ", body.args[j])
       else
