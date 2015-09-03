@@ -89,8 +89,8 @@ const VECDISABLE = 1
 const VECFORCE = 2
 
 # Globals
-verbose = true
-#verbose = false 
+#verbose = true
+verbose = false
 inEntryPoint = false
 lstate = nothing
 
@@ -974,6 +974,7 @@ function from_call(ast::Array{Any, 1})
 	args = ast[2:end]
 	debugp("fun is: ", fun)
 	debugp("call Args are: ", args)
+
 	if isInlineable(fun, args)
 		debugp("Doing with inlining ", fun, "(", args, ")")
 		fs = from_inlineable(fun, args)
@@ -988,6 +989,26 @@ function from_call(ast::Array{Any, 1})
 	# TODO: This needs to specialize on types
 	skipCompilation = has(lstate.compiledfunctions, funStr) ||
 		isPendingCompilation(lstate.worklist, funStr)
+	if(fun == :println)
+		s =  "std::cout << "
+		argTyps = []
+		for a in 2:length(args)
+			s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
+			if !skipCompilation
+				# Attempt to find type
+				if typeAvailable(args[a])
+					push!(argTyps, args[a].typ)
+				elseif isPrimitiveJuliaType(typeof(args[a]))
+					push!(argTyps, typeof(args[a]))
+				elseif haskey(lstate.symboltable, args[a])
+					push!(argTyps, lstate.symboltable[args[a]])
+				end
+			end
+		end
+		s *= "<< std::endl;"
+		return s
+	end
+
 
 	s = ""
 	map((i)->debugp(i[2]), lstate.worklist)

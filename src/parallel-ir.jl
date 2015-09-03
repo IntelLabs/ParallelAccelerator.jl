@@ -16,6 +16,9 @@ import CompilerTools.ReadWriteSet
 import CompilerTools.LivenessAnalysis
 import CompilerTools.Loops
 
+# uncomment this line when using Debug.jl
+#using Debug
+
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
 
@@ -1949,7 +1952,6 @@ end
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
 function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
-  eliminated_allocations = Set()
   dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
   if typeof(x) == Expr
     dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
@@ -1960,18 +1962,23 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
       if isAllocation(rhs)
         dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
         if !in(lhs.name, all_aliased_outputs)
-          push!(eliminated_allocations, lhs.name)
-          dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
-          return true
-        end
-      elseif typeof(rhs) == SymbolNode
-        if in(rhs.name, eliminated_allocations)
-          push!(eliminated_allocations, lhs.name)
           dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
           return true
         end
       end
     end
+  end
+
+  return false
+end
+
+function is_dead_arrayset(x, all_aliased_outputs :: Set)
+
+  if isArraysetCall(x)
+      array_to_set = x.args[2]
+        if !in(array_to_set.name, all_aliased_outputs)
+          return true
+        end
   end
 
   return false
@@ -2448,7 +2455,7 @@ end
 Returns a single element of an array if there is only one or the array otherwise.
 """
 function oneIfOnly(x)
-    if length(x) == 1
+    if isa(x,Array) && length(x) == 1
       return x[1]
     else
       return x
@@ -2608,6 +2615,12 @@ function fuse(body, body_index, cur, state)
     end
 
     outputs = collect(values(output_map))
+    # return code 2 if there is no output in the fused parfor
+    # this means the parfor is dead and should be removed
+    if length(outputs)==0
+	    return 2;
+    end
+
     dprintln(3,"output_map = ", output_map)
     dprintln(3,"new_aliases = ", new_aliases)
 
@@ -2708,6 +2721,11 @@ function fuse(body, body_index, cur, state)
                               map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
     dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
+    # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
+    dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)
+    filter!( x -> !is_dead_arrayset(x, output_items_with_aliases), prev_parfor.body)
+    dprintln(4,"prev_parfor.body after_ removing dead arrayset: ", prev_parfor.body)
+
     # reductions - a simple append with the caveat that you can't fuse parfor where the first has a reduction that the second one uses
     # need to check this caveat above.
     append!(prev_parfor.reductions, cur_parfor.reductions)
@@ -2770,12 +2788,12 @@ function fuse(body, body_index, cur, state)
 
     #throw(string("not finished"))
 
-    return true
+    return 1
   else
     dprintln(3, "Fusion could not happen here.")
   end
 
-  return false
+  return 0
 
   false
 end
@@ -3570,7 +3588,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             new_parfor = getParforNode(new_exprs[1])
             new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
           end
-          if fuse(body, length(body), new_exprs[1], state)
+	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
+	  if fuse_ret>0
+		  # 2 means combination of old and new parfors has no output and both are dead
+		  if fuse_ret==2
+			  # remove last parfor and don't add anything new
+			  pop!(body)
+		  end
             pre_next_parfor = Any[]
             # If fused then the new node is consumed and no new node is added to the body.
             continue
@@ -5942,6 +5966,105 @@ function create_equivalence_classes(node, state :: expr_state, top_level_number 
   nothing
 end
 
+# mmapInline() helper function
+function modify!(dict, lhs, i)
+  if haskey(dict, lhs)
+    push!(dict[lhs], i)
+  else
+    dict[lhs] = Int[i]
+  end
+end
+
+# function that inlines from src mmap into dst mmap
+function inline!(src, dst, lhs)
+  args = dst.args[1]
+  pos = 0
+  for k = 1:length(args)
+    s = args[k]
+    if isa(s, SymbolNode) s = s.name end
+    if s == lhs
+      pos = k
+      break
+    end
+  end
+  @assert pos>0 "mmapInline(): position of mmap output not found"
+  args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
+  f = src.args[2]
+  assert(length(f.outputs)==1)
+  dst.args[1] = args
+  g = dst.args[2]
+  inputs = g.inputs
+  g_inps = length(inputs) 
+  inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
+  linfo = g.linfo
+  # add escaping variables from f into g, since mergeLambdaInfo only deals
+  # with nesting lambda, but not parallel ones.
+  for (v, d) in f.linfo.escaping_defs
+    if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
+      CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
+    end
+  end
+  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+  tmp_t = f.outputs[1]
+  tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
+  dst.args[2] = DomainLambda(inputs, g.outputs, 
+  args -> begin
+    fb = f.genBody(args[g_inps:end])
+    fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
+    expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
+    gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
+    return [fb[1:end-1]; [expr]; gb]
+  end, linfo)
+  DomainIR.mmapRemoveDupArg!(dst)
+end
+
+# mmapInline() helper function
+function eliminateShapeAssert(dict, lhs, body)
+  if haskey(dict, lhs)
+    for k in dict[lhs]
+      dprintln(3, "MI: eliminate shape assert at line ", k)
+      body.args[k] = nothing
+    end
+  end
+end
+
+# mmapInline() helper function
+function check_used(defs, usedAt, shapeAssertAt, expr,i)
+  if isa(expr, Expr)
+    if is(expr.head, :assertEqShape)
+      # handle assertEqShape separately, do not consider them
+      # as valid references
+      for arg in expr.args
+        s = isa(arg, SymbolNode) ? arg.name : arg 
+        if isa(s, Symbol) || isa(s, GenSym)
+          modify!(shapeAssertAt, s, i)
+        end
+      end
+    else
+      for arg in expr.args
+        check_used(defs, usedAt, shapeAssertAt, arg,i)
+      end
+    end
+  elseif isa(expr, Symbol) || isa(expr, GenSym)
+    if haskey(usedAt, expr) # already used? remove from defs
+      delete!(defs, expr)
+    else
+      usedAt[expr] = i
+    end 
+  elseif isa(expr, SymbolNode)
+    if haskey(usedAt, expr.name) # already used? remove from defs
+      dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
+      delete!(defs, expr.name)
+    else
+      usedAt[expr.name] = i
+    end 
+  elseif isa(expr, Array) || isa(expr, Tuple)
+    for e in expr
+      check_used(defs, usedAt, shapeAssertAt, e, i)
+    end
+  end
+end
+
 
 @doc """
 # If a definition of a mmap is only used once and not aliased, it can be inlined into its
@@ -5954,59 +6077,18 @@ function mmapInline(ast, lives, uniqSet)
   usedAt = Dict{Union{Symbol, GenSym}, Int}()
   modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
   shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-  function modify!(dict, lhs, i)
-    if haskey(dict, lhs)
-      push!(dict[lhs], i)
-    else
-      dict[lhs] = Int[i]
-    end
-  end
   assert(isa(body, Expr) && is(body.head, :body))
+
   # first do a loop to see which def is only referenced once
   for i =1:length(body.args)
     expr = body.args[i]
     head = isa(expr, Expr) ? expr.head : nothing
-    function check_used(expr)
-      if isa(expr, Expr)
-        if is(expr.head, :assertEqShape)
-        # handle assertEqShape separately, do not consider them
-        # as valid references
-          for arg in expr.args
-            s = isa(arg, SymbolNode) ? arg.name : arg 
-            if isa(s, Symbol) || isa(s, GenSym)
-              modify!(shapeAssertAt, s, i)
-            end
-          end
-        else
-          for arg in expr.args
-            check_used(arg)
-          end
-        end
-      elseif isa(expr, Symbol) || isa(expr, GenSym)
-        if haskey(usedAt, expr) # already used? remove from defs
-          delete!(defs, expr)
-        else
-          usedAt[expr] = i
-        end 
-      elseif isa(expr, SymbolNode)
-        if haskey(usedAt, expr.name) # already used? remove from defs
-          dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
-          delete!(defs, expr.name)
-        else
-          usedAt[expr.name] = i
-        end 
-      elseif isa(expr, Array) || isa(expr, Tuple)
-        for e in expr
-          check_used(e)
-        end
-      end
-    end
     # record usedAt, and reject those used more than once
     # record definition
     if is(head, :(=))
       lhs = expr.args[1]
       rhs = expr.args[2]
-      check_used(rhs)
+      check_used(defs, usedAt, shapeAssertAt, rhs,i)
       assert(isa(lhs, Symbol) || isa(lhs, GenSym))
       modify!(modifiedAt, lhs, i)
       if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
@@ -6022,7 +6104,7 @@ function mmapInline(ast, lives, uniqSet)
         dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
       end
     else
-      check_used(expr)
+      check_used(defs, usedAt, shapeAssertAt, expr,i)
     end
     # check if args may be modified in place
     if is(head, :mmap!)
@@ -6069,7 +6151,8 @@ function mmapInline(ast, lives, uniqSet)
       j = usedAt[lhs]
       ok = true
       # dprintln(3, "MI: def of ", lhs, " at line ", i, " used by line ", j)
-      for v in src.args
+      for v in src.args[1]
+        @assert isa(v,Symbol) || isa(v,GenSym) || isa(v,SymbolNode) "mmapInline(): Arguments of mmap should be Symbol or GenSym or SymbolNode."
         if isa(v, SymbolNode) v = v.name end
         if haskey(modifiedAt, v)
           for k in modifiedAt[v]
@@ -6087,61 +6170,11 @@ function mmapInline(ast, lives, uniqSet)
       if isa(dst, Expr) && is(dst.head, :(=))
         dst = dst.args[2]
       end
-      # function that inlines from src into dst
-      function inline!(src, dst)
-        args = dst.args[1]
-        pos = 0
-        for k = 1:length(args)
-          s = args[k]
-          if isa(s, SymbolNode) s = s.name end
-          if s == lhs
-            pos = k
-             break
-          end
-        end
-        assert(pos > 0)
-        args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
-        f = src.args[2]
-        assert(length(f.outputs)==1)
-        dst.args[1] = args
-        g = dst.args[2]
-        inputs = g.inputs
-        g_inps = length(inputs) 
-        inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
-        linfo = g.linfo
-        # add escaping variables from f into g, since mergeLambdaInfo only deals
-        # with nesting lambda, but not parallel ones.
-        for (v, d) in f.linfo.escaping_defs
-          if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
-            CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
-          end
-        end
-        gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
-        tmp_t = f.outputs[1]
-        tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
-        dst.args[2] = DomainLambda(inputs, g.outputs, 
-          args -> begin
-            fb = f.genBody(args[g_inps:end])
-            fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
-            expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-            gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
-            return [fb[1:end-1]; [expr]; gb]
-          end, linfo)
-        DomainIR.mmapRemoveDupArg!(dst)
-      end
-      function eliminateShapeAssert(dict, lhs)
-        if haskey(dict, lhs)
-          for k in dict[lhs]
-            dprintln(3, "MI: eliminate shape assert at line ", k)
-            body.args[k] = nothing
-          end
-        end
-      end
       if isa(dst, Expr) && is(dst.head, :mmap)
          # inline mmap into mmap
-        inline!(src, dst)
+        inline!(src, dst, lhs)
         body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs)
+        eliminateShapeAssert(shapeAssertAt, lhs, body)
         dprintln(3, "MI: result: ", body.args[j])
       elseif isa(dst, Expr) && is(dst.head, :mmap!)
         s = dst.args[1][1]
@@ -6149,14 +6182,14 @@ function mmapInline(ast, lives, uniqSet)
         if s == lhs 
           # when lhs is the inplace array that dst operates on
           # change dst to mmap
-          inline!(src, dst)
+          inline!(src, dst, lhs)
           dst.head = :mmap
         else
           # otherwise just normal inline
-          inline!(src, dst)
+          inline!(src, dst, lhs)
         end
         body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs)
+        eliminateShapeAssert(shapeAssertAt, lhs, body)
         # inline mmap into mmap!
         dprintln(3, "MI: result: ", body.args[j])
       else
