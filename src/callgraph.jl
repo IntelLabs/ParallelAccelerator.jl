@@ -2,7 +2,7 @@ module CallGraph
 
 import Base.show
 using CompilerTools.LambdaHandling
-
+using CompilerTools.LivenessAnalysis
 
 type CallInfo
   func_sig                             # a tuple of (function, signature)
@@ -194,7 +194,7 @@ function extractStaticCallGraphWalk(node, state :: extractStaticCallGraphState, 
       func_expr = args[1]
       call_args = args[2:end]
       call_sig = Expr(:tuple)
-      call_sig.args = map(x -> DomainIR.typeOfOpr(state.lambdaInfo, x), call_args)
+      call_sig.args = map(x -> typeOfOpr(state.lambdaInfo, x), call_args)
       call_sig_arg_tuple = eval(call_sig)
       dprintln(4,"func_expr = ", func_expr)
       dprintln(4,"Arg tuple = ", call_sig_arg_tuple)

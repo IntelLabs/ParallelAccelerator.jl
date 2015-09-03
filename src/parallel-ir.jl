@@ -1476,8 +1476,10 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
       new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1])), state)
     elseif num_dim_inputs == 2
       new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2])), state)
+    elseif num_dim_inputs == 3
+      new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2]), symbol(save_array_lens[3])), state)
     else
-      throw(string("Only arrays up to two dimensions supported in parallel IR."))
+      throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
     end
     # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
     CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
@@ -3205,7 +3207,7 @@ function call_instruction_count(args, state :: eic_state, debug_level)
 
   dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
   sig_expr = Expr(:tuple)
-  sig_expr.args = map(x -> DomainIR.typeOfOpr(state.lambdaInfo, x), fargs)
+  sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(state.lambdaInfo, x), fargs)
   signature = eval(sig_expr)
   fs = (func, signature)
 
@@ -5355,7 +5357,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
     end
   elseif typeof(rhs) == SymbolNode
     out_typ = rhs.typ
-    if out_typ.name == Array.name
+    if DomainIR.isarray(out_typ)
       # Add a length correlation of the form "a = b".
       dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
       add_merge_correlations(toSymGen(rhs), lhsName, state)
@@ -5837,7 +5839,7 @@ function create_equivalence_classes(node, state :: expr_state, top_level_number 
 
     state.lambdaInfo = save_lambdaInfo
 
-    return node
+    return nothing
   end
 
   # We can only extract array equivalences from top-level statements.

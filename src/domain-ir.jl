@@ -121,7 +121,7 @@ function type_expr(typ, expr)
   return expr
 end
 
-export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwapArg, typeOfOpr, isarray
+export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwapArg, isarray
 
 # A representation for anonymous lambda used in domainIR.
 #   inputs:  types of input tuple
@@ -527,22 +527,8 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
   return (nonarrays, args_[1:j], typs[1:j], mkFun)
 end
 
-function typeOfOpr(li :: LambdaInfo, x)
-  if isa(x, Expr) x.typ
-  elseif isa(x, Symbol) 
-    getType(x, li) 
-  elseif isa(x, SymbolNode) 
-    typ1 = getType(x.name, li) 
-    assert(x.typ == typ1)
-    x.typ
-  elseif isa(x, GenSym) getType(x, li)
-  elseif isa(x, GlobalRef) typeof(eval(x))
-  else typeof(x)
-  end
-end
-
 function typeOfOpr(state :: IRState, x)
-  typeOfOpr(state.linfo, x)
+  CompilerTools.LivenessAnalysis.typeOfOpr(x, state.linfo)
 end
 
 # get elem type T from an Array{T} type

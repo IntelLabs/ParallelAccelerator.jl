@@ -1,5 +1,6 @@
 using CompilerTools
 using CompilerTools.LambdaHandling
+using CompilerTools.LivenessAnalysis
 
 type KernelStat
   dimension :: Int             # number of dimensions of the stencil
