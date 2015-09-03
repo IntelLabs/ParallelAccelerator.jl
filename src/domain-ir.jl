@@ -6,6 +6,9 @@ using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using Core.svec
 
+# uncomment this line when using Debug.jl
+#using Debug
+
 # List of Domain IR Operators
 #
 # eltype  :: Array{T, n} -> T
@@ -624,10 +627,11 @@ function from_body(state, env, expr::Any)
 end
 
 function mmapRemoveDupArg!(expr)
-  head = expr.head # must be :mmap or :mmap!
+  head = expr.head 
+  @assert head==:mmap || head==:mmap! "Input to mmapRemoveDupArg!() must be :mmap or :mmap!"
   arr = expr.args[1]
   f = expr.args[2]
-  posMap = Dict{Symbol, Int}()
+  posMap = Dict{SymGen, Int}()
   indices = Array(Int, length(arr))
   hasDup = false
   n = 1
@@ -638,14 +642,14 @@ function mmapRemoveDupArg!(expr)
     indices[i] = n
     s = arr[i]
     if isa(s, SymbolNode) s = s.name end
-    if isa(s, Symbol)
+    if isa(s, Symbol) || isa(s, GenSym)
       if haskey(posMap, s)
-	hasDup = true
-	indices[i] = posMap[s]
+        hasDup = true
+        indices[i] = posMap[s]
       else
-	posMap[s] = n
-	push!(newarr, arr[i])
-	push!(newinp, f.inputs[i])
+        posMap[s] = n
+        push!(newarr, arr[i])
+        push!(newinp, f.inputs[i])
         n += 1
       end
     end
@@ -655,13 +659,13 @@ function mmapRemoveDupArg!(expr)
   dprintln(3, "MMRD:  ", newarr, newinp, indices)
   expr.args[1] = newarr
   expr.args[2] = DomainLambda(newinp, f.outputs,
-    args -> begin
-	dupargs = Array(Any, oldn)
-        for i=1:oldn
-	  dupargs[i] = args[indices[i]]
-	end
-	f.genBody(dupargs)
-    end, f.linfo)
+  args -> begin
+    dupargs = Array(Any, oldn)
+    for i=1:oldn
+      dupargs[i] = args[indices[i]]
+    end
+    f.genBody(dupargs)
+  end, f.linfo)
   dprintln(3, "MMRD: expr becomes ", expr)
   return expr
 end
