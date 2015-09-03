@@ -5972,7 +5972,8 @@ function modify!(dict, lhs, i)
     dict[lhs] = Int[i]
   end
 end
-# function that inlines from src into dst
+
+# function that inlines from src mmap into dst mmap
 function inline!(src, dst, lhs)
   args = dst.args[1]
   pos = 0
@@ -5984,7 +5985,7 @@ function inline!(src, dst, lhs)
       break
     end
   end
-  assert(pos > 0)
+  @assert pos>0 "mmapInline(): position of mmap output not found"
   args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
   f = src.args[2]
   assert(length(f.outputs)==1)
@@ -6014,6 +6015,7 @@ function inline!(src, dst, lhs)
   end, linfo)
   DomainIR.mmapRemoveDupArg!(dst)
 end
+
 # mmapInline() helper function
 function eliminateShapeAssert(dict, lhs, body)
   if haskey(dict, lhs)
