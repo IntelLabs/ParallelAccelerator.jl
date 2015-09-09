@@ -627,17 +627,16 @@ function mmapRemoveDupArg!(expr)
   for i = 1:oldn
     indices[i] = n
     s = arr[i]
+    @assert isa(s,SymAllGen) "inputs of mmap should be variables (symbols)"
     if isa(s, SymbolNode) s = s.name end
-    if isa(s, Symbol) || isa(s, GenSym)
-      if haskey(posMap, s)
-        hasDup = true
-        indices[i] = posMap[s]
-      else
-        posMap[s] = n
-        push!(newarr, arr[i])
-        push!(newinp, f.inputs[i])
-        n += 1
-      end
+    if haskey(posMap, s)
+      hasDup = true
+      indices[i] = posMap[s]
+    else
+      posMap[s] = n
+      push!(newarr, arr[i])
+      push!(newinp, f.inputs[i])
+      n += 1
     end
   end
   if (!hasDup) return expr end
