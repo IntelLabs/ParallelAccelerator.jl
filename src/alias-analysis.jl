@@ -201,7 +201,7 @@ function from_call(state, expr::Any)
   #dprintln(2, "AA from_call: new fun=", fun)
   (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
   dprintln(2, "AA from_call: normalized fun=", fun_)
-  if is(fun_, :arrayref) || is(fun, :arrayset) || is(fun_, :unsafe_arrayset) || is(fun_, :unsafe_arrayref) || haskey(DomainIR.mapOps, fun_)
+  if is(fun_, :arrayref) || is(fun, :arrayset) || haskey(DomainIR.mapOps, fun_)
     # This is actually an conservative answer since arrayref might return
     # an array too, but we don't consider it as a case to handle.
     return NotArray
@@ -235,34 +235,6 @@ function from_return(state, expr)
   end
 end
 
-function from_stencil!(state, ast)
-  # ast is a list of PIRParForAst nodes.
-  assert(length(ast) > 0)
-  krnStat = ast[1]
-  iterations = ast[2]
-  bufs = ast[3]
-  dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
-  if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
-  # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
-    for i = 1:min(krnStat.rotateNum, length(bufs))
-      v = bufs[i]
-      if isa(v, SymbolNode)
-        update_unknown(state, v.name)
-      end
-    end
-  end
-end
-
-function from_parfor(state, ast)
-  # FIXME: the return result could alias any of the rotating buffers
-  state.nest_level = state.nest_level + 1
-  from_exprs(state, ast.preParFor)
-  from_exprs(state, ast.body)
-  ret = from_exprs(state, ast.postParFor)
-  state.nest_level = state.nest_level - 1
-  return ret[end]
-end
-
 function from_expr(state, ast)
   if isa(ast, LambdaStaticData)
       ast = uncompressed_ast(ast)
@@ -293,31 +265,7 @@ function from_expr(state, ast)
         return lookup(state, toSymGen(args[1]))
     elseif is(head, :ranges)
         return NotArray
-    elseif is(head, :reduce)
-        # TODO: inspect the lambda body to rule out assignment?
-        return NotArray
-    elseif is(head, :mmap)
-        # TODO: inspect the lambda body to rule out assignment?
-        return next_node(state)
-    elseif is(head, :mmap!)
-        dl :: DomainLambda = args[2]
-        n_outputs = length(dl.outputs)
-        assert(n_outputs == 1) # unless we support multi-return
-        tmp = args[1][1]
-        if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
-          tmp = tmp.args[1]
-        end
-        return lookup(state, toSymGen(tmp))
-    elseif is(head, :stencil!)
-        return from_stencil!(state, args)
-    elseif is(head, :parfor)
-        assert(length(args) == 1) # unless we support multi-return
-        return from_parfor(state, args[1])
     elseif is(head, :arraysize)
-        return NotArray
-    elseif is(head, :assertEqShape)
-        return NotArray
-    elseif is(head, :assert)
         return NotArray
     elseif is(head, :tuple)
         return NotArray 

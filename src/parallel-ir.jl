@@ -7151,4 +7151,63 @@ function AstWalk(ast::Any, callback, cbdata)
 end
 
 end
+@doc """
+An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.
+For each ParallelIR specific node type, form an array of expressions that AliasAnalysis
+can analyze to reflect the aliases of the given AST node.
+If we read a symbol it is sufficient to just return that symbol as one of the expressions.
+If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
+"""
+function pir_alias_cb(ast, state, cbdata)
+  dprintln(4,"pir_alias_cb")
+  asttyp = typeof(ast)
+  if asttyp == Expr
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+      dprintln(3,"pir_alias_cb for :parfor")
+      expr_to_process = Any[]
+
+      assert(typeof(args[1]) == IntelPSE.ParallelIR.PIRParForAst)
+      this_parfor = args[1]
+
+      AliasAnalysis.increaseNestLevel(state);
+      append!(expr_to_process, this_parfor.preParFor)
+      append!(expr_to_process, this_parfor.body)
+      append!(expr_to_process, this_parfor.postParFor)
+      AliasAnalysis.decreaseNestLevel(state);
+
+      return expr_to_process
+
+    elseif head == :call
+      if args[1] == TopNode(:unsafe_arrayref)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayref)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      elseif args[1] == TopNode(:unsafe_arrayset)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayset)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      end
+      # Ehsan: why assignment?
+    elseif head == :(=)
+      dprintln(3,"pir_live_cb for :(=)")
+      if length(args) > 2
+        expr_to_process = Any[]
+        push!(expr_to_process, args[1])
+        push!(expr_to_process, args[2])
+        for i = 4:length(args)
+          push!(expr_to_process, args[i])
+        end
+        return expr_to_process
+      end
+    end
+  end
+  return DomainIR.dir_live_cb(ast, cbdata)
+end
+
 

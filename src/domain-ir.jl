@@ -1609,4 +1609,64 @@ function symbol_or_gensym(x)
   end
 end
 
+function dir_alias_cb(ast, state, cbdata)
+  dprintln(4,"dir_alias_cb ")
+  asttyp = typeof(ast)
+  if asttyp == Expr
+    head = ast.head
+    args = ast.args
+    if head == :mmap
+      # TODO: inspect the lambda body to rule out assignment?
+      return next_node(state)
+    elseif head == :mmap!
+      dl :: DomainLambda = args[2]
+      n_outputs = length(dl.outputs)
+      assert(n_outputs == 1) # unless we support multi-return
+      tmp = args[1][1]
+      if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
+        tmp = tmp.args[1] 
+      end 
+      return lookup(state, toSymGen(tmp))
+    elseif head == :reduce
+      # TODO: inspect the lambda body to rule out assignment?
+      return NotArray
+    elseif head == :stencil!
+      # args is a list of PIRParForAst nodes.
+      assert(length(args) > 0)
+      krnStat = args[1]
+      iterations = args[2]
+      bufs = args[3]
+      dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
+      if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
+        # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
+        for i = 1:min(krnStat.rotateNum, length(bufs))
+          v = bufs[i]
+          if isa(v, SymbolNode)
+            update_unknown(state, v.name)
+          end
+        end
+      end
+    elseif head == :assertEqShape
+      return NotArray
+    elseif head == :assert
+      return NotArray 
+    elseif head == :select
+      expr_to_process = Any[]
+      for i = 1:length(args)
+          push!(expr_to_process, args[i])
+      end
+      return expr_to_process
+    elseif head == :range
+      expr_to_process = Any[]
+      for i = 1:length(args)
+          push!(expr_to_process, args[i])
+      end
+      return expr_to_process
+    end
+  elseif asttyp == KernelStat
+    return Any[]
+  end
+  return nothing
+end
+
 end
