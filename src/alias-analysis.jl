@@ -120,7 +120,7 @@ function lookup(state, v)
 end
 
 # (:lambda, {param, meta@{localvars, types, freevars}, body})
-function from_lambda(state, env, expr)
+function from_lambda(state, expr)
   local head = expr.head
   local ast  = expr.args
   local typ  = expr.typ
@@ -135,24 +135,24 @@ function from_lambda(state, env, expr)
   return NotArray
 end
 
-function from_exprs(state, env, ast)
+function from_exprs(state, ast)
   local len  = length(ast)
-  [ from_expr(state, env, exp) for exp in ast ]
+  [ from_expr(state, exp) for exp in ast ]
 end
 
-function from_body(state, env, expr::Any)
+function from_body(state, expr::Any)
   local exprs = expr.args
   local ret = NotArray       # default return
   for i = 1:length(exprs)
     if state.nest_level == 0
       state.top_level_idx = i
     end
-    ret = from_expr(state, env, exprs[i])
+    ret = from_expr(state, exprs[i])
   end
   return ret
 end
 
-function from_assignment(state, env, expr::Any)
+function from_assignment(state, expr::Any)
   local head = expr.head
   local ast  = expr.args
   local typ  = expr.typ
@@ -165,7 +165,7 @@ function from_assignment(state, env, expr::Any)
   end
   assert(isa(lhs, Symbol) || isa(lhs, GenSym))
   if lookup(state, lhs) != NotArray
-    rhs = from_expr(state, env, rhs)
+    rhs = from_expr(state, rhs)
     # if all vars that have rhs are not alive afterwards
     # then we can safely give v a fresh ID.
     if state.nest_level == 0
@@ -187,7 +187,7 @@ function from_assignment(state, env, expr::Any)
   end
 end
 
-function from_call(state, env, expr::Any)
+function from_call(state, expr::Any)
   # The assumption here is that the program has already been translated
   # by DomainIR, and all args are either SymbolNode or Constant.
   local head = expr.head
@@ -197,7 +197,7 @@ function from_call(state, env, expr::Any)
   local fun  = ast[1]
   local args = ast[2:end]
   dprintln(2, "AA from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
-  #fun = from_expr(state, env, fun)
+  #fun = from_expr(state, fun)
   #dprintln(2, "AA from_call: new fun=", fun)
   (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
   dprintln(2, "AA from_call: normalized fun=", fun_)
@@ -208,7 +208,7 @@ function from_call(state, env, expr::Any)
   elseif is(fun_, :alloc)
     return next_node(state)
   elseif is(fun_, :fill!)
-    return from_expr(state, env, args[1])
+    return from_expr(state, args[1])
   else
     dprintln(2, "AA: unknown call ", fun_)
     # For unknown calls, conservative assumption is that after
@@ -224,10 +224,10 @@ function from_call(state, env, expr::Any)
   end
 end
 
-function from_return(state, env, expr)
+function from_return(state, expr)
   local head = expr.head
   local typ  = expr.typ
-  local args = from_exprs(state, env, expr.args)
+  local args = from_exprs(state, expr.args)
   if length(args) == 1
     return args[1]
   else
@@ -235,7 +235,7 @@ function from_return(state, env, expr)
   end
 end
 
-function from_stencil!(state, env, ast)
+function from_stencil!(state, ast)
   # ast is a list of PIRParForAst nodes.
   assert(length(ast) > 0)
   krnStat = ast[1]
@@ -253,17 +253,17 @@ function from_stencil!(state, env, ast)
   end
 end
 
-function from_parfor(state, env, ast)
+function from_parfor(state, ast)
   # FIXME: the return result could alias any of the rotating buffers
   state.nest_level = state.nest_level + 1
-  from_exprs(state, env, ast.preParFor)
-  from_exprs(state, env, ast.body)
-  ret = from_exprs(state, env, ast.postParFor)
+  from_exprs(state, ast.preParFor)
+  from_exprs(state, ast.body)
+  ret = from_exprs(state, ast.postParFor)
   state.nest_level = state.nest_level - 1
   return ret[end]
 end
 
-function from_expr(state, env, ast)
+function from_expr(state, ast)
   if isa(ast, LambdaStaticData)
       ast = uncompressed_ast(ast)
   end
@@ -275,18 +275,18 @@ function from_expr(state, env, ast)
     local typ  = ast.typ
     dprintln(2, " --> ", head)
     if is(head, :lambda)
-        return from_lambda(state, env, ast)
+        return from_lambda(state, ast)
     elseif is(head, :body)
-        return from_body(state, env, ast)
+        return from_body(state, ast)
     elseif is(head, :(=))
-        return from_assignment(state, env, ast)
+        return from_assignment(state, ast)
     elseif is(head, :return)
-        return from_return(state, env, ast)
+        return from_return(state, ast)
     elseif is(head, :call)
-        return from_call(state, env, ast)
+        return from_call(state, ast)
         # TODO: catch domain IR result here
     elseif is(head, :call1)
-        return from_call(state, env, ast)
+        return from_call(state, ast)
     elseif is(head, :select)
         return next_node(state)
     elseif is(head, :tomask)
@@ -309,10 +309,10 @@ function from_expr(state, env, ast)
         end
         return lookup(state, toSymGen(tmp))
     elseif is(head, :stencil!)
-        return from_stencil!(state, env, args)
+        return from_stencil!(state, args)
     elseif is(head, :parfor)
         assert(length(args) == 1) # unless we support multi-return
-        return from_parfor(state, env, args[1])
+        return from_parfor(state, args[1])
     elseif is(head, :arraysize)
         return NotArray
     elseif is(head, :assertEqShape)
