@@ -1651,22 +1651,36 @@ function dir_alias_cb(ast, state, cbdata)
     elseif head == :assert
       return NotArray 
     elseif head == :select
-      expr_to_process = Any[]
-      for i = 1:length(args)
-          push!(expr_to_process, args[i])
+      return next_node(state) 
+    elseif head == :ranges
+      return NotArray
+    elseif is(head, :tomask)
+      return lookup(state, toSymGen(args[1]))
+    elseif is(head, :arraysize)
+      return NotArray
+    elseif is(head, :tuple)
+      return NotArray
+    elseif is(head, :alloc)
+      return next_node(state)
+    elseif is(head, :copy)
+      return next_node(state)
+    elseif is(head, :call) || is(head, :call1)
+      local fun  = ast.args[1]
+      local args = ast.args[2:end]
+      (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
+      dprintln(2, "AA from_call: normalized fun=", fun_)
+      if(haskey(DomainIR.mapOps, fun_))
+        return NotArray
+      elseif is(fun_, :alloc)
+        return next_node(state)
+      elseif is(fun_, :fill!)
+        return args[1]
+      else
+        return ast # return AST node untouched so AliasAnalysis handles it
       end
-      return expr_to_process
-    elseif head == :range
-      expr_to_process = Any[]
-      for i = 1:length(args)
-          push!(expr_to_process, args[i])
-      end
-      return expr_to_process
     end
-  elseif asttyp == KernelStat
-    return Any[]
+
+    return nothing
   end
-  return nothing
-end
 
 end

@@ -199,16 +199,10 @@ function from_call(state, expr::Any)
   dprintln(2, "AA from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
   #fun = from_expr(state, fun)
   #dprintln(2, "AA from_call: new fun=", fun)
-  (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
-  dprintln(2, "AA from_call: normalized fun=", fun_)
-  if is(fun_, :arrayref) || is(fun, :arrayset) || haskey(DomainIR.mapOps, fun_)
+  if is(fun_, :arrayref) || is(fun, :arrayset) 
     # This is actually an conservative answer since arrayref might return
     # an array too, but we don't consider it as a case to handle.
     return NotArray
-  elseif is(fun_, :alloc)
-    return next_node(state)
-  elseif is(fun_, :fill!)
-    return from_expr(state, args[1])
   else
     dprintln(2, "AA: unknown call ", fun_)
     # For unknown calls, conservative assumption is that after
@@ -258,21 +252,7 @@ function from_expr(state, ast)
         return from_call(state, ast)
         # TODO: catch domain IR result here
     elseif is(head, :call1)
-        return from_call(state, ast)
-    elseif is(head, :select)
-        return next_node(state)
-    elseif is(head, :tomask)
-        return lookup(state, toSymGen(args[1]))
-    elseif is(head, :ranges)
-        return NotArray
-    elseif is(head, :arraysize)
-        return NotArray
-    elseif is(head, :tuple)
-        return NotArray 
-    elseif is(head, :alloc)
-        return next_node(state)
-    elseif is(head, :copy)
-        return next_node(state)
+      return from_call(state, ast)
     elseif is(head, :method)
         # skip
     elseif is(head, :line)
