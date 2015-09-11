@@ -375,7 +375,7 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
     end
   end
   dprintln(2, "AA locals=", state.locals)
-  from_expr(state, Nothing, body)
+  from_expr(state, body)
   dprintln(2, "AA locals=", state.locals)
   local revmap = Dict{Int, SymGen}()
   local unique = Set{SymGen}()
