@@ -5,6 +5,7 @@ using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using Core.svec
+using ..AliasAnalysis
 
 # uncomment this line when using Debug.jl
 #using Debug
@@ -1617,7 +1618,7 @@ function dir_alias_cb(ast, state, cbdata)
     args = ast.args
     if head == :mmap
       # TODO: inspect the lambda body to rule out assignment?
-      return next_node(state)
+      return AliasAnalysis.next_node(state)
     elseif head == :mmap!
       dl :: DomainLambda = args[2]
       n_outputs = length(dl.outputs)
@@ -1626,10 +1627,10 @@ function dir_alias_cb(ast, state, cbdata)
       if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
         tmp = tmp.args[1] 
       end 
-      return lookup(state, toSymGen(tmp))
+      return AliasAnalysis.lookup(state, toSymGen(tmp))
     elseif head == :reduce
       # TODO: inspect the lambda body to rule out assignment?
-      return NotArray
+      return AliasAnalysis.NotArray
     elseif head == :stencil!
       # args is a list of PIRParForAst nodes.
       assert(length(args) > 0)
@@ -1642,45 +1643,45 @@ function dir_alias_cb(ast, state, cbdata)
         for i = 1:min(krnStat.rotateNum, length(bufs))
           v = bufs[i]
           if isa(v, SymbolNode)
-            update_unknown(state, v.name)
+            AliasAnalysis.update_unknown(state, v.name)
           end
         end
       end
+      return Any[] # empty array of Expr
     elseif head == :assertEqShape
-      return NotArray
+      return AliasAnalysis.NotArray
     elseif head == :assert
-      return NotArray 
+      return AliasAnalysis.NotArray 
     elseif head == :select
-      return next_node(state) 
+      return AliasAnalysis.next_node(state) 
     elseif head == :ranges
-      return NotArray
+      return AliasAnalysis.NotArray
     elseif is(head, :tomask)
-      return lookup(state, toSymGen(args[1]))
+      return AliasAnalysis.lookup(state, toSymGen(args[1]))
     elseif is(head, :arraysize)
-      return NotArray
+      return AliasAnalysis.NotArray
     elseif is(head, :tuple)
-      return NotArray
+      return AliasAnalysis.NotArray
     elseif is(head, :alloc)
-      return next_node(state)
+      return AliasAnalysis.next_node(state)
     elseif is(head, :copy)
-      return next_node(state)
+      return AliasAnalysis.next_node(state)
     elseif is(head, :call) || is(head, :call1)
       local fun  = ast.args[1]
       local args = ast.args[2:end]
       (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
       dprintln(2, "AA from_call: normalized fun=", fun_)
       if(haskey(DomainIR.mapOps, fun_))
-        return NotArray
+        return AliasAnalysis.NotArray
       elseif is(fun_, :alloc)
-        return next_node(state)
+        return AliasAnalysis.next_node(state)
       elseif is(fun_, :fill!)
         return args[1]
-      else
-        return ast # return AST node untouched so AliasAnalysis handles it
       end
     end
 
     return nothing
   end
+end
 
 end

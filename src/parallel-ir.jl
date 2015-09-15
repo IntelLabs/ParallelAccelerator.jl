@@ -6586,11 +6586,11 @@ function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
 
   if mmap_to_mmap! != 0
     dprintln(1, "starting mmap to mmap! transformation.")
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
+    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
     dprintln(3, "uniqSet = ", uniqSet)
     mmapInline(ast, lives, uniqSet)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
+    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
     mmapToMmap!(ast, lives, uniqSet)
     dprintln(1, "Finished mmap to mmap! transformation.")
     dprintln(3, "AST = ", ast)
@@ -6717,11 +6717,11 @@ function from_expr(function_name, ast :: Expr, input_arrays)
 
   if mmap_to_mmap! != 0
     dprintln(1, "starting mmap to mmap! transformation.")
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
+    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
     dprintln(3, "uniqSet = ", uniqSet)
     mmapInline(ast, lives, uniqSet)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives)
+    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
     mmapToMmap!(ast, lives, uniqSet)
     dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
     printLambda(3, ast)
@@ -7150,7 +7150,6 @@ function AstWalk(ast::Any, callback, cbdata)
   DomainIR.AstWalk(ast, AstWalkCallback, dw)
 end
 
-end
 @doc """
 An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.
 For each ParallelIR specific node type, form an array of expressions that AliasAnalysis
@@ -7172,42 +7171,22 @@ function pir_alias_cb(ast, state, cbdata)
       this_parfor = args[1]
 
       AliasAnalysis.increaseNestLevel(state);
-      append!(expr_to_process, this_parfor.preParFor)
-      append!(expr_to_process, this_parfor.body)
-      append!(expr_to_process, this_parfor.postParFor)
+      AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
+      AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
+      ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
       AliasAnalysis.decreaseNestLevel(state);
 
-      return expr_to_process
+      return ret[end]
 
     elseif head == :call
       if args[1] == TopNode(:unsafe_arrayref)
-        expr_to_process = Any[]
-        new_expr = deepcopy(ast)
-        new_expr.args[1] = TopNode(:arrayref)
-        push!(expr_to_process, new_expr)
-        return expr_to_process
+        return AliasAnalysis.NotArray 
       elseif args[1] == TopNode(:unsafe_arrayset)
-        expr_to_process = Any[]
-        new_expr = deepcopy(ast)
-        new_expr.args[1] = TopNode(:arrayset)
-        push!(expr_to_process, new_expr)
-        return expr_to_process
-      end
-      # Ehsan: why assignment?
-    elseif head == :(=)
-      dprintln(3,"pir_live_cb for :(=)")
-      if length(args) > 2
-        expr_to_process = Any[]
-        push!(expr_to_process, args[1])
-        push!(expr_to_process, args[2])
-        for i = 4:length(args)
-          push!(expr_to_process, args[i])
-        end
-        return expr_to_process
+        return AliasAnalysis.NotArray 
       end
     end
   end
-  return DomainIR.dir_live_cb(ast, cbdata)
+  return DomainIR.dir_alias_cb(ast, state, cbdata)
 end
 
-
+end

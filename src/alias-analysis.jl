@@ -13,7 +13,6 @@
 
 module AliasAnalysis
 
-using ..DomainIR
 using Base.uncompressed_ast
 using CompilerTools.LambdaHandling
 using CompilerTools
@@ -55,6 +54,14 @@ type State
 end
 
 init_state(liveness) = State(0, Dict{SymGen,Int}(), Dict{Int, Set{SymGen}}(), 0, 0, liveness)
+
+function increaseNestLevel(state)
+state.nest_level = state.nest_level + 1
+end
+
+function decreaseNestLevel(state)
+state.nest_level = state.nest_level -1
+end
 
 function next_node(state)
   local n = state.baseID + 1
@@ -135,24 +142,24 @@ function from_lambda(state, expr)
   return NotArray
 end
 
-function from_exprs(state, ast)
+function from_exprs(state, ast, callback=not_handled, cbdata=nothing)
   local len  = length(ast)
-  [ from_expr(state, exp) for exp in ast ]
+  [ from_expr(state, exp, callback, cbdata) for exp in ast ]
 end
 
-function from_body(state, expr::Any)
+function from_body(state, expr::Any, callback, cbdata)
   local exprs = expr.args
   local ret = NotArray       # default return
   for i = 1:length(exprs)
     if state.nest_level == 0
       state.top_level_idx = i
     end
-    ret = from_expr(state, exprs[i])
+    ret = from_expr(state, exprs[i], callback, cbdata)
   end
   return ret
 end
 
-function from_assignment(state, expr::Any)
+function from_assignment(state, expr::Any, callback, cbdata)
   local head = expr.head
   local ast  = expr.args
   local typ  = expr.typ
@@ -165,7 +172,7 @@ function from_assignment(state, expr::Any)
   end
   assert(isa(lhs, Symbol) || isa(lhs, GenSym))
   if lookup(state, lhs) != NotArray
-    rhs = from_expr(state, rhs)
+    rhs = from_expr(state, rhs, callback, cbdata)
     # if all vars that have rhs are not alive afterwards
     # then we can safely give v a fresh ID.
     if state.nest_level == 0
@@ -199,12 +206,12 @@ function from_call(state, expr::Any)
   dprintln(2, "AA from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
   #fun = from_expr(state, fun)
   #dprintln(2, "AA from_call: new fun=", fun)
-  if is(fun_, :arrayref) || is(fun, :arrayset) 
+  if is(fun, :arrayref) || is(fun, :arrayset) || fun==TopNode(:arrayref) || fun==TopNode(:arrayset)
     # This is actually an conservative answer since arrayref might return
     # an array too, but we don't consider it as a case to handle.
     return NotArray
   else
-    dprintln(2, "AA: unknown call ", fun_)
+    dprintln(2, "AA: unknown call ", fun)
     # For unknown calls, conservative assumption is that after
     # the call, its array type arguments might alias each other.
     for exp in args
@@ -218,10 +225,10 @@ function from_call(state, expr::Any)
   end
 end
 
-function from_return(state, expr)
+function from_return(state, expr, callback, cbdata)
   local head = expr.head
   local typ  = expr.typ
-  local args = from_exprs(state, expr.args)
+  local args = from_exprs(state, expr.args, callback, cbdata)
   if length(args) == 1
     return args[1]
   else
@@ -229,10 +236,25 @@ function from_return(state, expr)
   end
 end
 
-function from_expr(state, ast)
+function from_expr(state, ast, callback=not_handled, cbdata=nothing)
   if isa(ast, LambdaStaticData)
-      ast = uncompressed_ast(ast)
+    ast = uncompressed_ast(ast)
   end
+
+  # "nothing" output means couldn't be handled
+  handled = callback(ast, state, cbdata)
+  if isa(handled, Array)
+    dprintln(3,"Processing expression from callback for ", ast) 
+    dprintln(3,handled)
+    return from_exprs(state, handled, callback, cbdata)
+    # AST node replaced
+  elseif isa(handled, Expr)
+    ast = handled
+  elseif isa(handled,Integer)
+    return handled
+  end
+
+
   local asttyp = typeof(ast)
   dprint(2, "AA from_expr: ", asttyp)
   if is(asttyp, Expr)
@@ -243,11 +265,11 @@ function from_expr(state, ast)
     if is(head, :lambda)
         return from_lambda(state, ast)
     elseif is(head, :body)
-        return from_body(state, ast)
+        return from_body(state, ast, callback, cbdata)
     elseif is(head, :(=))
-        return from_assignment(state, ast)
+        return from_assignment(state, ast, callback, cbdata)
     elseif is(head, :return)
-        return from_return(state, ast)
+        return from_return(state, ast, callback, cbdata)
     elseif is(head, :call)
         return from_call(state, ast)
         # TODO: catch domain IR result here
@@ -283,12 +305,21 @@ function from_expr(state, ast)
   return Unknown
 end
 
-function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo, liveness)
+function isarray(typ)
+  isa(typ, DataType) && is(typ.name, Array.name)
+end
+
+function isbitarray(typ)
+  isa(typ, DataType) && is(typ.name, BitArray.name)
+end
+
+
+function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo, liveness, callback, cbdata)
   local state = init_state(liveness)
   dprintln(2, "AA ", isa(body, Expr), " ", is(body.head, :body)) 
   # FIXME: surprisingly the first value printed above is false!
   for (v, vd) in lambdaInfo.var_defs
-    if !(DomainIR.isarray(vd.typ) || DomainIR.isbitarray(vd.typ))
+    if !(isarray(vd.typ) || isbitarray(vd.typ))
       update_notarray(state, v)
     end
   end
@@ -297,13 +328,13 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
     # Note we assume all input parameters do not aliasing each other,
     # which is a very strong assumption. This may require reconsideration.
     # Update: changed to assum nothing by default.
-    if DomainIR.isarray(vtyp) || DomainIR.isbitarray(vtyp)
+    if isarray(vtyp) || isbitarray(vtyp)
       #update_node(state, v, next_node(state))
       update_unknown(state, v)
     end
   end
   dprintln(2, "AA locals=", state.locals)
-  from_expr(state, body)
+  from_expr(state, body, callback, cbdata)
   dprintln(2, "AA locals=", state.locals)
   local revmap = Dict{Int, SymGen}()
   local unique = Set{SymGen}()
@@ -325,9 +356,9 @@ function analyze_lambda_body(body :: Expr, lambdaInfo :: CompilerTools.LambdaHan
   return unique
 end
 
-function analyze_lambda(expr :: Expr, liveness)
+function analyze_lambda(expr :: Expr, liveness, callback, cbdata)
   lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(expr)
-  analyze_lambda_body(CompilerTools.LambdaHandling.getBody(expr), lambdaInfo, liveness)
+  analyze_lambda_body(CompilerTools.LambdaHandling.getBody(expr), lambdaInfo, liveness, callback, cbdata)
 end
 
 end
