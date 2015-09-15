@@ -616,7 +616,7 @@ function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, ran
     fname = :arrayref
   end
 
-  indsyms = cartesianarray(x -> augment_sn(x,index_vars,range_var), Any, (length(index_vars),))
+  indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
   dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
 
   TypedExpr(
@@ -707,7 +707,7 @@ function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_sta
 
   # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
   # a SymbolNode containing the index expression type "Int".
-  indsyms = cartesianarray(x -> augment_sn(x,index_vars,range_var), Any, (length(index_vars),))
+  indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
   dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
 
   TypedExpr(
