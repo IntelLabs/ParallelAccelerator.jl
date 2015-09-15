@@ -139,7 +139,6 @@ end
 _offload(function_name, signature) = offload(function_name, signature, 0)
 
 include("api.jl")
-include("alias-analysis.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
 include("j2c-array.jl")

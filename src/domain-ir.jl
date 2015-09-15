@@ -5,7 +5,7 @@ using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using Core.svec
-using ..AliasAnalysis
+using CompilerTools.AliasAnalysis
 
 # uncomment this line when using Debug.jl
 #using Debug

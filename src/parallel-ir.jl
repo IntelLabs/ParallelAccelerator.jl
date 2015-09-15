@@ -4,7 +4,7 @@ export num_threads_mode
 using CompilerTools
 using CompilerTools.LambdaHandling
 using ..DomainIR
-using ..AliasAnalysis
+using CompilerTools.AliasAnalysis
 using ..IntelPSE
 #if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
 #using Base.Threading
