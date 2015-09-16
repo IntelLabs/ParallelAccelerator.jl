@@ -5863,7 +5863,7 @@ function create_equivalence_classes(node, state :: expr_state, top_level_number 
 
     state.lambdaInfo = save_lambdaInfo
 
-    return nothing
+    return [node]
   end
 
   # We can only extract array equivalences from top-level statements.
