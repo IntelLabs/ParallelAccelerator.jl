@@ -1,6 +1,7 @@
 module DomainIR
 
 import CompilerTools.AstWalker
+using CompilerTools.LivenessAnalysis
 using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
@@ -1627,6 +1628,7 @@ function dir_alias_cb(ast, state, cbdata)
       if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
         tmp = tmp.args[1] 
       end 
+      toSymGen(x) = isa(x, SymbolNode) ? x.name : x
       return AliasAnalysis.lookup(state, toSymGen(tmp))
     elseif head == :reduce
       # TODO: inspect the lambda body to rule out assignment?
@@ -1657,6 +1659,7 @@ function dir_alias_cb(ast, state, cbdata)
     elseif head == :ranges
       return AliasAnalysis.NotArray
     elseif is(head, :tomask)
+      toSymGen(x) = isa(x, SymbolNode) ? x.name : x
       return AliasAnalysis.lookup(state, toSymGen(args[1]))
     elseif is(head, :arraysize)
       return AliasAnalysis.NotArray
