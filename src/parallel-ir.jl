@@ -1973,12 +1973,11 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
 end
 
 function is_dead_arrayset(x, all_aliased_outputs :: Set)
-
   if isArraysetCall(x)
-      array_to_set = x.args[2]
-        if !in(array_to_set.name, all_aliased_outputs)
-          return true
-        end
+    array_to_set = x.args[2]
+    if !in(toSymGen(array_to_set), all_aliased_outputs)
+      return true
+    end
   end
 
   return false
@@ -3225,7 +3224,7 @@ function call_instruction_count(args, state :: eic_state, debug_level)
 
   dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
   sig_expr = Expr(:tuple)
-  sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(state.lambdaInfo, x), fargs)
+  sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.lambdaInfo), fargs)
   signature = eval(sig_expr)
   fs = (func, signature)
 
@@ -7144,6 +7143,14 @@ end
 @doc """
 ParallelIR version of AstWalk.
 Invokes the DomainIR version of AstWalk and provides the parallel IR AstWalk callback AstWalkCallback.
+
+Parallel IR AstWalk calls Domain IR AstWalk which in turn calls CompilerTools.AstWalker.AstWalk.
+For each AST node, CompilerTools.AstWalker.AstWalk calls Domain IR callback to give it a chance to handle the node if it is a Domain IR node.
+Likewise, Domain IR callback first calls Parallel IR callback to give it a chance to handle Parallel IR nodes.
+The Parallel IR callback similarly first calls the user-level callback to give it a chance to process the node.
+If a callback returns "nothing" it means it didn't modify that node and that the previous code should process it.
+The Parallel IR callback will return "nothing" if the node isn't a Parallel IR node.
+The Domain IR callback will return "nothing" if the node isn't a Domain IR node.
 """
 function AstWalk(ast::Any, callback, cbdata)
   dw = DirWalk(callback, cbdata)
