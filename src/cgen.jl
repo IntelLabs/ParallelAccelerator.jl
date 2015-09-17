@@ -91,8 +91,8 @@ const USE_ICC = 0
 const USE_GCC = 1
 
 # Globals
-#verbose = true
-verbose = false
+verbose = true
+#verbose = false
 inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
@@ -608,15 +608,26 @@ function from_arrayset(args)
 	"$src.ARRAYELEM($idxs) = $val"
 end
 
+function istupletyp(typ)                                                                               
+    isa(typ, DataType) && is(typ.name, Tuple.name) 
+end 
 
 function from_getfield(args)
 	debugp("from_getfield args are: ", args)
 	tgt = from_expr(args[1])
-	if args[1].typ.name == Tuple.name && isPrimitiveJuliaType(eltype(args[1].typ))
-		eltyp = toCtype(eltype(args[1].typ))
+    if isa(args[1], SymbolNode)
+      args1typ = args[1].typ
+    elseif isa(args[1], GenSym)
+      args1typ = lstate.symboltable[args[1]]
+    else
+	  throw("Unhandled argument 1 type to getfield")
+    end
+	#if istupletyp(args1typ) && isPrimitiveJuliaType(eltype(args1typ))
+	if istupletyp(args1typ)
+		eltyp = toCtype(eltype(args1typ))
 		return "(($eltyp *)&$(tgt))[" * from_expr(args[2]) * " - 1]"
 	end
-	throw("Unhandled call to getfield")
+	throw(string("Unhandled call to getfield ",args1typ, " ", eltype(args1typ)))
 	#=
 	mod, tgt = resolveCallTarget(args[1], args[2:end])
 	if mod == "Intrinsics"
@@ -1792,9 +1803,9 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     # Generate dyn_lib
-    compileCommand = `icc $Opts $vecOpts -qopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icc $Opts -g $vecOpts -qopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
-    compileCommand = `gcc $Opts -fopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `gcc $Opts -g -fopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -1823,9 +1834,9 @@ function getLinkCommand(outfile_name, lib)
   packageroot = getPackageRoot()
 
   if backend_compiler == USE_ICC
-    linkCommand = `icc -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    linkCommand = `icc -g -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
   elseif backend_compiler == USE_GCC
-    linkCommand = `gcc -shared -fopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    linkCommand = `gcc -g -shared -fopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
   end
 
   return linkCommand 
