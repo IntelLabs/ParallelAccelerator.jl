@@ -87,12 +87,15 @@ end
 const VECDEFAULT = 0
 const VECDISABLE = 1
 const VECFORCE = 2
+const USE_ICC = 0
+const USE_GCC = 1
 
 # Globals
 #verbose = true
 verbose = false
 inEntryPoint = false
 lstate = nothing
+backend_compiler = USE_ICC
 
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
@@ -1779,37 +1782,70 @@ function writec(s, outfile_name=nothing)
     return outfile_name
 end
 
-function compile(outfile_name)
-	packageroot = getPackageRoot()
-	
-	cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
-	cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
+function getCompileCommand(full_outfile_name, cgenOutput)
+  # return an error if this is not overwritten with a valid compiler
+  compileCommand = `echo "invalid backend compiler"`
 
-	# make cpp code readable
-	beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
-	run(beautifyCommand)
+  packageroot = getPackageRoot()
+  otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
+  Opts = "-O3"
+  if backend_compiler == USE_ICC
+    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
+    # Generate dyn_lib
+    compileCommand = `icc $Opts $vecOpts -qopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+  elseif backend_compiler == USE_GCC
+    compileCommand = `gcc $Opts -fopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+  end
 
-	iccOpts = "-O3"
-	vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
-	otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
-	# Generate dyn_lib
-	compileCommand = `icc $iccOpts $vecOpts -qopenmp -fpic -c -o $packageroot/deps/generated/$outfile_name.o $cgenOutput $otherArgs`
-	run(compileCommand)	
+  return compileCommand
 end
 
-function link(outfile_name)
-    packageroot = getPackageRoot()
-    lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
+function compile(outfile_name)
+  packageroot = getPackageRoot()
+
+  cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+  cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
+
+  # make cpp code readable
+  beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+  run(beautifyCommand)
+
+  full_outfile_name = `$packageroot/deps/generated/$outfile_name.o`
+  compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
+  println(compileCommand)
+  run(compileCommand)	
+end
+
+function getLinkCommand(outfile_name, lib)
+  # return an error if this is not overwritten with a valid compiler
+  linkCommand = `echo "invalid backend linker"`
+
+  packageroot = getPackageRoot()
+
+  if backend_compiler == USE_ICC
     linkCommand = `icc -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
-    run(linkCommand)
-    debugp("Done cgen linking")
-    return lib
+  elseif backend_compiler == USE_GCC
+    linkCommand = `gcc -shared -fopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+  end
+
+  return linkCommand 
+end
+
+
+function link(outfile_name)
+  packageroot = getPackageRoot()
+  lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
+  linkCommand = getLinkCommand(outfile_name, lib)
+  println(linkCommand)
+  run(linkCommand)
+  debugp("Done cgen linking")
+  return lib
 end
 
 # When in standalone mode, this is the entry point to cgen.
 function generate(func::Function, typs)
-	name = string(func.env.name)
-	insert(func, name, typs)
-	return from_worklist()
+  name = string(func.env.name)
+  insert(func, name, typs)
+  return from_worklist()
 end
 end # cgen module
