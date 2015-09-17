@@ -51,7 +51,7 @@ function setindex!(A, args...)
 end
 
 @noinline function getindex{T}(A::DenseArray{T}, args...) 
-  Base.setindex!(A, args...)
+  Base.getindex(A, args...)
 end
 
 function getindex(A, args...) 
