@@ -131,18 +131,24 @@ export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwap
 # A representation for anonymous lambda used in domainIR.
 #   inputs:  types of input tuple
 #   outputs: types of output tuple
-#   genBody: Array{Any, 1} -> Array{Expr, 1}
+#   genBody: (LambdaInfo, Array{Any,1}) -> Array{Expr, 1}
 #   escapes: escaping variables in the body
 #
 # So the downstream can just call genBody, and pass it
-# the list of parameters, and it will return an expression
-# (with :body head) that represents the loop body
+# the downstream's LambdaInfo and an array of parameters,
+# and it will return an expression (with :body head) that 
+# represents the loop body. The input LambdaInfo, if
+# given, is updated inplace. 
 #
-# genBody always returns an array of expression even when there
-# is only one. The last expression is always of the form:
+# genBody always returns an array of expression even when 
+# there is only one. The last expression is always of the 
+# form:
 #   (:tuple, values...)
 # where there could be either 0 or multiple values being
 # returned.
+#
+# Note that DomainLambda only supports Julia expressions
+# and domain IR expressions, but not custom IR nodes.
 
 type DomainLambda
   inputs  :: Array{Type, 1}
@@ -151,7 +157,8 @@ type DomainLambda
   linfo   :: LambdaInfo
 
   function DomainLambda(i, o, gb, li)
-    licopy = deepcopy(li)
+    # TODO: is the following necessary?
+    licopy = deepcopy(li) 
     new(i, o, gb, licopy)
   end
 end
@@ -168,7 +175,7 @@ end
 # swap the i-th and j-th argument to domain lambda
 function lambdaSwapArg(f::DomainLambda, i, j)
   DomainLambda(f.inputs, f.outputs,
-    args -> f.genBody(arraySwap(args, i, j)),
+    (linfo, args) -> f.genBody(linfo, arraySwap(args, i, j)),
     f.linfo)
 end
 
@@ -476,7 +483,7 @@ function show(io::IO, f::DomainLambda)
   local len = length(f.inputs)
   local syms = [ symbol(string("x", i)) for i = 1:len ]
   local symNodes = [ SymbolNode(syms[i], f.inputs[i]) for i = 1:len ]
-  local body = f.genBody(syms)
+  local body = f.genBody(LambdaInfo(), syms) # use a dummy LambdaInfo for show purpose
   print(io, "(")
   show(io, symNodes)
   print(io, ";")
@@ -516,18 +523,14 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
       push!(nonarrays, args[i])
     end
   end
-  function mkFun(params)
-    dprintln(2,"mkFun: params = ", params, " j = ", j, " repldict = ", repldict)
-    dprintln(2,"mkFun: bodyf = ", bodyf)
+  function mkFun(plinfo, params)
     local myArgs = copy(args)
     assert(length(params)==j)
     local i
     for i=1:j
       myArgs[idx[i]] = params[i]
     end
-    ret = replaceExprWithDict(bodyf(myArgs), repldict)
-    dprintln(2,"mkFun: ret = ", ret)
-    ret
+    replaceExprWithDict(bodyf(myArgs), repldict)
   end
   return (nonarrays, args_[1:j], typs[1:j], mkFun)
 end
@@ -646,12 +649,12 @@ function mmapRemoveDupArg!(expr)
   dprintln(3, "MMRD:  ", newarr, newinp, indices)
   expr.args[1] = newarr
   expr.args[2] = DomainLambda(newinp, f.outputs,
-  args -> begin
+  (linfo, args) -> begin
     dupargs = Array(Any, oldn)
     for i=1:oldn
       dupargs[i] = args[indices[i]]
     end
-    f.genBody(dupargs)
+    f.genBody(linfo, dupargs)
   end, f.linfo)
   dprintln(3, "MMRD: expr becomes ", expr)
   return expr
@@ -961,16 +964,16 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       else
         lastExp.head = :tuple
       end
-      function bodyF(args)
-        bt = backtrace() ;
-        s = sprint(io->Base.show_backtrace(io, bt))
-        dprintln(3, "bodyF backtrace ")
-        dprintln(3, s)
-
+      function bodyF(plinfo, args)
+        #bt = backtrace() ;
+        #s = sprint(io->Base.show_backtrace(io, bt))
+        #dprintln(3, "bodyF backtrace ")
+        #dprintln(3, s)
+        ldict = mergeLambdaInfo(plinfo, linfo)
         dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
-        idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
-        dprintln(2,"cartesianarray idict = ", idict)
-        ret = replaceExprWithDict(body, idict).args
+        ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
+        # dprintln(2,"cartesianarray idict = ", ldict)
+        ret = replaceExprWithDict(body, ldict).args
         dprintln(2,"cartesianarray ret = ", ret)
         ret
       end
@@ -1129,7 +1132,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         etyp = elmTypOf(typ)
         ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
         if is(fun, :getindex) 
-          expr = mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], as -> [Expr(:tuple, as...)], LambdaInfo())) 
+          expr = mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
         else
            args = Any[mk_select(lhs, ranges), args[2]]
            typs = Type[typ, typeOfOpr(state, args[2])]
@@ -1202,7 +1205,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         flag = def == nothing ? 0 : def.desc
         addEscapingVariable(ival.name, ival.typ, flag, linfo)
       end
-      f = as -> [ Expr(:tuple, ival) ]
+      f(linfo,as) = [ Expr(:tuple, ival) ]
       domF = DomainLambda(typs, typs, f, linfo)
       expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
       expr.typ = typ
@@ -1223,7 +1226,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       typs = Type[ etyp for arg in args] # just use etyp for input element types
       opr, reorder = specializeOp(mapOps[fun], typs)
       # ignore reorder since it is always id function
-      f = as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
+      f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
       domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
       # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
       arr = inline_select(env, state, arr)

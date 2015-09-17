@@ -83,7 +83,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   kernArgs[2] = strideNodes
   kernArgs[3] = bufs
   dprintln(3,"kernArgs = ", kernArgs)
-  bodyExpr = relabel(kernelF.genBody(kernArgs).args, irState)
+  bodyExpr = relabel(kernelF.genBody(linfo, kernArgs).args, irState)
   # rotate
   assert(is(bodyExpr[end].head, :return))
   dprintln(3,"bodyExpr = ")
@@ -94,7 +94,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   if bodyExpr[end].args[1] != nothing
     rets = bodyExpr[end].args
     dprintln(3,"bodyExpr[end].args = ", rets)
-    dprintln(3,"kernelF.linfo = ", kernelF.linfo)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
       push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), rets[i]))
@@ -186,9 +185,8 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
             Any[] : vcat(rotateExpr, Expr(:loopend, stepNode.name))
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
   dprintln(3,"stencil! gensym_map = ", gensym_map)
-  expr = PIRParForAst(replaceExprWithDict(bodyExpr, gensym_map), 
+  expr = PIRParForAst(bodyExpr,
     [],
     loopNest,
     PIRReduction[],
@@ -197,11 +195,5 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     irState.top_level_number,
     get_unique_num(), 
     false)
-  # This line below is commented because expr isn't really an Expr you can pass to 
-  # replaceExprWithDict.  "expr" is a PIRParForAst object instead.  The lowering code for
-  # mmap, mmap!, and reduce all call replaceExprWithDict on just the body of the new parfor and
-  # so I made it do this above.  If we need it on the whole PIRParForAst then I wrote a routine
-  # in parallel-ir.jl to do it.
-  #expr = replaceExprWithDict(expr, gensym_map, IntelPSE.ParallelIR.AstWalk) 
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end
