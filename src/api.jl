@@ -3,7 +3,7 @@ baremodule API
 using Base
 import Base: call, getindex, setindex!
 
-export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod
+export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod, setindex!, getindex
 
 export cartesianarray, runStencil, @runStencil
 
@@ -40,6 +40,22 @@ for f in (:-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&
             (Base.$f)(A, B)
         end
     end
+end
+
+@noinline function setindex!{T}(A::DenseArray{T}, args...) 
+  Base.setindex!(A, args...)
+end
+
+function setindex!{T}(A, args...) 
+  Base.setindex!(A, args...)
+end
+
+@noinline function getindex{T}(A::DenseArray{T}, args...) 
+  Base.setindex!(A, args...)
+end
+
+function getindex{T}(A, args...) 
+  Base.setindex!(A, args...)
 end
 
 use_cartesianrange = false
