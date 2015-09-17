@@ -212,7 +212,7 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
   stat, genBody = analyze_kernel(state, typs, kernelExp, borderSty)
   # f expects input of either [indices, strides, buffers] or [symbols].
   # the latter is used in show method for DomainLambda
-  function f(inputs)
+  function f(plinfo, inputs)
     local indices, strides
     # warn(string("sizeof(inputs)=",length(inputs)))
     if isa(inputs[1], Array) # real inputs
@@ -224,7 +224,9 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
       strides = stat.strideSym
       bufs = inputs
     end
-    genBody(indices, strides, bufs)
+    body = genBody(indices, strides, bufs)
+    dict = mergeLambdaInfo(plinfo, linfo)
+    replaceExprWithDict(body, dict)
   end
   return stat, DomainLambda(typs, typs, f, state.linfo)
 end
