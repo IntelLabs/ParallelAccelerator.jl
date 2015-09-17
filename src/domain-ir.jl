@@ -187,7 +187,7 @@ Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
   s = isa(s, SymbolNode) ? s.name : s
-  dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
+  #dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
   @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
            (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
            (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
@@ -312,7 +312,7 @@ ignoreSet = Set{Symbol}(ignoreSym)
 
 # some part of the code still requires this
 unique_id = 0
-function addFreshLocalVariable(s::String, t::DataType, desc, linfo::LambdaInfo)
+function addFreshLocalVariable(s::String, t::Any, desc, linfo::LambdaInfo)
   global unique_id
   name = :tmpvar
   unique = false
@@ -525,7 +525,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
     for i=1:j
       myArgs[idx[i]] = params[i]
     end
-    ret = replaceExprWithDict(deepcopy(bodyf(myArgs)), repldict)
+    ret = replaceExprWithDict(bodyf(myArgs), repldict)
     dprintln(2,"mkFun: ret = ", ret)
     ret
   end
@@ -970,7 +970,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         idict = Dict{SymGen,Any}(zip(params, args[1+length(etys):end]))
         dprintln(2,"cartesianarray idict = ", idict)
-        ret = replaceExprWithDict(deepcopy(body), idict).args
+        ret = replaceExprWithDict(body, idict).args
         dprintln(2,"cartesianarray ret = ", ret)
         ret
       end
@@ -1086,14 +1086,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       args = normalize_args(state, env_, args)
       expr = mk_expr(typ, :assertEqShape, args...)
     elseif is(fun, :checkbounds)
-      dprintln(env, "got ", fun)
-      assert(length(args) == 2)
+      dprintln(env, "got ", fun, " args = ", args)
+      if length(args) == 2
       args = normalize_args(state, env_, args)
       typ = typeOfOpr(state, args[1])
       if isarray(typ)
         typ_second_arg = typeOfOpr(state, args[2])
         if isarray(typ_second_arg) || isbitarray(typ_second_arg)
-          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), deepcopy(args[1])), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), deepcopy(args[2]))))
+          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
         else
           dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
           error("Unhandled bound in checkbounds: ", args[2])
@@ -1112,6 +1112,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         end
       else
         error("Unhandled bound in checkbounds: ", args[1])
+      end
       end
     elseif is(fun, :sitofp)
       typ = args[1]
@@ -1213,7 +1214,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
     elseif is(fun, :sum) || is(fun, :prod)
       args = normalize_args(state, env_, args)
-      assert(length(args) == 1)
+      if length(args) == 1
       arr = args[1]
       # element type is the same as typ
       etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
@@ -1228,6 +1229,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       arr = inline_select(env, state, arr)
       expr = mk_reduce(convert(etyp, neutral), arr, domF)
       expr.typ = typ
+      end
     elseif in(fun, ignoreSet)
     else
       args_typ = map(x -> typeOfOpr(state, x), args)

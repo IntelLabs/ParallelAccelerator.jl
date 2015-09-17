@@ -188,7 +188,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   postExpr = vcat(iterPost)
   gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
   dprintln(3,"stencil! gensym_map = ", gensym_map)
-  expr = PIRParForAst(replaceExprWithDict(relabel(bodyExpr, irState), gensym_map, IntelPSE.ParallelIR.AstWalk),
+  expr = PIRParForAst(replaceExprWithDict(bodyExpr, gensym_map), 
     [],
     loopNest,
     PIRReduction[],

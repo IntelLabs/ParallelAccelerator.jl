@@ -4,12 +4,13 @@ module IntelPSE
 
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
-import Base.deepcopy_internal
 
-@doc """
-Overload deepcopy_internal() to just return a Module instead of trying to duplicate it.
-"""
-deepcopy_internal(x :: Module, stackdict::ObjectIdDict) = x
+#import Base.deepcopy_internal
+#
+#@doc """
+#Overload deepcopy_internal() to just return a Module instead of trying to duplicate it.
+#"""
+#deepcopy_internal(x :: Module, stackdict::ObjectIdDict) = x
 
 #######################################################################
 # Constants and functions below this line are not exported, and should 

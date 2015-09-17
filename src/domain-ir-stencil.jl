@@ -18,7 +18,7 @@ end
 # Return both the kernel stat, and the modified kernel LHS expression.
 # Note that the input kernel is modified in-place.
 # NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
-function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, borderSty::Symbol)
+function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, borderSty::Symbol)
   #assert(krn.head == symbol("->"))
   assert(isa(krn, Expr) && krn.head == :lambda)
   local stat = ()
@@ -162,7 +162,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{DataType, 1}, krn::Expr, 
     dprintln(3,"dict = ", dict)
     dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(deepcopy(krnExpr), dict)
+    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
   end
   # Remove those with no definition from locals as a sanity cleanup.
   # Note that among those removed are the input arguments, but this
@@ -201,7 +201,7 @@ end
 # It expects krn to be of Expr(:lambda, ...) type.
 function mkStencilLambda(state_, bufs, kernelExp, borderExp)
   local linfo = lambdaExprToLambdaInfo(kernelExp)
-  local typs = DataType[ typeOfOpr(state_, a) for a in bufs ]
+  local typs = Type[ typeOfOpr(state_, a) for a in bufs ]
   local state = newState(linfo, Dict(), state_)
   local stat, genBody
   if !(isa(borderExp, QuoteNode))

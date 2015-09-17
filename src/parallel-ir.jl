@@ -187,17 +187,17 @@ Not currently used but might need it at some point.
 Search a whole PIRParForAst object and replace one SymAllGen with another.
 """
 function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
-    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.body, gensym_map)
-    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.preParFor, gensym_map)
+    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map)
+    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map)
     for i = 1:length(parfor.loopNests)
-        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].lower, gensym_map)
-        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].upper, gensym_map)
-        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.loopNests[i].step, gensym_map)
+        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map)
+        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map)
+        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].step, gensym_map)
     end
     for i = 1:length(parfor.reductions)
-        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.reductions[i].reductionVarInit, gensym_map)
+        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.reductions[i].reductionVarInit, gensym_map)
     end
-    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict(parfor.postParFor, gensym_map)
+    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map)
 end
 
 @doc """
@@ -1002,7 +1002,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  temp_body = CompilerTools.LambdaHandling.replaceExprWithDict(temp_body, gensym_map)
+  temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
   state.max_label = max_label
   assert(isa(temp_body,Array))
   assert(length(temp_body) == 1)
@@ -1243,7 +1243,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dl_body = dl.genBody(dl_inputs)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -1449,7 +1449,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict(nested_body, gensym_map)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -1645,7 +1645,7 @@ function from_lambda(lambda :: Expr, depth, state)
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  body = CompilerTools.LambdaHandling.eliminateUnusedLocals(state.lambdaInfo, body, IntelPSE.ParallelIR.AstWalk)
+  body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, IntelPSE.ParallelIR.AstWalk)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -4918,7 +4918,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   end
 
   push!(task_body.args, TypedExpr(Int, :return, 0))
-  task_body = CompilerTools.LambdaHandling.replaceExprWithDict(task_body, gensyms_table)
+  task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
   # Create the new :lambda Expr for the task function.
   code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
 
@@ -5531,7 +5531,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     dprintln(3,"Intersection dict = ", intersection_dict)
     if !isempty(intersection_dict)
       origBody      = node.genBody
-      newBody(args) = CompilerTools.LambdaHandling.replaceExprWithDict(deepcopy(origBody(args)), intersection_dict)
+      newBody(args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(args), intersection_dict)
       node.genBody  = newBody
       return [node]
     end 
