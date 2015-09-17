@@ -999,8 +999,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_inputs = [reduction_output_snode, atm]
-  dl_body = dl.genBody(dl_inputs)
-  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
   state.max_label = max_label
@@ -1238,10 +1237,8 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(3,"indexed_arrays = ", indexed_arrays)
   dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
   dprintln(3,"dl_inputs = ", dl_inputs)
-  dprintln(3,"genBody = ", dl.genBody)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  dl_body = dl.genBody(dl_inputs)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
   state.max_label = max_label
@@ -1445,9 +1442,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   #for (v, d) in dl.locals
   #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
   #end
-  dl_body = dl.genBody(indexed_arrays)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
   state.max_label = max_label
@@ -1535,7 +1531,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  [new_parfor]
+  return [new_parfor]
 end
 
 # ===============================================================================================================================
@@ -5531,7 +5527,7 @@ function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top
     dprintln(3,"Intersection dict = ", intersection_dict)
     if !isempty(intersection_dict)
       origBody      = node.genBody
-      newBody(args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(args), intersection_dict)
+      newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
       node.genBody  = newBody
       return [node]
     end 
@@ -6007,11 +6003,10 @@ function inline!(src, dst, lhs)
   tmp_t = f.outputs[1]
   tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
   dst.args[2] = DomainLambda(inputs, g.outputs, 
-  args -> begin
-    fb = f.genBody(args[g_inps:end])
-    fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
+  (linfo, args) -> begin
+    fb = f.genBody(linfo, args[g_inps:end])
     expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-    gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
+    gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
     return [fb[1:end-1]; [expr]; gb]
   end, linfo)
   DomainIR.mmapRemoveDupArg!(dst)
@@ -6533,7 +6528,7 @@ end
 @doc """
 Form a Julia :lambda Expr from a DomainLambda.
 """
-function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
+function lambdaFromDomainLambda(domain_lambda, dl_inputs)
 #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
   type_data = CompilerTools.LambdaHandling.VarDef[]
   input_arrays = Symbol[]
@@ -6548,14 +6543,8 @@ function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   dprintln(3,"DomainLambda is:")
   pirPrintDl(3, domain_lambda)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  newLambdaInfo.var_defs = deepcopy(domain_lambda.linfo.var_defs)
-  newLambdaInfo.gen_sym_typs = deepcopy(domain_lambda.linfo.gen_sym_typs)
-  newLambdaInfo.escaping_defs = deepcopy(domain_lambda.linfo.escaping_defs)
   CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
-  #ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(domain_lambda.linfo, Expr(:body, stmts...))
+  stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
   ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
   return (ast, input_arrays) 
 end
@@ -6564,13 +6553,10 @@ end
 A routine similar to the main parallel IR entry put but designed to process the lambda part of
 domain IR AST nodes.
 """
-function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
-  dprintln(2,"nested_function_exprs max_label = ", max_label, " stmts = ", stmts, " of type = ", typeof(stmts))
+function nested_function_exprs(max_label, domain_lambda, dl_inputs)
+  dprintln(2,"nested_function_exprs max_label = ", max_label)
   dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
-  if !isa(stmts, Array)
-    return stmts
-  end
-  (ast, input_arrays) = lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
+  (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
   dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
 
   start_time = time_ns()
@@ -6900,7 +6886,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
     elseif head == :mmap
         head = :parfor
         args = mk_parfor_args_from_mmap(args, state)
-        dprintln(1,"switching to parfor node for mmap")
+        dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
     elseif head == :mmap!
         head = :parfor
         args = mk_parfor_args_from_mmap!(args, state)
@@ -6970,7 +6956,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         throw(string("from_expr: unknown Expr head :", head))
     end
     ast = Expr(head, args...)
-    dprintln(3,"New expr type = ", typ)
+    dprintln(3,"New expr type = ", typ, " ast = ", ast)
     ast.typ = typ
   elseif asttyp == Symbol
     dprintln(2,"Symbol type")
