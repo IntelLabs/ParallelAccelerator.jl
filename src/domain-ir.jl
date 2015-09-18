@@ -176,7 +176,7 @@ type IRState
   linfo  :: LambdaInfo
   defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
   stmts  :: Array{Any, 1}
-  parent :: Union(Nothing, IRState)
+  parent :: Union(Void, IRState)
 end
 
 emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
@@ -250,7 +250,7 @@ function emitStmt(state::IRState, stmt)
 end
 
 type IREnv
-  cur_module  :: Union(Module, Nothing)
+  cur_module  :: Union(Module, Void)
   debugLevel  :: Int
   debugIndent :: Int
 end
@@ -312,7 +312,7 @@ ignoreSet = Set{Symbol}(ignoreSym)
 
 # some part of the code still requires this
 unique_id = 0
-function addFreshLocalVariable(s::String, t::Any, desc, linfo::LambdaInfo)
+function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
   global unique_id
   name = :tmpvar
   unique = false
@@ -329,7 +329,7 @@ include("domain-ir-stencil.jl")
 
 function isinttyp(typ)
     is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is(typ, Int8)  || 
-    is(typ, Uint64) || is(typ, Uint32) || is(typ, Uint16) || is(typ, Uint8)
+    is(typ, UInt64) || is(typ, UInt32) || is(typ, UInt16) || is(typ, UInt8)
 end
 
 function istupletyp(typ)
@@ -803,7 +803,7 @@ function inline_select(env, state, arr)
   if isa(arr, SymbolNode) 
     # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
     def = lookupConstDef(state, arr.name)
-    if !isa(def, Nothing)  
+    if !isa(def, Void)  
       if isa(def, Expr) && is(def.head, :call) 
         assert(length(def.args) > 2)
         if is(def.args[1], :getindex)
@@ -1284,7 +1284,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   else
     dprintln(env,"function call is not GlobalRef and not translated: ", fun, ", return typ=", typ)
   end
-  if isa(expr, Nothing)
+  if isa(expr, Void)
     if !is(fun, :ccall)
       oldargs = normalize_args(state, env_, oldargs)
     end

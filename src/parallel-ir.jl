@@ -638,8 +638,8 @@ function createStateVar(state, name, typ, access)
 end
 
 function convert(dt :: DataType, x :: GenSym)
-  if dt == String
-       return string("GenSym", x.id)
+  if dt == AbstractString
+    return string("GenSym", x.id)
   end
   throw(string("Unsupport conversion of GenSym to something."))
 end
@@ -946,7 +946,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens  = String[]
+  save_array_lens  = AbstractString[]
   input_array_rangeconds = Array(Any, num_dim_inputs)
 
   # Insert a statement to assign the length of the input arrays to a var
@@ -1195,7 +1195,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens = String[]
+  save_array_lens = AbstractString[]
 
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
@@ -1403,7 +1403,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   post_statements = Any[]
   # To hold the names of newly created output arrays.
   new_array_symbols = Symbol[]
-  save_array_lens   = String[]
+  save_array_lens   = AbstractString[]
 
   # Make sure each input array is a SymbolNode.
   # Also, create indexed versions of those symbols for the loop body.
@@ -2913,7 +2913,7 @@ Structure for storing information about task formation.
 type TaskInfo
   task_func       :: Function                  # The Julia task function that we generated for a task.
   function_sym
-  join_func       :: String                    # The name of the C join function that we constructed and forced into the C file.
+  join_func       :: AbstractString            # The name of the C join function that we constructed and forced into the C file.
   input_symbols   :: Array{SymbolNode,1}       # Variables that are need as input to the task.
   modified_inputs :: Array{SymbolNode,1} 
   io_symbols      :: Array{SymbolNode,1}
@@ -3071,7 +3071,7 @@ type InsertTaskNode
   ranges :: pir_range
   args   :: Array{pir_arg_metadata,1}
   task_func :: Any
-  join_func :: String  # empty string for no join function
+  join_func :: AbstractString  # empty string for no join function
   task_options :: Int
   host_grain_size :: pir_grain_size
   phi_grain_size :: pir_grain_size
@@ -3175,7 +3175,7 @@ end
 type eic_state
   non_calls      :: Float64    # estimated instruction count for non-calls
   fully_analyzed :: Bool
-  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Nothing}
+  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Void}
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3459,7 +3459,7 @@ function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_le
   elseif asttyp == NewvarNode
     dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
     #skip
-  elseif asttyp == Nothing
+  elseif asttyp == Void
     #skip
   #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
   elseif isbits(asttyp)
@@ -4269,9 +4269,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
           end
 
-          #push!(new_body, TypedExpr(Nothing, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
-          #push!(new_body, TypedExpr(Nothing, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
-          push!(new_body, TypedExpr(Nothing, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
+          #push!(new_body, TypedExpr(Void, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
+          #push!(new_body, TypedExpr(Void, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
+          push!(new_body, TypedExpr(Void, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
 
           for k = 1:out_len
             push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state), state))
@@ -4939,7 +4939,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   def = m[1].func.code
   if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
     def.j2cflag = convert(Int32,6)
-    ccall(:set_j2c_task_arg_types, Void, (Ptr{Uint8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
+    ccall(:set_j2c_task_arg_types, Void, (Ptr{UInt8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
   end
   precompile(task_func, all_arg_type)
   dprintln(3, "def post = ", def, " type = ", typeof(def))
@@ -4962,7 +4962,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # The name of the new reduction function.
     reduction_func_name = string("reduction_func_",unique_node_id)
 
-    the_types = String[]
+    the_types = AbstractString[]
     for i = 1:length(the_parfor.reductions)
       if the_parfor.reductions[i].reductionVar.typ == Float64
         push!(the_types, "double")
@@ -5003,7 +5003,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     dprintln(3,c_reduction_func)
 
     # Tell cgen to put this reduction function directly into the C code.
-    ccall(:set_j2c_add_c_code, Void, (Ptr{Uint8},), c_reduction_func)
+    ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
   end
 
   return TaskInfo(task_func,     # The task function that we just generated of type Function.
@@ -7006,7 +7006,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
     #skip
   elseif asttyp == NewvarNode
     #skip
-  elseif asttyp == Nothing
+  elseif asttyp == Void
     #skip
   elseif asttyp == Module
     #skip
