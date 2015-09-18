@@ -117,8 +117,6 @@ const USE_ICC = 0
 const USE_GCC = 1
 
 # Globals
-#verbose = true
-verbose = false
 inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
@@ -1573,9 +1571,9 @@ end
 
 function from_callee(ast::Expr, functionName::ASCIIString)
 	dprintln(3,"Ast = ", ast)
-	verbose && dprintln(3,"Starting processing for $ast")
+	dprintln(3,"Starting processing for $ast")
 	typ = toCtype(body(ast).typ)
-	verbose && dprintln(3,"Return type of body = $typ")
+	dprintln(3,"Return type of body = $typ")
 	params	=	ast.args[1]
 	env		=	ast.args[2]
 	bod		=	ast.args[3]
@@ -1643,7 +1641,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 	end
 	dprintln(3,"Ast = ", ast)
-	verbose && dprintln(3,"Starting processing for $ast")
+	dprintln(3,"Starting processing for $ast")
 	params	=	ast.args[1]
 	aparams	=	lambdaparams(ast)
 	env		=	ast.args[2]
@@ -1678,7 +1676,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	# If emitting unaliased versions, get "restrict"ed decls for arguments
 	argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
 
-	if verbose
+	if DEBUG_LVL>=3 
 		dumpSymbolTable(lstate.symboltable)
 	end
 
