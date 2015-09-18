@@ -1,6 +1,7 @@
 module DomainIR
 
 import CompilerTools.AstWalker
+using CompilerTools
 using CompilerTools.LivenessAnalysis
 using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
@@ -632,13 +633,14 @@ function mmapRemoveDupArg!(expr)
   for i = 1:oldn
     indices[i] = n
     s = arr[i]
-    @assert isa(s,SymAllGen) "inputs of mmap should be variables (symbols)"
     if isa(s, SymbolNode) s = s.name end
     if haskey(posMap, s)
       hasDup = true
       indices[i] = posMap[s]
     else
-      posMap[s] = n
+      if isa(s,SymAllGen) 
+        posMap[s] = n
+      end
       push!(newarr, arr[i])
       push!(newinp, f.inputs[i])
       n += 1
