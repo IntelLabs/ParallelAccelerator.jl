@@ -7052,7 +7052,7 @@ end
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
-function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: Any, dw::DirWalk, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback ret = ", ret)

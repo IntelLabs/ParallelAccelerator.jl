@@ -1489,7 +1489,7 @@ function AstWalk(ast::Any, callback, cbdata)
   AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
 
-function dir_live_cb(ast, cbdata)
+function dir_live_cb(ast :: Any, cbdata :: Any)
   dprintln(4,"dir_live_cb ")
   asttyp = typeof(ast)
   if asttyp == Expr
