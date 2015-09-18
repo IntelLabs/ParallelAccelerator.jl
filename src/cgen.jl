@@ -1652,6 +1652,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 	end
 	dprintln(3,"Ast = ", ast)
+	dprintln(3,"functionName = ", functionName)
 	dprintln(3,"Starting processing for $ast")
 	params	=	ast.args[1]
 	aparams	=	lambdaparams(ast)
