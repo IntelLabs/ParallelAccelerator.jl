@@ -87,8 +87,7 @@ function decompose(function_name, signature)
   def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
 end
 
-function Optimize(ast, call_sig_arg_tuple, call_sig_args)
-  assert(typeof(ast) == Expr)
+function Optimize(ast :: Expr, call_sig_arg_tuple :: Tuple, call_sig_args)
   assert(ast.head == :lambda)
 
   dprintln(2, "Starting Optimize with args = ", call_sig_arg_tuple, " names = ", call_sig_args, "\n", ast, "\n")
@@ -119,9 +118,6 @@ function Optimize(ast, call_sig_arg_tuple, call_sig_args)
   proxy = offload(new_func, call_sig_arg_tuple)
 
   if proxy != nothing
-    # Force j2c to run on the target method.
-    precompile(new_func, call_sig_arg_tuple)
-
     dprintln(3,"offload in Optimize returned something.")
     # Get the AST of the proxy function.
     cps   = string("_IntelPSE_optimize_call_proxy_", getNextFuncId())
@@ -253,20 +249,21 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
     package_root   = IntelPSE.getPackageRoot()
 
+    function_name_string = IntelPSE.cgen.canonicalize(string(function_name))
 	# cgen path
-    outfile_name = cgen.writec(cgen.from_root(code, string(function_name)))
+    outfile_name = cgen.writec(cgen.from_root(code, function_name_string))
     cgen.compile(outfile_name)
     dyn_lib = cgen.link(outfile_name)
  
     # The proxy function name is the original function name with "_j2c_proxy" appended.
-    proxy_name   = string("_",function_name,"_j2c_proxy")
+    proxy_name   = string("_",function_name_string,"_j2c_proxy")
     proxy_sym    = symbol(proxy_name)
     dprintln(2, "IntelPSE.offload for ", proxy_name)
     dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
     dprintln(2, "dyn_lib = ", dyn_lib)
   
     # This is the name of the function that j2c generates.
-    j2c_name     = string("_",function_name,"_")
+    j2c_name     = string("_",function_name_string,"_")
   
     ret_type     = CompilerTools.LambdaHandling.getReturnType(lambdaInfo)
     # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
@@ -378,7 +375,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
         println("Error getting proxy code.\n")
       else
         proxy_ct = proxy_ct[1]
-        println("Proxy code for ", function_name)
+        println("Proxy code for ", function_name_string)
         println(proxy_ct)    
 		println("Done printing proxy code")
       end
