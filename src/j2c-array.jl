@@ -26,7 +26,7 @@ function __init__()
       _dims = Int64[ convert(Int64, x) for x in dims ]
       _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
 
-      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{Uint64}),
+      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
             convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
     end
 
