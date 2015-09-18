@@ -5999,12 +5999,12 @@ function inline!(src, dst, lhs)
       CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
     end
   end
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+  # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
   tmp_t = f.outputs[1]
-  tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
   dst.args[2] = DomainLambda(inputs, g.outputs, 
   (linfo, args) -> begin
     fb = f.genBody(linfo, args[g_inps:end])
+    tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
     expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
     gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
     return [fb[1:end-1]; [expr]; gb]
@@ -6545,7 +6545,9 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
   CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
+  newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
   ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+  # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
   return (ast, input_arrays) 
 end
 
