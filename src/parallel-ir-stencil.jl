@@ -185,7 +185,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
             Any[] : vcat(rotateExpr, Expr(:loopend, stepNode.name))
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
-  dprintln(3,"stencil! gensym_map = ", gensym_map)
   expr = PIRParForAst(bodyExpr,
     [],
     loopNest,
