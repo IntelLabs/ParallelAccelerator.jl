@@ -5,6 +5,9 @@ module IntelPSE
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
 
+using CompilerTools
+using CompilerTools.OptFramework
+
 #import Base.deepcopy_internal
 #
 #@doc """
@@ -106,6 +109,8 @@ function __init__()
     end
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
+
+    CompilerTools.OptFramework.addOptPass(CompilerTools.OptFramework.optPass(IntelPSE.Driver.Optimize, false))
 end
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
@@ -155,5 +160,7 @@ include("driver.jl")
 
 importall .API
 importall .Driver
+
+export @acc
 
 end
