@@ -59,7 +59,7 @@ function __init__()
     function j2c_array_set{T}(arr::Ptr{Void}, idx::Int, value::T)
       nbytes = is(T, Ptr{Void}) ? 0 : sizeof(T)
       _value = nbytes == 0 ? value : convert(Ptr{Void}, pointer(T[ value ]))
-      ccall(:j2c_array_set, Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
+      ccall((:j2c_array_set, $dyn_lib), Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
             convert(Cint, nbytes), arr, convert(Cuint, idx), _value)
     end
 
