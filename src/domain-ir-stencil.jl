@@ -20,7 +20,9 @@ end
 # NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
 function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, borderSty::Symbol)
   #assert(krn.head == symbol("->"))
-  assert(isa(krn, Expr) && krn.head == :lambda)
+  dprintln(3, "typeof krn = ", typeof(krn), " ", krn.head, " :: ", typeof(krn.head), " ", object_id(krn.head), " ", object_id(:lambda)) 
+  assert(isa(krn, Expr))
+  assert(is(krn.head, :lambda))
   local stat = ()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms = krn.args[1] # parameter of the kernel lambda
