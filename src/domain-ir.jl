@@ -364,6 +364,10 @@ function isrange(typ)
   isunitrange(typ) || issteprange(typ)
 end
 
+function ismask(typ)
+  isrange(typ) || isbitarray(typ)
+end
+
 function remove_typenode(expr)
   if isa(expr, Expr)
     if is(expr.head, :(::))
@@ -1021,6 +1025,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
       kernelExp = lookupConstDefForArg(state, kernelExp)
       dprintln(env, "stencil kernelExp = ", kernelExp)
+      dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
       assert(isa(kernelExp, LambdaStaticData))
       # TODO: better infer type here
       (ast, ety) = lambdaTypeinf(kernelExp, to_tuple_type(tuple(bufstyp...)))
@@ -1122,22 +1127,24 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
     elseif is(fun, :sitofp)
       typ = args[1]
     elseif is(fun, :getindex) || is(fun, :setindex!) 
+      dprintln(env, "got getindex or setindex!")
       args = normalize_args(state, env_, args)
-      lhs = args[1]
+      arr = args[1]
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-      typ = typeOfOpr(state, lhs)
-      if any(Bool[ isrange(typeOfOpr(state, range)) for range in ranges])
-        dprintln(env, "got :getindex with ", args)
+      atyp = typeOfOpr(state, arr)
+      dprintln(env, "ranges = ", ranges)
+      if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
+        dprintln(env, "args is ", args)
         dprintln(env, "ranges is ", ranges)
         newsize = addGenSym(Int, state.linfo)
-        newlhs = addGenSym(typ, state.linfo)
-        etyp = elmTypOf(typ)
+        #newlhs = addGenSym(typ, state.linfo)
+        etyp = elmTypOf(atyp)
         ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
         if is(fun, :getindex) 
-          expr = mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+          expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
         else
-           args = Any[mk_select(lhs, ranges), args[2]]
-           typs = Type[typ, typeOfOpr(state, args[2])]
+           args = Any[mk_select(arr, ranges), args[2]]
+           typs = Type[atyp, typeOfOpr(state, args[2])]
            (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
            elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
            linfo = LambdaInfo()
