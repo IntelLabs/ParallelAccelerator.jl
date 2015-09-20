@@ -176,7 +176,7 @@ type IRState
   linfo  :: LambdaInfo
   defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
   stmts  :: Array{Any, 1}
-  parent :: Union(Void, IRState)
+  parent :: Union{Void, IRState}
 end
 
 emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
@@ -250,7 +250,7 @@ function emitStmt(state::IRState, stmt)
 end
 
 type IREnv
-  cur_module  :: Union(Module, Void)
+  cur_module  :: Union{Module, Void}
   debugLevel  :: Int
   debugIndent :: Int
 end

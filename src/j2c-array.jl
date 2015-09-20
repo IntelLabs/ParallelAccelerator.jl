@@ -21,12 +21,12 @@ function __init__()
     # It will share the data pointer of the given inp array, and if inp is nothing,
     # the j2c array will allocate fresh memory to hold data.
     # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
-    function j2c_array_new(elem_bytes::Int, inp::Union(Array, Void), ndim::Int, dims::Tuple)
+    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
       # note that C interface mandates Int64 for dimension data
       _dims = Int64[ convert(Int64, x) for x in dims ]
       _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
 
-      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{Uint64}),
+      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
             convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
     end
 
