@@ -887,13 +887,13 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       local mapExp = args[1]     # first argument is the lambda
       #println("mapExp ", mapExp)
       #dump(mapExp,1000)
-      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == IntelPSE)
+      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
         mapExp = mapExp.name
       end
-      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
 
-        if(isdefined(IntelPSE, mapExp))
-          m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+        if(isdefined(ParallelAccelerator, mapExp))
+          m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
         else
           m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
         end

@@ -5,7 +5,7 @@ export offload, Optimize, decompose
 using CompilerTools
 using CompilerTools.LambdaHandling
 
-import ..IntelPSE, ..DomainIR, ..ParallelIR, ..LD, ..Pert, ..cgen, ..DomainIR.isarray
+import ..ParallelAccelerator, ..DomainIR, ..ParallelIR, ..LD, ..Pert, ..cgen, ..DomainIR.isarray
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -66,7 +66,7 @@ end
 # Converts a given function and signature to use library decomposition.
 # It does NOT generates a stub/proxy like the offload function, or go through J2C.
 function decompose(function_name, signature)
-  if IntelPSE.getPseMode() == IntelPSE.OFF_MODE
+  if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFF_MODE
     return function_name
   end
 
@@ -97,7 +97,7 @@ function Optimize(ast :: Expr, call_sig_arg_tuple :: Tuple, call_sig_args)
   # 2: pass that new function to the existing offload function.
   # 3: force the j2c function to compile
   # 4: get the AST of the proxy returned by offload and use that as the AST to return.
-  func_copy_to_j2c = string("_IntelPSE_optimize_", getNextFuncId())
+  func_copy_to_j2c = string("_ParallelAccelerator_optimize_", getNextFuncId())
   func_copy_sym    = symbol(func_copy_to_j2c)
   #arg_array        = [ symbol(string("arg", i)) for i=1:length(call_sig_arg_tuple) ]
   #dprintln(2,"func_copy = ", func_copy_to_j2c, " arg_array = ", arg_array)
@@ -120,7 +120,7 @@ function Optimize(ast :: Expr, call_sig_arg_tuple :: Tuple, call_sig_args)
   if proxy != nothing
     dprintln(3,"offload in Optimize returned something.")
     # Get the AST of the proxy function.
-    cps   = string("_IntelPSE_optimize_call_proxy_", getNextFuncId())
+    cps   = string("_ParallelAccelerator_optimize_call_proxy_", getNextFuncId())
     cpsym = symbol(cps)
     # Create a temporary function which just calls the proxy.
                               #println("======> ", $cps, " ", $call_sig_args)
@@ -163,8 +163,8 @@ previouslyOptimized = Set()
 # It also generates a stub/proxy with the same signature as the original that you can call to get you
 # to the j2c version of the code.
 function offload(function_name, signature, offload_mode=TOPLEVEL)
-  pse_mode = IntelPSE.getPseMode() 
-  if pse_mode == IntelPSE.OFF_MODE
+  pse_mode = ParallelAccelerator.getPseMode() 
+  if pse_mode == ParallelAccelerator.OFF_MODE
     return function_name
   end
   start_time = time_ns()
@@ -232,11 +232,11 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     dprintln(1, "offload: ParallelIR conversion time = ", ns_to_sec(pir_time))
     def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
   else
-    dprintln(1, "IntelPSE code optimization skipped")
+    dprintln(1, "ParallelAccelerator code optimization skipped")
     code = ct
   end
 
-  if pse_mode == IntelPSE.THREADS_MODE
+  if pse_mode == ParallelAccelerator.THREADS_MODE
     if no_precompile == 0
       precompile(function_name, signature)
     end
@@ -247,9 +247,9 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
      
     off_time_start = time_ns()
   
-    package_root   = IntelPSE.getPackageRoot()
+    package_root   = ParallelAccelerator.getPackageRoot()
 
-    function_name_string = IntelPSE.cgen.canonicalize(string(function_name))
+    function_name_string = ParallelAccelerator.cgen.canonicalize(string(function_name))
 	# cgen path
     outfile_name = cgen.writec(cgen.from_root(code, function_name_string))
     cgen.compile(outfile_name)
@@ -258,7 +258,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     # The proxy function name is the original function name with "_j2c_proxy" appended.
     proxy_name   = string("_",function_name_string,"_j2c_proxy")
     proxy_sym    = symbol(proxy_name)
-    dprintln(2, "IntelPSE.offload for ", proxy_name)
+    dprintln(2, "ParallelAccelerator.offload for ", proxy_name)
     dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
     dprintln(2, "dyn_lib = ", dyn_lib)
   
@@ -292,13 +292,13 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     end
   
     # Create a set of expressions to pass as arguments to specify the array dimension sizes.
-    if IntelPSE.getPseMode() == IntelPSE.HOST_MODE
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.HOST_MODE
       run_where = -1
-    elseif IntelPSE.getPseMode() == IntelPSE.OFFLOAD1_MODE
+    elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE
       run_where = 0
-    elseif IntelPSE.getPseMode() == IntelPSE.OFFLOAD2_MODE
+    elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
       run_where = 1
-    elseif IntelPSE.getPseMode() == IntelPSE.TASK_MODE
+    elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.TASK_MODE
       pert_init(package_root, false)
     else
       assert(0)
@@ -382,9 +382,9 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     end
   
     if stop_after_offload != 0
-      throw(string("debuggging IntelPSE"))
+      throw(string("debuggging ParallelAccelerator"))
     end
-    return proxy_func #@eval IntelPSE.$proxy_sym
+    return proxy_func #@eval ParallelAccelerator.$proxy_sym
   else
     return nothing
   end

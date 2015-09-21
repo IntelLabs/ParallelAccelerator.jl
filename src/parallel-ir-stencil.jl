@@ -202,6 +202,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # mmap, mmap!, and reduce all call replaceExprWithDict on just the body of the new parfor and
   # so I made it do this above.  If we need it on the whole PIRParForAst then I wrote a routine
   # in parallel-ir.jl to do it.
-  #expr = replaceExprWithDict(expr, gensym_map, IntelPSE.ParallelIR.AstWalk) 
+  #expr = replaceExprWithDict(expr, gensym_map, ParallelAccelerator.ParallelIR.AstWalk) 
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

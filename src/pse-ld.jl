@@ -3,7 +3,7 @@ module LD
 import Base.LinAlg: BlasInt
 
 #require("intel-pse.jl")
-#importall IntelPSE
+#importall ParallelAccelerator
 import ..getPackageRoot
 import ..Pert
 
@@ -64,7 +64,7 @@ function check_ccall(state, expr)
          matched_call = call_dict[args[2].args[2]]
          dprintln(2, "found ", matched_call, " call!")
          real_args = Array(Any, 0)
-         push!(real_args, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), IntelPSE, QuoteNode(:LD)), QuoteNode(matched_call)))
+         push!(real_args, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), ParallelAccelerator, QuoteNode(:LD)), QuoteNode(matched_call)))
          for i = 5:2:length(args)		 
           arg = args[i] 
            if isa(arg, Expr) && is(arg.head, :&) 
@@ -86,8 +86,8 @@ function check_ccall(state, expr)
          #expr = Expr(:call, :println, Expr(:call, TopNode(:getfield), Base, QuoteNode(:STDOUT)),"\nnew_ returns: ", ld_node)
          #emit_expr(state, expr)
 	 
-         expr = Expr(:call, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), IntelPSE, QuoteNode(:LD)), QuoteNode(:insert_task)), 
-                     ld_node, IntelPSE.client_intel_task_graph ? 3 : IntelPSE.client_intel_pse_mode)
+         expr = Expr(:call, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), ParallelAccelerator, QuoteNode(:LD)), QuoteNode(:insert_task)), 
+                     ld_node, ParallelAccelerator.client_intel_task_graph ? 3 : ParallelAccelerator.client_intel_pse_mode)
          emit_expr(state, expr)
          return nothing
       end

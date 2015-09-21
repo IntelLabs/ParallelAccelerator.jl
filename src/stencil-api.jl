@@ -72,7 +72,7 @@ traversing them. It may contain more than one assignment to any input arrays,
 but such writes must always be indexed at 0 to guarantee write operation never
 goes out-of-bound. Also care must be taken when the same array is both read
 from and written into in the kernel function, as they'll result in
-non-deterministic behavior when the stencil is parallelized by IntelPSE. 
+non-deterministic behavior when the stencil is parallelized by ParallelAccelerator. 
 
 The "kernel_function" may optionally access scalar variables from outerscope,
 but no write is permitted.  It may optinally contain a return statement, which
@@ -82,7 +82,7 @@ is not an ISL, it should always return nothing.
 
 This function is a reference implementation of stencil in native Julia for two
 purposes: to verify expected return result, and to make sure user code type
-checks. It runs very very slow, so any real usage should go through IntelPSE
+checks. It runs very very slow, so any real usage should go through ParallelAccelerator
 optimizations.
 
 "runStencil" always returns nothing.
