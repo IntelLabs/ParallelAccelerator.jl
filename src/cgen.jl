@@ -7,7 +7,7 @@ module cgen
 using ..ParallelIR
 using CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level
-import IntelPSE, ..getPackageRoot
+import ParallelAccelerator, ..getPackageRoot
 
 # This controls the debug print level.
 DEBUG_LVL=0

@@ -9,7 +9,7 @@ eval(x) = Core.eval(J2CArray, x)
 package_root = getPackageRoot()
 dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
 if !isfile(dyn_lib)
-  error("libj2carray not compiled, build with: julia -e 'Pkg.build(\"IntelPSE\")'")
+  error("libj2carray not compiled, build with: julia -e 'Pkg.build(\"ParallelAccelerator\")'")
 end
 
 function __init__()

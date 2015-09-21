@@ -1,6 +1,6 @@
 VERSION >= v"0.4.0-dev" && __precompile__()
 
-module IntelPSE
+module ParallelAccelerator
 
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
@@ -110,7 +110,7 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
-    CompilerTools.OptFramework.addOptPass(CompilerTools.OptFramework.optPass(IntelPSE.Driver.Optimize, false))
+    CompilerTools.OptFramework.addOptPass(CompilerTools.OptFramework.optPass(ParallelAccelerator.Driver.Optimize, false))
 end
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
