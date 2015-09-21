@@ -1091,7 +1091,7 @@ end
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
 function rangeToRangeData(range :: Expr)
-  assert(range.head == :range)
+  @assert (range.head == :range) ":range expression expected"
 
   return RangeData(range.args[1], range.args[2], range.args[3])
 end
