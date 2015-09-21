@@ -1874,7 +1874,11 @@ function link(outfile_name)
 end
 
 # When in standalone mode, this is the entry point to cgen.
-function generate(func::Function, typs)
+function generate(func::Function, typs; init_lstate=false)
+  global lstate
+  if init_lstate
+      lstate = LambdaGlobalData()
+  end
   name = string(func.env.name)
   insert(func, name, typs)
   return from_worklist()
