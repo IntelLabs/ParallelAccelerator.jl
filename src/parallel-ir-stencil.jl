@@ -172,7 +172,7 @@ dprintln(3, "borderExpr pushed")
   push!(borderExpr, LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = TypedExpr(Void, head,
-        PIRParForAst(vcat(lowerGotos, upperGotos, borderExpr),
+        PIRParForAst(vcat(lowerGotos, upperGotos, deepcopy(borderExpr)),
         [],
         [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
         PIRReduction[],
