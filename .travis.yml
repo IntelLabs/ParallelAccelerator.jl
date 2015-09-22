@@ -23,6 +23,6 @@ notifications:
 # uncomment the following lines to override the default test script
 script:
  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
- # Pull in CompilerTools dependency.
- - julia -e 'Pkg.clone("git://github.com/IntelLabs/CompilerTools.jl.git")'
- - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
+ - julia --check-bounds=yes -e 'Pkg.clone(pwd());'
+ - git clone https://psl-travis-user@github.com/IntelLabs/CompilerTools.jl.git # Pull in CompilerTools dependency
+ - julia --check-bounds=yes -e 'Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
