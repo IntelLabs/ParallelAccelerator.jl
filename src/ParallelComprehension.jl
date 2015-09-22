@@ -89,16 +89,16 @@ macro replace_comprehensions(func)
   return esc(func)
 end
 #=
-using IntelPSE
-IntelPSE.set_debug_level(3)
-# IntelPSE.DomainIR.set_debug_level(3)
-# IntelPSE.ParallelIR.set_debug_level(3)
+using ParallelAccelerator
+ParallelAccelerator.set_debug_level(3)
+# ParallelAccelerator.DomainIR.set_debug_level(3)
+# ParallelAccelerator.ParallelIR.set_debug_level(3)
 @replace_comprehensions function test()
   a = Float64[i for i in 1:4]
   return a
 end
 
-test2 = IntelPSE.offload(test, ())
+test2 = ParallelAccelerator.offload(test, ())
 
 function main()
   a = test2()

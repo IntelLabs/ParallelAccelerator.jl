@@ -3,7 +3,7 @@ module LD
 import Base.LinAlg: BlasInt
 
 #require("intel-pse.jl")
-#importall IntelPSE
+#importall ParallelAccelerator
 import ..getPackageRoot
 import ..Pert
 
@@ -50,8 +50,8 @@ function new_var(state, var, typ, flag)
   return var
 end
 
-call_dict = Dict{String,Symbol}("LAPACKE_dlaswp" => :new_dlaswp,   "LAPACKE_dgetrf" => :new_dgetrf,   "cblas_dtrsm" => :new_dtrsm,    "cblas_dgemm" => :new_dgemm,    "LAPACKE_dpotrf" => :new_dpotrf,   "cblas_dsyrk" => :new_dsyrk, "LAPACKE_dgeqr2" => :new_dgeqr2, "LAPACKE_dlarft" => :new_dlarft, "LAPACKE_dlarfb"  => :new_dlarfb )
-lib_dict  = Dict{String,Symbol}("LAPACKE_dlaswp" => :libblas_name, "LAPACKE_dgetrf" => :libblas_name, "cblas_dtrsm" => :libblas_name, "cblas_dgemm" => :libblas_name, "LAPACKE_dpotrf" => :libblas_name, "cblas_dsyrk" => :libblas_name, "LAPACKE_dgeqr2" => :libblas_name, "LAPACKE_dlarft" => :libblas_name, "LAPACKE_dlarfb" => :libblas_name)
+call_dict = Dict{AbstractString,Symbol}("LAPACKE_dlaswp" => :new_dlaswp,   "LAPACKE_dgetrf" => :new_dgetrf,   "cblas_dtrsm" => :new_dtrsm,    "cblas_dgemm" => :new_dgemm,    "LAPACKE_dpotrf" => :new_dpotrf,   "cblas_dsyrk" => :new_dsyrk, "LAPACKE_dgeqr2" => :new_dgeqr2, "LAPACKE_dlarft" => :new_dlarft, "LAPACKE_dlarfb"  => :new_dlarfb )
+lib_dict  = Dict{AbstractString,Symbol}("LAPACKE_dlaswp" => :libblas_name, "LAPACKE_dgetrf" => :libblas_name, "cblas_dtrsm" => :libblas_name, "cblas_dgemm" => :libblas_name, "LAPACKE_dpotrf" => :libblas_name, "cblas_dsyrk" => :libblas_name, "LAPACKE_dgeqr2" => :libblas_name, "LAPACKE_dlarft" => :libblas_name, "LAPACKE_dlarfb" => :libblas_name)
 
 function check_ccall(state, expr)
   if(isa(expr, Expr) && is(expr.head, :call)) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :ccall)
@@ -64,7 +64,7 @@ function check_ccall(state, expr)
          matched_call = call_dict[args[2].args[2]]
          dprintln(2, "found ", matched_call, " call!")
          real_args = Array(Any, 0)
-         push!(real_args, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), IntelPSE, QuoteNode(:LD)), QuoteNode(matched_call)))
+         push!(real_args, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), ParallelAccelerator, QuoteNode(:LD)), QuoteNode(matched_call)))
          for i = 5:2:length(args)		 
           arg = args[i] 
            if isa(arg, Expr) && is(arg.head, :&) 
@@ -86,8 +86,8 @@ function check_ccall(state, expr)
          #expr = Expr(:call, :println, Expr(:call, TopNode(:getfield), Base, QuoteNode(:STDOUT)),"\nnew_ returns: ", ld_node)
          #emit_expr(state, expr)
 	 
-         expr = Expr(:call, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), IntelPSE, QuoteNode(:LD)), QuoteNode(:insert_task)), 
-                     ld_node, IntelPSE.client_intel_task_graph ? 3 : IntelPSE.client_intel_pse_mode)
+         expr = Expr(:call, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), ParallelAccelerator, QuoteNode(:LD)), QuoteNode(:insert_task)), 
+                     ld_node, ParallelAccelerator.client_intel_task_graph ? 3 : ParallelAccelerator.client_intel_pse_mode)
          emit_expr(state, expr)
          return nothing
       end
@@ -216,7 +216,7 @@ function __init__()
         Ap::Ptr{Float64}, lda::BlasInt, Bp::Ptr{Float64}, ldb::BlasInt, 
         beta::Float64, Cp::Ptr{Float64}, ldc::BlasInt)
       ccall((:new_dgemm_LD, $(libpath)), Ptr{Void}, 
-        (Uint8, Uint8, Uint8, BlasInt, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
+        (UInt8, UInt8, UInt8, BlasInt, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
          Ptr{Float64}, BlasInt, Float64, Ptr{Float64}, BlasInt),
         order, transA, transB, M, N, K, alpha, Ap, lda, Bp, ldb, beta, Cp, ldc)
     end
@@ -253,7 +253,7 @@ function __init__()
         K::BlasInt, alpha::Float64, Ap::Ptr{Float64}, lda::BlasInt, beta::Float64, 
         Cp::Ptr{Float64}, ldc::BlasInt)
       ccall((:new_dsyrk_LD, $(libpath)), Ptr{Void}, 
-        (Uint8, Uint8, Uint8, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
+        (UInt8, UInt8, UInt8, BlasInt, BlasInt, Float64, Ptr{Float64}, BlasInt, 
         Float64, Ptr{Float64}, BlasInt), 
         layout, uplo, trans, N, K, alpha, Ap, lda, beta, Cp, ldc)
     end
@@ -270,7 +270,7 @@ function __init__()
         ldv::BlasInt, tau::Ptr{Float64}, t::Ptr{Float64},
         ldt::BlasInt )
       ccall((:new_dlarft_LD, $(libpath)), Ptr{Void}, 
-        (Int,  Uint8, Uint8, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, Ptr{Float64},		BlasInt ),
+        (Int,  UInt8, UInt8, BlasInt, BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, Ptr{Float64},		BlasInt ),
         matrix_layout, direct, storev, n, k, v, ldv, tau, t, ldt )
     end
 
@@ -279,7 +279,7 @@ function __init__()
         ldv::BlasInt, t::Ptr{Float64}, ldt::BlasInt, c::Ptr{Float64}, 
         ldc::BlasInt )
       ccall((:new_dlarfb_LD, $(libpath)), Ptr{Void}, 
-        (Int, Uint8, Uint8, Uint8, Uint8,  BlasInt, BlasInt, BlasInt, Ptr{Float64}, 
+        (Int, UInt8, UInt8, UInt8, UInt8,  BlasInt, BlasInt, BlasInt, Ptr{Float64}, 
         BlasInt, Ptr{Float64}, BlasInt, Ptr{Float64}, BlasInt ),
         matrix_layout, side, trans, direct, storev, m, n, k, v, ldv, t, ldt, c, ldc )
     end

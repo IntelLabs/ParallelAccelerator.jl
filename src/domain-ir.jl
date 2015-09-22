@@ -1,6 +1,7 @@
 module DomainIR
 
 import CompilerTools.AstWalker
+using CompilerTools
 using CompilerTools.LivenessAnalysis
 using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
@@ -183,7 +184,7 @@ type IRState
   linfo  :: LambdaInfo
   defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
   stmts  :: Array{Any, 1}
-  parent :: Union(Nothing, IRState)
+  parent :: Union{Void, IRState}
 end
 
 emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
@@ -257,7 +258,7 @@ function emitStmt(state::IRState, stmt)
 end
 
 type IREnv
-  cur_module  :: Union(Module, Nothing)
+  cur_module  :: Union{Module, Void}
   debugLevel  :: Int
   debugIndent :: Int
 end
@@ -319,7 +320,7 @@ ignoreSet = Set{Symbol}(ignoreSym)
 
 # some part of the code still requires this
 unique_id = 0
-function addFreshLocalVariable(s::String, t::Any, desc, linfo::LambdaInfo)
+function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
   global unique_id
   name = :tmpvar
   unique = false
@@ -336,7 +337,7 @@ include("domain-ir-stencil.jl")
 
 function isinttyp(typ)
     is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is(typ, Int8)  || 
-    is(typ, Uint64) || is(typ, Uint32) || is(typ, Uint16) || is(typ, Uint8)
+    is(typ, UInt64) || is(typ, UInt32) || is(typ, UInt16) || is(typ, UInt8)
 end
 
 function istupletyp(typ)
@@ -361,6 +362,10 @@ end
 
 function isrange(typ)
   isunitrange(typ) || issteprange(typ)
+end
+
+function ismask(typ)
+  isrange(typ) || isbitarray(typ)
 end
 
 function remove_typenode(expr)
@@ -632,13 +637,14 @@ function mmapRemoveDupArg!(expr)
   for i = 1:oldn
     indices[i] = n
     s = arr[i]
-    @assert isa(s,SymAllGen) "inputs of mmap should be variables (symbols)"
     if isa(s, SymbolNode) s = s.name end
     if haskey(posMap, s)
       hasDup = true
       indices[i] = posMap[s]
     else
-      posMap[s] = n
+      if isa(s,SymAllGen) 
+        posMap[s] = n
+      end
       push!(newarr, arr[i])
       push!(newinp, f.inputs[i])
       n += 1
@@ -806,7 +812,7 @@ function inline_select(env, state, arr)
   if isa(arr, SymbolNode) 
     # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
     def = lookupConstDef(state, arr.name)
-    if !isa(def, Nothing)  
+    if !isa(def, Void)  
       if isa(def, Expr) && is(def.head, :call) 
         assert(length(def.args) > 2)
         if is(def.args[1], :getindex)
@@ -890,13 +896,13 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       local mapExp = args[1]     # first argument is the lambda
       #println("mapExp ", mapExp)
       #dump(mapExp,1000)
-      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == IntelPSE)
+      if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
         mapExp = mapExp.name
       end
-      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(IntelPSE, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+      if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
 
-        if(isdefined(IntelPSE, mapExp))
-          m = methods(getfield(IntelPSE, mapExp), tuple(argstyp...))
+        if(isdefined(ParallelAccelerator, mapExp))
+          m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
         else
           m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
         end
@@ -969,7 +975,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         #s = sprint(io->Base.show_backtrace(io, bt))
         #dprintln(3, "bodyF backtrace ")
         #dprintln(3, s)
-        ldict = mergeLambdaInfo(plinfo, linfo)
+        ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
         dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
         # dprintln(2,"cartesianarray idict = ", ldict)
@@ -1019,6 +1025,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
       kernelExp = lookupConstDefForArg(state, kernelExp)
       dprintln(env, "stencil kernelExp = ", kernelExp)
+      dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
       assert(isa(kernelExp, LambdaStaticData))
       # TODO: better infer type here
       (ast, ety) = lambdaTypeinf(kernelExp, to_tuple_type(tuple(bufstyp...)))
@@ -1120,22 +1127,24 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
     elseif is(fun, :sitofp)
       typ = args[1]
     elseif is(fun, :getindex) || is(fun, :setindex!) 
+      dprintln(env, "got getindex or setindex!")
       args = normalize_args(state, env_, args)
-      lhs = args[1]
+      arr = args[1]
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-      typ = typeOfOpr(state, lhs)
-      if any(Bool[ isrange(typeOfOpr(state, range)) for range in ranges])
-        dprintln(env, "got :getindex with ", args)
+      atyp = typeOfOpr(state, arr)
+      dprintln(env, "ranges = ", ranges)
+      if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
+        dprintln(env, "args is ", args)
         dprintln(env, "ranges is ", ranges)
         newsize = addGenSym(Int, state.linfo)
-        newlhs = addGenSym(typ, state.linfo)
-        etyp = elmTypOf(typ)
+        #newlhs = addGenSym(typ, state.linfo)
+        etyp = elmTypOf(atyp)
         ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
         if is(fun, :getindex) 
-          expr = mk_mmap([mk_select(lhs, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+          expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
         else
-           args = Any[mk_select(lhs, ranges), args[2]]
-           typs = Type[typ, typeOfOpr(state, args[2])]
+           args = Any[mk_select(arr, ranges), args[2]]
+           typs = Type[atyp, typeOfOpr(state, args[2])]
            (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
            elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
            linfo = LambdaInfo()
@@ -1287,7 +1296,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
   else
     dprintln(env,"function call is not GlobalRef and not translated: ", fun, ", return typ=", typ)
   end
-  if isa(expr, Nothing)
+  if isa(expr, Void)
     if !is(fun, :ccall)
       oldargs = normalize_args(state, env_, oldargs)
     end
@@ -1492,7 +1501,7 @@ function AstWalk(ast::Any, callback, cbdata)
   AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
 
-function dir_live_cb(ast, cbdata)
+function dir_live_cb(ast :: Any, cbdata :: Any)
   dprintln(4,"dir_live_cb ")
   asttyp = typeof(ast)
   if asttyp == Expr

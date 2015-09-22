@@ -26,7 +26,7 @@ type extractStaticCallGraphState
 
   calls :: Array{CallInfo,1}
   globalWrites :: Set
-  lambdaInfo   :: Union{LambdaInfo, Nothing}
+  lambdaInfo   :: Union{LambdaInfo, Void}
   array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
   cant_analyze :: Bool
 

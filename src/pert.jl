@@ -10,12 +10,12 @@ function __init__()
   package_root    = getPackageRoot()
   runtime_libpath = string(package_root, "/src/intel-runtime/lib/libintel-runtime.so")
   @eval begin
-    function StartTiming(state::String)
-      ccall((:StartTiming, $runtime_libpath), Void, (Ptr{Uint8},), state)
+    function StartTiming(state::AbstractString)
+      ccall((:StartTiming, $runtime_libpath), Void, (Ptr{UInt8},), state)
     end
 
-    function StopTiming(state::String)
-      ccall((:StopTiming, $runtime_libpath), Void, (Ptr{Uint8},), state)
+    function StopTiming(state::AbstractString)
+      ccall((:StopTiming, $runtime_libpath), Void, (Ptr{UInt8},), state)
     end
 
     function Register{T, N}(a :: Array{T, N})

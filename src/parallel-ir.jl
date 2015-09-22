@@ -5,8 +5,8 @@ using CompilerTools
 using CompilerTools.LambdaHandling
 using ..DomainIR
 using CompilerTools.AliasAnalysis
-using ..IntelPSE
-#if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
+using ..ParallelAccelerator
+#if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 #using Base.Threading
 #end
 
@@ -242,7 +242,7 @@ include("parallel-ir-stencil.jl")
 @doc """
 Overload of Base.show to pretty print for parfor AST nodes.
 """
-function show(io::IO, pnode::IntelPSE.ParallelIR.PIRParForAst)
+function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
     println(io,"")
     if pnode.instruction_count_expr != nothing
         println(io,"Instruction count estimate: ", pnode.instruction_count_expr)
@@ -400,10 +400,10 @@ end
 
 @doc """
 Create an expression that references something inside ParallelIR.
-In other words, returns an expression the equivalent of IntelPSE.ParallelIR.sym where sym is an input argument to this function.
+In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.
 """
 function mk_parallelir_ref(sym, ref_type=Function)
-    inner_call = TypedExpr(Module, :call, TopNode(:getfield), :IntelPSE, QuoteNode(:ParallelIR))
+    inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
     TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
 end
 
@@ -638,8 +638,8 @@ function createStateVar(state, name, typ, access)
 end
 
 function convert(dt :: DataType, x :: GenSym)
-  if dt == String
-       return string("GenSym", x.id)
+  if dt == AbstractString
+    return string("GenSym", x.id)
   end
   throw(string("Unsupport conversion of GenSym to something."))
 end
@@ -946,7 +946,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens  = String[]
+  save_array_lens  = AbstractString[]
   input_array_rangeconds = Array(Any, num_dim_inputs)
 
   # Insert a statement to assign the length of the input arrays to a var
@@ -1066,7 +1066,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 #  makeLhsPrivate(out_body, state)
 
   # The parfor node that will go into the AST.
-  new_parfor = IntelPSE.ParallelIR.PIRParForAst(
+  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
       pre_statements,
       loopNests,
@@ -1194,7 +1194,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens = String[]
+  save_array_lens = AbstractString[]
 
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
@@ -1287,7 +1287,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     push!(post_statements, input_arrays[1:length(dl.outputs)])
   end
 
-  new_parfor = IntelPSE.ParallelIR.PIRParForAst(
+  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
       pre_statements,
       loopNests,
@@ -1400,7 +1400,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   post_statements = Any[]
   # To hold the names of newly created output arrays.
   new_array_symbols = Symbol[]
-  save_array_lens   = String[]
+  save_array_lens   = AbstractString[]
 
   # Make sure each input array is a SymbolNode.
   # Also, create indexed versions of those symbols for the loop body.
@@ -1517,7 +1517,7 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     push!(post_statements, all_sn)
   end
 
-  new_parfor = IntelPSE.ParallelIR.PIRParForAst(
+  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
       pre_statements,
       loopNests,
@@ -1641,7 +1641,7 @@ function from_lambda(lambda :: Expr, depth, state)
   # to say whether the var is assigned once or multiple times.
   CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, IntelPSE.ParallelIR.AstWalk)
+  body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
   # Write the lambdaInfo back to the lambda AST node.
   lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
@@ -1738,7 +1738,7 @@ end
 Returns true if the domain operation mapped to this parfor has the property that the iteration space
 is identical to the dimenions of the inputs.
 """
-function iterations_equals_inputs(node :: IntelPSE.ParallelIR.PIRParForAst)
+function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
   assert(length(node.original_domain_nodes) > 0)
 
   first_domain_node = node.original_domain_nodes[1]
@@ -1759,7 +1759,7 @@ end
 @doc """
 Returns a Set with all the arrays read by this parfor.
 """
-function getInputSet(node :: IntelPSE.ParallelIR.PIRParForAst)
+function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
   ret = Set(collect(keys(node.rws.readSet.arrays)))
   dprintln(3,"Input set = ", ret)
   ret
@@ -2909,7 +2909,7 @@ Structure for storing information about task formation.
 type TaskInfo
   task_func       :: Function                  # The Julia task function that we generated for a task.
   function_sym
-  join_func       :: String                    # The name of the C join function that we constructed and forced into the C file.
+  join_func       :: AbstractString            # The name of the C join function that we constructed and forced into the C file.
   input_symbols   :: Array{SymbolNode,1}       # Variables that are need as input to the task.
   modified_inputs :: Array{SymbolNode,1} 
   io_symbols      :: Array{SymbolNode,1}
@@ -3067,7 +3067,7 @@ type InsertTaskNode
   ranges :: pir_range
   args   :: Array{pir_arg_metadata,1}
   task_func :: Any
-  join_func :: String  # empty string for no join function
+  join_func :: AbstractString  # empty string for no join function
   task_options :: Int
   host_grain_size :: pir_grain_size
   phi_grain_size :: pir_grain_size
@@ -3171,7 +3171,7 @@ end
 type eic_state
   non_calls      :: Float64    # estimated instruction count for non-calls
   fully_analyzed :: Bool
-  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Nothing}
+  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Void}
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3455,7 +3455,7 @@ function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_le
   elseif asttyp == NewvarNode
     dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
     #skip
-  elseif asttyp == Nothing
+  elseif asttyp == Void
     #skip
   #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
   elseif isbits(asttyp)
@@ -3483,7 +3483,7 @@ end
 @doc """
 Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.
 """
-function createInstructionCountEstimate(the_parfor :: IntelPSE.ParallelIR.PIRParForAst, state :: expr_state)
+function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state :: expr_state)
   if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
     dprintln(2,"instruction count estimate for parfor = ", the_parfor)
     new_state = eic_state(0, true, state.lambdaInfo)
@@ -3772,7 +3772,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
   dprintln(3,"new_lives = ", new_lives)
   dprintln(3,"loop_info = ", loop_info)
 
-  if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE || IntelPSE.getTaskMode() > 0 || run_as_task()
+  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
     task_start = time_ns()
 
     # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
@@ -3995,7 +3995,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     for i = 1:length(rr)
       dprintln(2, rr[i])
 
-      if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
+      if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
         # new body starts with the pre-task graph portion
         new_body = body[1:rr[i].start_index-1]
         copy_back = Any[]
@@ -4117,7 +4117,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
         dprintln(3,"new_body after region ", i, " replaced")
         printBody(3,body)
-      elseif IntelPSE.client_intel_task_graph
+      elseif ParallelAccelerator.client_intel_task_graph
         # new body starts with the pre-task graph portion
         new_body = body[1:rr[i].start_index-1]
         copy_back = Any[]
@@ -4140,14 +4140,14 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             if dims > 0
               itn = InsertTaskNode()
 
-              if IntelPSE.client_intel_task_graph_mode == 0
+              if ParallelAccelerator.client_intel_task_graph_mode == 0
                 itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_XEON
-              elseif IntelPSE.client_intel_task_graph_mode == 1
+              elseif ParallelAccelerator.client_intel_task_graph_mode == 1
                 itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_PHI
-              elseif IntelPSE.client_intel_task_graph_mode == 2
+              elseif ParallelAccelerator.client_intel_task_graph_mode == 2
                 itn.task_options = 0
               else
-                throw(string("Unknown task graph mode option ", IntelPSE.client_intel_task_graph_mode))
+                throw(string("Unknown task graph mode option ", ParallelAccelerator.client_intel_task_graph_mode))
               end
 
               if task_graph_mode == SEQUENTIAL_TASKS
@@ -4265,9 +4265,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
           end
 
-          #push!(new_body, TypedExpr(Nothing, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
-          #push!(new_body, TypedExpr(Nothing, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
-          push!(new_body, TypedExpr(Nothing, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
+          #push!(new_body, TypedExpr(Void, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
+          #push!(new_body, TypedExpr(Void, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
+          push!(new_body, TypedExpr(Void, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
 
           for k = 1:out_len
             push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state), state))
@@ -4341,7 +4341,7 @@ An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
 """
 function isf(t::Function, 
-             full_iteration_space::IntelPSE.ParallelIR.pir_range_actual,
+             full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
              rest...)
     tid = Base.Threading.threadid()
 
@@ -4358,15 +4358,15 @@ function isf(t::Function,
 if true
     if tid == 1
       #println("ISF tid = ", tid, " t = ", t, " fis = ", full_iteration_space, " args = ", rest...)
-      return t(IntelPSE.ParallelIR.pir_range_actual(1,2), rest...)
+      return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
       #return t(full_iteration_space, rest...)
     else
       return nothing
     end
 else
           if tid <= num_iters
-              return t(IntelPSE.ParallelIR.pir_range_actual(1,2), rest...)
-              #return t(IntelPSE.ParallelIR.pir_range_actual(tid,tid), rest...)
+              return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
+              #return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
           else
               #return t(pir_range_actual([0],[-1]), rest...)
               return nothing
@@ -4414,7 +4414,7 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
   # MULTI_PARFOR_SEQ_NO mode converts parfors to tasks but leaves non-parfors as non-tasks.  This implies that the code calling this function has ensured
   #     that none of the non-parfor stmts depend on the completion of a parfor in the batch.
 
-  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
+  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
     if task_graph_mode == SEQUENTIAL_TASKS
       task_finish = false
     elseif task_graph_mode == ONE_AT_A_TIME
@@ -4454,12 +4454,12 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
     end
   end
   
-  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
+  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
     # If each task doesn't wait to finish then add a call to pert_wait_all_task to wait for the batch to finish.
     if !task_finish
-      #julia_root      = IntelPSE.getJuliaRoot()
+      #julia_root      = ParallelAccelerator.getJuliaRoot()
       #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
-      #runtime_libpath = IntelPSE.runtime_libpath
+      #runtime_libpath = ParallelAccelerator.runtime_libpath
 
       #call_wait = Expr(:ccall, Expr(:tuple, QuoteNode(:pert_wait_all_task), runtime_libpath), :Void, Expr(:tuple))
       #push!(task_list, call_wait) 
@@ -4624,7 +4624,7 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst, loop_nest_level, next_available_label)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label)
   if loop_nest_level > length(the_parfor.loopNests)
     # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
     # For each statement in the parfor body.
@@ -4714,7 +4714,7 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
   max_label = getMaxLabel(0, the_parfor.body)
   dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
   # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
@@ -4728,7 +4728,7 @@ body.  This parfor is in the nested (parfor code is in the parfor node itself) t
 pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
-function flattenParfor(new_body, the_parfor :: IntelPSE.ParallelIR.PIRParForAst)
+function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
   dprintln(2,"Flattening ", the_parfor)
 
   private_set = getPrivateSet(the_parfor.body)
@@ -4884,7 +4884,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
  
   dprintln(3, "meta = ", meta)
 
-  if IntelPSE.client_intel_task_graph
+  if ParallelAccelerator.client_intel_task_graph
     for i = 1:length(the_parfor.loopNests)
       # Put outerloop first in the loopNest
       j = length(the_parfor.loopNests) - i + 1
@@ -4895,7 +4895,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
                                                 TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i),
                                                 1)
     end
-  elseif IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
+  elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
     for i = 1:length(the_parfor.loopNests)
       # Put outerloop first in the loopNest
       j = length(the_parfor.loopNests) - i + 1
@@ -4907,7 +4907,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3, "Before recreation or flattening")
 
   # Add the parfor stmt to the task function body.
-  if IntelPSE.getPseMode() == IntelPSE.THREADS_MODE
+  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
     recreateLoops(task_body.args, the_parfor)
   else
     flattenParfor(task_body.args, the_parfor)
@@ -4933,9 +4933,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
   m = methods(task_func, all_arg_type)
   def = m[1].func.code
-  if IntelPSE.getPseMode() != IntelPSE.THREADS_MODE
+  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
     def.j2cflag = convert(Int32,6)
-    ccall(:set_j2c_task_arg_types, Void, (Ptr{Uint8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
+    ccall(:set_j2c_task_arg_types, Void, (Ptr{UInt8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
   end
   precompile(task_func, all_arg_type)
   dprintln(3, "def post = ", def, " type = ", typeof(def))
@@ -4958,7 +4958,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # The name of the new reduction function.
     reduction_func_name = string("reduction_func_",unique_node_id)
 
-    the_types = String[]
+    the_types = AbstractString[]
     for i = 1:length(the_parfor.reductions)
       if the_parfor.reductions[i].reductionVar.typ == Float64
         push!(the_types, "double")
@@ -4999,7 +4999,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     dprintln(3,c_reduction_func)
 
     # Tell cgen to put this reduction function directly into the C code.
-    ccall(:set_j2c_add_c_code, Void, (Ptr{Uint8},), c_reduction_func)
+    ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
   end
 
   return TaskInfo(task_func,     # The task function that we just generated of type Function.
@@ -5075,7 +5075,7 @@ function pir_live_cb(ast, cbdata)
       dprintln(3,"pir_live_cb for :parfor")
       expr_to_process = Any[]
 
-      assert(typeof(args[1]) == IntelPSE.ParallelIR.PIRParForAst)
+      assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
       this_parfor = args[1]
 
       append!(expr_to_process, this_parfor.preParFor)
@@ -5999,12 +5999,12 @@ function inline!(src, dst, lhs)
       CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
     end
   end
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+  # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
   tmp_t = f.outputs[1]
-  tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
   dst.args[2] = DomainLambda(inputs, g.outputs, 
   (linfo, args) -> begin
     fb = f.genBody(linfo, args[g_inps:end])
+    tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
     expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
     gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
     return [fb[1:end-1]; [expr]; gb]
@@ -6545,7 +6545,9 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
   CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
   stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
+  newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
   ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+  # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
   return (ast, input_arrays) 
 end
 
@@ -6992,7 +6994,7 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
     #skip
   elseif asttyp == NewvarNode
     #skip
-  elseif asttyp == Nothing
+  elseif asttyp == Void
     #skip
   elseif asttyp == Module
     #skip
@@ -7038,7 +7040,7 @@ end
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
-function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: Any, dw::DirWalk, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback ret = ", ret)
@@ -7160,7 +7162,7 @@ function pir_alias_cb(ast, state, cbdata)
       dprintln(3,"pir_alias_cb for :parfor")
       expr_to_process = Any[]
 
-      assert(typeof(args[1]) == IntelPSE.ParallelIR.PIRParForAst)
+      assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
       this_parfor = args[1]
 
       AliasAnalysis.increaseNestLevel(state);

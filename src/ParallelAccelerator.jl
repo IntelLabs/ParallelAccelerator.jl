@@ -1,9 +1,12 @@
 VERSION >= v"0.4.0-dev" && __precompile__()
 
-module IntelPSE
+module ParallelAccelerator
 
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
+
+using CompilerTools
+using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
@@ -106,6 +109,8 @@ function __init__()
     end
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
+
+    CompilerTools.OptFramework.addOptPass(CompilerTools.OptFramework.optPass(ParallelAccelerator.Driver.Optimize, false))
 end
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
@@ -140,6 +145,7 @@ end
 _offload(function_name, signature) = offload(function_name, signature, 0)
 
 include("api.jl")
+include("stencil-api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
 include("j2c-array.jl")
@@ -154,5 +160,7 @@ include("driver.jl")
 
 importall .API
 importall .Driver
+
+export @acc
 
 end

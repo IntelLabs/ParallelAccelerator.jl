@@ -18,10 +18,10 @@
 #####################################################
 
 require("intel-pse.jl")
-importall IntelPSE
+importall ParallelAccelerator
 ParallelIR.set_debug_level(3)
 ParallelIR.PIRSetFuseLimit(-1)
-IntelPSE.set_debug_level(3)
+ParallelAccelerator.set_debug_level(3)
 ccall(:set_j2c_verbose, Void, (Cint,), 9)
 
 # A variant of pmap that passes indexes instead of values
@@ -121,7 +121,7 @@ end
 
 function distribute2DF(body, T, ndims)
 	_f = (function foo(_pid, _csize)
-		#IntelPSE.offload(_f, (Int64, Int64))
+		#ParallelAccelerator.offload(_f, (Int64, Int64))
 		#println("[DEBUG] On process: ", myid(), " doing chunk of size: ", _csize)
 		a = Array(T, _csize)
 		cartesianarray(
@@ -211,7 +211,7 @@ function render(w::Int64, h::Int64)
 	a = matmul(ones(Float64, w, h), ones(Float64, h, w), 0)
 	#a
 end
-#IntelPSE.offload(render, (Int64, Int64))
+#ParallelAccelerator.offload(render, (Int64, Int64))
 function main()
 	w = 1024
 	h = 1024
