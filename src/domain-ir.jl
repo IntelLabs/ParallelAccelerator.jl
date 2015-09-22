@@ -1136,7 +1136,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
         dprintln(env, "args is ", args)
         dprintln(env, "ranges is ", ranges)
-        newsize = addGenSym(Int, state.linfo)
+        #newsize = addGenSym(Int, state.linfo)
         #newlhs = addGenSym(typ, state.linfo)
         etyp = elmTypOf(atyp)
         ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
@@ -1151,7 +1151,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
            for i=1:length(nonarrays)
              # At this point, they are either symbol nodes, or constants
              if isa(nonarrays[i], SymbolNode)
-               addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+               addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
              end
            end
            expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))

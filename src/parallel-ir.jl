@@ -1090,7 +1090,7 @@ end
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
 function rangeToRangeData(range :: Expr)
-  assert(range.head == :range)
+  @assert (range.head == :range) ":range expression expected"
 
   return RangeData(range.args[1], range.args[2], range.args[3])
 end
@@ -1328,7 +1328,7 @@ end
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state) 
+function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr) 
   # Make sure we get what we expect from domain IR.  
   # There should be two entries in the array, another array of input array symbols and a DomainLambda type
   if(length(input_args) != 2)
@@ -1530,8 +1530,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
       simply_indexed)
 
   dprintln(3,"Lowered parallel IR = ", new_parfor)
-
-  return [new_parfor]
+  retarr[1] = new_parfor
+  #[new_parfor]
 end
 
 # ===============================================================================================================================
@@ -6887,7 +6887,9 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
         # skip
     elseif head == :mmap
         head = :parfor
-        args = mk_parfor_args_from_mmap(args, state)
+        retarr = Any[nothing]
+        mk_parfor_args_from_mmap(args, state, retarr)
+        args = retarr
         dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
     elseif head == :mmap!
         head = :parfor
