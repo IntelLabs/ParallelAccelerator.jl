@@ -1113,7 +1113,7 @@ function from_gotonode(ast, exp = "")
 	labelId = ast.label
 	s = ""
 	dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
-	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
+	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
 	end
 	s *= "goto " * "label" * string(labelId)
@@ -1125,7 +1125,7 @@ function from_gotoifnot(args)
 	labelId = args[2]
 	s = ""
 	dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
-	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
+	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
 	end
 	s *= "goto " * "label" * string(labelId)
