@@ -1032,7 +1032,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
       dprintln(env, "type inferred AST = ", ast)
       kernelExp = from_expr(state, env_, ast)
-      if !is(borderExp, nothing)
+      if is(borderExp, nothing)
+        borderExp = QuoteNode(:oob_skip)
+      else
         borderExp = lookupConstDefForArg(state, borderExp)
       end
       dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))

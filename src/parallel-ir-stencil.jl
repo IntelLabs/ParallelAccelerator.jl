@@ -30,12 +30,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local oob_dst_zero = false
   local oob_src_zero = false
   local oob_wraparound = false
-  if isa(border, QuoteNode)
-    local b = border.value
-    oob_dst_zero = is(b, :oob_dst_zero)
-    oob_src_zero = is(b, :oob_src_zero)
-    oob_wraparound = is(b, :oob_wraparound)
-  end
+  assert(isa(border, Symbol))
+  oob_dst_zero = is(border, :oob_dst_zero)
+  oob_src_zero = is(border, :oob_src_zero)
+  oob_wraparound = is(border, :oob_wraparound)
   local iterations = args[2]
   # convert all SymbolNode in bufs to just Symbol
   local bufs = args[3]
@@ -126,22 +124,25 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     for expr in bodyExpr
       if is(expr.head, :call) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :unsafe_arrayset)
         assert(isa(expr.args[2], SymbolNode))
-        zero = convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
+dprintln(3, " elmTyp = ", DomainIR.elmTypOf(expr.args[2].typ), " :: ", typeof(DomainIR.elmTypOf(expr.args[2].typ)))
+        zero = Base.convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
     end
   elseif oob_src_zero
+dprintln(3, "inside oob_src_zero")
     for expr in bodyExpr
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
         if isa(rhs, Expr) && is(rhs.head, :call) && isa(rhs.args[1], TopNode) && is(rhs.args[1].name, :unsafe_arrayref)
-          zero = convert(rhs.typ, 0)
+          zero = Base.convert(rhs.typ, 0)
           expr = TypedExpr(expr.typ, :(=), lhs,
                   TypedExpr(rhs.typ, :call, TopNode(:safe_arrayref),
                       rhs.args[2], zero, rhs.args[3:end]...))
         end
       end
+dprintln(3, "borderExpr pushed")
       push!(borderExpr, expr)
     end
   elseif oob_wraparound

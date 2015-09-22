@@ -9,10 +9,12 @@ type KernelStat
   bufSym    :: Array{GenSym,1} # (fresh) buffer symbols
   idxSym    :: Array{GenSym,1} # (fresh) symbol of the index variable into the source image
   strideSym :: Array{GenSym,1} # (fresh) symbol of the strides data of source image
-  borderSty :: Any             # QuoteNode :oob_dst_zero, :oob_src_zero, :oob_skip
+  borderSty :: Symbol          # Symbol :oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound
   rotateNum :: Int             # number of buffers that is affected by rotation
   modified  :: Array{Int,1}    # which buffer is modified
 end
+
+supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound])
 
 # Analyze a stencil kernel specified as a lambda expression.
 # Return both the kernel stat, and the modified kernel LHS expression.
@@ -213,6 +215,9 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
     error("Border specification in runStencil can only be Symbols.")
   end
   borderSty = borderExp.value 
+  if !in(borderSty, supportedBorderStyle)
+    error("Expect stencil border style to be one of ", supportedBorderStyle, ", but got ", borderSty)
+  end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, genBody = analyze_kernel(state, typs, kernelExp, borderSty)
   # f expects input of either [indices, strides, buffers] or [symbols].

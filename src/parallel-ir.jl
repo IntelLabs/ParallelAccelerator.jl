@@ -637,13 +637,6 @@ function createStateVar(state, name, typ, access)
   return SymbolNode(new_temp_sym, typ)
 end
 
-function convert(dt :: DataType, x :: GenSym)
-  if dt == AbstractString
-    return string("GenSym", x.id)
-  end
-  throw(string("Unsupport conversion of GenSym to something."))
-end
-
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
@@ -5156,6 +5149,12 @@ function pir_live_cb(ast, cbdata)
       return Any[]
     elseif head == :call
       if args[1] == TopNode(:unsafe_arrayref)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayref)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      elseif args[1] == TopNode(:safe_arrayref)
         expr_to_process = Any[]
         new_expr = deepcopy(ast)
         new_expr.args[1] = TopNode(:arrayref)
