@@ -1,4 +1,4 @@
-using IntelPSE
+using ParallelAccelerator
 using Base.Test
 
 # write your own tests here
