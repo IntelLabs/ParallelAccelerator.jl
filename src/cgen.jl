@@ -351,7 +351,7 @@ function from_lambda(ast, args)
 		if !in(k, params) #|| (!in(k, locals) && !in(k, params))
 			# If we have user defined types, record them
 			#if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-			if !isPrimitiveJuliaType(lstate.symboltable[k]) 
+			if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
 				if !haskey(lstate.globalUDTs, lstate.symboltable[k])
 					lstate.globalUDTs[lstate.symboltable[k]] = 1
 				end
@@ -443,6 +443,14 @@ end
 function isPrimitiveJuliaType(t)
 	haskey(lstate.jtypes, t)
 end
+
+function isArrayOfPrimitiveJuliaType(t)
+  if isArrayType(t) && isPrimitiveJuliaType(eltype(t))
+    return true
+  end
+  return false
+end
+
 
 function isArrayType(typ)
 	isa(typ, DataType) && ((typ.name == Array.name) || (typ.name == BitArray.name))
