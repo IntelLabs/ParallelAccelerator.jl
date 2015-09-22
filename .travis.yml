@@ -10,7 +10,7 @@ julia:
 
 branches:
   only:
-    - latest
+    - master
 
 matrix:
   allow_failures:
