@@ -360,13 +360,15 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
   array                                # The name of the array.
+  select_bitarrays :: Array{SymbolNode,1} # Empty if whole array or range, else on BitArray per dimension.
   range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
   range_offset :: Array{SymbolNode,1}  # New temp variables to hold offset from iteration space for each dimension.
   elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
   pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
+  rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
   function InputInfo()
-    new(nothing, RangeData[], SymbolNode[], nothing)
+    new(nothing, Array{SymbolNode,1}[], RangeData[], SymbolNode[], nothing, Expr[], Expr(:noop))
   end
 end
 
@@ -1141,10 +1143,20 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
     if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
       thisInfo.array = input_arrays[i].args[1]
-      thisInfo.range = selectToRangeData(input_arrays[i])
-      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      select_kind = input_arrays[i].args[2].head
+      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+      if select_kind == :tomask
+        thisInfo.select_bitarrays = input_arrays[i].args[2].args
+        thisInfo.range = RangeData[]
+        thisInfo.range_offset = SymbolNode[]
+        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+        thisInfo.pre_offsets = Expr[]
+      else
+        thisInfo.range = selectToRangeData(input_arrays[i])
+        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      end
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
@@ -1202,8 +1214,17 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   for(i = 1:length(inputInfo))
     argtyp = typeof(inputInfo[i].array)
     dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    assert(argtyp <: SymAllGen)
+    @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
 
+    # we only support bitarray selection for 1D arrays
+    if length(inputInfo[i].select_bitarrays)==1
+      mask_array = inputInfo[i].select_bitarrays[1] 
+      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+#      end
+      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
@@ -1272,6 +1293,18 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
+  end
+
+  # add conditional expressions to body if array elements are selected by bit arrays
+  fallthroughLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
+    end
+  end
+  if length(condExprs) > 0
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1352,10 +1385,21 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
     if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
       thisInfo.array = input_arrays[i].args[1]
-      thisInfo.range = selectToRangeData(input_arrays[i])
-      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      select_kind = input_arrays[i].args[2].head
+      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+      if select_kind == :tomask
+#        @bp
+        thisInfo.select_bitarrays = input_arrays[i].args[2].args
+        thisInfo.range = RangeData[]
+        thisInfo.range_offset = SymbolNode[]
+        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+        thisInfo.pre_offsets = Expr[]
+      else
+        thisInfo.range = selectToRangeData(input_arrays[i])
+        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      end
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
@@ -1412,6 +1456,15 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
     assert(argtyp <: SymAllGen)
 
+    # we only support bitarray selection for 1D arrays
+    if length(inputInfo[i].select_bitarrays)==1
+      mask_array = inputInfo[i].select_bitarrays[1]
+      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+#      end
+      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
@@ -1500,6 +1553,18 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     output_element_sizes = output_element_sizes + sizeof(dl.outputs)
   end
   dprintln(3,"out_body = ", out_body)
+
+  # add conditional expressions to body if array elements are selected by bit arrays
+  fallthroughLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
+    end
+  end
+  if length(condExprs) > 0
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
   rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
