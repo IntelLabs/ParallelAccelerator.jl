@@ -287,7 +287,7 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
             end
         end
     end
-    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 3
+    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 4
         println(io,"Domain nodes: ")
         for i = 1:length(pnode.original_domain_nodes)
             println(io,pnode.original_domain_nodes[i])
