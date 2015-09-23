@@ -6,7 +6,6 @@ using CompilerTools.LivenessAnalysis
 using CompilerTools.LambdaHandling
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
-using Core.svec
 using CompilerTools.AliasAnalysis
 
 # uncomment this line when using Debug.jl
@@ -919,8 +918,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       # Element type is specified as an argument to cartesianarray
       # This allows us to cast the return type, but inference still needs to be
       # called on the mapExp ast.
-      ety = eval(args[2])
-      etys = isa(ety, Tuple) ? Type[ t for t in ety ] : Type[ ety ]
+      # These types are sometimes GlobalRefs, and must be evaled into Type
+      etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
+      dprintln(env, "etys = ", etys)
+      @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
       ast = from_expr("anonymous", env.cur_module, ast)
       # dprintln(env, "ast = ", ast)
       # create tmp arrays to store results
@@ -945,20 +946,21 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       # fix the return in body
       lastExp = body.args[end]
       assert(isa(lastExp, Expr) && is(lastExp.head, :return))
-      # FIXME: lastExp may be returning a tuple
       # dprintln(env, "fixReturn: lastExp = ", lastExp)
-      if (isa(lastExp.args[1], SymbolNode) &&
-          isa(lastExp.args[1].typ, Tuple))
+      args1 = lastExp.args[1]
+      args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
+      # lastExp may be returning a tuple
+      if istupletyp(args1_typ)
         # create tmp variables to store results
-        local tvar = lastExp.args[1]
-        local typs = tvar.typ
+        local tvar = args1
+        local typs = args1_typ.parameters
         local nvar = length(typs)
         local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
         local retExprs = Array(Expr, length(retNodes))
         for i in 1:length(retNodes)
           n = retNodes[i]
           t = typs[i]
-          retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, TopNode(:tupleref), tvar, i))
+          retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
         end
         lastExp.head = retExprs[1].head
         lastExp.args = retExprs[1].args
@@ -985,7 +987,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       end
       domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
       expr = mk_mmap!(tmpNodes, domF, true)
-      expr.typ = length(arrtyps) == 1 ? arrtyps[1] : tuple(arrtyps...)
+      expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
     elseif is(fun, :runStencil)
       # we handle the following runStencil form:
       #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
@@ -1638,8 +1640,9 @@ function dir_alias_cb(ast, state, cbdata)
       return AliasAnalysis.next_node(state)
     elseif head == :mmap!
       dl :: DomainLambda = args[2]
-      n_outputs = length(dl.outputs)
-      assert(n_outputs == 1) # unless we support multi-return
+      # n_outputs = length(dl.outputs)
+      # assert(n_outputs == 1) 
+      # FIXME: fix it in case of multiple return!
       tmp = args[1][1]
       if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
         tmp = tmp.args[1] 

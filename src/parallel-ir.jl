@@ -1277,7 +1277,9 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     # If there is only one output then put that output in the post_statements
     push!(post_statements, input_arrays[1])
   else
-    push!(post_statements, input_arrays[1:length(dl.outputs)])
+    ret_arrays = input_arrays[1:length(dl.outputs)]
+    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
   end
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
