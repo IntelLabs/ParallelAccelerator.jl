@@ -27,4 +27,4 @@ script:
  - cd ~/.julia/v0.5/CompilerTools; git fetch; git checkout latest
  - julia --check-bounds=yes -e 'Pkg.build("CompilerTools"); Pkg.test("CompilerTools"; coverage=true)'
  - cd -
- - julia --check-bounds=yes -e 'Pkg.clone("ParallelAccelerator"); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
+ - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
