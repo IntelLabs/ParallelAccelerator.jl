@@ -5629,6 +5629,12 @@ function remove_no_deps(node, data :: RemoveNoDepsState, top_level_number, is_to
 
   if is_top_level
     dprintln(3,"remove_no_deps is_top_level")
+
+    if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+      # Empty the state at the end or begining of a basic block
+      data.dict_sym = Dict{SymGen,Any}()
+    end
+
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
     # Remove line number statements.
     if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
@@ -5640,10 +5646,7 @@ function remove_no_deps(node, data :: RemoveNoDepsState, top_level_number, is_to
       dprintln(3,"remove_no_deps live_info = ", live_info)
       dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
-      if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-        # Empty the state at the end or begining of a basic block
-        data.dict_sym = Dict{SymGen,Any}()
-      elseif isAssignmentNode(node)
+      if isAssignmentNode(node)
         dprintln(3,"Is an assignment node.")
         lhs = node.args[1]
         dprintln(4,lhs)
