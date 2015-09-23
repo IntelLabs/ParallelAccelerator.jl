@@ -1094,13 +1094,20 @@ function from_return(args)
 	dprintln(3,"Return args are: ", args)
 	retExp = ""
 	if inEntryPoint
-		if typeAvailable(args[1]) && isa(args[1].typ, Tuple)
-			retTyps = args[1].typ
+		arg1 = args[1]
+		arg1_typ = Any
+		if typeAvailable(arg1)
+			arg1_typ = arg1.typ
+		elseif isa(arg1, GenSym)
+			arg1_typ = lstate.symboltable[arg1]
+		end
+		if istupletyp(arg1_typ)
+			retTyps = arg1_typ.parameters
 			for i in 1:length(retTyps)
-				retExp *= "*ret" * string(i-1) * " = " * from_expr(args[1]) * ".f" * string(i-1) * ";\n"
+				retExp *= "*ret" * string(i-1) * " = " * from_expr(arg1) * ".f" * string(i-1) * ";\n"
 			end
 		else
-			retExp = "*ret0 = " * from_expr(args[1]) * ";\n"
+			retExp = "*ret0 = " * from_expr(arg1) * ";\n"
 		end
 		return retExp * "return"
 	else
@@ -1698,7 +1705,9 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
 	hdr = ""
 	wrapper = ""
-	if !isa(returnType, Tuple)
+	if istupletyp(returnType)
+	    returnType = tuple(returnType.parameters...)
+	else
 		returnType = (returnType,)
 	end
 	hdr = from_header(isEntryPoint)
@@ -1718,7 +1727,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 			argsunal = retargs
 		end
 	else
-
 		rtyp = toCtype(typ)
 	end
 	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
