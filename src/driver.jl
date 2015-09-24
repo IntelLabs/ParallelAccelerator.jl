@@ -267,7 +267,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
   
     ret_type     = CompilerTools.LambdaHandling.getReturnType(lambdaInfo)
     # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
-    ret_typs     = isa(ret_type, Tuple) ? [ (x, isarray(x)) for x in ret_type ] : [ (ret_type, isarray(ret_type)) ]
+    ret_typs     = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
 
     # Convert Arrays in signature to Ptr and add extra arguments for array dimensions
     (modified_sig, sig_dims) = convert_sig(signature)
