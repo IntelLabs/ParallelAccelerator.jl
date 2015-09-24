@@ -106,8 +106,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # border handling
   borderLabel = next_label(irState)
   afterBorderLabel = next_label(irState)
-  #borderHead = [ Expr(:loophead, idxNodes[i].name, 1, sizeNodes[i]) for i = n:-1:1 ]
-  #borderTail = [ Expr(:loopend, idxNodes[i].name) for i in 1:n ]
   lowerExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), 1-stat.shapeMin[i], idxNodes[i])
                  for i in 1:n ]
   upperExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), idxNodes[i],
@@ -115,23 +113,24 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
-  borderExpr = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
+  borderHead = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
                       TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
                   ]
+  borderExpr = Any[]
   if oob_dst_zero
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if is(expr.head, :call) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :unsafe_arrayset)
         assert(isa(expr.args[2], SymbolNode))
-dprintln(3, " elmTyp = ", DomainIR.elmTypOf(expr.args[2].typ), " :: ", typeof(DomainIR.elmTypOf(expr.args[2].typ)))
         zero = Base.convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
     end
   elseif oob_src_zero
-dprintln(3, "inside oob_src_zero")
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
@@ -142,11 +141,11 @@ dprintln(3, "inside oob_src_zero")
                       rhs.args[2], zero, rhs.args[3:end]...))
         end
       end
-dprintln(3, "borderExpr pushed")
       push!(borderExpr, expr)
     end
   elseif oob_wraparound
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
@@ -169,10 +168,10 @@ dprintln(3, "borderExpr pushed")
   else #FIXME: the following is to make a dummy node to avoid an IR bug
 #    push!(borderExpr, TypedExpr(Int, :(=), idxNodes[1].name, idxNodes[1]))
   end
-  push!(borderExpr, LabelNode(afterBorderLabel))
+  borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = TypedExpr(Void, head,
-        PIRParForAst(vcat(lowerGotos, upperGotos, deepcopy(borderExpr)),
+        PIRParForAst(vcat(lowerGotos, upperGotos, borderExpr),
         [],
         [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
         PIRReduction[],
