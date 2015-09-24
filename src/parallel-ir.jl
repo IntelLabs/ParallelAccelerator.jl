@@ -7002,13 +7002,11 @@ function from_expr(ast :: Any, depth, state :: expr_state, top_level)
     #skip
   elseif asttyp == Module
     #skip
-  #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
   elseif isbits(asttyp)
     #skip
   elseif isbitstuple(ast)
     #skip
   else
-#    dprintln(2,"from_expr: unknown AST (", typeof(ast), ",", ast, ")")
     throw(string("from_expr: unknown AST (", typeof(ast), ",", ast, ")"))
   end
   return [ast]
