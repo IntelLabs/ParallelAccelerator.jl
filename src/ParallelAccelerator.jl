@@ -1,4 +1,4 @@
-VERSION >= v"0.4.0-dev" && __precompile__()
+#VERSION >= v"0.4.0-dev" && __precompile__()
 
 module ParallelAccelerator
 
@@ -159,6 +159,7 @@ include("pse-ld.jl")
 include("driver.jl")
 
 importall .API
+importall .StencilAPI
 importall .Driver
 
 export @acc

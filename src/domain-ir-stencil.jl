@@ -68,9 +68,11 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
       updateDef(state, lhs, rhs)
     end
     # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are SymGen.
-    if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && (is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) &&
+    if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
+       (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
+        is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
        isa(expr.args[2], GenSym) && in(expr.args[2], bufSymSet)
-      local isGet = is(expr.args[1].name, :arrayref)
+      local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
       #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
       bufSym = expr.args[2]
       elmTyp = elmTypOf(getType(bufSym, state.linfo))
