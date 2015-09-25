@@ -750,7 +750,7 @@ function from_box(args)
 	s
 end
 
-function from_intrinsic(f, args)
+function from_intrinsic(f :: ANY, args)
 	intr = string(f)
 	dprintln(3,"Intrinsic ", intr, ", args are ", args)
 
