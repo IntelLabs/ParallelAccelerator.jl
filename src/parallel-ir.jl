@@ -27,7 +27,7 @@ function set_debug_level(x)
 end
 
 # A debug print routine.
-function dprint(level,msgs...)
+function dprint(level, msgs :: ANY ...)
     if(DEBUG_LVL >= level)
         print(msgs...)
     end
@@ -38,18 +38,18 @@ function ns_to_sec(x)
 end
 
 # A debug print routine.
-function dprintln(level,msgs...)
+function dprintln(level, msgs :: ANY ...)
     if(DEBUG_LVL >= level)
         println(msgs...)
     end
 end
 
-ISCAPTURED = 1
-ISASSIGNED = 2
-ISASSIGNEDBYINNERFUNCTION = 4
-ISCONST = 8
-ISASSIGNEDONCE = 16
-ISPRIVATEPARFORLOOP = 32
+const ISCAPTURED = 1
+const ISASSIGNED = 2
+const ISASSIGNEDBYINNERFUNCTION = 4
+const ISCONST = 8
+const ISASSIGNEDONCE = 16
+const ISPRIVATEPARFORLOOP = 32
 
 unique_num = 1
 
@@ -360,13 +360,15 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
   array                                # The name of the array.
+  select_bitarrays :: Array{SymbolNode,1} # Empty if whole array or range, else on BitArray per dimension.
   range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
   range_offset :: Array{SymbolNode,1}  # New temp variables to hold offset from iteration space for each dimension.
   elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
   pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
+  rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
   function InputInfo()
-    new(nothing, RangeData[], SymbolNode[], nothing)
+    new(nothing, Array{SymbolNode,1}[], RangeData[], SymbolNode[], nothing, Expr[], Expr(:noop))
   end
 end
 
@@ -1133,10 +1135,20 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
 
     if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
       thisInfo.array = input_arrays[i].args[1]
-      thisInfo.range = selectToRangeData(input_arrays[i])
-      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      select_kind = input_arrays[i].args[2].head
+      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+      if select_kind == :tomask
+        thisInfo.select_bitarrays = input_arrays[i].args[2].args
+        thisInfo.range = RangeData[]
+        thisInfo.range_offset = SymbolNode[]
+        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+        thisInfo.pre_offsets = Expr[]
+      else
+        thisInfo.range = selectToRangeData(input_arrays[i])
+        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      end
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
@@ -1194,8 +1206,17 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   for(i = 1:length(inputInfo))
     argtyp = typeof(inputInfo[i].array)
     dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    assert(argtyp <: SymAllGen)
+    @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
 
+    # we only support bitarray selection for 1D arrays
+    if length(inputInfo[i].select_bitarrays)==1
+      mask_array = inputInfo[i].select_bitarrays[1] 
+      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+#      end
+      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
@@ -1262,6 +1283,18 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
+  end
+
+  # add conditional expressions to body if array elements are selected by bit arrays
+  fallthroughLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
+    end
+  end
+  if length(condExprs) > 0
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1344,10 +1377,21 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
 
     if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
       thisInfo.array = input_arrays[i].args[1]
-      thisInfo.range = selectToRangeData(input_arrays[i])
-      thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-      thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-      thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      select_kind = input_arrays[i].args[2].head
+      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+      if select_kind == :tomask
+#        @bp
+        thisInfo.select_bitarrays = input_arrays[i].args[2].args
+        thisInfo.range = RangeData[]
+        thisInfo.range_offset = SymbolNode[]
+        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+        thisInfo.pre_offsets = Expr[]
+      else
+        thisInfo.range = selectToRangeData(input_arrays[i])
+        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      end
     else
       thisInfo.array = input_arrays[i]
       thisInfo.range = RangeData[]
@@ -1404,6 +1448,15 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
     dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
     assert(argtyp <: SymAllGen)
 
+    # we only support bitarray selection for 1D arrays
+    if length(inputInfo[i].select_bitarrays)==1
+      mask_array = inputInfo[i].select_bitarrays[1]
+      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+#      end
+      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
@@ -1491,6 +1544,18 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
     output_element_sizes = output_element_sizes + sizeof(dl.outputs)
   end
   dprintln(3,"out_body = ", out_body)
+
+  # add conditional expressions to body if array elements are selected by bit arrays
+  fallthroughLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
+    end
+  end
+  if length(condExprs) > 0
+    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
   rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
@@ -2104,7 +2169,7 @@ end
 @doc """
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
-function sub_cur_body_walk(x, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dbglvl = 3
   dprintln(dbglvl,"sub_cur_body_walk ", x)
   xtype = typeof(x)
@@ -5060,7 +5125,7 @@ can analysis to reflect the read/write set of the given AST node.
 If we read a symbol it is sufficient to just return that symbol as one of the expressions.
 If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
-function pir_live_cb(ast, cbdata)
+function pir_live_cb(ast :: ANY, cbdata :: ANY)
   dprintln(4,"pir_live_cb")
   asttyp = typeof(ast)
   if asttyp == Expr
@@ -5449,7 +5514,7 @@ that in copies as copies[a] = b.  Then, later in the basic block if you see the 
 "a" then replace it with "b".  Note that this is not SSA so "a" may be written again
 and if it is then it must be removed from copies.
 """
-function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top_level, read)
+function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
   dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5621,7 +5686,7 @@ end
 # insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
 # where they can't prevent fusion.
 """
-function remove_no_deps(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
   dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5751,7 +5816,7 @@ end
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
 don't already have one and make sure they all share one equivalence class.
 """
-function extractArrayEquivalencies(node, state)
+function extractArrayEquivalencies(node :: ANY, state)
   input_args = node.args
 
   # Make sure we get what we expect from domain IR.
@@ -5845,7 +5910,7 @@ end
 @doc """
 AstWalk callback to determine the array equivalence classes.
 """
-function create_equivalence_classes(node, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -6845,7 +6910,7 @@ end
 @doc """
 The main ParallelIR function for processing some node in the AST.
 """
-function from_expr(ast :: Any, depth, state :: expr_state, top_level)
+function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
   if is(ast, nothing)
     return [nothing]
   end
@@ -7044,7 +7109,7 @@ end
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
-function AstWalkCallback(x :: Any, dw::DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback ret = ", ret)

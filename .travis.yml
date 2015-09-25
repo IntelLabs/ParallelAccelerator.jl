@@ -1,13 +1,30 @@
 language: julia
+
 os:
   - linux
   - osx
+
 julia:
   - release
   - nightly
+
+branches:
+  only:
+    - master
+
+matrix:
+  allow_failures:
+  # Julia release is 0.3.11, so we shouldn't expect to run on it.
+    - julia: release
+
 notifications:
   email: false
+
 # uncomment the following lines to override the default test script
-#script:
-#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-#  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("IntelPSE"); Pkg.test("IntelPSE"; coverage=true)'
+script:
+ - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+ - julia --check-bounds=yes -e 'Pkg.clone("https://psl-travis-user:6mnZDX4Hf04Kcn1S2gog@github.com/IntelLabs/CompilerTools.jl.git")' # Pull in CompilerTools dependency
+ - cd ~/.julia/v0.5/CompilerTools; git fetch; git checkout latest
+ - julia --check-bounds=yes -e 'Pkg.build("CompilerTools"); Pkg.test("CompilerTools"; coverage=true)'
+ - cd -
+ - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
