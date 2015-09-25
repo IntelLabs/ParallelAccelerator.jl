@@ -729,7 +729,7 @@ function normalize_args(state::IRState, env, args)
 end
 
 # Fix Julia inconsistencies in call before we pattern match
-function normalize_callname(state::IRState, env, fun, args)
+function normalize_callname(state::IRState, env, fun :: ANY, args)
   if isa(fun, GlobalRef)
     fun = fun.name
   end
@@ -1303,7 +1303,7 @@ function from_return(state, env, expr)
   return mk_expr(typ, head, args...)
 end
 
-function from_expr(function_name, cur_module::Module, ast)
+function from_expr(function_name, cur_module :: Module, ast :: ANY)
   dprintln(2,"DomainIR translation function = ", function_name, " on:")
   dprintln(2,ast)
   ast = from_expr(emptyState(), newEnv(cur_module), ast)
@@ -1312,7 +1312,7 @@ function from_expr(function_name, cur_module::Module, ast)
   return ast
 end
 
-function from_expr(state, env, ast)
+function from_expr(state, env, ast :: ANY)
   if isa(ast, LambdaStaticData)
     dprintln(env, "from_expr: LambdaStaticData inferred = ", ast.inferred)
     if !ast.inferred
@@ -1398,7 +1398,7 @@ function get_one(ast)
   ast[1]
 end
 
-function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
   dprintln(3,"DomainIR.AstWalkCallback ", x)
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
@@ -1483,13 +1483,13 @@ function AstWalkCallback(x, dw::DirWalk, top_level_number, is_top_level, read)
   return nothing
 end
 
-function AstWalk(ast::Any, callback, cbdata)
+function AstWalk(ast :: ANY, callback, cbdata :: ANY)
   dprintln(3,"DomainIR.AstWalk ", ast)
   dw = DirWalk(callback, cbdata)
   AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
 
-function dir_live_cb(ast :: Any, cbdata :: Any)
+function dir_live_cb(ast :: ANY, cbdata :: ANY)
   dprintln(4,"dir_live_cb ")
   asttyp = typeof(ast)
   if asttyp == Expr
