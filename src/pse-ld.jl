@@ -118,14 +118,10 @@ end
 # Decompose ccalls among the expressions in the body of a lambda.
 # Modification is made in place.
 function decompose(ast)
-  julia_root   = ENV("JULIA_ROOT")
-  # Strip trailing /
-  len_root     = length(julia_root)
-  if(julia_root[len_root] == '/')
-    julia_root = julia_root[1:len_root-1]
-  end
+  package_root   = ParallelAccelerator.getPackageRoot()
+
   # LD mode, pert_init with double buffer
-  Pert.pert_init(julia_root, true)
+  Pert.pert_init(package_root, true)
   if isa(ast, LambdaStaticData)
       ast = uncompressed_ast(ast)
   end
