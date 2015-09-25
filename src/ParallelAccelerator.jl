@@ -6,7 +6,6 @@ export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
 
 using CompilerTools
-using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
