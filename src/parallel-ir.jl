@@ -27,7 +27,7 @@ function set_debug_level(x)
 end
 
 # A debug print routine.
-function dprint(level,msgs...)
+function dprint(level, msgs :: ANY ...)
     if(DEBUG_LVL >= level)
         print(msgs...)
     end
@@ -38,7 +38,7 @@ function ns_to_sec(x)
 end
 
 # A debug print routine.
-function dprintln(level,msgs...)
+function dprintln(level, msgs :: ANY ...)
     if(DEBUG_LVL >= level)
         println(msgs...)
     end
@@ -2178,7 +2178,7 @@ end
 @doc """
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
-function sub_cur_body_walk(x, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dbglvl = 3
   dprintln(dbglvl,"sub_cur_body_walk ", x)
   xtype = typeof(x)
@@ -5134,7 +5134,7 @@ can analysis to reflect the read/write set of the given AST node.
 If we read a symbol it is sufficient to just return that symbol as one of the expressions.
 If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
-function pir_live_cb(ast, cbdata)
+function pir_live_cb(ast :: ANY, cbdata :: ANY)
   dprintln(4,"pir_live_cb")
   asttyp = typeof(ast)
   if asttyp == Expr
@@ -5517,7 +5517,7 @@ that in copies as copies[a] = b.  Then, later in the basic block if you see the 
 "a" then replace it with "b".  Note that this is not SSA so "a" may be written again
 and if it is then it must be removed from copies.
 """
-function copy_propagate(node, data::CopyPropagateState, top_level_number, is_top_level, read)
+function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
   dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5689,7 +5689,7 @@ end
 # insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
 # where they can't prevent fusion.
 """
-function remove_no_deps(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
   dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -5816,7 +5816,7 @@ end
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
 don't already have one and make sure they all share one equivalence class.
 """
-function extractArrayEquivalencies(node, state)
+function extractArrayEquivalencies(node :: ANY, state)
   input_args = node.args
 
   # Make sure we get what we expect from domain IR.
@@ -5910,7 +5910,7 @@ end
 @doc """
 AstWalk callback to determine the array equivalence classes.
 """
-function create_equivalence_classes(node, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
   dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
   if typeof(node) == Expr
@@ -6918,7 +6918,7 @@ end
 @doc """
 The main ParallelIR function for processing some node in the AST.
 """
-function from_expr(ast :: Any, depth, state :: expr_state, top_level)
+function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
   if is(ast, nothing)
     return [nothing]
   end
@@ -7117,7 +7117,7 @@ end
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
-function AstWalkCallback(x :: Any, dw::DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
   dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback ret = ", ret)
