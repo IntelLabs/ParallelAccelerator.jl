@@ -9,6 +9,9 @@ using CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level
 import ParallelAccelerator, ..getPackageRoot
 
+# uncomment this line for using Debug.jl
+#using Debug
+
 # This controls the debug print level.
 DEBUG_LVL=0
 
