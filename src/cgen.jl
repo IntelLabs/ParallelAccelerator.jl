@@ -143,7 +143,7 @@ end
 # These are primitive operators on scalars and arrays
 _operators = ["*", "/", "+", "-", "<", ">"]
 # These are primitive "methods" for scalars and arrays
-_builtins = ["getindex", "setindex", "arrayref", "top", "box", 
+_builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top", "box", 
 			"unbox", "tuple", "arraysize", "arraylen", "ccall",
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
@@ -697,9 +697,9 @@ end
 
 function from_builtins(f, args)
 	tgt = string(f)
-	if tgt == "getindex"
+	if tgt == "getindex" || tgt == "getindex!"
 		return from_getindex(args)
-	elseif tgt == "setindex"
+	elseif tgt == "setindex" || tgt == "setindex!"
 		return from_setindex(args)
 	elseif tgt == "top"
 		return ""
