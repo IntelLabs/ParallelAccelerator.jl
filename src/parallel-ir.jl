@@ -513,7 +513,7 @@ end
 Returns true if the incoming type in "typ" is an array type.
 """
 function isArrayType(typ)
-  return (typ.name == Array.name)
+  return (typ.name == Array.name || typ.name == BitArray.name)
 end
 
 @doc """
