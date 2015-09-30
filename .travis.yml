@@ -16,6 +16,7 @@ matrix:
   allow_failures:
   # Julia release is 0.3.11, so we shouldn't expect to run on it.
     - julia: release
+    - os: osx
 
 notifications:
   email: false
