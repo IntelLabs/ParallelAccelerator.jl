@@ -12,7 +12,7 @@ Performance Scripting project at Intel Labs.
     released version of Julia (0.3.11) is not new enough to support
     all of ParallelAccelerator's features.
   * Install the CompilerTools package, following the instructions
-    [here](https://github.com/IntelLabs/CompilerTools.jl#README).
+    [here](https://github.com/IntelLabs/CompilerTools.jl#compilertools).
   * You will need a C++ compiler: either `gcc` or `icpc`.
 
 ## Installation
