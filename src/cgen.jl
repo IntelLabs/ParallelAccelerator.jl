@@ -436,6 +436,16 @@ function from_assignment(args::Array)
     return s
   end
 
+  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
+    size = rhs.args[2]
+    typ = toCtype(eval(rhs.args[3].name))
+    s = ""
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_1d(NULL, $size);\n"
+    values = rhs.args[4:end]
+    s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
+    return s
+  end
+
 	lhsO = from_expr(lhs)
 	rhsO = from_expr(rhs)
 
