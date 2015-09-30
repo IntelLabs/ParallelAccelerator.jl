@@ -6330,6 +6330,7 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
+  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
   # For each statement in the body.
@@ -6341,6 +6342,7 @@ function mmapToMmap!(ast, lives, uniqSet)
       rhs = expr.args[2]
       # right now assume all
       assert(isa(lhs, SymAllGen))
+      lhsTyp = CompilerTools.LambdaHandling.getType(lhs, lambdaInfo) 
       # If the right-hand side is an mmap.
       if isa(rhs, Expr) && is(rhs.head, :mmap)
         args = rhs.args[1]
@@ -6355,7 +6357,8 @@ function mmapToMmap!(ast, lives, uniqSet)
           j = j + 1
           v = args[j]
           v = isa(v, SymbolNode) ? v.name : v
-          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet)
+          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
+             CompilerTools.LambdaHandling.getType(v, lambdaInfo) == lhsTyp
             reuse = v  # Found a dying symbol.
             break
           end
