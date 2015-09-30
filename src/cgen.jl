@@ -152,7 +152,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
 			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
-			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex"
+			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last"
 ]
 
 # Intrinsics
@@ -705,6 +705,13 @@ function from_nfields(args)
 	string(nfields(args[1].typ))
 end
 
+function from_steprange_last(args)
+  start = from_expr(args[1])
+  step = from_expr(args[2])
+  stop = from_expr(args[3])
+  return "("*stop*"-("*stop*"-"*start*")%"*step*")"
+end
+
 function from_arrayalloc(args)
 	dprintln(3,"Array alloc args:")
 	map((i)->dprintln(3,args[i]), 1:length(args))
@@ -767,7 +774,9 @@ function from_builtins(f, args)
 	elseif tgt == "_unsafe_setindex!"
 		return from_unsafe_setindex!(args) 
 	elseif tgt == "nfields"
-		return from_nfields(args) 
+		return from_nfields(args)
+  elseif tgt =="steprange_last"
+    return from_steprange_last(args)
 	end
 
 	
