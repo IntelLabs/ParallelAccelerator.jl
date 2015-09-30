@@ -9,6 +9,9 @@ using CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level
 import ParallelAccelerator, ..getPackageRoot
 
+# uncomment this line for using Debug.jl
+#using Debug
+
 # This controls the debug print level.
 DEBUG_LVL=0
 
@@ -76,6 +79,7 @@ type LambdaGlobalData
 	ompprivatelist::Array{Any, 1}
 	globalUDTs::Dict{Any, Any}
 	symboltable::Dict{Any, Any}
+  tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
 	compiledfunctions::Array{Any, 1}
 	worklist::Array{Any, 1}
 	jtypes::Dict{Any, Any}
@@ -98,7 +102,7 @@ type LambdaGlobalData
 	)
 
 		#new(ASTDispatcher(), [], Dict(), Dict(), [], [])
-		new([], Dict(), Dict(), [], [], _j, 0)
+		new([], Dict(), Dict(), Dict(), [], [], _j, 0)
 	end
 end
 
@@ -143,7 +147,7 @@ end
 # These are primitive operators on scalars and arrays
 _operators = ["*", "/", "+", "-", "<", ">"]
 # These are primitive "methods" for scalars and arrays
-_builtins = ["getindex", "setindex", "arrayref", "top", "box", 
+_builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top", "box", 
 			"unbox", "tuple", "arraysize", "arraylen", "ccall",
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
@@ -403,10 +407,39 @@ function from_assignment(args::Array)
 	global lstate
 	lhs = args[1]
 	rhs = args[2]
+
+  # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
+  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:tuple
+    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
+    lstate.tupleTable[lhs] = rhs.args[2:end]
+  end
+
+  # if this is a hvcat call, the array should be allocated and initialized
+  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
+    dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
+    s = ""
+    
+    @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
+    typ = toCtype(eval(rhs.args[2].name))
+
+    arr_info = rhs.args[3]
+    dims = Int64[]
+    if isa(arr_info, Expr) && arr_info.head==:call
+      dims = arrinfo[2:end]
+    else
+      dims = lstate.tupleTable[arr_info]
+    end
+    dims_str = mapfoldl((i)->from_expr(dims[i]),(a, b) -> "$a, $b", dims) 
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(length(dims))d(NULL, $dims_str);\n"
+    values = rhs.args[4:end]
+    s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
+    return s
+  end
+
 	lhsO = from_expr(lhs)
 	rhsO = from_expr(rhs)
 
-	if !typeAvailable(lhs)
+  if !typeAvailable(lhs)
 		if typeAvailable(rhs)
 			lstate.symboltable[lhs] = rhs.typ
 		elseif haskey(lstate.symboltable, rhs)
@@ -697,9 +730,9 @@ end
 
 function from_builtins(f, args)
 	tgt = string(f)
-	if tgt == "getindex"
+	if tgt == "getindex" || tgt == "getindex!"
 		return from_getindex(args)
-	elseif tgt == "setindex"
+	elseif tgt == "setindex" || tgt == "setindex!"
 		return from_setindex(args)
 	elseif tgt == "top"
 		return ""

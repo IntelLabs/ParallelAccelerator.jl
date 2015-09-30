@@ -44,12 +44,12 @@ function dprintln(level, msgs :: ANY ...)
     end
 end
 
-ISCAPTURED = 1
-ISASSIGNED = 2
-ISASSIGNEDBYINNERFUNCTION = 4
-ISCONST = 8
-ISASSIGNEDONCE = 16
-ISPRIVATEPARFORLOOP = 32
+const ISCAPTURED = 1
+const ISASSIGNED = 2
+const ISASSIGNEDBYINNERFUNCTION = 4
+const ISCONST = 8
+const ISASSIGNEDONCE = 16
+const ISPRIVATEPARFORLOOP = 32
 
 unique_num = 1
 
@@ -513,7 +513,7 @@ end
 Returns true if the incoming type in "typ" is an array type.
 """
 function isArrayType(typ)
-  return (typ.name == Array.name)
+  return (typ.name == Array.name || typ.name == BitArray.name)
 end
 
 @doc """
