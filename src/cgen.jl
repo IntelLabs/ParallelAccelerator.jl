@@ -423,14 +423,15 @@ function from_assignment(args::Array)
     typ = toCtype(eval(rhs.args[2].name))
 
     arr_info = rhs.args[3]
-    dims = Int64[]
+    rows = Int64[]
     if isa(arr_info, Expr) && arr_info.head==:call
-      dims = arrinfo[2:end]
+      rows = arrinfo[2:end]
     else
-      dims = lstate.tupleTable[arr_info]
+      rows = lstate.tupleTable[arr_info]
     end
-    dims_str = mapfoldl((i)->from_expr(dims[i]),(a, b) -> "$a, $b", dims) 
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(length(dims))d(NULL, $dims_str);\n"
+    nr = length(rows)
+    nc = rows[1] # all rows should have the same size
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
     values = rhs.args[4:end]
     s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
     return s
