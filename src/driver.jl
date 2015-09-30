@@ -382,7 +382,7 @@ function offload(function_name, signature, offload_mode=TOPLEVEL)
     end
   
     if stop_after_offload != 0
-      throw(string("debuggging ParallelAccelerator"))
+      throw(string("debugging ParallelAccelerator"))
     end
     return proxy_func #@eval ParallelAccelerator.$proxy_sym
   else
