@@ -1270,6 +1270,14 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(2,"out_body is of length ",length(out_body))
   printBody(3,out_body)
 
+  else_body = Any[]
+  elseLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    end
+  end
   out_body = out_body[1:oblen-1]
   for i = 1:length(dl.outputs)
     if length(inputInfo[i].range) != 0
@@ -1281,20 +1289,18 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
     push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    if length(condExprs) > 0
+      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    end
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
 
   # add conditional expressions to body if array elements are selected by bit arrays
   fallthroughLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
-    end
-  end
   if length(condExprs) > 0
-    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1512,7 +1518,14 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
   output_element_sizes = 0
 
   out_body = out_body[1:oblen-1]
-
+else_body = Any[]
+elseLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    end
+  end
   # Create each output array
   number_output_arrays = length(dl.outputs)
   for(i = 1:number_output_arrays)
@@ -1539,7 +1552,10 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
     tfa = createTempForArray(nans_sn, 1, state)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
     push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
-
+if length(condExprs) > 0
+      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    end
     # keep the sum of the sizes of the individual output array elements
     output_element_sizes = output_element_sizes + sizeof(dl.outputs)
   end
@@ -1547,14 +1563,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
 
   # add conditional expressions to body if array elements are selected by bit arrays
   fallthroughLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
-    end
-  end
   if length(condExprs) > 0
-    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
