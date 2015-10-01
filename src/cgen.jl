@@ -438,10 +438,12 @@ function from_assignment(args::Array)
   end
 
   if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
-    size = rhs.args[2]
+    dims = rhs.args[2]
+    @assert dims==2 "cgen: only 2d cat_t() is supported now"
+    size = length(rhs.args[4:end])
     typ = toCtype(eval(rhs.args[3].name))
     s = ""
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_1d(NULL, $size);\n"
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
     values = rhs.args[4:end]
     s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
     return s
