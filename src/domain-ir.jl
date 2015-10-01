@@ -914,7 +914,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
       # call typeinf since Julia doesn't do it for us
       # and we can figure out the element type from mapExp's return type
-      (ast, ety) = lambdaTypeinf(mapExp, to_tuple_type(tuple(argstyp...)))
+      (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
       # Element type is specified as an argument to cartesianarray
       # This allows us to cast the return type, but inference still needs to be
       # called on the mapExp ast.
@@ -1030,7 +1030,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
       assert(isa(kernelExp, LambdaStaticData))
       # TODO: better infer type here
-      (ast, ety) = lambdaTypeinf(kernelExp, to_tuple_type(tuple(bufstyp...)))
+      (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
       #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
       dprintln(env, "type inferred AST = ", ast)
       kernelExp = from_expr(state, env_, ast)
