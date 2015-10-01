@@ -360,15 +360,15 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
   array                                # The name of the array.
-  select_bitarrays :: Array{SymbolNode,1} # Empty if whole array or range, else on BitArray per dimension.
+  select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
   range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
-  range_offset :: Array{SymbolNode,1}  # New temp variables to hold offset from iteration space for each dimension.
+  range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
   elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
   pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
   rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
   function InputInfo()
-    new(nothing, Array{SymbolNode,1}[], RangeData[], SymbolNode[], nothing, Expr[], Expr(:noop))
+    new(nothing, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
   end
 end
 
@@ -580,7 +580,7 @@ end
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
-function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
+function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1})
   dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
   xtyp = typeof(index_vars[dim])
 
@@ -605,7 +605,7 @@ end
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
-function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
+function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
   dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)
@@ -686,7 +686,7 @@ end
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
-function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
+function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
   dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
@@ -1254,7 +1254,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -2838,7 +2838,7 @@ function fuse(body, body_index, cur, state)
         # The new lhs is not empty so the fused parfor will not be bare and "prev" needs to become an assignment expression.
         body[body_index] = mk_assignment_expr(new_lhs, prev, state)
         prev = body[body_index]
-        prev.args[2].typ = new_lhs.typ
+        prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.lambdaInfo)
         if !single
           push!(prev.args, FusionSentinel())
           append!(prev.args, all_rets)
