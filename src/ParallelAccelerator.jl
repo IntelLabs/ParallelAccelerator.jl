@@ -5,7 +5,7 @@ module ParallelAccelerator
 export decompose, offload, Optimize
 export cartesianarray, runStencil, @runStencil
 
-using CompilerTools
+using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
@@ -93,25 +93,6 @@ function getPackageRoot()
   joinpath(dirname(@__FILE__), "..")
 end
 
-@doc """
-Called when the package is loaded to do initialization.
-"""
-function __init__()
-    package_root = getPackageRoot()
-    @linux_only ld_env_key = "LD_LIBRARY_PATH"
-    @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
-    prefix = ""
-    # See if the LD_LIBRARY_PATH environment varible is already set.
-    if haskey(ENV, ld_env_key)
-        # Prepare the current value to have a new path added to it.
-        prefix = ENV[ld_env_key] * ":"
-    end
-    # Add the bin directory off the package root to the LD_LIBRARY_PATH.
-    ENV[ld_env_key] = string(prefix, package_root, "bin")
-
-    CompilerTools.OptFramework.addOptPass(CompilerTools.OptFramework.optPass(ParallelAccelerator.Driver.Optimize, false))
-end
-
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
 
@@ -141,7 +122,7 @@ function dprintln(level, msgs...)
 end
 
 # a hack to make offload function and DomainIR mutually recursive.
-_offload(function_name, signature) = offload(function_name, signature, 0)
+_offload(function_name, signature) = offload(function_name, signature, level = 0)
 
 include("api.jl")
 include("stencil-api.jl")
@@ -150,16 +131,35 @@ include("parallel-ir.jl")
 include("j2c-array.jl")
 include("cgen.jl")
 include("pp.jl")
-include("ParallelComprehension.jl")
 include("callgraph.jl")
-# The following are intel-runtime specific
-include("pert.jl")
-include("pse-ld.jl")
+include("comprehension.jl")
 include("driver.jl")
 
 importall .API
 importall .StencilAPI
 importall .Driver
+
+@doc """
+Called when the package is loaded to do initialization.
+"""
+function __init__()
+    package_root = getPackageRoot()
+    @linux_only ld_env_key = "LD_LIBRARY_PATH"
+    @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
+    prefix = ""
+    # See if the LD_LIBRARY_PATH environment varible is already set.
+    if haskey(ENV, ld_env_key)
+        # Prepare the current value to have a new path added to it.
+        prefix = ENV[ld_env_key] * ":"
+    end
+    # Add the bin directory off the package root to the LD_LIBRARY_PATH.
+    ENV[ld_env_key] = string(prefix, package_root, "bin")
+
+    addOptPass(toCartesianArray, PASS_MACRO)
+    addOptPass(toDomainIR, PASS_TYPED)
+    addOptPass(toParallelIR, PASS_TYPED)
+    addOptPass(toCGen, PASS_TYPED)
+end
 
 export @acc
 
