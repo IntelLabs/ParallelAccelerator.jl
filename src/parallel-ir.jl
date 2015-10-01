@@ -6742,6 +6742,23 @@ end
 doRemoveAssertEqShape = true
 generalSimplification = true
 
+function get_input_arrays(linfo::LambdaInfo)
+  ret = Symbol[]
+  input_vars = linfo.input_params
+  dprintln(3,"input_vars = ", input_vars)
+
+  for iv in input_vars
+    it = getType(iv, linfo)
+    dprintln(3,"iv = ", iv, " type = ", it)
+    if it.name == Array.name
+      dprintln(3,"Parameter is an Array.")
+      push!(ret, iv)
+    end
+  end
+
+  ret
+end
+
 @doc """
 The main ENTRY point into ParallelIR.
 1) Do liveness analysis.
@@ -6754,15 +6771,16 @@ The main ENTRY point into ParallelIR.
    b) Fuse parallel IR nodes where possible.
    c) Convert to task IR nodes if task mode enabled.
 """
-function from_expr(function_name, ast :: Expr, input_arrays)
+function from_expr(function_name, ast :: Expr)
   assert(ast.head == :lambda)
-  dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast, " input_arrays = ", input_arrays)
+  dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
   start_time = time_ns()
 
   # Create CFG from AST.  This will automatically filter out dead basic blocks.
   cfg = CompilerTools.CFGs.from_ast(ast)
   lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+  input_arrays = get_input_arrays(lambdaInfo)
   body = CompilerTools.LambdaHandling.getBody(ast)
   # Re-create the body minus any dead basic blocks.
   body.args = CompilerTools.CFGs.createFunctionBody(cfg)

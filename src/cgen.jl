@@ -1828,7 +1828,7 @@ end
 function insert(func::Function, name, typs)
 	global lstate
 	#ast = code_typed(func, typs; optimize=true)
-	ast = code_typed(func, typs)
+	ast = ParallelAccelerator.Driver.code_typed(func, typs)
 	if !has(lstate.compiledfunctions, name)
 		push!(lstate.worklist, (ast, name, typs))
 	end
@@ -1851,7 +1851,7 @@ function from_worklist()
 		empty!(lstate.symboltable)
 		empty!(lstate.ompprivatelist)
 		if isa(a, Symbol)
-			a = code_typed(a, typs; optimize=true)
+			a = ParallelAccelerator.Driver.code_typed(a, typs)
 		end
 		dprintln(3,"============ Compiling AST for ", fname, " ============") 
 		dprintln(3,a)

@@ -978,11 +978,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         #dprintln(3, "bodyF backtrace ")
         #dprintln(3, s)
         ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
-        dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+        #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
         # dprintln(2,"cartesianarray idict = ", ldict)
         ret = replaceExprWithDict(body, ldict).args
-        dprintln(2,"cartesianarray ret = ", ret)
+        #dprintln(2,"cartesianarray ret = ", ret)
         ret
       end
       domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
@@ -1391,6 +1391,9 @@ function from_expr(state, env, ast :: ANY)
         # ?
     elseif is(head, :meta)
         # skip
+    elseif is(head, :static_typeof)
+      typ = getType(args[1], state.linfo)
+      return typ  
     else
         throw(string("from_expr: unknown Expr head :", head))
     end
