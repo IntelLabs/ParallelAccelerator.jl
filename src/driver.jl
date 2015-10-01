@@ -2,6 +2,7 @@ module Driver
 
 export offload, toDomainIR, toParallelIR, toCGen, toCartesianArray
 
+using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
@@ -218,11 +219,11 @@ end
 
 function code_typed(func, signature)
   global alreadyOptimized
-  key = (func, signature)
-  if haskey(alreadyOptimized, key)
-    Any[ alreadyOptimized[key] ]
+  if haskey(alreadyOptimized, (func, signature))
+    Any[ alreadyOptimized[(func, signature)] ]
   else
-    Base.code_typed(key...)
+    func = get(CompilerTools.OptFramework.gOptFrameworkDict, func, func)
+    Base.code_typed(func, signature)
   end
 end
 
@@ -248,12 +249,9 @@ function offload(func, signature; level = TOPLEVEL)
   cur_module = def.module
   func_ref = GlobalRef(cur_module, symbol(string(func)))
 
+  ast = code_typed(func, signature)[1]
   global alreadyOptimized 
-  if haskey(alreadyOptimized, (func, signature))
-    dprintln(2, "method ", func, " already optimized")
-    ast = alreadyOptimized[(func, signature)]
-  else
-    ast = Base.code_typed(func, signature)[1]
+  if !haskey(alreadyOptimized, (func, signature))
     ast = toDomainIR(func_ref, ast, signature)
     ast = toParallelIR(func_ref, ast, signature)
     alreadyOptimized[(func, signature)] = ast
