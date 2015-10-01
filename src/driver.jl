@@ -2,7 +2,7 @@ module Driver
 
 export offload, toDomainIR, toParallelIR, toCGen, toCartesianArray
 
-using CompilerTools
+using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
 import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray
@@ -69,7 +69,7 @@ alreadyOptimized = Dict{Any,Any}()
 Pass for comprehension to cartesianarray translation.
 """
 function toCartesianArray(func, ast, sig)
-  AstWalker.AstWalk(ast, Comprehension.process_node, nothing)
+  AstWalk(ast, Comprehension.process_node, nothing)
   return ast
 end
 
@@ -117,8 +117,8 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   # This is the name of the function that j2c generates.
   j2c_name = string("_",function_name_string,"_")
   
-  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(code)
-  ret_type = CompilerTools.LambdaHandling.getReturnType(lambdaInfo)
+  lambdaInfo = lambdaExprToLambdaInfo(code)
+  ret_type = getReturnType(lambdaInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
   ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
 
