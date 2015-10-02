@@ -1,5 +1,7 @@
 using ParallelAccelerator
 using Base.Test
 
-# write your own tests here
-@test 1 == 1
+include("example1.jl")
+using Example1
+
+@test Example1.main() == 10000
