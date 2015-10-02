@@ -30,12 +30,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local oob_dst_zero = false
   local oob_src_zero = false
   local oob_wraparound = false
-  if isa(border, QuoteNode)
-    local b = border.value
-    oob_dst_zero = is(b, :oob_dst_zero)
-    oob_src_zero = is(b, :oob_src_zero)
-    oob_wraparound = is(b, :oob_wraparound)
-  end
+  assert(isa(border, Symbol))
+  oob_dst_zero = is(border, :oob_dst_zero)
+  oob_src_zero = is(border, :oob_src_zero)
+  oob_wraparound = is(border, :oob_wraparound)
   local iterations = args[2]
   # convert all SymbolNode in bufs to just Symbol
   local bufs = args[3]
@@ -83,7 +81,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   kernArgs[2] = strideNodes
   kernArgs[3] = bufs
   dprintln(3,"kernArgs = ", kernArgs)
-  bodyExpr = relabel(kernelF.genBody(kernArgs).args, irState)
+  bodyExpr = relabel(kernelF.genBody(linfo, kernArgs).args, irState)
   # rotate
   assert(is(bodyExpr[end].head, :return))
   dprintln(3,"bodyExpr = ")
@@ -94,7 +92,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   if bodyExpr[end].args[1] != nothing
     rets = bodyExpr[end].args
     dprintln(3,"bodyExpr[end].args = ", rets)
-    dprintln(3,"kernelF.linfo = ", kernelF.linfo)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
       push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), rets[i]))
@@ -109,8 +106,6 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # border handling
   borderLabel = next_label(irState)
   afterBorderLabel = next_label(irState)
-  #borderHead = [ Expr(:loophead, idxNodes[i].name, 1, sizeNodes[i]) for i = n:-1:1 ]
-  #borderTail = [ Expr(:loopend, idxNodes[i].name) for i in 1:n ]
   lowerExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), 1-stat.shapeMin[i], idxNodes[i])
                  for i in 1:n ]
   upperExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), idxNodes[i],
@@ -118,26 +113,29 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
-  borderExpr = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
+  borderHead = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
                       TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
                   ]
+  borderExpr = Any[]
   if oob_dst_zero
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if is(expr.head, :call) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :unsafe_arrayset)
         assert(isa(expr.args[2], SymbolNode))
-        zero = convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
+        zero = Base.convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
     end
   elseif oob_src_zero
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
         if isa(rhs, Expr) && is(rhs.head, :call) && isa(rhs.args[1], TopNode) && is(rhs.args[1].name, :unsafe_arrayref)
-          zero = convert(rhs.typ, 0)
+          zero = Base.convert(rhs.typ, 0)
           expr = TypedExpr(expr.typ, :(=), lhs,
                   TypedExpr(rhs.typ, :call, TopNode(:safe_arrayref),
                       rhs.args[2], zero, rhs.args[3:end]...))
@@ -147,6 +145,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     end
   elseif oob_wraparound
     for expr in bodyExpr
+      expr = deepcopy(expr)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
@@ -169,7 +168,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   else #FIXME: the following is to make a dummy node to avoid an IR bug
 #    push!(borderExpr, TypedExpr(Int, :(=), idxNodes[1].name, idxNodes[1]))
   end
-  push!(borderExpr, LabelNode(afterBorderLabel))
+  borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = TypedExpr(Void, head,
         PIRParForAst(vcat(lowerGotos, upperGotos, borderExpr),
@@ -186,9 +185,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
             Any[] : vcat(rotateExpr, Expr(:loopend, stepNode.name))
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, kernelF.linfo)
-  dprintln(3,"stencil! gensym_map = ", gensym_map)
-  expr = PIRParForAst(replaceExprWithDict(bodyExpr, gensym_map), 
+  expr = PIRParForAst(bodyExpr,
     [],
     loopNest,
     PIRReduction[],
@@ -197,11 +194,5 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     irState.top_level_number,
     get_unique_num(), 
     false)
-  # This line below is commented because expr isn't really an Expr you can pass to 
-  # replaceExprWithDict.  "expr" is a PIRParForAst object instead.  The lowering code for
-  # mmap, mmap!, and reduce all call replaceExprWithDict on just the body of the new parfor and
-  # so I made it do this above.  If we need it on the whole PIRParForAst then I wrote a routine
-  # in parallel-ir.jl to do it.
-  #expr = replaceExprWithDict(expr, gensym_map, ParallelAccelerator.ParallelIR.AstWalk) 
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

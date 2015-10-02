@@ -124,6 +124,9 @@ const USE_GCC = 1
 inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
+#config file overrides backend_compiler variable
+include("../deps/generated/config.jl")
+
 
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
@@ -152,7 +155,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
 			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
-			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex"
+			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last"
 ]
 
 # Intrinsics
@@ -423,14 +426,27 @@ function from_assignment(args::Array)
     typ = toCtype(eval(rhs.args[2].name))
 
     arr_info = rhs.args[3]
-    dims = Int64[]
+    rows = Int64[]
     if isa(arr_info, Expr) && arr_info.head==:call
-      dims = arrinfo[2:end]
+      rows = arrinfo[2:end]
     else
-      dims = lstate.tupleTable[arr_info]
+      rows = lstate.tupleTable[arr_info]
     end
-    dims_str = mapfoldl((i)->from_expr(dims[i]),(a, b) -> "$a, $b", dims) 
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(length(dims))d(NULL, $dims_str);\n"
+    nr = length(rows)
+    nc = rows[1] # all rows should have the same size
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
+    values = rhs.args[4:end]
+    s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
+    return s
+  end
+
+  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
+    dims = rhs.args[2]
+    @assert dims==2 "cgen: only 2d cat_t() is supported now"
+    size = length(rhs.args[4:end])
+    typ = toCtype(eval(rhs.args[3].name))
+    s = ""
+    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
     values = rhs.args[4:end]
     s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
     return s
@@ -705,6 +721,13 @@ function from_nfields(args)
 	string(nfields(args[1].typ))
 end
 
+function from_steprange_last(args)
+  start = from_expr(args[1])
+  step = from_expr(args[2])
+  stop = from_expr(args[3])
+  return "("*stop*"-("*stop*"-"*start*")%"*step*")"
+end
+
 function from_arrayalloc(args)
 	dprintln(3,"Array alloc args:")
 	map((i)->dprintln(3,args[i]), 1:length(args))
@@ -767,7 +790,9 @@ function from_builtins(f, args)
 	elseif tgt == "_unsafe_setindex!"
 		return from_unsafe_setindex!(args) 
 	elseif tgt == "nfields"
-		return from_nfields(args) 
+		return from_nfields(args)
+  elseif tgt =="steprange_last"
+    return from_steprange_last(args)
 	end
 
 	
@@ -1135,13 +1160,20 @@ function from_return(args)
 	dprintln(3,"Return args are: ", args)
 	retExp = ""
 	if inEntryPoint
-		if typeAvailable(args[1]) && isa(args[1].typ, Tuple)
-			retTyps = args[1].typ
+		arg1 = args[1]
+		arg1_typ = Any
+		if typeAvailable(arg1)
+			arg1_typ = arg1.typ
+		elseif isa(arg1, GenSym)
+			arg1_typ = lstate.symboltable[arg1]
+		end
+		if istupletyp(arg1_typ)
+			retTyps = arg1_typ.parameters
 			for i in 1:length(retTyps)
-				retExp *= "*ret" * string(i-1) * " = " * from_expr(args[1]) * ".f" * string(i-1) * ";\n"
+				retExp *= "*ret" * string(i-1) * " = " * from_expr(arg1) * ".f" * string(i-1) * ";\n"
 			end
 		else
-			retExp = "*ret0 = " * from_expr(args[1]) * ";\n"
+			retExp = "*ret0 = " * from_expr(arg1) * ";\n"
 		end
 		return retExp * "return"
 	else
@@ -1154,7 +1186,7 @@ function from_gotonode(ast, exp = "")
 	labelId = ast.label
 	s = ""
 	dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
-	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
+	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
 	end
 	s *= "goto " * "label" * string(labelId)
@@ -1166,7 +1198,7 @@ function from_gotoifnot(args)
 	labelId = args[2]
 	s = ""
 	dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
-	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
+	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
 	end
 	s *= "goto " * "label" * string(labelId)
@@ -1739,7 +1771,9 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
 	hdr = ""
 	wrapper = ""
-	if !isa(returnType, Tuple)
+	if istupletyp(returnType)
+	    returnType = tuple(returnType.parameters...)
+	else
 		returnType = (returnType,)
 	end
 	hdr = from_header(isEntryPoint)
@@ -1759,7 +1793,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 			argsunal = retargs
 		end
 	else
-
 		rtyp = toCtype(typ)
 	end
 	s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
@@ -1795,7 +1828,7 @@ end
 function insert(func::Function, name, typs)
 	global lstate
 	#ast = code_typed(func, typs; optimize=true)
-	ast = code_typed(func, typs)
+	ast = ParallelAccelerator.Driver.code_typed(func, typs)
 	if !has(lstate.compiledfunctions, name)
 		push!(lstate.worklist, (ast, name, typs))
 	end
@@ -1818,7 +1851,7 @@ function from_worklist()
 		empty!(lstate.symboltable)
 		empty!(lstate.ompprivatelist)
 		if isa(a, Symbol)
-			a = code_typed(a, typs; optimize=true)
+			a = ParallelAccelerator.Driver.code_typed(a, typs)
 		end
 		dprintln(3,"============ Compiling AST for ", fname, " ============") 
 		dprintln(3,a)
