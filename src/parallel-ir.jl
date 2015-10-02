@@ -405,8 +405,9 @@ Create an expression that references something inside ParallelIR.
 In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.
 """
 function mk_parallelir_ref(sym, ref_type=Function)
-    inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
-    TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
+    #inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
+    #TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
+    TypedExpr(ref_type, :call, TopNode(:getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
 end
 
 @doc """
@@ -421,6 +422,13 @@ Create an expression which returns the index'th element of the tuple whose name 
 """
 function mk_tupleref_expr(tuple_var, index, typ)
     TypedExpr(typ, :call, TopNode(:tupleref), tuple_var, index)
+end
+
+@doc """
+Make a svec expression.
+"""
+function mk_svec_expr(parts...)
+    TypedExpr(SimpleVector, :call, TopNode(:svec), parts...)
 end
 
 @doc """
@@ -3653,13 +3661,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             new_parfor = getParforNode(new_exprs[1])
             new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
           end
-	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
-	  if fuse_ret>0
-		  # 2 means combination of old and new parfors has no output and both are dead
-		  if fuse_ret==2
+     	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
+	      if fuse_ret>0
+		    # 2 means combination of old and new parfors has no output and both are dead
+  		    if fuse_ret==2
 			  # remove last parfor and don't add anything new
 			  pop!(body)
-		  end
+		    end
             pre_next_parfor = Any[]
             # If fused then the new node is consumed and no new node is added to the body.
             continue
@@ -4146,22 +4154,25 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
                 call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
                 call_tup = eval(call_tup_expr)
                 dprintln(3, "call_tup = ", call_tup)
-                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
               end
 
               if false
-              insert_task_expr = TypedExpr(Any,
+                insert_task_expr = TypedExpr(Any,
                                            :call,
                                            cur_task.task_func,
                                            SymbolNode(range_sym, pir_range_actual),
                                            real_args_build...)
               else
-              insert_task_expr = TypedExpr(Any, 
+                # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
+                svec_args = mk_svec_expr(Any, Any)
+                insert_task_expr = TypedExpr(Any, 
                                            :call, 
                                            TopNode(:ccall), 
                                            QuoteNode(:jl_threading_run), 
-                                           :Void, 
-                                           TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
+                                           GlobalRef(Main,:Void), 
+                                           svec_args,
                                            mk_parallelir_ref(:isf), 0, 
                                            tup_sym, 0)
               end
@@ -4413,6 +4424,7 @@ It takes the task function to run, the full iteration space to run and the norma
 function isf(t::Function, 
              full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
              rest...)
+    println("Starting isf.")
     tid = Base.Threading.threadid()
 
     # This isn't working so this is debugging code at the moment.
@@ -4644,11 +4656,11 @@ function convertUnsafeWalk(x, state, top_level_number, is_top_level, read)
       if x.args[1] == TopNode(:unsafe_arrayset)
         x.args[1] = TopNode(:arrayset)
         state.found = true
-        return x
+        return [x]
       elseif x.args[1] == TopNode(:unsafe_arrayref)
         x.args[1] = TopNode(:arrayref)
         state.found = true
-        return x
+        return [x]
       end
     end
   end
@@ -4667,6 +4679,7 @@ function convertUnsafe(stmt)
   res = AstWalk(stmt, convertUnsafeWalk, state)
   # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
   if state.found
+    dprintln(3, "state.found ", state, " ", res)
     assert(isa(res,Array))
     assert(length(res) == 1)
     dprintln(3,"Replaced unsafe: ", res[1])
@@ -4694,14 +4707,17 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state)
+  dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
   if loop_nest_level > length(the_parfor.loopNests)
     # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
     # For each statement in the parfor body.
     for i = 1:length(the_parfor.body)
+      dprintln(3, "Body index ", i)
       # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
       # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
       cu_res = convertUnsafe(the_parfor.body[i])
+      dprintln(3, "cu_res = ", cu_res)
       if cu_res != nothing
         push!(new_body, Expr(:boundscheck, false)) 
         push!(new_body, cu_res)
@@ -4770,7 +4786,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
 
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-    recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4)
+    recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state)
 
     push!(new_body, LabelNode(label_before_second_unless))
     push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
@@ -4784,11 +4800,11 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state)
   max_label = getMaxLabel(0, the_parfor.body)
   dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
   # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-  recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1)
+  recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state)
   nothing
 end
  
@@ -4899,25 +4915,25 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3,"arg_types = ", arg_types)
 
   # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
-  all_arg_names = [:ranges,
-                   map(x -> symbol(x), in_array_names),
-                   map(x -> symbol(x), modified_symbols),
-                   map(x -> symbol(x), io_symbols),
+  all_arg_names = [:ranges;
+                   map(x -> symbol(x), in_array_names);
+                   map(x -> symbol(x), modified_symbols);
+                   map(x -> symbol(x), io_symbols);
                    map(x -> symbol(x), reduction_vars)]
   # Form a tuple that contains the type of each parameter.
   all_arg_types_tuple = Expr(:tuple)
-  all_arg_types_tuple.args = [pir_range_actual,
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names),
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols),
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols),
+  all_arg_types_tuple.args = [pir_range_actual;
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
                               map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
   all_arg_type = eval(all_arg_types_tuple)
   # Forms VarDef's for the local variables to the task function.
   args_var = CompilerTools.LambdaHandling.VarDef[]
   push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
-  append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names),
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols),
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols),
+  append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names);
+                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols);
+                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols);
                       map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), reduction_vars)])
   dprintln(3,"all_arg_names = ", all_arg_names)
   dprintln(3,"all_arg_type = ", all_arg_type)
@@ -4952,9 +4968,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 #    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
 #  end
  
-  dprintln(3, "meta = ", meta)
-
-  if ParallelAccelerator.client_intel_task_graph
+  if ParallelAccelerator.getTaskMode() != ParallelAccelerator.NO_TASK_MODE
     for i = 1:length(the_parfor.loopNests)
       # Put outerloop first in the loopNest
       j = length(the_parfor.loopNests) - i + 1
@@ -4978,7 +4992,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
   # Add the parfor stmt to the task function body.
   if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-    recreateLoops(task_body.args, the_parfor)
+    recreateLoops(task_body.args, the_parfor, state)
   else
     flattenParfor(task_body.args, the_parfor)
   end

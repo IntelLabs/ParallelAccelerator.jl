@@ -87,7 +87,7 @@ function check_ccall(state, expr)
          #emit_expr(state, expr)
 	 
          expr = Expr(:call, Expr(:call, TopNode(:getfield), Expr(:call, TopNode(:getfield), ParallelAccelerator, QuoteNode(:LD)), QuoteNode(:insert_task)), 
-                     ld_node, ParallelAccelerator.client_intel_task_graph ? 3 : ParallelAccelerator.client_intel_pse_mode)
+                     ld_node, ParallelAccelerator.getTaskMode() != NO_TASK_MODE ? 3 : ParallelAccelerator.getPseMode())
          emit_expr(state, expr)
          return nothing
       end
