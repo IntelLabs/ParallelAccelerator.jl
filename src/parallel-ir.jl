@@ -6257,13 +6257,13 @@ function mmapInline(ast, lives, uniqSet)
       if isa(dst, Expr) && is(dst.head, :(=))
         dst = dst.args[2]
       end
-      if isa(dst, Expr) && is(dst.head, :mmap)
+      if isa(dst, Expr) && is(dst.head, :mmap) && in(lhs, dst.args[1])
          # inline mmap into mmap
         inline!(src, dst, lhs)
         body.args[i] = nothing
         eliminateShapeAssert(shapeAssertAt, lhs, body)
         dprintln(3, "MI: result: ", body.args[j])
-      elseif isa(dst, Expr) && is(dst.head, :mmap!)
+      elseif isa(dst, Expr) && is(dst.head, :mmap!) && in(lhs, dst.args[1])
         s = dst.args[1][1]
         if isa(s, SymbolNode) s = s.name end
         if s == lhs 
