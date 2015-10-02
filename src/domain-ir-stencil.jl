@@ -1,6 +1,6 @@
-using CompilerTools
-using CompilerTools.LambdaHandling
-using CompilerTools.LivenessAnalysis
+#using CompilerTools
+#using CompilerTools.LambdaHandling
+#using CompilerTools.LivenessAnalysis
 
 type KernelStat
   dimension :: Int             # number of dimensions of the stencil
@@ -9,10 +9,12 @@ type KernelStat
   bufSym    :: Array{GenSym,1} # (fresh) buffer symbols
   idxSym    :: Array{GenSym,1} # (fresh) symbol of the index variable into the source image
   strideSym :: Array{GenSym,1} # (fresh) symbol of the strides data of source image
-  borderSty :: Any             # QuoteNode :oob_dst_zero, :oob_src_zero, :oob_skip
+  borderSty :: Symbol          # Symbol :oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound
   rotateNum :: Int             # number of buffers that is affected by rotation
   modified  :: Array{Int,1}    # which buffer is modified
 end
+
+supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound])
 
 # Analyze a stencil kernel specified as a lambda expression.
 # Return both the kernel stat, and the modified kernel LHS expression.
@@ -20,7 +22,9 @@ end
 # NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
 function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, borderSty::Symbol)
   #assert(krn.head == symbol("->"))
-  assert(isa(krn, Expr) && krn.head == :lambda)
+  dprintln(3, "typeof krn = ", typeof(krn), " ", krn.head, " :: ", typeof(krn.head), " ", object_id(krn.head), " ", object_id(:lambda)) 
+  assert(isa(krn, Expr))
+  assert(is(krn.head, :lambda))
   local stat = ()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms = krn.args[1] # parameter of the kernel lambda
@@ -64,9 +68,11 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
       updateDef(state, lhs, rhs)
     end
     # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are SymGen.
-    if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && (is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) &&
+    if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
+       (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
+        is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
        isa(expr.args[2], GenSym) && in(expr.args[2], bufSymSet)
-      local isGet = is(expr.args[1].name, :arrayref)
+      local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
       #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
       bufSym = expr.args[2]
       elmTyp = elmTypOf(getType(bufSym, state.linfo))
@@ -147,22 +153,25 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   # It is supposed to be part of DomainLambda, and will have
   # to make fresh local variables (idxSym, strideSym, bufSym, etc)
   # on every invocation. Thus, these names are passed in as arguments.
-  function genBody(idxSymNodes, strideSymNodes, bufSymNodes)
+  function genBody(dict, idxSymNodes, strideSymNodes, bufSymNodes)
     # assert(length(stat.idxSym) == length(idxSymNodes))
     # assert(length(stat.strideSym) == length(strideSymNodes))
     # assert(2 == length(bufSymNodes))
+    # we first rename all GenSym to parent
+    dprintln(3, "in stencil genBody, dict = ", dict)
+    # CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
     local idxDict = Dict{SymGen, Any}(zip(stat.idxSym, idxSymNodes))
     local strideDict = Dict{SymGen, Any}(zip(stat.strideSym, strideSymNodes))
     local bufDict = Dict{SymGen, Any}(zip(bufSyms, bufSymNodes))
-    local dict = merge(bufDict, idxDict, strideDict)
+    local ldict = merge(dict, bufDict, idxDict, strideDict)
     dprintln(3,"stencil genBody")
     dprintln(3,"idxDict = ", idxDict)
     dprintln(3,"strideDict = ", strideDict)
     dprintln(3,"bufDict = ", bufDict)
-    dprintln(3,"dict = ", dict)
+    dprintln(3,"ldict = ", ldict)
     dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
+    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, ldict)
   end
   # Remove those with no definition from locals as a sanity cleanup.
   # Note that among those removed are the input arguments, but this
@@ -208,11 +217,14 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
     error("Border specification in runStencil can only be Symbols.")
   end
   borderSty = borderExp.value 
+  if !in(borderSty, supportedBorderStyle)
+    error("Expect stencil border style to be one of ", supportedBorderStyle, ", but got ", borderSty)
+  end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, genBody = analyze_kernel(state, typs, kernelExp, borderSty)
   # f expects input of either [indices, strides, buffers] or [symbols].
   # the latter is used in show method for DomainLambda
-  function f(inputs)
+  function f(plinfo, inputs)
     local indices, strides
     # warn(string("sizeof(inputs)=",length(inputs)))
     if isa(inputs[1], Array) # real inputs
@@ -224,7 +236,8 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp)
       strides = stat.strideSym
       bufs = inputs
     end
-    genBody(indices, strides, bufs)
+    dict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+    body = genBody(dict, indices, strides, bufs)
   end
   return stat, DomainLambda(typs, typs, f, state.linfo)
 end

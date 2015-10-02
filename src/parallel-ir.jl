@@ -287,7 +287,7 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
             end
         end
     end
-    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 3
+    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 4
         println(io,"Domain nodes: ")
         for i = 1:length(pnode.original_domain_nodes)
             println(io,pnode.original_domain_nodes[i])
@@ -360,15 +360,15 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
   array                                # The name of the array.
-  select_bitarrays :: Array{SymbolNode,1} # Empty if whole array or range, else on BitArray per dimension.
+  select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
   range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
-  range_offset :: Array{SymbolNode,1}  # New temp variables to hold offset from iteration space for each dimension.
+  range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
   elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
   pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
   rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
   function InputInfo()
-    new(nothing, Array{SymbolNode,1}[], RangeData[], SymbolNode[], nothing, Expr[], Expr(:noop))
+    new(nothing, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
   end
 end
 
@@ -405,8 +405,9 @@ Create an expression that references something inside ParallelIR.
 In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.
 """
 function mk_parallelir_ref(sym, ref_type=Function)
-    inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
-    TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
+    #inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
+    #TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
+    TypedExpr(ref_type, :call, TopNode(:getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
 end
 
 @doc """
@@ -421,6 +422,13 @@ Create an expression which returns the index'th element of the tuple whose name 
 """
 function mk_tupleref_expr(tuple_var, index, typ)
     TypedExpr(typ, :call, TopNode(:tupleref), tuple_var, index)
+end
+
+@doc """
+Make a svec expression.
+"""
+function mk_svec_expr(parts...)
+    TypedExpr(SimpleVector, :call, TopNode(:svec), parts...)
 end
 
 @doc """
@@ -580,7 +588,7 @@ end
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
-function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymbolNode,1})
+function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1})
   dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
   xtyp = typeof(index_vars[dim])
 
@@ -605,7 +613,7 @@ end
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
-function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
+function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
   dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)
@@ -637,13 +645,6 @@ function createStateVar(state, name, typ, access)
   new_temp_sym = symbol(name)
   CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
   return SymbolNode(new_temp_sym, typ)
-end
-
-function convert(dt :: DataType, x :: GenSym)
-  if dt == AbstractString
-    return string("GenSym", x.id)
-  end
-  throw(string("Unsupport conversion of GenSym to something."))
 end
 
 @doc """
@@ -693,7 +694,7 @@ end
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
-function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymbolNode,1} = SymbolNode[])
+function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
   dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
   dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
   elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
@@ -1001,8 +1002,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
   # Call Domain IR to generate most of the body of the function (except for saving the output)
   dl_inputs = [reduction_output_snode, atm]
-  dl_body = dl.genBody(dl_inputs)
-  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
   state.max_label = max_label
@@ -1259,12 +1259,10 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(3,"indexed_arrays = ", indexed_arrays)
   dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
   dprintln(3,"dl_inputs = ", dl_inputs)
-  dprintln(3,"genBody = ", dl.genBody)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  dl_body = dl.genBody(dl_inputs)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, dl_inputs)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
+  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
   state.max_label = max_label
   out_body = [out_body; nested_body...]
   dprintln(2,"typeof(out_body) = ",typeof(out_body))
@@ -1280,6 +1278,14 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   dprintln(2,"out_body is of length ",length(out_body))
   printBody(3,out_body)
 
+  else_body = Any[]
+  elseLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    end
+  end
   out_body = out_body[1:oblen-1]
   for i = 1:length(dl.outputs)
     if length(inputInfo[i].range) != 0
@@ -1291,20 +1297,18 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
     push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    if length(condExprs) > 0
+      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    end
     #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
     #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
   end
 
   # add conditional expressions to body if array elements are selected by bit arrays
   fallthroughLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
-    end
-  end
   if length(condExprs) > 0
-    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1320,7 +1324,9 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     # If there is only one output then put that output in the post_statements
     push!(post_statements, input_arrays[1])
   else
-    push!(post_statements, input_arrays[1:length(dl.outputs)])
+    ret_arrays = input_arrays[1:length(dl.outputs)]
+    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
   end
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
@@ -1364,7 +1370,7 @@ end
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state) 
+function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr) 
   # Make sure we get what we expect from domain IR.  
   # There should be two entries in the array, another array of input array symbols and a DomainLambda type
   if(length(input_args) != 2)
@@ -1498,9 +1504,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   #for (v, d) in dl.locals
   #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
   #end
-  dl_body = dl.genBody(indexed_arrays)
   # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl_body, dl, indexed_arrays)
+  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
   gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
   nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
   state.max_label = max_label
@@ -1521,7 +1526,14 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
   output_element_sizes = 0
 
   out_body = out_body[1:oblen-1]
-
+else_body = Any[]
+elseLabel = next_label(state)
+  condExprs = Any[]
+  for i = 1:length(inputInfo)
+    if inputInfo[i].rangeconds.head != :noop
+      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    end
+  end
   # Create each output array
   number_output_arrays = length(dl.outputs)
   for(i = 1:number_output_arrays)
@@ -1548,7 +1560,10 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
     tfa = createTempForArray(nans_sn, 1, state)
     push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
     push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
-
+if length(condExprs) > 0
+      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    end
     # keep the sum of the sizes of the individual output array elements
     output_element_sizes = output_element_sizes + sizeof(dl.outputs)
   end
@@ -1556,14 +1571,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
 
   # add conditional expressions to body if array elements are selected by bit arrays
   fallthroughLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, fallthroughLabel))
-    end
-  end
   if length(condExprs) > 0
-    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
   end
 
   # Compute which scalars and arrays are ever read or written by the body of the parfor
@@ -1599,8 +1608,8 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state)
       simply_indexed)
 
   dprintln(3,"Lowered parallel IR = ", new_parfor)
-
-  [new_parfor]
+  retarr[1] = new_parfor
+  #[new_parfor]
 end
 
 # ===============================================================================================================================
@@ -2837,7 +2846,7 @@ function fuse(body, body_index, cur, state)
         # The new lhs is not empty so the fused parfor will not be bare and "prev" needs to become an assignment expression.
         body[body_index] = mk_assignment_expr(new_lhs, prev, state)
         prev = body[body_index]
-        prev.args[2].typ = new_lhs.typ
+        prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.lambdaInfo)
         if !single
           push!(prev.args, FusionSentinel())
           append!(prev.args, all_rets)
@@ -3652,13 +3661,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             new_parfor = getParforNode(new_exprs[1])
             new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
           end
-	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
-	  if fuse_ret>0
-		  # 2 means combination of old and new parfors has no output and both are dead
-		  if fuse_ret==2
+     	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
+	      if fuse_ret>0
+		    # 2 means combination of old and new parfors has no output and both are dead
+  		    if fuse_ret==2
 			  # remove last parfor and don't add anything new
 			  pop!(body)
-		  end
+		    end
             pre_next_parfor = Any[]
             # If fused then the new node is consumed and no new node is added to the body.
             continue
@@ -4145,22 +4154,25 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
                 call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
                 call_tup = eval(call_tup_expr)
                 dprintln(3, "call_tup = ", call_tup)
-                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
               end
 
               if false
-              insert_task_expr = TypedExpr(Any,
+                insert_task_expr = TypedExpr(Any,
                                            :call,
                                            cur_task.task_func,
                                            SymbolNode(range_sym, pir_range_actual),
                                            real_args_build...)
               else
-              insert_task_expr = TypedExpr(Any, 
+                # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
+                svec_args = mk_svec_expr(Any, Any)
+                insert_task_expr = TypedExpr(Any, 
                                            :call, 
                                            TopNode(:ccall), 
                                            QuoteNode(:jl_threading_run), 
-                                           :Void, 
-                                           TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
+                                           GlobalRef(Main,:Void), 
+                                           svec_args,
                                            mk_parallelir_ref(:isf), 0, 
                                            tup_sym, 0)
               end
@@ -4412,6 +4424,7 @@ It takes the task function to run, the full iteration space to run and the norma
 function isf(t::Function, 
              full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
              rest...)
+    println("Starting isf.")
     tid = Base.Threading.threadid()
 
     # This isn't working so this is debugging code at the moment.
@@ -4643,11 +4656,11 @@ function convertUnsafeWalk(x, state, top_level_number, is_top_level, read)
       if x.args[1] == TopNode(:unsafe_arrayset)
         x.args[1] = TopNode(:arrayset)
         state.found = true
-        return x
+        return [x]
       elseif x.args[1] == TopNode(:unsafe_arrayref)
         x.args[1] = TopNode(:arrayref)
         state.found = true
-        return x
+        return [x]
       end
     end
   end
@@ -4666,6 +4679,7 @@ function convertUnsafe(stmt)
   res = AstWalk(stmt, convertUnsafeWalk, state)
   # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
   if state.found
+    dprintln(3, "state.found ", state, " ", res)
     assert(isa(res,Array))
     assert(length(res) == 1)
     dprintln(3,"Replaced unsafe: ", res[1])
@@ -4693,14 +4707,17 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state)
+  dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
   if loop_nest_level > length(the_parfor.loopNests)
     # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
     # For each statement in the parfor body.
     for i = 1:length(the_parfor.body)
+      dprintln(3, "Body index ", i)
       # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
       # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
       cu_res = convertUnsafe(the_parfor.body[i])
+      dprintln(3, "cu_res = ", cu_res)
       if cu_res != nothing
         push!(new_body, Expr(:boundscheck, false)) 
         push!(new_body, cu_res)
@@ -4769,7 +4786,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
 
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-    recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4)
+    recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state)
 
     push!(new_body, LabelNode(label_before_second_unless))
     push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
@@ -4783,11 +4800,11 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state)
   max_label = getMaxLabel(0, the_parfor.body)
   dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
   # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-  recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1)
+  recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state)
   nothing
 end
  
@@ -4898,25 +4915,25 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3,"arg_types = ", arg_types)
 
   # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
-  all_arg_names = [:ranges,
-                   map(x -> symbol(x), in_array_names),
-                   map(x -> symbol(x), modified_symbols),
-                   map(x -> symbol(x), io_symbols),
+  all_arg_names = [:ranges;
+                   map(x -> symbol(x), in_array_names);
+                   map(x -> symbol(x), modified_symbols);
+                   map(x -> symbol(x), io_symbols);
                    map(x -> symbol(x), reduction_vars)]
   # Form a tuple that contains the type of each parameter.
   all_arg_types_tuple = Expr(:tuple)
-  all_arg_types_tuple.args = [pir_range_actual,
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names),
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols),
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols),
+  all_arg_types_tuple.args = [pir_range_actual;
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
+                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
                               map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
   all_arg_type = eval(all_arg_types_tuple)
   # Forms VarDef's for the local variables to the task function.
   args_var = CompilerTools.LambdaHandling.VarDef[]
   push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
-  append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names),
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols),
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols),
+  append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names);
+                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols);
+                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols);
                       map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), reduction_vars)])
   dprintln(3,"all_arg_names = ", all_arg_names)
   dprintln(3,"all_arg_type = ", all_arg_type)
@@ -4951,9 +4968,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 #    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
 #  end
  
-  dprintln(3, "meta = ", meta)
-
-  if ParallelAccelerator.client_intel_task_graph
+  if ParallelAccelerator.getTaskMode() != ParallelAccelerator.NO_TASK_MODE
     for i = 1:length(the_parfor.loopNests)
       # Put outerloop first in the loopNest
       j = length(the_parfor.loopNests) - i + 1
@@ -4977,7 +4992,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
   # Add the parfor stmt to the task function body.
   if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-    recreateLoops(task_body.args, the_parfor)
+    recreateLoops(task_body.args, the_parfor, state)
   else
     flattenParfor(task_body.args, the_parfor)
   end
@@ -5225,6 +5240,12 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
       return Any[]
     elseif head == :call
       if args[1] == TopNode(:unsafe_arrayref)
+        expr_to_process = Any[]
+        new_expr = deepcopy(ast)
+        new_expr.args[1] = TopNode(:arrayref)
+        push!(expr_to_process, new_expr)
+        return expr_to_process
+      elseif args[1] == TopNode(:safe_arrayref)
         expr_to_process = Any[]
         new_expr = deepcopy(ast)
         new_expr.args[1] = TopNode(:arrayref)
@@ -5596,7 +5617,7 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     dprintln(3,"Intersection dict = ", intersection_dict)
     if !isempty(intersection_dict)
       origBody      = node.genBody
-      newBody(args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(args), intersection_dict)
+      newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
       node.genBody  = newBody
       return [node]
     end 
@@ -5699,6 +5720,12 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
 
   if is_top_level
     dprintln(3,"remove_no_deps is_top_level")
+
+    if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+      # Empty the state at the end or begining of a basic block
+      data.dict_sym = Dict{SymGen,Any}()
+    end
+
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
     # Remove line number statements.
     if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
@@ -5710,10 +5737,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
       dprintln(3,"remove_no_deps live_info = ", live_info)
       dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
-      if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-        # Empty the state at the end or begining of a basic block
-        data.dict_sym = Dict{SymGen,Any}()
-      elseif isAssignmentNode(node)
+      if isAssignmentNode(node)
         dprintln(3,"Is an assignment node.")
         lhs = node.args[1]
         dprintln(4,lhs)
@@ -6068,15 +6092,14 @@ function inline!(src, dst, lhs)
       CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
     end
   end
-  gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+  # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
   tmp_t = f.outputs[1]
-  tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
   dst.args[2] = DomainLambda(inputs, g.outputs, 
-  args -> begin
-    fb = f.genBody(args[g_inps:end])
-    fb = CompilerTools.LambdaHandling.replaceExprWithDict(fb, gensym_map)
+  (linfo, args) -> begin
+    fb = f.genBody(linfo, args[g_inps:end])
+    tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
     expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-    gb = g.genBody(vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
+    gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
     return [fb[1:end-1]; [expr]; gb]
   end, linfo)
   DomainIR.mmapRemoveDupArg!(dst)
@@ -6234,13 +6257,13 @@ function mmapInline(ast, lives, uniqSet)
       if isa(dst, Expr) && is(dst.head, :(=))
         dst = dst.args[2]
       end
-      if isa(dst, Expr) && is(dst.head, :mmap)
+      if isa(dst, Expr) && is(dst.head, :mmap) && in(lhs, dst.args[1])
          # inline mmap into mmap
         inline!(src, dst, lhs)
         body.args[i] = nothing
         eliminateShapeAssert(shapeAssertAt, lhs, body)
         dprintln(3, "MI: result: ", body.args[j])
-      elseif isa(dst, Expr) && is(dst.head, :mmap!)
+      elseif isa(dst, Expr) && is(dst.head, :mmap!) && in(lhs, dst.args[1])
         s = dst.args[1][1]
         if isa(s, SymbolNode) s = s.name end
         if s == lhs 
@@ -6331,6 +6354,7 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
+  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
   body = ast.args[3]
   assert(isa(body, Expr) && is(body.head, :body))
   # For each statement in the body.
@@ -6342,6 +6366,7 @@ function mmapToMmap!(ast, lives, uniqSet)
       rhs = expr.args[2]
       # right now assume all
       assert(isa(lhs, SymAllGen))
+      lhsTyp = CompilerTools.LambdaHandling.getType(lhs, lambdaInfo) 
       # If the right-hand side is an mmap.
       if isa(rhs, Expr) && is(rhs.head, :mmap)
         args = rhs.args[1]
@@ -6356,7 +6381,8 @@ function mmapToMmap!(ast, lives, uniqSet)
           j = j + 1
           v = args[j]
           v = isa(v, SymbolNode) ? v.name : v
-          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet)
+          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
+             CompilerTools.LambdaHandling.getType(v, lambdaInfo) == lhsTyp
             reuse = v  # Found a dying symbol.
             break
           end
@@ -6598,7 +6624,7 @@ end
 @doc """
 Form a Julia :lambda Expr from a DomainLambda.
 """
-function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
+function lambdaFromDomainLambda(domain_lambda, dl_inputs)
 #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
   type_data = CompilerTools.LambdaHandling.VarDef[]
   input_arrays = Symbol[]
@@ -6613,15 +6639,11 @@ function lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
   dprintln(3,"DomainLambda is:")
   pirPrintDl(3, domain_lambda)
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  newLambdaInfo.var_defs = deepcopy(domain_lambda.linfo.var_defs)
-  newLambdaInfo.gen_sym_typs = deepcopy(domain_lambda.linfo.gen_sym_typs)
-  newLambdaInfo.escaping_defs = deepcopy(domain_lambda.linfo.escaping_defs)
   CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addInputParameters(inputs_as_symbols, newLambdaInfo)
-  #CompilerTools.LambdaHandling.addLocalVariables(type_data, newLambdaInfo)
-  #ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(domain_lambda.linfo, Expr(:body, stmts...))
+  stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
+  newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
   ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+  # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
   return (ast, input_arrays) 
 end
 
@@ -6629,13 +6651,10 @@ end
 A routine similar to the main parallel IR entry put but designed to process the lambda part of
 domain IR AST nodes.
 """
-function nested_function_exprs(max_label, stmts, domain_lambda, dl_inputs)
-  dprintln(2,"nested_function_exprs max_label = ", max_label, " stmts = ", stmts, " of type = ", typeof(stmts))
+function nested_function_exprs(max_label, domain_lambda, dl_inputs)
+  dprintln(2,"nested_function_exprs max_label = ", max_label)
   dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
-  if !isa(stmts, Array)
-    return stmts
-  end
-  (ast, input_arrays) = lambdaFromDomainLambda(stmts, domain_lambda, dl_inputs)
+  (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
   dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
 
   start_time = time_ns()
@@ -6737,6 +6756,23 @@ end
 doRemoveAssertEqShape = true
 generalSimplification = true
 
+function get_input_arrays(linfo::LambdaInfo)
+  ret = Symbol[]
+  input_vars = linfo.input_params
+  dprintln(3,"input_vars = ", input_vars)
+
+  for iv in input_vars
+    it = getType(iv, linfo)
+    dprintln(3,"iv = ", iv, " type = ", it)
+    if it.name == Array.name
+      dprintln(3,"Parameter is an Array.")
+      push!(ret, iv)
+    end
+  end
+
+  ret
+end
+
 @doc """
 The main ENTRY point into ParallelIR.
 1) Do liveness analysis.
@@ -6749,15 +6785,16 @@ The main ENTRY point into ParallelIR.
    b) Fuse parallel IR nodes where possible.
    c) Convert to task IR nodes if task mode enabled.
 """
-function from_expr(function_name, ast :: Expr, input_arrays)
+function from_expr(function_name, ast :: Expr)
   assert(ast.head == :lambda)
-  dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast, " input_arrays = ", input_arrays)
+  dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
   start_time = time_ns()
 
   # Create CFG from AST.  This will automatically filter out dead basic blocks.
   cfg = CompilerTools.CFGs.from_ast(ast)
   lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+  input_arrays = get_input_arrays(lambdaInfo)
   body = CompilerTools.LambdaHandling.getBody(ast)
   # Re-create the body minus any dead basic blocks.
   body.args = CompilerTools.CFGs.createFunctionBody(cfg)
@@ -6964,8 +7001,10 @@ function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
         # skip
     elseif head == :mmap
         head = :parfor
-        args = mk_parfor_args_from_mmap(args, state)
-        dprintln(1,"switching to parfor node for mmap")
+        retarr = Any[nothing]
+        mk_parfor_args_from_mmap(args, state, retarr)
+        args = retarr
+        dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
     elseif head == :mmap!
         head = :parfor
         args = mk_parfor_args_from_mmap!(args, state)
@@ -7035,7 +7074,7 @@ function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
         throw(string("from_expr: unknown Expr head :", head))
     end
     ast = Expr(head, args...)
-    dprintln(3,"New expr type = ", typ)
+    dprintln(3,"New expr type = ", typ, " ast = ", ast)
     ast.typ = typ
   elseif asttyp == Symbol
     dprintln(2,"Symbol type")
@@ -7075,13 +7114,11 @@ function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
     #skip
   elseif asttyp == Module
     #skip
-  #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
   elseif isbits(asttyp)
     #skip
   elseif isbitstuple(ast)
     #skip
   else
-#    dprintln(2,"from_expr: unknown AST (", typeof(ast), ",", ast, ")")
     throw(string("from_expr: unknown AST (", typeof(ast), ",", ast, ")"))
   end
   return [ast]
