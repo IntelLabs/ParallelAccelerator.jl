@@ -3390,7 +3390,7 @@ function generate_instr_count(function_name, signature)
 #    error("Method for ", function_name, " with signature ", signature, " is not found")
   end
 
-  ct = code_typed(function_name, signature)      # get information about code for the given function and signature
+  ct = ParallelAccelerator.Driver.code_typed(function_name, signature)      # get information about code for the given function and signature
 
   dprintln(2,"generate_instr_count ", function_name, " ", signature)
   state = eic_state(0, true, nothing)
@@ -4952,7 +4952,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3,"task_func = ", task_func)
 
   # DON'T DELETE.  Forces function into existence.
-  unused_ct = code_typed(task_func, all_arg_type)
+  unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
   dprintln(3, "unused_ct = ", unused_ct)
 
   newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
@@ -5025,7 +5025,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
   dprintln(3, "def post = ", def, " type = ", typeof(def))
 
   if DEBUG_LVL >= 3
-    task_func_ct = code_typed(task_func, all_arg_type)
+    task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
     if length(task_func_ct) == 0
       println("Error getting task func code.\n")
     else
