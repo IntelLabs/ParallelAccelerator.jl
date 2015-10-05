@@ -21,28 +21,40 @@ import CompilerTools.Loops
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
+const ENABLE_DEBUG = false
 
 function set_debug_level(x)
     global DEBUG_LVL = x
 end
 
-# A debug print routine.
-function dprint(level, msgs :: ANY ...)
+if ENABLE_DEBUG==true
+  # A debug print routine.
+  function dprint(level, msgs :: ANY ...)
     if(DEBUG_LVL >= level)
-        print(msgs...)
+      print(msgs...)
     end
+  end
+
+  # A debug print routine.
+  function dprintln(level, msgs :: ANY ...)
+    if(DEBUG_LVL >= level)
+      println(msgs...)
+    end
+  end
+else
+
+  function dprintln(args...)
+  end
+
+  function dprint(args...)
+  end
+
 end
 
 function ns_to_sec(x)
   x / 1000000000.0
 end
 
-# A debug print routine.
-function dprintln(level, msgs :: ANY ...)
-    if(DEBUG_LVL >= level)
-        println(msgs...)
-    end
-end
 
 const ISCAPTURED = 1
 const ISASSIGNED = 2

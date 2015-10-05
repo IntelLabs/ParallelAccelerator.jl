@@ -267,35 +267,48 @@ nextEnv(env::IREnv)=IREnv(env.cur_module, env.debugLevel, env.debugIndent + 1)
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
+const ENABLE_DEBUG = false
 
 function set_debug_level(x)
     global DEBUG_LVL = x
 end
 
-# A debug print routine.
-function dprint(level,msgs...)
+if ENABLE_DEBUG==true
+
+  # A debug print routine.
+  function dprint(level,msgs...)
     if(DEBUG_LVL >= level)
-        print(msgs...)
+      print(msgs...)
     end
-end
+  end
 
-# A debug print routine.
-function dprintln(level,msgs...)
+  # A debug print routine.
+  function dprintln(level,msgs...)
     if(DEBUG_LVL >= level)
-        println(msgs...)
+      println(msgs...)
     end
-end
+  end
 
-function dprint(env::IREnv,msgs...)
+  function dprint(env::IREnv,msgs...)
     if(DEBUG_LVL >= env.debugLevel)
-        print(repeat(" ", env.debugIndent*2), msgs...)
+      print(repeat(" ", env.debugIndent*2), msgs...)
     end
-end
+  end
 
-function dprintln(env::IREnv,msgs...)
+  function dprintln(env::IREnv,msgs...)
     if(DEBUG_LVL >= env.debugLevel)
-        println(repeat(" ", env.debugIndent*2), msgs...)
+      println(repeat(" ", env.debugIndent*2), msgs...)
     end
+  end
+
+else
+
+  function dprintln(args...)
+  end
+  
+  function dprint(args...)
+  end
+
 end
 
 mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max]

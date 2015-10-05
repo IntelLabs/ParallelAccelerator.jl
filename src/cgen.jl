@@ -14,35 +14,43 @@ import ParallelAccelerator, ..getPackageRoot
 
 # This controls the debug print level.
 DEBUG_LVL=0
+const ENABLE_DEBUG = false
 
 function set_debug_level(x)
     global DEBUG_LVL = x
 end
 
-# A debug print routine.
-function dprint(level,msgs...)
+if ENABLE_DEBUG==true
+  # A debug print routine.
+  function dprint(level,msgs...)
     if(DEBUG_LVL >= level)
-        print(msgs...)
+      print(msgs...)
     end
+  end
+
+  # A debug print routine.
+  function dprintln(level,msgs...)
+    if(DEBUG_LVL >= level)
+      println(msgs...)
+    end
+  end
+else
+
+  function dprintln(args...)
+  end
+
+  function dprint(args...)
+  end
+
 end
 
-function ns_to_sec(x)
-  x / 1000000000.0
-end
-
-# A debug print routine.
-function dprintln(level,msgs...)
-    if(DEBUG_LVL >= level)
-        println(msgs...)
-    end
-end
 
 
 #=
 type ASTDispatcher
-	nodes::Array{Any, 1}
-	dt::Dict{Any, Any}
-	m::Module
+  nodes::Array{Any, 1}
+  dt::Dict{Any, Any}
+  m::Module
 	function ASTDispatcher()
 		d = Dict{Any, Any}()
 		n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
