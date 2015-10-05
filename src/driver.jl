@@ -1,6 +1,6 @@
 module Driver
 
-export offload, toDomainIR, toParallelIR, toCGen, toCartesianArray
+export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray
 
 using CompilerTools
 using CompilerTools.AstWalker
@@ -11,7 +11,7 @@ import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
 
-# MODE for offload
+# MODE for accelerate
 const TOPLEVEL=1
 const PROXYONLY=3
 
@@ -54,9 +54,9 @@ function getNextFuncId()
   return cur
 end
 
-stop_after_offload = 0
-function stopAfterOffload(x)
-  global stop_after_offload = x
+stop_after_accelerate = 0
+function stopAfterAccelerate(x)
+  global stop_after_accelerate = x
 end
 
 no_precompile = 0
@@ -79,7 +79,7 @@ function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   code = DomainIR.from_expr(string(func.name), func.mod, ast)
   dir_time = time_ns() - dir_start
   dprintln(3, "domain code = ", code)
-  dprintln(1, "offload: ParallelIR conversion time = ", ns_to_sec(dir_time))
+  dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(dir_time))
   return code
 end
 
@@ -93,7 +93,7 @@ function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   end
   pir_time = time_ns() - pir_start
   dprintln(3, "parallel code = ", code)
-  dprintln(1, "offload: ParallelIR conversion time = ", ns_to_sec(pir_time))
+  dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
   return code
 end
 
@@ -111,7 +111,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
   proxy_sym = symbol(proxy_name)
-  dprintln(2, "ParallelAccelerator.offload for ", proxy_name)
+  dprintln(2, "ParallelAccelerator.accelerate for ", proxy_name)
   dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
   dprintln(2, "dyn_lib = ", dyn_lib)
   
@@ -213,7 +213,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   
   off_time = time_ns() - off_time_start
-  dprintln(1, "offload: offload conversion time = ", ns_to_sec(off_time))
+  dprintln(1, "accelerate: accelerate conversion time = ", ns_to_sec(off_time))
   return proxy_func
 end
 
@@ -229,13 +229,13 @@ end
 
 # Converts a given function and signature to use domain IR and parallel IR, and
 # remember it so that it won't be translated again.
-function offload(func, signature; level = TOPLEVEL)
+function accelerate(func, signature; level = TOPLEVEL)
   pse_mode = ParallelAccelerator.getPseMode() 
   if pse_mode == ParallelAccelerator.OFF_MODE
     return func
   end
 
-  dprintln(2, "Starting offload for ", func, " with signature ", signature)
+  dprintln(2, "Starting accelerate for ", func, " with signature ", signature)
   if !isgeneric(func)
     dprintln(1, "method ", func, " is not generic.")
     return nothing

@@ -121,7 +121,7 @@ end
 
 function distribute2DF(body, T, ndims)
 	_f = (function foo(_pid, _csize)
-		#ParallelAccelerator.offload(_f, (Int64, Int64))
+		#ParallelAccelerator.accelerate(_f, (Int64, Int64))
 		#println("[DEBUG] On process: ", myid(), " doing chunk of size: ", _csize)
 		a = Array(T, _csize)
 		cartesianarray(
@@ -211,7 +211,7 @@ function render(w::Int64, h::Int64)
 	a = matmul(ones(Float64, w, h), ones(Float64, h, w), 0)
 	#a
 end
-#ParallelAccelerator.offload(render, (Int64, Int64))
+#ParallelAccelerator.accelerate(render, (Int64, Int64))
 function main()
 	w = 1024
 	h = 1024

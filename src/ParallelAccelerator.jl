@@ -2,7 +2,7 @@
 
 module ParallelAccelerator
 
-export decompose, offload, Optimize
+export decompose, accelerate, Optimize
 export cartesianarray, runStencil, @runStencil
 
 using CompilerTools.OptFramework
@@ -121,8 +121,8 @@ function dprintln(level, msgs...)
     end
 end
 
-# a hack to make offload function and DomainIR mutually recursive.
-_offload(function_name, signature) = offload(function_name, signature, level = 0)
+# a hack to make accelerate function and DomainIR mutually recursive.
+_accelerate(function_name, signature) = accelerate(function_name, signature, level = 0)
 
 include("api.jl")
 include("stencil-api.jl")

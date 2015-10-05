@@ -481,7 +481,7 @@ function specializeOp(opr, argstyp)
 end
 
 import Base.show
-import .._offload
+import .._accelerate
 
 function show(io::IO, f::DomainLambda)
   local len = length(f.inputs)
@@ -1259,8 +1259,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
       args_typ = map(x -> typeOfOpr(state, x), args)
       dprintln(3,"args = ", args, " args_typ = ", args_typ)
       if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
-        dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
-        _offload(getfield(env.cur_module, fun), tuple(args_typ...))
+        dprintln(env,"function to accelerate: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
+        _accelerate(getfield(env.cur_module, fun), tuple(args_typ...))
         oldfun = GlobalRef(env.cur_module, fun)
       elseif is(fun, :getfield)
         dprintln(env,"eval getfield with args ", args)
@@ -1297,10 +1297,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun, args)
         args_typ = map(x -> typeOfOpr(state, x), args)
         gf = getfield(fun.mod, fun.name)
         if isgeneric(gf)
-          dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
-          _offload(gf, tuple(args_typ...))
+          dprintln(env,"function to accelerate: ", fun, " methods=", methods(gf))
+          _accelerate(gf, tuple(args_typ...))
         else
-          dprintln(env,"function ", fun, " not offloaded since it isn't generic.")
+          dprintln(env,"function ", fun, " not accelerated since it isn't generic.")
         end
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")

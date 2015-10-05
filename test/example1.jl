@@ -1,4 +1,4 @@
-# A toy example demonstrating how to use ParallelAccelerator.offload().
+# A toy example demonstrating how to use ParallelAccelerator.accelerate().
 
 module Example1
 
@@ -13,9 +13,9 @@ function example(n::Int)
 end
 
 tic()
-example_pa = ParallelAccelerator.offload(example, (Int,))
+example_pa = ParallelAccelerator.accelerate(example, (Int,))
 time = toq()
-println("ParallelAccelerator.offload time: ", time)
+println("ParallelAccelerator.accelerate time: ", time)
 
 function main()
 
