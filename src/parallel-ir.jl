@@ -1131,6 +1131,35 @@ function selectToRangeData(select :: Expr)
   return range_array
 end
 
+function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, state)
+    thisInfo = InputInfo()
+
+    if isa(input_array, Expr) && is(input_array.head, :select)
+      thisInfo.array = input_array.args[1]
+      select_kind = input_array.args[2].head
+      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+      if select_kind == :tomask
+        thisInfo.select_bitarrays = input_array.args[2].args
+        thisInfo.range = RangeData[]
+        thisInfo.range_offset = SymbolNode[]
+        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+        thisInfo.pre_offsets = Expr[]
+      else
+        thisInfo.range = selectToRangeData(input_array)
+        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+      end
+    else
+      thisInfo.array = input_array
+      thisInfo.range = RangeData[]
+      thisInfo.range_offset = SymbolNode[]
+      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+      thisInfo.pre_offsets = Expr[]
+    end
+    return thisInfo
+end
+
 @doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
@@ -1151,33 +1180,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
   # handle range selector
   inputInfo = InputInfo[]
   for i = 1 : length(input_arrays)
-    thisInfo = InputInfo()
-
-    if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
-      thisInfo.array = input_arrays[i].args[1]
-      select_kind = input_arrays[i].args[2].head
-      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
-      if select_kind == :tomask
-        thisInfo.select_bitarrays = input_arrays[i].args[2].args
-        thisInfo.range = RangeData[]
-        thisInfo.range_offset = SymbolNode[]
-        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-        thisInfo.pre_offsets = Expr[]
-      else
-        thisInfo.range = selectToRangeData(input_arrays[i])
-        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
-      end
-    else
-      thisInfo.array = input_arrays[i]
-      thisInfo.range = RangeData[]
-      thisInfo.range_offset = SymbolNode[]
-      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-      thisInfo.pre_offsets = Expr[]
-    end
-
-    push!(inputInfo, thisInfo)
+    push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
   end
 
   # Second arg is a DomainLambda
@@ -1399,36 +1402,9 @@ function mk_parfor_args_from_mmap(input_args::Array{Any,1}, state, retarr)
   # handle range selector
   inputInfo = InputInfo[]
   for i = 1 : length(input_arrays)
-    thisInfo = InputInfo()
-
-    if isa(input_arrays[i], Expr) && is(input_arrays[i].head, :select)
-      thisInfo.array = input_arrays[i].args[1]
-      select_kind = input_arrays[i].args[2].head
-      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
-      if select_kind == :tomask
-#        @bp
-        thisInfo.select_bitarrays = input_arrays[i].args[2].args
-        thisInfo.range = RangeData[]
-        thisInfo.range_offset = SymbolNode[]
-        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-        thisInfo.pre_offsets = Expr[]
-      else
-        thisInfo.range = selectToRangeData(input_arrays[i])
-        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
-      end
-    else
-      thisInfo.array = input_arrays[i]
-      thisInfo.range = RangeData[]
-      thisInfo.range_offset = SymbolNode[]
-      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-      thisInfo.pre_offsets = Expr[]
-    end
-
-    push!(inputInfo, thisInfo)
+    push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
   end
-
+  
   # Second arg is a DomainLambda
   ftype = typeof(input_args[2])
   dprintln(2,"mk_parfor_args_from_mmap function = ",input_args[2])
