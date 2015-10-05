@@ -1633,13 +1633,13 @@ function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int6
       if length(sstr) >= red_var_len
         if sstr[1:red_var_len] == red_var_start
           # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-          return nothing
+          return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
       end
       push!(state, sname)
     end
   end
-  nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -1672,7 +1672,7 @@ function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_num
     lhs = x.args[1]
     # GenSyms don't have descriptors so no need to count their assignment.
     if !hasSymbol(lhs)
-      return nothing
+      return CompilerTools.AstWalker.ASTWALK_RECURSE
     end
     sname = getSName(lhs)
     if !haskey(symbol_assigns, sname)
@@ -1680,7 +1680,7 @@ function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_num
     end
     symbol_assigns[sname] = symbol_assigns[sname] + 1
   end
-  nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE 
 end
 
 @doc """
@@ -2125,9 +2125,9 @@ function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
         assert(isa(array_name, SymNodeGen))
         # If the array being assigned to is in temp_map.
         if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
-          return [nothing]
+          return nothing
         elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
-          return [nothing]
+          return nothing
         else
           dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
         end
@@ -2135,7 +2135,7 @@ function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
     end
   end
 
-  nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -2148,7 +2148,7 @@ map_drop_arrayset drops the arrayset without replacing with a variable.  This is
 function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases)
   dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
   # Walk the AST and call sub_arrayset_walk for each node.
-  return get_one(AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases)))
+  return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
 end
 
 @doc """
@@ -2208,7 +2208,7 @@ function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: I
         # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
         if haskey(cbd.temp_map, lowered_array_name)
           dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
-          return [cbd.temp_map[lowered_array_name]]
+          return cbd.temp_map[lowered_array_name]
         end
       elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
         array_name = x.args[2]
@@ -2225,7 +2225,7 @@ function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: I
     if haskey(cbd.index_map, x)
       # Detected the use of an index variable.  Change it to the first parfor's index variable.
       dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
-      return [cbd.index_map[x]]
+      return cbd.index_map[x]
     end
   elseif xtype == SymbolNode
     dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
@@ -2233,11 +2233,12 @@ function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: I
       # Detected the use of an index variable.  Change it to the first parfor's index variable.
       dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
       x.name = cbd.index_map[x.name]
-      return [x]
+      return x
     end
   end
   dprintln(dbglvl,"sub_cur_body_walk not substituting")
-  nothing
+  
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -2259,7 +2260,7 @@ function substitute_cur_body(x,
   dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
   dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
   # Walk the AST and call sub_cur_body_walk for each node.
-  return get_one(DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state)))
+  return DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
 end
 
 @doc """
@@ -2307,7 +2308,8 @@ function sub_arraylen_walk(x, replacement, top_level_number, is_top_level, read)
     end
   end
   dprintln(4,"sub_arraylen_walk not substituting")
-  nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -2317,7 +2319,7 @@ If we see a call to create an array, replace the length params with those in the
 function substitute_arraylen(x, replacement)
   dprintln(3,"substitute_arraylen ", x, " ", replacement)
   # Walk the AST and call sub_arraylen_walk for each node.
-  return get_one(DomainIR.AstWalk(x, sub_arraylen_walk, replacement))
+  return DomainIR.AstWalk(x, sub_arraylen_walk, replacement)
 end
 
 fuse_limit = -1
@@ -3555,7 +3557,7 @@ function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_le
     dprintln(1,"instruction count estimator: unknown AST (", typeof(ast), ",", ast, ")")
   end
 
-  nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -4656,16 +4658,16 @@ function convertUnsafeWalk(x, state, top_level_number, is_top_level, read)
       if x.args[1] == TopNode(:unsafe_arrayset)
         x.args[1] = TopNode(:arrayset)
         state.found = true
-        return [x]
+        return x
       elseif x.args[1] == TopNode(:unsafe_arrayref)
         x.args[1] = TopNode(:arrayref)
         state.found = true
-        return [x]
+        return x
       end
     end
   end
 
-  nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -5573,9 +5575,9 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
       data.copies = Dict{SymGen, SymGen}() 
     elseif isAssignmentNode(node)
       dprintln(3,"Is an assignment node.")
-      lhs = node.args[1] = get_one(AstWalk(node.args[1], copy_propagate, data))
+      lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
       dprintln(4,lhs)
-      rhs = node.args[2] = get_one(AstWalk(node.args[2], copy_propagate, data))
+      rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
       dprintln(4,rhs)
 
       if isa(rhs, SymAllGen)
@@ -5583,25 +5585,25 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
         # Record that the left-hand side is a copy of the right-hand side.
         data.copies[toSymGen(lhs)] = toSymGen(rhs)
       end
-      return [node]
+      return node
     end
   end
 
   if isa(node, Symbol)
     if haskey(data.copies, node)
       dprintln(3,"Replacing ", node, " with ", data.copies[node])
-      return [data.copies[node]]
+      return data.copies[node]
     end
   elseif isa(node, SymbolNode)
     if haskey(data.copies, node.name)
       dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
       tmp_node = data.copies[node.name]
-      return isa(tmp_node, Symbol) ? [SymbolNode(tmp_node, node.typ)] : [tmp_node]
+      return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
     end
   elseif isa(node, GenSym)
     if haskey(data.copies, node)
       dprintln(3,"Replacing ", node, " with ", data.copies[node])
-      return [data.copies[node]]
+      return data.copies[node]
     end
   elseif isa(node, DomainLambda)
     dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
@@ -5619,10 +5621,11 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
       origBody      = node.genBody
       newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
       node.genBody  = newBody
-      return [node]
+      return node
     end 
   end
-  nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -5665,18 +5668,19 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
             dprintln(3,"remove_dead lhs is NOT live out")
             if hasNoSideEffects(rhs)
               dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
-              return Any[]
+              return CompilerTools.AstWalker.ASTWALK_REMOVE
             else
               # Just eliminate the assignment but keep the rhs
               dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym, " rhs = ", rhs)
-              return [rhs]
+              return rhs
             end
           end
         end
       end
     end
   end
-  nothing
+  
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 
@@ -5729,7 +5733,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
     # Remove line number statements.
     if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
-      return Any[]
+      return CompilerTools.AstWalker.ASTWALK_REMOVE
     end
     if live_info == nothing
       dprintln(3,"remove_no_deps no live_info")
@@ -5747,7 +5751,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
         if isa(rhs, Expr) && (is(rhs.head, :parfor) || is(rhs.head, :mmap!))
           # Always keep parfor assignment in order to work with fusion
           dprintln(3, "keep assignment due to parfor or mmap! node")
-          return [node]
+          return node
         end
         if isa(lhs, SymAllGen)
           lhs_sym = toSymGen(lhs)
@@ -5757,11 +5761,11 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
             dprintln(3,"remove_no_deps lhs is NOT live out")
             if hasNoSideEffects(rhs)
               dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
-              return Any[]
+              return CompilerTools.AstWalker.ASTWALK_REMOVE
             else
               # Just eliminate the assignment but keep the rhs
               dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym)
-              return [rhs]
+              return rhs
             end
           else
             dprintln(3,"remove_no_deps lhs is live out")
@@ -5777,7 +5781,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
                   data.dict_sym[lhs_sym] = prev_expr
                   dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
                   dprintln(3,"New expr = ", prev_expr)
-                  return Any[]
+                  return CompilerTools.AstWalker.ASTWALK_REMOVE
                 end
               else
                 dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
@@ -5827,13 +5831,14 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
             for i in live_info.def
               push!(data.hoistable_scalars, i)
             end
-            return Any[]
+            return CompilerTools.AstWalker.ASTWALK_REMOVE
           end
         end
       end
     end
   end
-  nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -5951,7 +5956,7 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
 
     state.lambdaInfo = save_lambdaInfo
 
-    return [node]
+    return node
   end
 
   # We can only extract array equivalences from top-level statements.
@@ -6051,7 +6056,8 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
       dprintln(3,"Not an assignment or expr node.")
     end
   end
-  nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 # mmapInline() helper function
@@ -6712,14 +6718,13 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
   for i = 1:rearrange_passes
     dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
     rnd_state = RemoveNoDepsState(lives, non_array_params)
-    ast = get_one(AstWalk(ast, remove_no_deps, rnd_state))
+    ast = AstWalk(ast, remove_no_deps, rnd_state)
     dprintln(3,"ast after no dep stmts removed = ", ast)
       
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
     dprintln(1,"Adding statements with no dependencies to the start of the AST.")
     ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
-    #ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
     dprintln(3,"ast after no dep stmts re-inserted = ", ast)
 
     dprintln(1,"Re-starting liveness analysis.")
@@ -6853,14 +6858,13 @@ function from_expr(function_name, ast :: Expr)
   for i = 1:rearrange_passes
     dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
     rnd_state = RemoveNoDepsState(lives, non_array_params)
-    ast = get_one(AstWalk(ast, remove_no_deps, rnd_state))
+    ast = AstWalk(ast, remove_no_deps, rnd_state)
     dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
     printLambda(3, ast)
       
     dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
     dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
-#    ast = get_one(AstWalk(ast, insert_no_deps_beginning, rnd_state))
     ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
     dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
     printLambda(3, ast)
@@ -6879,13 +6883,13 @@ function from_expr(function_name, ast :: Expr)
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
   if generalSimplification
-  ast   = get_one(AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}())))
+  ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}()))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
   dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
   printLambda(3, ast)
   end
 
-  ast   = get_one(AstWalk(ast, remove_dead, RemoveDeadState(lives)))
+  ast   = AstWalk(ast, remove_dead, RemoveDeadState(lives))
   lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
   dprintln(3,"ast after remove_dead = ", " function = ", function_name)
   printLambda(3, ast)
@@ -7158,7 +7162,7 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_
   dprintln(3,"PIR AstWalkCallback starting")
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"PIR AstWalkCallback ret = ", ret)
-  if ret != nothing
+  if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
     return ret
   end
 
@@ -7170,76 +7174,75 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_
     if head == :parfor
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.preParFor)
-        x.args[1].preParFor[i] = AstWalker.get_one(AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata))
-        #AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
+        x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.loopNests)
-        x.args[1].loopNests[i].indexVariable = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
         # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
         AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].lower = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata))
-        x.args[1].loopNests[i].upper = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata))
-        x.args[1].loopNests[i].step = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.reductions)
-        x.args[1].reductions[i].reductionVar = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata))
-        x.args[1].reductions[i].reductionVarInit = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata))
-        x.args[1].reductions[i].reductionFunc = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.body)
-        x.args[1].body[i] = AstWalker.get_one(AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata))
+        x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.postParFor)-1
-        x.args[1].postParFor[i] = AstWalker.get_one(AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata))
+        x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
       end
-      return [x]
+      return x
     elseif head == :parfor_start || head == :parfor_end
       dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
       dprintln(3, "pre x = ", x)
       cur_parfor = args[1]
       for i = 1:length(cur_parfor.loopNests)
-        x.args[1].loopNests[i].indexVariable = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
         AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].lower = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata))
-        x.args[1].loopNests[i].upper = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata))
-        x.args[1].loopNests[i].step = AstWalker.get_one(AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata))
+        x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+        x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
       end
       for i = 1:length(cur_parfor.reductions)
-        x.args[1].reductions[i].reductionVar = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata))
-        x.args[1].reductions[i].reductionVarInit = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata))
-        x.args[1].reductions[i].reductionFunc = AstWalker.get_one(AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata))
+        x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+        x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
       end
-      #x.args[1].instruction_count_expr = AstWalker.get_one(AstWalk(cur_parfor.instruction_count_expr, dw.callback. dw.cbdata))
       for i = 1:length(cur_parfor.private_vars)
-        x.args[1].private_vars[i] = AstWalker.get_one(AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata))
+        x.args[1].private_vars[i] = AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata)
       end
       dprintln(3, "post x = ", x)
-      return [x]
+      return x
     elseif head == :insert_divisible_task
       cur_task = args[1]
       for i = 1:length(cur_task.args)
-        x.args[1].value = AstWalker.get_one(AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata))
+        x.args[1].value = AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
       end
-      return [x]
+      return x
     elseif head == :loophead
       for i = 1:length(args)
-        x.args[i] = AstWalker.get_one(AstWalk(x.args[i], dw.callback, dw.cbdata))
+        x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
       end
-      return [x]
+      return x
     elseif head == :loopend
       for i = 1:length(args)
-        x.args[i] = AstWalker.get_one(AstWalk(x.args[i], dw.callback, dw.cbdata))
+        x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
       end
-      return [x]
+      return x
     end
   elseif asttyp == pir_range_actual
     for i = 1:length(x.dim)
-      x.lower_bounds[i] = AstWalker.get_one(AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata))
-      x.upper_bounds[i] = AstWalker.get_one(AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata))
+      x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
+      x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
     end
-    return [x]
+    return x
   end
-  return nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """

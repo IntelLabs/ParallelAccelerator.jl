@@ -125,8 +125,9 @@ inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
 #config file overrides backend_compiler variable
-include("../deps/generated/config.jl")
-
+if isfile("../deps/generated/config.jl")
+  include("../deps/generated/config.jl")
+end
 
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.

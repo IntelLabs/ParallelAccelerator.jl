@@ -38,7 +38,7 @@ This function is a AstWalker callback.
 """
 function process_node(node, state, top_level_number, is_top_level, read)
   if !isa(node,Expr)
-    return nothing
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
   end
   if node.head == :typed_comprehension
     typ = node.args[1]
@@ -47,7 +47,7 @@ function process_node(node, state, top_level_number, is_top_level, read)
     node.head = :comprehension
     node.args = node.args[2:end]
   end
-  return (node.head == :comprehension) ? [comprehension_to_cartesianarray(node)] : nothing
+  return (node.head == :comprehension) ? comprehension_to_cartesianarray(node) : CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 

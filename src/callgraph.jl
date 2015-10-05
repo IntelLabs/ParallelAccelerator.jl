@@ -290,7 +290,7 @@ function extractStaticCallGraphWalk(node, state :: extractStaticCallGraphState, 
   end
 
   # Don't make any changes to the AST, just record information in the state variable.
-  return nothing
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function show(io::IO, cg :: Dict{Any,FunctionInfo})

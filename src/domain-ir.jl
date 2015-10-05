@@ -1419,17 +1419,11 @@ type DirWalk
   cbdata
 end
 
-function get_one(ast)
-  assert(isa(ast,Array))
-  assert(length(ast) == 1)
-  ast[1]
-end
-
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
   dprintln(3,"DomainIR.AstWalkCallback ", x)
   ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
   dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
-  if ret != nothing
+  if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
     return ret
   end
 
@@ -1442,20 +1436,20 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
       assert(length(args) >= 2)
       input_arrays = args[1]
       for i = 1:length(input_arrays)
-        args[1][i] = get_one(AstWalker.AstWalk(input_arrays[i], AstWalkCallback, dw))
+        args[1][i] = AstWalker.AstWalk(input_arrays[i], AstWalkCallback, dw)
       end
-      args[2] = get_one(AstWalker.AstWalk(args[2], AstWalkCallback, dw))
-      return [x]
+      args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
+      return x
     elseif head == :reduce
       assert(length(args) == 3)
       for i = 1:3
-        args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
+        args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     elseif head == :select 
       # it is always in the form of select(arr, mask), where range can itself be ranges(range(...), ...))
       assert(length(args) == 2)
-      args[1] = get_one(AstWalker.AstWalk(args[1], AstWalkCallback, dw))
+      args[1] = AstWalker.AstWalk(args[1], AstWalkCallback, dw)
       assert(isa(args[2], Expr))
       if args[2].head == :ranges
         ranges = args[2].args
@@ -1468,46 +1462,47 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
         assert(isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask))
         for j = 1:length(ranges[i].args)
-          ranges[i].args[j] = get_one(AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw))
+          ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
         end
       end
-      return [x]
+      return x
     elseif head == :stencil!
       assert(length(args) == 4)
-      args[2] = get_one(AstWalker.AstWalk(args[2], AstWalkCallback, dw))
+      args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
       for i in 1:length(args[3]) # buffer array
-        args[3][i] = get_one(AstWalker.AstWalk(args[3][i], AstWalkCallback, dw))
+        args[3][i] = AstWalker.AstWalk(args[3][i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     elseif head == :assertEqShape
       assert(length(args) == 2)
       for i = 1:length(args)
-        args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
+        args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     elseif head == :assert 
       for i = 1:length(args)
         AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     elseif head == :select
       for i = 1:length(args)
-          args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
+          args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     elseif head == :range
       for i = 1:length(args)
-          args[i] = get_one(AstWalker.AstWalk(args[i], AstWalkCallback, dw))
+          args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
       end
-      return [x]
+      return x
     end
     x = Expr(head, args...)
     x.typ = typ
   elseif asttyp == DomainLambda
     dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
-    return [x]
+    return x
   end
-  return nothing
+
+  return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function AstWalk(ast :: ANY, callback, cbdata :: ANY)
