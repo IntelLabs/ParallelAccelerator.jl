@@ -135,9 +135,9 @@ include("callgraph.jl")
 include("comprehension.jl")
 include("driver.jl")
 
-importall .API
-importall .StencilAPI
-importall .Driver
+#importall .API
+using .StencilAPI
+using .Driver
 
 @doc """
 Called when the package is loaded to do initialization.
