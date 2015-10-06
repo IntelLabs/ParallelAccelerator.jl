@@ -227,7 +227,7 @@ end
 
 # Converts a given function and signature to use domain IR and parallel IR, and
 # remember it so that it won't be translated again.
-function accelerate(func, signature; level = TOPLEVEL)
+function accelerate(func::Function, signature::ANY, level = TOPLEVEL)
   pse_mode = ParallelAccelerator.getPseMode() 
   if pse_mode == ParallelAccelerator.OFF_MODE
     return func
