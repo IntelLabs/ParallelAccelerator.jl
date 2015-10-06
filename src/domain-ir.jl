@@ -1354,7 +1354,7 @@ function from_return(state, env, expr)
   return mk_expr(typ, head, args...)
 end
 
-function from_expr(function_name, cur_module :: Module, ast :: ANY)
+function from_expr(function_name::AbstractString, cur_module :: Module, ast :: ANY)
   dprintln(2,"DomainIR translation function = ", function_name, " on:")
   dprintln(2,ast)
   ast = from_expr(emptyState(), newEnv(cur_module), ast)
@@ -1363,81 +1363,87 @@ function from_expr(function_name, cur_module :: Module, ast :: ANY)
   return ast
 end
 
-function from_expr(state, env, ast :: ANY)
-  if isa(ast, LambdaStaticData)
-    dprintln(env, "from_expr: LambdaStaticData inferred = ", ast.inferred)
-    if !ast.inferred
-      # we return this unmodified since we want the caller to
-      # type check it before conversion.
-      return ast
-    else
-      ast = uncompressed_ast(ast)
-      # (tree, ty)=Base.typeinf(ast, argstyp, ())
+function from_expr(state::IRState, env::IREnv, ast::LambdaStaticData)
+  dprintln(env, "from_expr: LambdaStaticData inferred = ", ast.inferred)
+  if !ast.inferred
+    # we return this unmodified since we want the caller to
+    # type check it before conversion.
+    return ast
+  else
+    ast = uncompressed_ast(ast)
+    # (tree, ty)=Base.typeinf(ast, argstyp, ())
+  end
+  return ast
+end
+
+function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
+  name = isa(ast, SymbolNode) ? ast.name : ast
+  # if it is global const, we replace it with its const value
+  def = lookupDefInAllScopes(state, name)
+  if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
+    def = getfield(env.cur_module, name)
+    if isbits(def)
+      return def
     end
   end
+  dprintln(2, " not handled ", ast)
+  return ast
+end
+
+function from_expr(state::IRState, env::IREnv, ast::Expr)
   local asttyp = typeof(ast)
   dprint(env,"from_expr: ", asttyp)
-  if is(asttyp, Expr)
-    local head = ast.head
-    local args = ast.args
-    local typ  = ast.typ
-    dprintln(2, " :", head)
-    if is(head, :lambda)
-        return from_lambda(state, env, ast)
-    elseif is(head, :body)
-        return from_body(state, env, ast)
-    elseif is(head, :(=))
-        return from_assignment(state, env, ast)
-    elseif is(head, :return)
-        return from_return(state, env, ast)
-    elseif is(head, :call)
-        return from_call(state, env, ast)
-        # TODO: catch domain IR result here
-    elseif is(head, :call1)
-        return from_call(state, env, ast)
-        # TODO?: tuple
-    elseif is(head, :method)
-        # change it to assignment
-        ast.head = :(=)
-        n = length(args)
-        ast.args = Array(Any, n-1)
-        ast.args[1] = args[1]
-        for i = 3:n
-          ast.args[i-1] = args[i]
-        end
-        return from_assignment(state, env, ast)
-    elseif is(head, :line)
-        # skip
-    elseif is(head, :new)
-        # skip?
-    elseif is(head, :boundscheck)
-        # skip?
-    elseif is(head, :type_goto)
-        # skip?
-    elseif is(head, :gotoifnot)
-        # ?
-    elseif is(head, :meta)
-        # skip
-    elseif is(head, :static_typeof)
-      typ = getType(args[1], state.linfo)
-      return typ  
-    else
-        throw(string("from_expr: unknown Expr head :", head))
+  local head = ast.head
+  local args = ast.args
+  local typ  = ast.typ
+  dprintln(2, " :", head)
+  if is(head, :lambda)
+    return from_lambda(state, env, ast)
+  elseif is(head, :body)
+    return from_body(state, env, ast)
+  elseif is(head, :(=))
+    return from_assignment(state, env, ast)
+  elseif is(head, :return)
+    return from_return(state, env, ast)
+  elseif is(head, :call)
+    return from_call(state, env, ast)
+    # TODO: catch domain IR result here
+  elseif is(head, :call1)
+    return from_call(state, env, ast)
+    # TODO?: tuple
+  elseif is(head, :method)
+    # change it to assignment
+    ast.head = :(=)
+    n = length(args)
+    ast.args = Array(Any, n-1)
+    ast.args[1] = args[1]
+    for i = 3:n
+      ast.args[i-1] = args[i]
     end
-  elseif isa(ast, SymbolNode) || isa(ast, Symbol)
-    name = isa(ast, SymbolNode) ? ast.name : ast
-    # if it is global const, we replace it with its const value
-    def = lookupDefInAllScopes(state, name)
-    if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
-      def = getfield(env.cur_module, name)
-      if isbits(def)
-        return def
-      end
-    end
-    dprintln(2, " not handled ", ast)
-  else 
-    dprintln(2, " not handled ", ast)
+    return from_assignment(state, env, ast)
+  elseif is(head, :line)
+    # skip
+  elseif is(head, :new)
+    # skip?
+  elseif is(head, :boundscheck)
+    # skip?
+  elseif is(head, :type_goto)
+    # skip?
+  elseif is(head, :gotoifnot)
+    # ?
+  elseif is(head, :meta)
+    # skip
+  elseif is(head, :static_typeof)
+    typ = getType(args[1], state.linfo)
+    return typ  
+  else
+    throw(string("from_expr: unknown Expr head :", head))
   end
+  return ast
+end
+
+function from_expr(state::IRState, env::IREnv, ast::ANY)
+  dprintln(2, " not handled ", ast)
   return ast
 end
 
