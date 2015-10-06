@@ -6911,191 +6911,181 @@ function isbitstuple(a)
   return false
 end
 
+
+
+function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
+  ast = uncompressed_ast(ast)
+  return from_expr(ast, depth, state, top_level)
+end
+
+function from_expr(ast::Union{SymAllGen,TopNode,LineNumberNode,LabelNode,
+     GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
+    #skip
+    return [ast]
+end
+
+function from_expr(ast::GlobalRef, depth, state :: expr_state, top_level)
+  mod = ast.mod
+  name = ast.name
+  # typ = ast.typ  # FIXME: is this type needed?
+  typ = typeof(mod)
+  dprintln(2,"GlobalRef type ",typeof(mod))
+    return [ast]
+end
+
+
+function from_expr(ast::QuoteNode, depth, state :: expr_state, top_level)
+  value = ast.value
+  #TODO: fields: value
+  dprintln(2,"QuoteNode type ",typeof(value))
+  return [ast] 
+end
+
+function from_expr(ast::Tuple, depth, state :: expr_state, top_level)
+  @assert isbitstuple(ast) "Only bits type tuples allowed in from_expr()"
+  return [ast] 
+end
+
+function from_expr(ast::Number, depth, state :: expr_state, top_level)
+  @assert isbits(ast) "only bits (plain) types supported in from_expr()"
+  return [ast] 
+end
+
 @doc """
 The main ParallelIR function for processing some node in the AST.
 """
-function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
+function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
   if is(ast, nothing)
     return [nothing]
   end
-  if typeof(ast) == LambdaStaticData
-      ast = uncompressed_ast(ast)
-  end
   dprintln(2,"from_expr depth=",depth," ")
-  asttyp = typeof(ast)
-  if asttyp == Expr
-    dprint(2,"Expr ")
-    head = ast.head
-    args = ast.args
-    typ  = ast.typ
-    dprintln(2,head, " ", args)
-    if head == :lambda
-        ast = from_lambda(ast, depth, state)
-        dprintln(3,"After from_lambda = ", ast)
-        return [ast]
-    elseif head == :body
-        dprintln(3,"Processing body start")
-        args = from_exprs(args,depth+1,state)
-        dprintln(3,"Processing body end")
-    elseif head == :(=)
-        dprintln(3,"Before from_assignment typ is ", typ)
-        args, new_typ = from_assignment(args, depth, state)
-        if length(args) == 0
-          return []
-        end
-        if new_typ != nothing
-          typ = new_typ
-        end
-    elseif head == :return
-        args = from_exprs(args,depth,state)
-    elseif head == :call
-        args = from_call(args,depth,state)
-        # TODO: catch domain IR result here
-    elseif head == :call1
-        args = from_call(args, depth, state)
-        # TODO?: tuple
-    elseif head == :line
-        # remove line numbers
-        return []
-        # skip
-    elseif head == :mmap
-        head = :parfor
-        # Make sure we get what we expect from domain IR.
-        # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-        if(length(args) < 2)
-          throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
-        end
-        # first arg is input arrays, second arg is DomainLambda
-        domain_oprs = [DomainOperation(:mmap, args)]
-        retarr = Any[nothing]
-        mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state, retarr)
-        args = retarr
-        dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
-    elseif head == :mmap!
-        head = :parfor
-        # Make sure we get what we expect from domain IR.
-        # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-        if(length(args) < 2)
-          throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
-        end
-        # third arg is withIndices
-        with_indices = length(args) >= 3 ? args[3] : false
-        # first arg is input arrays, second arg is DomainLambda
-        domain_oprs = [DomainOperation(:mmap!, args)]
-        args = mk_parfor_args_from_mmap!(args[1], args[2], with_indices, domain_oprs, state)
-        dprintln(1,"switching to parfor node for mmap!")
-    elseif head == :reduce
-        head = :parfor
-        args = mk_parfor_args_from_reduce(args, state)
-        dprintln(1,"switching to parfor node for reduce")
-    elseif head == :copy
-        # turn array copy back to plain Julia call
-        head = :call
-        args = vcat(:copy, args)
-    elseif head == :arraysize
-        # turn array size back to plain Julia call
-        head = :call
-        args = vcat(TopNode(:arraysize), args)
-    elseif head == :alloc
-        # turn array alloc back to plain Julia ccall
-        head = :call
-        elemTyp = args[1]
-        sizes = args[2]
-        n = length(sizes)
-        assert(n >= 1 && n <= 3)
-        name = symbol(string("jl_alloc_array_", n, "d"))
-        appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
-        #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-        #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-        new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
-        realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
-        #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
-        for i=1:n
-          push!(realArgs, sizes[i])
-          push!(realArgs, 0)
-        end
-        args = vcat(TopNode(:ccall), realArgs)
-    elseif head == :stencil!
-        head = :parfor
-        ast = mk_parfor_args_from_stencil(typ, head, args, state)
-        dprintln(1,"switching to parfor node for stencil")
-        return ast
-    elseif head == :copyast
-        dprintln(2,"copyast type")
-        # skip
-    elseif head == :assertEqShape
-        if top_level && from_assertEqShape(ast, state)
-          return []
-        end
-    elseif head == :gotoifnot
-        assert(length(args) == 2)
-        args[1] = get_one(from_expr(args[1], depth, state, false))
-    elseif head == :new
-        args = from_exprs(args,depth,state)
-    elseif head == :tuple
-        for i = 1:length(args)
-          args[i] = get_one(from_expr(args[i], depth, state, false))
-        end
-    elseif head == :getindex
-        args = from_exprs(args,depth,state)
-    elseif head == :assert
-        args = from_exprs(args,depth,state)
-    elseif head == :boundscheck
-        # skip
-    elseif head == :meta
-        # skip
-    else
-        #println("from_expr: unknown Expr head :", head)
-        throw(string("from_expr: unknown Expr head :", head))
+  dprint(2,"Expr ")
+  head = ast.head
+  args = ast.args
+  typ  = ast.typ
+  dprintln(2,head, " ", args)
+  if head == :lambda
+    ast = from_lambda(ast, depth, state)
+    dprintln(3,"After from_lambda = ", ast)
+    return [ast]
+  elseif head == :body
+    dprintln(3,"Processing body start")
+    args = from_exprs(args,depth+1,state)
+    dprintln(3,"Processing body end")
+  elseif head == :(=)
+    dprintln(3,"Before from_assignment typ is ", typ)
+    args, new_typ = from_assignment(args, depth, state)
+    if length(args) == 0
+      return []
     end
-    ast = Expr(head, args...)
-    dprintln(3,"New expr type = ", typ, " ast = ", ast)
-    ast.typ = typ
-  elseif asttyp == Symbol
-    dprintln(2,"Symbol type")
-    #skip
-  elseif asttyp == SymbolNode # name, typ
-    dprintln(2,"SymbolNode type")
-    #skip
-  elseif asttyp == TopNode    # name
-    dprintln(2,"TopNode type")
-    #skip
-  elseif asttyp == GlobalRef
-    mod = ast.mod
-    name = ast.name
-   # typ = ast.typ  # FIXME: is this type needed?
-   typ = typeof(mod)
-    dprintln(2,"GlobalRef type ",typeof(mod))
-  elseif asttyp == QuoteNode
-    value = ast.value
-    #TODO: fields: value
-    dprintln(2,"QuoteNode type ",typeof(value))
-  elseif asttyp == LineNumberNode
+    if new_typ != nothing
+      typ = new_typ
+    end
+  elseif head == :return
+    args = from_exprs(args,depth,state)
+  elseif head == :call
+    args = from_call(args,depth,state)
+    # TODO: catch domain IR result here
+  elseif head == :call1
+    args = from_call(args, depth, state)
+    # TODO?: tuple
+  elseif head == :line
     # remove line numbers
     return []
-  elseif asttyp == LabelNode
-    #skip
-  elseif asttyp == GotoNode
-    #skip
-  elseif asttyp == DataType
-    #skip
-  elseif asttyp == ()
-    #skip
-  elseif asttyp == ASCIIString
-    #skip
-  elseif asttyp == NewvarNode
-    #skip
-  elseif asttyp == Void
-    #skip
-  elseif asttyp == Module
-    #skip
-  elseif isbits(asttyp)
-    #skip
-  elseif isbitstuple(ast)
-    #skip
+    # skip
+  elseif head == :mmap
+    head = :parfor
+    # Make sure we get what we expect from domain IR.
+    # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+    if(length(args) < 2)
+      throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
+    end
+    # first arg is input arrays, second arg is DomainLambda
+    domain_oprs = [DomainOperation(:mmap, args)]
+    retarr = Any[nothing]
+    mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state, retarr)
+    args = retarr
+    dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
+  elseif head == :mmap!
+    head = :parfor
+    # Make sure we get what we expect from domain IR.
+    # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+    if(length(args) < 2)
+      throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
+    end
+    # third arg is withIndices
+    with_indices = length(args) >= 3 ? args[3] : false
+    # first arg is input arrays, second arg is DomainLambda
+    domain_oprs = [DomainOperation(:mmap!, args)]
+    args = mk_parfor_args_from_mmap!(args[1], args[2], with_indices, domain_oprs, state)
+    dprintln(1,"switching to parfor node for mmap!")
+  elseif head == :reduce
+    head = :parfor
+    args = mk_parfor_args_from_reduce(args, state)
+    dprintln(1,"switching to parfor node for reduce")
+  elseif head == :copy
+    # turn array copy back to plain Julia call
+    head = :call
+    args = vcat(:copy, args)
+  elseif head == :arraysize
+    # turn array size back to plain Julia call
+    head = :call
+    args = vcat(TopNode(:arraysize), args)
+  elseif head == :alloc
+    # turn array alloc back to plain Julia ccall
+    head = :call
+    elemTyp = args[1]
+    sizes = args[2]
+    n = length(sizes)
+    assert(n >= 1 && n <= 3)
+    name = symbol(string("jl_alloc_array_", n, "d"))
+    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+    #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
+    #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
+    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+    realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
+    #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
+    for i=1:n
+      push!(realArgs, sizes[i])
+      push!(realArgs, 0)
+    end
+    args = vcat(TopNode(:ccall), realArgs)
+  elseif head == :stencil!
+    head = :parfor
+    ast = mk_parfor_args_from_stencil(typ, head, args, state)
+    dprintln(1,"switching to parfor node for stencil")
+    return ast
+  elseif head == :copyast
+    dprintln(2,"copyast type")
+    # skip
+  elseif head == :assertEqShape
+    if top_level && from_assertEqShape(ast, state)
+      return []
+    end
+  elseif head == :gotoifnot
+    assert(length(args) == 2)
+    args[1] = get_one(from_expr(args[1], depth, state, false))
+  elseif head == :new
+    args = from_exprs(args,depth,state)
+  elseif head == :tuple
+    for i = 1:length(args)
+      args[i] = get_one(from_expr(args[i], depth, state, false))
+    end
+  elseif head == :getindex
+    args = from_exprs(args,depth,state)
+  elseif head == :assert
+    args = from_exprs(args,depth,state)
+  elseif head == :boundscheck
+    # skip
+  elseif head == :meta
+    # skip
   else
-    throw(string("from_expr: unknown AST (", typeof(ast), ",", ast, ")"))
+    #println("from_expr: unknown Expr head :", head)
+    throw(string("from_expr: unknown Expr head :", head))
   end
+  ast = Expr(head, args...)
+  dprintln(3,"New expr type = ", typ, " ast = ", ast)
+  ast.typ = typ
   return [ast]
 end
 
