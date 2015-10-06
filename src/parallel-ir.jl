@@ -1163,16 +1163,10 @@ end
 @doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
-  # Make sure we get what we expect from domain IR.
-  # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-  if(length(input_args) < 2)
-    throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(input_args)))
-  end
+function mk_parfor_args_from_mmap!(input_arrays::Array{Any,1}, dl::DomainLambda, with_indices, domain_oprs, state)
 
   # First arg is an array of input arrays to the mmap!
-  input_arrays = input_args[1]
-  len_input_arrays = length(input_args[1])
+  len_input_arrays = length(input_arrays)
   dprintln(1,"Number of input arrays: ", len_input_arrays)
   dprintln(2,"input arrays: ", input_arrays)
   assert(len_input_arrays > 0)
@@ -1183,18 +1177,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
     push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
   end
 
-  # Second arg is a DomainLambda
-  ftype = typeof(input_args[2])
-  dprintln(1,"mk_parfor_args_from_mmap! function = ",input_args[2])
-  if(ftype != DomainLambda)
-    throw(string("mk_parfor_args_from_mmap! second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
-  end
 
-  # third arg is withIndices
-  with_indices = length(input_args) >= 3 ? input_args[3] : false
-
-  # Make the DomainLambda easier to access
-  dl::DomainLambda = input_args[2]
   dprintln(3,"dl = ", dl)
   dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
 
@@ -1350,7 +1333,7 @@ function mk_parfor_args_from_mmap!(input_args::Array{Any,1}, state)
       loopNests,
       PIRReduction[],
       post_statements,
-      [DomainOperation(:mmap!, input_args)],
+      domain_oprs,
       state.top_level_number,
       rws,
       unique_node_id,
@@ -6995,7 +6978,16 @@ function from_expr(ast :: ANY, depth, state :: expr_state, top_level)
         dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
     elseif head == :mmap!
         head = :parfor
-        args = mk_parfor_args_from_mmap!(args, state)
+        # Make sure we get what we expect from domain IR.
+        # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+        if(length(args) < 2)
+          throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
+        end
+        # third arg is withIndices
+        with_indices = length(args) >= 3 ? args[3] : false
+        # first arg is input arrays, second arg is DomainLambda
+        domain_oprs = [DomainOperation(:mmap!, args)]
+        args = mk_parfor_args_from_mmap!(args[1], args[2], with_indices, domain_oprs, state)
         dprintln(1,"switching to parfor node for mmap!")
     elseif head == :reduce
         head = :parfor
