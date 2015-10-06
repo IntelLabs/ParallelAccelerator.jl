@@ -553,7 +553,6 @@ end
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: SymbolNode, state :: expr_state)
-  assert(typeof(array) == SymbolNode)
   return getArrayElemType(array.typ)
 end
 
@@ -569,7 +568,6 @@ end
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: SymbolNode, state :: expr_state)
-  assert(typeof(array) == SymbolNode)
   assert(array.typ.name == Array.name)
   array.typ.parameters[2]
 end
@@ -768,33 +766,41 @@ end
 In various places we need a SymGen type which is the union of Symbol and GenSym.
 This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.
 """
+function toSymGen(x :: Symbol)
+  return x
+end
+
+function toSymGen(x :: SymbolNode)
+  return x.name
+end
+
+function toSymGen(x :: GenSym)
+  return x
+end
+
 function toSymGen(x)
   xtyp = typeof(x)
-  if xtyp == Symbol
-    return x
-  elseif xtyp == SymbolNode
-    return x.name
-  elseif xtyp == GenSym
-    return x
-  else
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
-  end
+  throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
 end
 
 @doc """
 Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
 """
+function toSymNodeGen(x :: Symbol, typ)
+  return SymbolNode(x, typ)
+end
+
+function toSymNodeGen(x :: SymbolNode, typ)
+  return x
+end
+
+function toSymNodeGen(x :: GenSym, typ)
+  return x
+end
+
 function toSymNodeGen(x, typ)
   xtyp = typeof(x)
-  if xtyp == Symbol
-    return SymbolNode(x, typ)
-  elseif xtyp == SymbolNode
-    return x
-  elseif xtyp == GenSym
-    return x
-  else
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
-  end
+  throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
 end
 
 @doc """
@@ -1689,25 +1695,33 @@ end
 @doc """
 Is a node an assignment expression node.
 """
+function isAssignmentNode(node :: Expr)
+  return node.head == :(=)
+end
+
 function isAssignmentNode(node)
-  return typeof(node) == Expr && node.head == :(=)
+  return false
 end
 
 @doc """
 Is a node a loophead expression node (a form of assignment).
 """
+function isLoopheadNode(node :: Expr)
+  return node.head == :loophead
+end
+
 function isLoopheadNode(node)
-  return typeof(node) == Expr && node.head == :loophead
+  return false
 end
 
 @doc """
 Is this a parfor node not part of an assignment statement.
 """
+function isBareParfor(node :: Expr)
+  return node.head == :parfor
+end
+
 function isBareParfor(node)
-  if(typeof(node) == Expr && node.head == :parfor)
-      dprintln(4,"Found a bare parfor.")
-      return true
-  end
   return false
 end
 
@@ -1838,20 +1852,23 @@ end
 Return an expression which creates a tuple.
 """
 function mk_tuple_expr(tuple_fields, typ)
-    # Tuples are formed with a call to :tuple.
-    TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
+  # Tuples are formed with a call to :tuple.
+  TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
 end
 
 @doc """
 Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
 """
+function nameToSymbolNode(name :: Symbol, sym_to_type)
+  return SymbolNode(name, sym_to_type[name])
+end
+
+function nameToSymbolNode(name :: GenSym, sym_to_type)
+  return name
+end
+
 function nameToSymbolNode(name, sym_to_type)
-  if typeof(name) == Symbol
-    return SymbolNode(name, sym_to_type[name])
-  else
-    assert(typeof(name) == GenSym)
-    return name
-  end
+  throw(string("Unknown name type ", typeof(name), " passed to nameToSymbolNode."))
 end
 
 function getAliasMap(loweredAliasMap, sym)
@@ -1971,33 +1988,39 @@ function getAllAliases(input :: Set{SymGen}, aliases :: Dict{SymGen, SymGen})
   return out
 end
 
+function isAllocation(expr :: Expr)
+  return expr.head == :call && 
+         expr.args[1] == TopNode(:ccall) && 
+        (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d))
+end
+
 function isAllocation(expr)
-  if typeof(expr) == Expr && expr.head == :call && expr.args[1] == TopNode(:ccall) && (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d))
-    return true
-  end
   return false
 end
 
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
-function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
+function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
   dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
-  if typeof(x) == Expr
-    dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
-    if x.head == symbol('=')
-      assert(typeof(x.args[1]) == SymbolNode)
-      lhs = x.args[1]
-      rhs = x.args[2]
-      if isAllocation(rhs)
-        dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
-        if !in(lhs.name, all_aliased_outputs)
-          dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
-          return true
-        end
+  dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
+  if x.head == symbol('=')
+    assert(typeof(x.args[1]) == SymbolNode)
+    lhs = x.args[1]
+    rhs = x.args[2]
+    if isAllocation(rhs)
+      dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
+      if !in(lhs.name, all_aliased_outputs)
+        dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
+        return true
       end
     end
   end
 
+  return false
+end
+
+function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
+  dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
   return false
 end
 
@@ -2043,20 +2066,22 @@ end
 @doc """
 Is a node a call to arrayset.
 """
+function isArraysetCall(x :: Expr)
+  return x.head == :call && isArrayset(x.args[1])
+end
+
 function isArraysetCall(x)
-  if typeof(x) == Expr && x.head == :call && isArrayset(x.args[1])
-    return true
-  end
   return false
 end
 
 @doc """
 Is a node a call to arrayref.
 """
+function isArrayrefCall(x :: Expr)
+  return x.head == :call && isArrayref(x.args[1])
+end
+
 function isArrayrefCall(x)
-  if typeof(x) == Expr && x.head == :call && isArrayref(x.args[1])
-    return true
-  end
   return false
 end
 
@@ -2318,8 +2343,7 @@ Check if an assignement is a fusion assignment.
 In regular assignments, there are only two args, the left and right hand sides.
 In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.
 """
-function isFusionAssignment(x)
-  assert(typeof(x) == Expr)
+function isFusionAssignment(x :: Expr)
   if x.head != symbol('=')
     return false
   elseif length(x.args) <= 2
@@ -2831,31 +2855,40 @@ end
 @doc """
 Returns true if the incoming AST node can be interpreted as a Symbol.
 """
+function hasSymbol(ssn :: Symbol)
+  return true
+end
+
+function hasSymbol(ssn :: SymbolNode)
+  return true
+end
+
+function hasSymbol(ssn :: Expr)
+  return ssn.head == :(::)
+end
+
 function hasSymbol(ssn)
-  stype = typeof(ssn)
-  if stype == Symbol
-    return true
-  elseif stype == SymbolNode
-    return true
-  elseif stype == Expr && ssn.head == :(::)
-    return true
-  else
-    return false
-  end
+  return false
 end
 
 @doc """
 Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.
 """
+function getSName(ssn :: Symbol)
+  return ssn
+end
+
+function getSName(ssn :: SymbolNode)
+  return ssn.name
+end
+
+function getSName(ssn :: Expr)
+  assert(ssn.head == :(::))
+  return ssn.args[1]
+end
+
 function getSName(ssn)
   stype = typeof(ssn)
-  if stype == Symbol
-    return ssn
-  elseif stype == SymbolNode
-    return ssn.name
-  elseif stype == Expr && ssn.head == :(::)
-    return ssn.args[1]
-  end
 
   dprintln(0, "getSName ssn = ", ssn, " stype = ", stype)
   if stype == Expr
@@ -5080,8 +5113,7 @@ end
 @doc """
 Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 """
-function printLambda(dlvl, node)
-  assert(typeof(node) == Expr)
+function printLambda(dlvl, node :: Expr)
   assert(node.head == :lambda)
   dprintln(dlvl, "Lambda:")
   dprintln(dlvl, "Input parameters: ", node.args[1])
@@ -5094,9 +5126,9 @@ function printLambda(dlvl, node)
   assert(body.head == :body)
   dprintln(dlvl, "typeof(body): ", body.typ)
   printBody(dlvl, body.args)
-#  if body.typ == Any
-#    throw(string("Body type should never be Any."))
-#  end
+  if body.typ == Any
+    dprintln(1,"Body type is Any.")
+  end
 end
 
 @doc """
@@ -5237,40 +5269,40 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node)
-  ntype = typeof(node)
+function hasNoSideEffects(node :: Union{Symbol, SymbolNode, LambdaStaticData, Number})
+  return true
+end
 
-  if ntype == Expr
-    if node.head == :ccall
-      func = node.args[1]
-      if func == QuoteNode(:jl_alloc_array_1d) ||
-         func == QuoteNode(:jl_alloc_array_2d)
-        return true
-      end
-    elseif node.head == :call1
-      func = node.args[1]
-      if func == TopNode(:apply_type) ||
-         func == TopNode(:tuple)
-        return true
-      end
-    elseif node.head == :lambda
+function hasNoSideEffects(node)
+  return false
+end
+
+function hasNoSideEffects(node :: Expr)
+  if node.head == :ccall
+    func = node.args[1]
+    if func == QuoteNode(:jl_alloc_array_1d) ||
+       func == QuoteNode(:jl_alloc_array_2d)
       return true
-    elseif node.head == :call
-      func = node.args[1]
-      if func == TopNode(:box) ||
-         func == TopNode(:tuple) ||
-         func == TopNode(:getindex_bool_1d) ||
-         func == :getindex
-        return true
-      end
     end
-  elseif ntype == Symbol || ntype == SymbolNode || ntype == LambdaStaticData
+  elseif node.head == :call1
+    func = node.args[1]
+    if func == TopNode(:apply_type) ||
+       func == TopNode(:tuple)
+      return true
+    end
+  elseif node.head == :lambda
     return true
-  elseif ntype == Int64 || ntype == Int32 || ntype == Float64 || ntype == Float32
-    return true
+  elseif node.head == :call
+    func = node.args[1]
+    if func == TopNode(:box) ||
+       func == TopNode(:tuple) ||
+       func == TopNode(:getindex_bool_1d) ||
+       func == :getindex
+      return true
+    end
   end
 
-  false
+  return false
 end
 
 @doc """
@@ -5440,17 +5472,21 @@ end
 If we have the type, convert a Symbol to SymbolNode.
 If we have a GenSym then we have to keep it.
 """
+function toSNGen(x :: Symbol, typ)
+  return SymbolNode(x, typ)
+end
+
+function toSNGen(x :: SymbolNode, typ)
+  return x
+end
+
+function toSNGen(x :: GenSym, typ)
+  return x
+end
+
 function toSNGen(x, typ)
   xtyp = typeof(x)
-  if xtyp == Symbol
-    return SymbolNode(x, typ)
-  elseif xtyp == SymbolNode
-    return x
-  elseif xtyp == GenSym
-    return x
-  else
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
-  end
+  throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
 end
 
 @doc """
@@ -6435,21 +6471,23 @@ end
 Returns true if the given "ast" node is a DomainIR operation.
 """
 function isDomainNode(ast)
-  asttyp = typeof(ast)
-  if asttyp == Expr
-    head = ast.head
-    args = ast.args
+  return false
+end
 
-    if head == :mmap || head == :mmap! || head == :reduce || head == :stencil!
+function isDomainNode(ast :: Expr)
+  head = ast.head
+  args = ast.args
+
+  if head == :mmap || head == :mmap! || head == :reduce || head == :stencil!
+    return true
+  end
+ 
+  for i = 1:length(args)
+    if isDomainNode(args[i])
       return true
     end
- 
-    for i = 1:length(args)
-      if isDomainNode(args[i])
-        return true
-      end
-    end
-  end 
+  end
+
   return false
 end
 
@@ -6457,15 +6495,16 @@ end
 Returns true if the given AST "node" must remain the last statement in a basic block.
 This is true if the node is a GotoNode or a :gotoifnot Expr.
 """
+function mustRemainLastStatementInBlock(node :: GotoNode)
+  return true
+end
+
 function mustRemainLastStatementInBlock(node)
-  if typeof(node) == GotoNode
-    return true
-  elseif typeof(node) == Expr && node.head == :gotoifnot
-    return true
-  elseif typeof(node) == Expr && node.head == :return
-    return true
-  end
   return false
+end
+
+function mustRemainLastStatementInBlock(node :: Expr)
+  return node.head == :gotoifnot  ||  node.head == :return
 end
 
 @doc """
