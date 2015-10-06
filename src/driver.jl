@@ -85,12 +85,10 @@ end
 
 function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   pir_start = time_ns()
-  if DEBUG_LVL >= 5
-    code = @profile ParallelIR.from_expr(string(func.name), ast)
-    Profile.print()
-  else
-    code = ParallelIR.from_expr(string(func.name), ast)
-  end
+# uncomment these 2 lines for ParallelIR profiling
+#  code = @profile ParallelIR.from_expr(string(func.name), ast)
+#  Profile.print()
+  code = ParallelIR.from_expr(string(func.name), ast)
   pir_time = time_ns() - pir_start
   dprintln(3, "parallel code = ", code)
   dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
