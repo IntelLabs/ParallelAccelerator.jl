@@ -5,6 +5,7 @@ module ParallelAccelerator
 export decompose, accelerate, Optimize
 export cartesianarray, runStencil, @runStencil
 
+using CompilerTools
 using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
@@ -162,5 +163,6 @@ function __init__()
 end
 
 export @acc
+export CompilerTools
 
 end
