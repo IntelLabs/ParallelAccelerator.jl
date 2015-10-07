@@ -846,7 +846,7 @@ function inline_select(env, state, arr)
 end
 
 # translate a function call to domain IR if it matches
-function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args)
+function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
   local env_ = nextEnv(env)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
@@ -1224,26 +1224,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mmapRemoveDupArg!(mk_mmap!(args, domF))
     expr.typ = typ
   elseif is(fun, :fill!)
-    args = normalize_args(state, env_, args)
-    assert(length(args) == 2)
-    arr = args[1]
-    ival = args[2]
-    typs = Type[typeOfOpr(state, arr)]
-    linfo = LambdaInfo()
-    if isa(ival, GenSym)
-      tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-      emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
-      ival = tmpv
-    end
-    if isa(ival, SymbolNode)
-      def = getVarDef(ival.name, state.linfo)
-      flag = def == nothing ? 0 : def.desc
-      addEscapingVariable(ival.name, ival.typ, flag, linfo)
-    end
-    f(linfo,as) = [ Expr(:tuple, ival) ]
-    domF = DomainLambda(typs, typs, f, linfo)
-    expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
-    expr.typ = typ
+    return translate_call_fill!(state, env_, typ, args)
   elseif is(fun, :_getindex!) # see if we can turn getindex! back into getindex
     if isa(args[1], Expr) && args[1].head == :call && args[1].args[1] == TopNode(:ccall) && 
       (args[1].args[2] == :jl_new_array ||
@@ -1252,21 +1233,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     end
   elseif is(fun, :sum) || is(fun, :prod)
     args = normalize_args(state, env_, args)
-    if length(args) == 1
-      arr = args[1]
-      # element type is the same as typ
-      etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
-      neutral = is(fun, :sum) ? 0 : 1
-      fun = is(fun, :sum) ? :+ : :*
-      typs = Type[ etyp for arg in args] # just use etyp for input element types
-      opr, reorder = specializeOp(mapOps[fun], typs)
-      # ignore reorder since it is always id function
-      f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
-      domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
-      # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
-      arr = inline_select(env, state, arr)
-      expr = mk_reduce(convert(etyp, neutral), arr, domF)
-      expr.typ = typ
+    if length(args)==1
+      return translate_call_reduce(state, env_, typ, fun, args)
     end
   elseif in(fun, ignoreSet)
   else
@@ -1300,6 +1268,48 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     end
     expr = mk_expr(typ, head, oldfun, oldargs...)
   end
+  return expr
+end
+
+function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
+  arr = args[1]
+  # element type is the same as typ
+  etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
+  neutral = is(fun, :sum) ? 0 : 1
+  fun = is(fun, :sum) ? :+ : :*
+  typs = Type[ etyp for arg in args] # just use etyp for input element types
+  opr, reorder = specializeOp(mapOps[fun], typs)
+  # ignore reorder since it is always id function
+  f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
+  domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
+  # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
+  arr = inline_select(env, state, arr)
+  expr = mk_reduce(convert(etyp, neutral), arr, domF)
+  expr.typ = typ
+  return expr
+end
+
+function translate_call_fill!(state, env, typ, args::Array{Any,1})
+  args = normalize_args(state, env, args)
+  @assert length(args)==2 "fill! should have 2 arguments"
+  arr = args[1]
+  ival = args[2]
+  typs = Type[typeOfOpr(state, arr)]
+  linfo = LambdaInfo()
+  if isa(ival, GenSym)
+    tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+    emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
+    ival = tmpv
+  end
+  if isa(ival, SymbolNode)
+    def = getVarDef(ival.name, state.linfo)
+    flag = def == nothing ? 0 : def.desc
+    addEscapingVariable(ival.name, ival.typ, flag, linfo)
+  end
+  f(linfo,as) = [ Expr(:tuple, ival) ]
+  domF = DomainLambda(typs, typs, f, linfo)
+  expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
+  expr.typ = typ
   return expr
 end
 
