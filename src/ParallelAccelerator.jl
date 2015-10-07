@@ -135,7 +135,7 @@ include("callgraph.jl")
 include("comprehension.jl")
 include("driver.jl")
 
-#importall .API
+importall .API
 using .StencilAPI
 using .Driver
 

@@ -2,7 +2,7 @@ module Comprehension
 
 export @comprehend
 
-using CompilerTools.AstWalker
+import CompilerTools
 
 @doc """
 Translate an ast whose head is :comprehension into equivalent code that uses cartesianarray call.
