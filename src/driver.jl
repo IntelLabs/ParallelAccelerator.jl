@@ -64,7 +64,7 @@ function noPrecompile(x)
   global no_precompile = x;
 end
 
-alreadyOptimized = Dict{Any,Any}()
+alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
 
 @doc """
 Pass for comprehension to cartesianarray translation.
@@ -227,7 +227,7 @@ end
 
 # Converts a given function and signature to use domain IR and parallel IR, and
 # remember it so that it won't be translated again.
-function accelerate(func::Function, signature::ANY, level = TOPLEVEL)
+function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   pse_mode = ParallelAccelerator.getPseMode() 
   if pse_mode == ParallelAccelerator.OFF_MODE
     return func
@@ -243,18 +243,22 @@ function accelerate(func::Function, signature::ANY, level = TOPLEVEL)
     error("Method for ", func, " with signature ", signature, " is not found")
   end
 
-  def = m[1].func.code
+  def::LambdaStaticData = m[1].func.code
   cur_module = def.module
   func_ref = GlobalRef(cur_module, symbol(string(func)))
 
+  local out::Expr
   ast = code_typed(func, signature)[1]
   global alreadyOptimized 
   if !haskey(alreadyOptimized, (func, signature))
-    ast = toDomainIR(func_ref, ast, signature)
-    ast = toParallelIR(func_ref, ast, signature)
-    alreadyOptimized[(func, signature)] = ast
+    dir_ast::Expr = toDomainIR(func_ref, ast, signature)
+    pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
+    alreadyOptimized[(func, signature)] = pir_ast
+    out = pir_ast
+  else
+    out = ast
   end
-    
+
   #if use_extract_static_call_graph != 0
   #  callgraph = extractStaticCallGraph(func, signature)
   #  if DEBUG_LVL >= 3
@@ -265,7 +269,7 @@ function accelerate(func::Function, signature::ANY, level = TOPLEVEL)
   #end
 
   if level & TOPLEVEL > 0
-    return toCGen(func_ref, ast, signature)
+    return toCGen(func_ref, out, signature)
   else
     return nothing
   end
