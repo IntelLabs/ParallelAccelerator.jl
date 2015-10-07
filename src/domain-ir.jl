@@ -593,7 +593,7 @@ end
 # unlike from_body, from_exprs do not emit the input expressions
 # as statements to the state, while still allowing side effects
 # of emitting statements durinfg the translation of these expressions.
-function from_exprs(state, env, ast::Array{Any,1})
+function from_exprs(state::IRState, env::IREnv, ast::Array{Any,1})
   local env_ = nextEnv(env)
   local len  = length(ast)
   local body = Array(Any, len)
@@ -706,12 +706,12 @@ function from_assignment(state, env, expr::Any)
   return mk_expr(typ, head, lhs, rhs)
 end
 
-function from_call(state, env, expr::Expr)
+function from_call(state::IRState, env::IREnv, expr::Expr)
   local env_ = nextEnv(env)
   local head = expr.head
   local ast = expr.args
   local typ = expr.typ
-  assert(length(ast) >= 1)
+  @assert length(ast) >= 1 "call args cannot be empty"
   local fun  = ast[1]
   local args = ast[2:end]
   dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
