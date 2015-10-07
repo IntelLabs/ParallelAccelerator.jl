@@ -147,6 +147,7 @@ function __init__()
     package_root = getPackageRoot()
     @linux_only ld_env_key = "LD_LIBRARY_PATH"
     @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
+    @windows_only ld_env_key = "PATH"
     prefix = ""
     # See if the LD_LIBRARY_PATH environment varible is already set.
     if haskey(ENV, ld_env_key)
