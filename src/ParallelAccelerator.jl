@@ -122,7 +122,7 @@ function dprintln(level, msgs...)
 end
 
 # a hack to make accelerate function and DomainIR mutually recursive.
-_accelerate(function_name, signature) = accelerate(function_name, signature, level = 0)
+_accelerate(function_name, signature) = accelerate(function_name, signature, 0)
 
 include("api.jl")
 include("stencil-api.jl")

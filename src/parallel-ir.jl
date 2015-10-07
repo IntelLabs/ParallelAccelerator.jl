@@ -1169,7 +1169,7 @@ end
 @doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap!(input_arrays::Array{Any,1}, dl::DomainLambda, with_indices, domain_oprs, state)
+function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_indices, domain_oprs, state)
 
   # First arg is an array of input arrays to the mmap!
   len_input_arrays = length(input_arrays)
@@ -1374,7 +1374,7 @@ end
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap(input_arrays::Array{Any,1}, dl::DomainLambda, domain_oprs, state, retarr) 
+function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_oprs, state, retarr) 
 
   len_input_arrays = length(input_arrays)
   dprintln(2,"Number of input arrays: ", len_input_arrays)
