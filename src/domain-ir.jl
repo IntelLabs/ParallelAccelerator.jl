@@ -593,7 +593,7 @@ end
 # unlike from_body, from_exprs do not emit the input expressions
 # as statements to the state, while still allowing side effects
 # of emitting statements durinfg the translation of these expressions.
-function from_exprs(state, env, ast::Array{Any,1})
+function from_exprs(state::IRState, env::IREnv, ast::Array{Any,1})
   local env_ = nextEnv(env)
   local len  = length(ast)
   local body = Array(Any, len)
@@ -706,12 +706,12 @@ function from_assignment(state, env, expr::Any)
   return mk_expr(typ, head, lhs, rhs)
 end
 
-function from_call(state, env, expr::Expr)
+function from_call(state::IRState, env::IREnv, expr::Expr)
   local env_ = nextEnv(env)
   local head = expr.head
   local ast = expr.args
   local typ = expr.typ
-  assert(length(ast) >= 1)
+  @assert length(ast) >= 1 "call args cannot be empty"
   local fun  = ast[1]
   local args = ast[2:end]
   dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
@@ -724,11 +724,12 @@ end
 
 # turn Exprs in args into variable names, and put their definition into state
 # anything of void type in the argument is omitted in return value.
-function normalize_args(state::IRState, env, args)
-  args = from_exprs(state, env, args)
+function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
+  in_args::Array{Any,1} = from_exprs(state, env, args)
+  local out_args = Array(Any,length(in_args))
   j = 0
-  for i = 1:length(args)
-    local arg = args[i]
+  for i = 1:length(in_args)
+    local arg = in_args[i]
     if isa(arg, Expr) && arg.typ == Void
       # do not produce new assignment for Void values
       dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
@@ -740,13 +741,13 @@ function normalize_args(state::IRState, env, args)
       updateDef(state, newVar, arg)
       emitStmt(state, mk_expr(typ, :(=), newVar, arg))
       j = j + 1
-      args[j] = newVar
+      out_args[j] = newVar
     else
       j = j + 1
-      args[j] = args[i]
+      out_args[j] = in_args[i]
     end
   end
-  return args[1:j]
+  return out_args[1:j]
 end
 
 # Fix Julia inconsistencies in call before we pattern match
@@ -845,7 +846,7 @@ function inline_select(env, state, arr)
 end
 
 # translate a function call to domain IR if it matches
-function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args)
+function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
   local env_ = nextEnv(env)
   expr = nothing
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
@@ -891,176 +892,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mmapRemoveDupArg!(mk_mmap(args, domF))
     expr.typ = typ
   elseif is(fun, :cartesianarray)
-    # equivalent to creating an array first, then map! with indices.
-    dprintln(env, "got cartesianarray args=", args)
-    # need to retrieve map lambda from inits, since it is already moved out.
-    nargs = length(args)
-    args = normalize_args(state, env_, args)
-    assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
-    local dimExp = args[end]     # last argument is the dimension tuple
-    assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
-    dimExp = lookupConstDefForArg(state, dimExp)
-    dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
-    assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
-    dimExp = dimExp.args[2:end]
-    ndim = length(dimExp)   # num of dimensions
-    argstyp = Any[ Int for i in 1:ndim ] 
-    local mapExp = args[1]     # first argument is the lambda
-    #println("mapExp ", mapExp)
-    #dump(mapExp,1000)
-    if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
-      mapExp = mapExp.name
-    end
-    if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
-
-      if(isdefined(ParallelAccelerator, mapExp))
-        m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
-      else
-        m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
-      end
-      dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
-      assert(length(m) > 0)
-      mapExp = m[1].func.code
-    elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
-      mapExp = lookupConstDefForArg(state, mapExp)
-    end
-    @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
-    # call typeinf since Julia doesn't do it for us
-    # and we can figure out the element type from mapExp's return type
-    (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
-    # Element type is specified as an argument to cartesianarray
-    # This allows us to cast the return type, but inference still needs to be
-    # called on the mapExp ast.
-    # These types are sometimes GlobalRefs, and must be evaled into Type
-    etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
-    dprintln(env, "etys = ", etys)
-    @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
-    ast = from_expr("anonymous", env.cur_module, ast)
-    # dprintln(env, "ast = ", ast)
-    # create tmp arrays to store results
-    arrtyps = Type[ Array{t, ndim} for t in etys ]
-    tmpNodes = Array(GenSym, length(arrtyps))
-    # allocate the tmp array
-    for i = 1:length(arrtyps)
-      arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
-      tmparr = addGenSym(arrtyps[i], state.linfo)
-      updateDef(state, tmparr, arrdef)
-      emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
-      tmpNodes[i] = tmparr
-    end
-    # produce a DomainLambda
-    body = ast.args[3]
-    params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
-    # dprintln(env, "params = ", params)
-    #locals = metaToVarDef(ast.args[2][2])
-    #escapes = metaToVarDef(ast.args[2][3])
-    linfo = lambdaExprToLambdaInfo(ast)
-    assert(isa(body, Expr) && is(body.head, :body))
-    # fix the return in body
-    lastExp = body.args[end]
-    assert(isa(lastExp, Expr) && is(lastExp.head, :return))
-    # dprintln(env, "fixReturn: lastExp = ", lastExp)
-    args1 = lastExp.args[1]
-    args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
-    # lastExp may be returning a tuple
-    if istupletyp(args1_typ)
-      # create tmp variables to store results
-      local tvar = args1
-      local typs = args1_typ.parameters
-      local nvar = length(typs)
-      local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
-      local retExprs = Array(Expr, length(retNodes))
-      for i in 1:length(retNodes)
-        n = retNodes[i]
-        t = typs[i]
-        retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
-      end
-      lastExp.head = retExprs[1].head
-      lastExp.args = retExprs[1].args
-      lastExp.typ  = retExprs[1].typ
-      for i = 2:length(retExprs)
-        push!(body.args, retExprs[i])
-      end
-      push!(body.args, mk_expr(typs, :tuple, retNodes...))
-    else
-      lastExp.head = :tuple
-    end
-    function bodyF(plinfo, args)
-      #bt = backtrace() ;
-      #s = sprint(io->Base.show_backtrace(io, bt))
-      #dprintln(3, "bodyF backtrace ")
-      #dprintln(3, s)
-      ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
-      #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
-      ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
-      # dprintln(2,"cartesianarray idict = ", ldict)
-      ret = replaceExprWithDict(body, ldict).args
-      #dprintln(2,"cartesianarray ret = ", ret)
-      ret
-    end
-    domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
-    expr = mk_mmap!(tmpNodes, domF, true)
-    expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
+    return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
-    # we handle the following runStencil form:
-    #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
-    # where kernelFunc takes the same number of bufs as inputs
-    # and returns the same number of them, but in different order,
-    # as a rotation specification for iterative stencils.
-    dprintln(env,"got runStencil, args=", args)
-    # need to retrieve stencil kernel lambda from inits, since it is already moved out.
-    local nargs = length(args)
-    args = normalize_args(state, env_, args)
-    assert(nargs >= 3) # needs at least a function, and two buffers
-    local iterations = 1               # default
-    local borderExp = nothing          # default
-    local kernelExp = args[1]
-    local bufs = Any[]
-    local bufstyp = Any[]
-    local i
-    for i = 2:nargs
-      oprTyp = typeOfOpr(state, args[i])
-      if isarray(oprTyp)
-        push!(bufs, args[i])
-        push!(bufstyp, oprTyp)
-      else
-        break
-      end
-    end
-    if i == nargs
-      if is(typeOfOpr(state, args[i]), Int)
-        iterations = args[i]
-      else
-        borderExp = args[i]
-      end
-    elseif i + 1 <= nargs
-      iterations = args[i]
-      borderExp = args[i+1]
-    end
-    assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
-    kernelExp = lookupConstDefForArg(state, kernelExp)
-    dprintln(env, "stencil kernelExp = ", kernelExp)
-    dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
-    assert(isa(kernelExp, LambdaStaticData))
-    # TODO: better infer type here
-    (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
-    #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
-    dprintln(env, "type inferred AST = ", ast)
-    kernelExp = from_expr(state, env_, ast)
-    if is(borderExp, nothing)
-      borderExp = QuoteNode(:oob_skip)
-    else
-      borderExp = lookupConstDefForArg(state, borderExp)
-    end
-    dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
-    local stat, kernelF
-    stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
-    dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
-    expr = mk_stencil!(stat, iterations, bufs, kernelF)
-    #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
-    # force typ to be Void, which means stencil doesn't return anything
-    typ = Void
-    expr.typ = typ
+    return translate_call_runstencil(state,env_,args)
   elseif is(fun, :copy)
     args = normalize_args(state, env_, args[1:1])
     dprintln(env,"got copy, args=", args)
@@ -1184,65 +1018,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
       expr.typ = typ
     end
   elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
-    is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray) 
-    etyp = elmTypOf(typ)
-    args = normalize_args(state, env_, args)
-    arr2 = nothing
-    if is(fun, :assign_bool_vector_1d!) # must has a mattching getindex_bool_1d
-      arr2 = args[2]
-      if isa(arr2, SymbolNode)
-        def = lookupConstDefForArg(state, arr2)
-        if isa(def, Expr) && is(def.head, :call) && def.args[1] == TopNode(:getindex_bool_1d) 
-          #dprintln(env, "matching :getindex_bool_1d")
-          b1 = lookupConstDefForArg(state, def.args[3])
-          b2 = lookupConstDefForArg(state, args[3])
-          if b1 == b2 # got a match?
-            arr2 = def.args[2]
-          end
-        end
-      end
-    end
-    if is(arr2, args[2]) 
-      error("expect :assign_bool_vector_1d! to be used with a matching :getindex_bool_1d")
-    elseif !is(arr2, nothing)
-      args[2] = arr2
-    end
-    assert(length(args) == 3)
-    typs = Type[typeOfOpr(state, a) for a in args]
-    (nonarrays, args, typs, f) = specialize(state, args, typs, 
-    as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    linfo = LambdaInfo()
-    for i=1:length(nonarrays)
-      # At this point, they are either symbol nodes, or constants
-      if isa(nonarrays[i], SymbolNode)
-        addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
-      end
-    end
-    domF = DomainLambda(elmtyps, Type[etyp], f, linfo)
-    expr = mmapRemoveDupArg!(mk_mmap!(args, domF))
-    expr.typ = typ
+    is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
+    return translate_call_assign_bool(state,env_,typ,fun, args) 
   elseif is(fun, :fill!)
-    args = normalize_args(state, env_, args)
-    assert(length(args) == 2)
-    arr = args[1]
-    ival = args[2]
-    typs = Type[typeOfOpr(state, arr)]
-    linfo = LambdaInfo()
-    if isa(ival, GenSym)
-      tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-      emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
-      ival = tmpv
-    end
-    if isa(ival, SymbolNode)
-      def = getVarDef(ival.name, state.linfo)
-      flag = def == nothing ? 0 : def.desc
-      addEscapingVariable(ival.name, ival.typ, flag, linfo)
-    end
-    f(linfo,as) = [ Expr(:tuple, ival) ]
-    domF = DomainLambda(typs, typs, f, linfo)
-    expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
-    expr.typ = typ
+    return translate_call_fill!(state, env_, typ, args)
   elseif is(fun, :_getindex!) # see if we can turn getindex! back into getindex
     if isa(args[1], Expr) && args[1].head == :call && args[1].args[1] == TopNode(:ccall) && 
       (args[1].args[2] == :jl_new_array ||
@@ -1251,21 +1030,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     end
   elseif is(fun, :sum) || is(fun, :prod)
     args = normalize_args(state, env_, args)
-    if length(args) == 1
-      arr = args[1]
-      # element type is the same as typ
-      etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
-      neutral = is(fun, :sum) ? 0 : 1
-      fun = is(fun, :sum) ? :+ : :*
-      typs = Type[ etyp for arg in args] # just use etyp for input element types
-      opr, reorder = specializeOp(mapOps[fun], typs)
-      # ignore reorder since it is always id function
-      f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
-      domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
-      # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
-      arr = inline_select(env, state, arr)
-      expr = mk_reduce(convert(etyp, neutral), arr, domF)
-      expr.typ = typ
+    if length(args)==1
+      return translate_call_reduce(state, env_, typ, fun, args)
     end
   elseif in(fun, ignoreSet)
   else
@@ -1299,6 +1065,269 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     end
     expr = mk_expr(typ, head, oldfun, oldargs...)
   end
+  return expr
+end
+
+# this is legacy v0.3 call
+function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
+  etyp = elmTypOf(typ)
+  args = normalize_args(state, env, args)
+  arr2 = nothing
+  if is(fun, :assign_bool_vector_1d!) # must has a mattching getindex_bool_1d
+    arr2 = args[2]
+    if isa(arr2, SymbolNode)
+      def = lookupConstDefForArg(state, arr2)
+      if isa(def, Expr) && is(def.head, :call) && def.args[1] == TopNode(:getindex_bool_1d) 
+        #dprintln(env, "matching :getindex_bool_1d")
+        b1 = lookupConstDefForArg(state, def.args[3])
+        b2 = lookupConstDefForArg(state, args[3])
+        if b1 == b2 # got a match?
+          arr2 = def.args[2]
+        end
+      end
+    end
+  end
+  if is(arr2, args[2]) 
+    error("expect :assign_bool_vector_1d! to be used with a matching :getindex_bool_1d")
+  elseif !is(arr2, nothing)
+    args[2] = arr2
+  end
+  assert(length(args) == 3)
+  typs = Type[typeOfOpr(state, a) for a in args]
+  (nonarrays, args, typs, f) = specialize(state, args, typs, 
+  as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  linfo = LambdaInfo()
+  for i=1:length(nonarrays)
+    # At this point, they are either symbol nodes, or constants
+    if isa(nonarrays[i], SymbolNode)
+      addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+    end
+  end
+  domF = DomainLambda(elmtyps, Type[etyp], f, linfo)
+  expr = mmapRemoveDupArg!(mk_mmap!(args, domF))
+  expr.typ = typ
+  return expr
+end
+
+function translate_call_runstencil(state, env, args::Array{Any,1})
+  # we handle the following runStencil form:
+  #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
+  # where kernelFunc takes the same number of bufs as inputs
+  # and returns the same number of them, but in different order,
+  # as a rotation specification for iterative stencils.
+  dprintln(env,"got runStencil, args=", args)
+  # need to retrieve stencil kernel lambda from inits, since it is already moved out.
+  local nargs = length(args)
+  args = normalize_args(state, env, args)
+  @assert nargs >= 3 "runstencil needs at least a function, and two buffers"
+  local iterations = 1               # default
+  local borderExp = nothing          # default
+  local kernelExp = args[1]
+  local bufs = Any[]
+  local bufstyp = Any[]
+  local i
+  for i = 2:nargs
+    oprTyp = typeOfOpr(state, args[i])
+    if isarray(oprTyp)
+      push!(bufs, args[i])
+      push!(bufstyp, oprTyp)
+    else
+      break
+    end
+  end
+  if i == nargs
+    if is(typeOfOpr(state, args[i]), Int)
+      iterations = args[i]
+    else
+      borderExp = args[i]
+    end
+  elseif i + 1 <= nargs
+    iterations = args[i]
+    borderExp = args[i+1]
+  end
+  assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
+  kernelExp = lookupConstDefForArg(state, kernelExp)
+  dprintln(env, "stencil kernelExp = ", kernelExp)
+  dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
+  assert(isa(kernelExp, LambdaStaticData))
+  # TODO: better infer type here
+  (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
+  #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
+  dprintln(env, "type inferred AST = ", ast)
+  kernelExp = from_expr(state, env, ast)
+  if is(borderExp, nothing)
+    borderExp = QuoteNode(:oob_skip)
+  else
+    borderExp = lookupConstDefForArg(state, borderExp)
+  end
+  dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
+  local stat, kernelF
+  stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
+  dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
+  expr = mk_stencil!(stat, iterations, bufs, kernelF)
+  #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
+  # force typ to be Void, which means stencil doesn't return anything
+  typ = Void
+  expr.typ = typ
+  return expr
+end
+
+
+function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
+  # equivalent to creating an array first, then map! with indices.
+  dprintln(env, "got cartesianarray args=", args)
+  # need to retrieve map lambda from inits, since it is already moved out.
+  nargs = length(args)
+  args = normalize_args(state, env, args)
+  assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
+  local dimExp = args[end]     # last argument is the dimension tuple
+  assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
+  dimExp = lookupConstDefForArg(state, dimExp)
+  dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
+  assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
+  dimExp = dimExp.args[2:end]
+  ndim = length(dimExp)   # num of dimensions
+  argstyp = Any[ Int for i in 1:ndim ] 
+  local mapExp = args[1]     # first argument is the lambda
+  #println("mapExp ", mapExp)
+  #dump(mapExp,1000)
+  if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
+    mapExp = mapExp.name
+  end
+  if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+
+    if(isdefined(ParallelAccelerator, mapExp))
+      m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
+    else
+      m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+    end
+    dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
+    assert(length(m) > 0)
+    mapExp = m[1].func.code
+  elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
+    mapExp = lookupConstDefForArg(state, mapExp)
+  end
+  @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
+  # call typeinf since Julia doesn't do it for us
+  # and we can figure out the element type from mapExp's return type
+  (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
+  # Element type is specified as an argument to cartesianarray
+  # This allows us to cast the return type, but inference still needs to be
+  # called on the mapExp ast.
+  # These types are sometimes GlobalRefs, and must be evaled into Type
+  etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
+  dprintln(env, "etys = ", etys)
+  @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
+  ast = from_expr("anonymous", env.cur_module, ast)
+  # dprintln(env, "ast = ", ast)
+  # create tmp arrays to store results
+  arrtyps = Type[ Array{t, ndim} for t in etys ]
+  tmpNodes = Array(GenSym, length(arrtyps))
+  # allocate the tmp array
+  for i = 1:length(arrtyps)
+    arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
+    tmparr = addGenSym(arrtyps[i], state.linfo)
+    updateDef(state, tmparr, arrdef)
+    emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
+    tmpNodes[i] = tmparr
+  end
+  # produce a DomainLambda
+  body = ast.args[3]
+  params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
+  # dprintln(env, "params = ", params)
+  #locals = metaToVarDef(ast.args[2][2])
+  #escapes = metaToVarDef(ast.args[2][3])
+  linfo = lambdaExprToLambdaInfo(ast)
+  assert(isa(body, Expr) && is(body.head, :body))
+  # fix the return in body
+  lastExp = body.args[end]
+  assert(isa(lastExp, Expr) && is(lastExp.head, :return))
+  # dprintln(env, "fixReturn: lastExp = ", lastExp)
+  args1 = lastExp.args[1]
+  args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
+  # lastExp may be returning a tuple
+  if istupletyp(args1_typ)
+    # create tmp variables to store results
+    local tvar = args1
+    local typs = args1_typ.parameters
+    local nvar = length(typs)
+    local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
+    local retExprs = Array(Expr, length(retNodes))
+    for i in 1:length(retNodes)
+      n = retNodes[i]
+      t = typs[i]
+      retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
+    end
+    lastExp.head = retExprs[1].head
+    lastExp.args = retExprs[1].args
+    lastExp.typ  = retExprs[1].typ
+    for i = 2:length(retExprs)
+      push!(body.args, retExprs[i])
+    end
+    push!(body.args, mk_expr(typs, :tuple, retNodes...))
+  else
+    lastExp.head = :tuple
+  end
+  function bodyF(plinfo, args)
+    #bt = backtrace() ;
+    #s = sprint(io->Base.show_backtrace(io, bt))
+    #dprintln(3, "bodyF backtrace ")
+    #dprintln(3, s)
+    ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+    #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+    ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
+    # dprintln(2,"cartesianarray idict = ", ldict)
+    ret = replaceExprWithDict(body, ldict).args
+    #dprintln(2,"cartesianarray ret = ", ret)
+    ret
+  end
+  domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
+  expr = mk_mmap!(tmpNodes, domF, true)
+  expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
+  return expr
+end
+
+
+function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
+  arr = args[1]
+  # element type is the same as typ
+  etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
+  neutral = is(fun, :sum) ? 0 : 1
+  fun = is(fun, :sum) ? :+ : :*
+  typs = Type[ etyp for arg in args] # just use etyp for input element types
+  opr, reorder = specializeOp(mapOps[fun], typs)
+  # ignore reorder since it is always id function
+  f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
+  domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
+  # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
+  arr = inline_select(env, state, arr)
+  expr = mk_reduce(convert(etyp, neutral), arr, domF)
+  expr.typ = typ
+  return expr
+end
+
+function translate_call_fill!(state, env, typ, args::Array{Any,1})
+  args = normalize_args(state, env, args)
+  @assert length(args)==2 "fill! should have 2 arguments"
+  arr = args[1]
+  ival = args[2]
+  typs = Type[typeOfOpr(state, arr)]
+  linfo = LambdaInfo()
+  if isa(ival, GenSym)
+    tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+    emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
+    ival = tmpv
+  end
+  if isa(ival, SymbolNode)
+    def = getVarDef(ival.name, state.linfo)
+    flag = def == nothing ? 0 : def.desc
+    addEscapingVariable(ival.name, ival.typ, flag, linfo)
+  end
+  f(linfo,as) = [ Expr(:tuple, ival) ]
+  domF = DomainLambda(typs, typs, f, linfo)
+  expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
+  expr.typ = typ
   return expr
 end
 
