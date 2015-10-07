@@ -5,6 +5,9 @@ then
   rm -f "$CONF_FILE"
 fi
 
+if type "bcpp"; then
+    echo "use_bcpp = 1" >> "$CONF_FILE"
+fi
 
 # First check for existence of icpc; failing that, use gcc.
 if type "icpc"; then

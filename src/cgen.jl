@@ -132,9 +132,11 @@ const USE_GCC = 1
 inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
+use_bcpp = 0
+package_root = getPackageRoot()
 #config file overrides backend_compiler variable
-if isfile("../deps/generated/config.jl")
-  include("../deps/generated/config.jl")
+if isfile("$package_root/deps/generated/config.jl")
+  include("$package_root/deps/generated/config.jl")
 end
 
 # Set what flags pertaining to vectorization to pass to the
@@ -1888,7 +1890,7 @@ function writec(s, outfile_name=nothing)
         outfile_name = generate_new_file_name()
     end
     packageroot = getPackageRoot()
-    cgenOutput = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+    cgenOutput = "$packageroot/deps/generated/$(outfile_name).cpp"
     cf = open(cgenOutput, "w")
     write(cf, s)
     dprintln(3,"Done committing cgen code")
@@ -1915,14 +1917,18 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 end
 
 function compile(outfile_name)
+  global use_bcpp
   packageroot = getPackageRoot()
 
-  cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
   cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
 
-  # make cpp code readable
-  beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
-  run(beautifyCommand)
+  if use_bcpp == 1
+    cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+    run(`cp $cgenOutput $cgenOutputTmp`)
+    # make cpp code readable
+    beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+    run(beautifyCommand)
+  end
 
   full_outfile_name = `$packageroot/deps/generated/$outfile_name.o`
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
