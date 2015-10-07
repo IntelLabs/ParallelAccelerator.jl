@@ -724,11 +724,12 @@ end
 
 # turn Exprs in args into variable names, and put their definition into state
 # anything of void type in the argument is omitted in return value.
-function normalize_args(state::IRState, env, args)
-  args = from_exprs(state, env, args)
+function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
+  in_args::Array{Any,1} = from_exprs(state, env, args)
+  local out_args = Array(Any,length(in_args))
   j = 0
-  for i = 1:length(args)
-    local arg = args[i]
+  for i = 1:length(in_args)
+    local arg = in_args[i]
     if isa(arg, Expr) && arg.typ == Void
       # do not produce new assignment for Void values
       dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
@@ -740,13 +741,13 @@ function normalize_args(state::IRState, env, args)
       updateDef(state, newVar, arg)
       emitStmt(state, mk_expr(typ, :(=), newVar, arg))
       j = j + 1
-      args[j] = newVar
+      out_args[j] = newVar
     else
       j = j + 1
-      args[j] = args[i]
+      out_args[j] = in_args[i]
     end
   end
-  return args[1:j]
+  return out_args[1:j]
 end
 
 # Fix Julia inconsistencies in call before we pattern match
