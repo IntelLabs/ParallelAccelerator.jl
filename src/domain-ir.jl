@@ -892,116 +892,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mmapRemoveDupArg!(mk_mmap(args, domF))
     expr.typ = typ
   elseif is(fun, :cartesianarray)
-    # equivalent to creating an array first, then map! with indices.
-    dprintln(env, "got cartesianarray args=", args)
-    # need to retrieve map lambda from inits, since it is already moved out.
-    nargs = length(args)
-    args = normalize_args(state, env_, args)
-    assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
-    local dimExp = args[end]     # last argument is the dimension tuple
-    assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
-    dimExp = lookupConstDefForArg(state, dimExp)
-    dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
-    assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
-    dimExp = dimExp.args[2:end]
-    ndim = length(dimExp)   # num of dimensions
-    argstyp = Any[ Int for i in 1:ndim ] 
-    local mapExp = args[1]     # first argument is the lambda
-    #println("mapExp ", mapExp)
-    #dump(mapExp,1000)
-    if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
-      mapExp = mapExp.name
-    end
-    if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
-
-      if(isdefined(ParallelAccelerator, mapExp))
-        m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
-      else
-        m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
-      end
-      dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
-      assert(length(m) > 0)
-      mapExp = m[1].func.code
-    elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
-      mapExp = lookupConstDefForArg(state, mapExp)
-    end
-    @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
-    # call typeinf since Julia doesn't do it for us
-    # and we can figure out the element type from mapExp's return type
-    (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
-    # Element type is specified as an argument to cartesianarray
-    # This allows us to cast the return type, but inference still needs to be
-    # called on the mapExp ast.
-    # These types are sometimes GlobalRefs, and must be evaled into Type
-    etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
-    dprintln(env, "etys = ", etys)
-    @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
-    ast = from_expr("anonymous", env.cur_module, ast)
-    # dprintln(env, "ast = ", ast)
-    # create tmp arrays to store results
-    arrtyps = Type[ Array{t, ndim} for t in etys ]
-    tmpNodes = Array(GenSym, length(arrtyps))
-    # allocate the tmp array
-    for i = 1:length(arrtyps)
-      arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
-      tmparr = addGenSym(arrtyps[i], state.linfo)
-      updateDef(state, tmparr, arrdef)
-      emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
-      tmpNodes[i] = tmparr
-    end
-    # produce a DomainLambda
-    body = ast.args[3]
-    params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
-    # dprintln(env, "params = ", params)
-    #locals = metaToVarDef(ast.args[2][2])
-    #escapes = metaToVarDef(ast.args[2][3])
-    linfo = lambdaExprToLambdaInfo(ast)
-    assert(isa(body, Expr) && is(body.head, :body))
-    # fix the return in body
-    lastExp = body.args[end]
-    assert(isa(lastExp, Expr) && is(lastExp.head, :return))
-    # dprintln(env, "fixReturn: lastExp = ", lastExp)
-    args1 = lastExp.args[1]
-    args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
-    # lastExp may be returning a tuple
-    if istupletyp(args1_typ)
-      # create tmp variables to store results
-      local tvar = args1
-      local typs = args1_typ.parameters
-      local nvar = length(typs)
-      local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
-      local retExprs = Array(Expr, length(retNodes))
-      for i in 1:length(retNodes)
-        n = retNodes[i]
-        t = typs[i]
-        retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
-      end
-      lastExp.head = retExprs[1].head
-      lastExp.args = retExprs[1].args
-      lastExp.typ  = retExprs[1].typ
-      for i = 2:length(retExprs)
-        push!(body.args, retExprs[i])
-      end
-      push!(body.args, mk_expr(typs, :tuple, retNodes...))
-    else
-      lastExp.head = :tuple
-    end
-    function bodyF(plinfo, args)
-      #bt = backtrace() ;
-      #s = sprint(io->Base.show_backtrace(io, bt))
-      #dprintln(3, "bodyF backtrace ")
-      #dprintln(3, s)
-      ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
-      #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
-      ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
-      # dprintln(2,"cartesianarray idict = ", ldict)
-      ret = replaceExprWithDict(body, ldict).args
-      #dprintln(2,"cartesianarray ret = ", ret)
-      ret
-    end
-    domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
-    expr = mk_mmap!(tmpNodes, domF, true)
-    expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
+    return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
     # we handle the following runStencil form:
     #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
@@ -1270,6 +1161,121 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   end
   return expr
 end
+
+function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
+  # equivalent to creating an array first, then map! with indices.
+  dprintln(env, "got cartesianarray args=", args)
+  # need to retrieve map lambda from inits, since it is already moved out.
+  nargs = length(args)
+  args = normalize_args(state, env, args)
+  assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
+  local dimExp = args[end]     # last argument is the dimension tuple
+  assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
+  dimExp = lookupConstDefForArg(state, dimExp)
+  dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
+  assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
+  dimExp = dimExp.args[2:end]
+  ndim = length(dimExp)   # num of dimensions
+  argstyp = Any[ Int for i in 1:ndim ] 
+  local mapExp = args[1]     # first argument is the lambda
+  #println("mapExp ", mapExp)
+  #dump(mapExp,1000)
+  if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
+    mapExp = mapExp.name
+  end
+  if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
+
+    if(isdefined(ParallelAccelerator, mapExp))
+      m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
+    else
+      m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
+    end
+    dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
+    assert(length(m) > 0)
+    mapExp = m[1].func.code
+  elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
+    mapExp = lookupConstDefForArg(state, mapExp)
+  end
+  @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
+  # call typeinf since Julia doesn't do it for us
+  # and we can figure out the element type from mapExp's return type
+  (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
+  # Element type is specified as an argument to cartesianarray
+  # This allows us to cast the return type, but inference still needs to be
+  # called on the mapExp ast.
+  # These types are sometimes GlobalRefs, and must be evaled into Type
+  etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
+  dprintln(env, "etys = ", etys)
+  @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
+  ast = from_expr("anonymous", env.cur_module, ast)
+  # dprintln(env, "ast = ", ast)
+  # create tmp arrays to store results
+  arrtyps = Type[ Array{t, ndim} for t in etys ]
+  tmpNodes = Array(GenSym, length(arrtyps))
+  # allocate the tmp array
+  for i = 1:length(arrtyps)
+    arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
+    tmparr = addGenSym(arrtyps[i], state.linfo)
+    updateDef(state, tmparr, arrdef)
+    emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
+    tmpNodes[i] = tmparr
+  end
+  # produce a DomainLambda
+  body = ast.args[3]
+  params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
+  # dprintln(env, "params = ", params)
+  #locals = metaToVarDef(ast.args[2][2])
+  #escapes = metaToVarDef(ast.args[2][3])
+  linfo = lambdaExprToLambdaInfo(ast)
+  assert(isa(body, Expr) && is(body.head, :body))
+  # fix the return in body
+  lastExp = body.args[end]
+  assert(isa(lastExp, Expr) && is(lastExp.head, :return))
+  # dprintln(env, "fixReturn: lastExp = ", lastExp)
+  args1 = lastExp.args[1]
+  args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
+  # lastExp may be returning a tuple
+  if istupletyp(args1_typ)
+    # create tmp variables to store results
+    local tvar = args1
+    local typs = args1_typ.parameters
+    local nvar = length(typs)
+    local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
+    local retExprs = Array(Expr, length(retNodes))
+    for i in 1:length(retNodes)
+      n = retNodes[i]
+      t = typs[i]
+      retExprs[i] = mk_expr(typ, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
+    end
+    lastExp.head = retExprs[1].head
+    lastExp.args = retExprs[1].args
+    lastExp.typ  = retExprs[1].typ
+    for i = 2:length(retExprs)
+      push!(body.args, retExprs[i])
+    end
+    push!(body.args, mk_expr(typs, :tuple, retNodes...))
+  else
+    lastExp.head = :tuple
+  end
+  function bodyF(plinfo, args)
+    #bt = backtrace() ;
+    #s = sprint(io->Base.show_backtrace(io, bt))
+    #dprintln(3, "bodyF backtrace ")
+    #dprintln(3, s)
+    ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+    #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+    ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
+    # dprintln(2,"cartesianarray idict = ", ldict)
+    ret = replaceExprWithDict(body, ldict).args
+    #dprintln(2,"cartesianarray ret = ", ret)
+    ret
+  end
+  domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
+  expr = mk_mmap!(tmpNodes, domF, true)
+  expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
+  return expr
+end
+
 
 function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
   arr = args[1]
