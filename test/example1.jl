@@ -4,6 +4,8 @@ module Example1
 
 using ParallelAccelerator
 
+ParallelAccelerator.set_debug_level(3)
+
 function example(n::Int)
     for i = 1 : 10000
         n = n + 1
