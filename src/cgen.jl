@@ -853,37 +853,37 @@ function from_intrinsic(f :: ANY, args)
 	dprintln(3,"Intrinsic ", intr, ", args are ", args)
 
 	if intr == "mul_int"
-		return from_expr(args[1]) * " * " * from_expr(args[2])
+		return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
 	elseif intr == "neg_int"
 		return "-" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "mul_float"
-		return from_expr(args[1]) * " * " * from_expr(args[2])
+		return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
 	elseif intr == "urem_int"
-		return from_expr(args[1]) * " % " * from_expr(args[2])
+		return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
 	elseif intr == "add_int"
-		return from_expr(args[1]) * " + " * from_expr(args[2])
+		return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
 	elseif intr == "or_int"
-		return from_expr(args[1]) * " | " * from_expr(args[2])
+		return "($(from_expr(args[1]))) | ($(from_expr(args[2])))"
 	elseif intr == "xor_int"
-		return from_expr(args[1]) * " ^ " * from_expr(args[2])
+		return "($(from_expr(args[1]))) ^ ($(from_expr(args[2])))"
 	elseif intr == "and_int"
-		return from_expr(args[1]) * " & " * from_expr(args[2])
+		return "($(from_expr(args[1]))) & ($(from_expr(args[2])))"
 	elseif intr == "sub_int"
-		return from_expr(args[1]) * " - " * from_expr(args[2])
+		return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
 	elseif intr == "slt_int"
-		return from_expr(args[1]) * " < " * from_expr(args[2])
+		return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
 	elseif intr == "sle_int"
-		return from_expr(args[1]) * " <= " * from_expr(args[2])
+		return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
 	elseif intr == "lshr_int"
-		return from_expr(args[1]) * " >> " * from_expr(args[2])
+		return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
 	elseif intr == "shl_int"
-		return from_expr(args[1]) * " << " * from_expr(args[2])
+		return "($(from_expr(args[1]))) << ($(from_expr(args[2])))"
 	elseif intr == "checked_ssub"
-		return from_expr(args[1]) * " - " * from_expr(args[2])
+		return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
 	elseif intr == "checked_sadd"
-		return from_expr(args[1]) * " + " * from_expr(args[2])
+		return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
 	elseif intr == "srem_int"
-        return from_expr(args[1]) * " % " * from_expr(args[2])
+		return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
 	#TODO: Check if flip semantics are the same as Julia codegen.
 	# For now, we emit unary negation
 	elseif intr == "flipsign_int"
@@ -906,21 +906,21 @@ function from_intrinsic(f :: ANY, args)
 	elseif intr == "ctpop_int"
 		return "__builtin_popcount" * "(" * from_expr(args[1]) * ")"
 	elseif intr == "add_float"
-		return from_expr(args[1]) * " + " * from_expr(args[2])
+		return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
 	elseif intr == "lt_float"
-		return from_expr(args[1]) * " < " * from_expr(args[2])
+		return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
 	elseif intr == "ne_float"
-		return from_expr(args[1]) * " != " * from_expr(args[2])
+		return "($(from_expr(args[1]))) != ($(from_expr(args[2])))"
 	elseif intr == "le_float"
-		return from_expr(args[1]) * " <= " * from_expr(args[2])
+		return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
 	elseif intr == "neg_float"
-		return "-" * from_expr(args[1])
+		return "-($(from_expr(args[1])))"
 	elseif intr == "abs_float"
 		return "fabs(" * from_expr(args[1]) * ")"
 	elseif intr == "sqrt_llvm"
 		return "sqrt(" * from_expr(args[1]) * ")"
 	elseif intr == "sub_float"
-		return from_expr(args[1]) * " - " * from_expr(args[2])
+		return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
 	elseif intr == "div_float"
 		return "(" * from_expr(args[1]) * ")" * 
 			" / " * "(" * from_expr(args[2]) * ")"
