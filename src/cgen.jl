@@ -570,6 +570,8 @@ function canonicalize(tok)
 	s = replace(s, scrubbedTokens, "")
 	s = replace(s, r"^[^a-zA-Z]", "_")
 	s = replace(s, replacedTokens, "p")
+    s = replace(s, "!", "bang")
+    s = replace(s, "∇", "del")
 	s
 end
 
