@@ -7073,22 +7073,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
   elseif head == :alloc
     # turn array alloc back to plain Julia ccall
     head = :call
-    elemTyp = args[1]
-    sizes = args[2]
-    n = length(sizes)
-    assert(n >= 1 && n <= 3)
-    name = symbol(string("jl_alloc_array_", n, "d"))
-    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
-    #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-    #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
-    realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
-    #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
-    for i=1:n
-      push!(realArgs, sizes[i])
-      push!(realArgs, 0)
-    end
-    args = vcat(TopNode(:ccall), realArgs)
+    args = from_alloc(args)
   elseif head == :stencil!
     head = :parfor
     ast = mk_parfor_args_from_stencil(typ, head, args, state)
@@ -7127,6 +7112,26 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
   ast.typ = typ
   return [ast]
 end
+
+function from_alloc(args::Array{Any,1})
+  elemTyp = args[1]
+  sizes = args[2]
+  n = length(sizes)
+  assert(n >= 1 && n <= 3)
+  name = symbol(string("jl_alloc_array_", n, "d"))
+  appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+  #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
+  #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
+  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+  realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
+  #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
+  for i=1:n
+    push!(realArgs, sizes[i])
+    push!(realArgs, 0)
+  end
+  return vcat(TopNode(:ccall), realArgs)
+end
+
 
 @doc """
 Take something returned from AstWalk and assert it should be an array but in this
