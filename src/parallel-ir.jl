@@ -5288,6 +5288,10 @@ function hasNoSideEffects(node :: Expr)
     end
   elseif node.head == :lambda
     return true
+  elseif node.head == :new
+    if node.args[1] <: Range
+      return true
+    end
   elseif node.head == :call
     func = node.args[1]
     if func == TopNode(:box) ||
