@@ -942,14 +942,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dprintln(3,"input_array_ranges = ", input_array_ranges)
    
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
-
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+  
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
   argtyp = typeof(input_array)
@@ -1199,13 +1193,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
