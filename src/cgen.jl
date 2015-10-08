@@ -984,6 +984,9 @@ function arrayToTuple(a)
 end
 
 function from_symbol(ast)
+    if ast == :Inf
+        return "INFINITY"
+    end
 	hasfield(ast, :name) ? canonicalize(string(ast.name)) : canonicalize(ast)
 end
 
