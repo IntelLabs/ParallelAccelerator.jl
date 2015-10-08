@@ -519,6 +519,10 @@ function isArrayType(typ)
 	isa(typ, DataType) && ((typ.name == Array.name) || (typ.name == BitArray.name))
 end
 
+function isPtrType(typ)
+    isa(typ, DataType) && typ.name == Ptr.name
+end
+
 function toCtype(typ::Tuple)
 	return "Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", typ)
 end
@@ -532,6 +536,8 @@ function toCtype(typ)
 		atyp = toCtype(atyp)
 		assert(dims >= 0)
 		return " j2c_array< $(atyp) > "
+    elseif isPtrType(typ)
+        return "$(toCtype(eltype(typ))) *"
 	elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
 		# For parameteric types, for now assume we have equivalent C++
 		# implementations
