@@ -1169,7 +1169,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   len_input_arrays = length(input_arrays)
   dprintln(1,"Number of input arrays: ", len_input_arrays)
   dprintln(2,"input arrays: ", input_arrays)
-  assert(len_input_arrays > 0)
+  @assert len_input_arrays>0 "mmap! should have input arrays"
 
   # handle range selector
   inputInfo = InputInfo[]
@@ -1181,7 +1181,8 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   dprintln(3,"dl = ", dl)
   dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
 
-  indexed_arrays = Any[]
+  # Create an expression to access one element of this input array with index symbols parfor_index_syms
+  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
@@ -1219,8 +1220,6 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
     end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
 
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays, inputInfo[i].elementTemp)
   end
 
   # Insert a statement to assign the length of the input arrays to a var
@@ -1261,9 +1260,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   assert(isa(out_body,Array))
   oblen = length(out_body)
   # the last output of genBody is a tuple of the outputs of the mmap!
-  last_body = out_body[oblen]
-  assert(typeof(last_body) == Expr)
-  lbexpr::Expr = last_body
+  lbexpr::Expr = out_body[oblen]
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
 
@@ -1386,7 +1383,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   len_input_arrays = length(input_arrays)
   dprintln(2,"Number of input arrays: ", len_input_arrays)
   dprintln(2,"input arrays: ", input_arrays)
-  assert(len_input_arrays > 0)
+  @assert len_input_arrays>0 "mmap should have input arrays"
 
   # handle range selector
   inputInfo = InputInfo[]
@@ -1397,7 +1394,8 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # Verify the number of input arrays matches the number of input types in dl
   assert(length(dl.inputs) == length(inputInfo))
 
-  indexed_arrays = Any[]
+  # Create an expression to access one element of this input array with index symbols parfor_index_syms
+  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
@@ -1435,9 +1433,6 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
       inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
     end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays, inputInfo[i].elementTemp)
   end
 
   # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
@@ -1477,9 +1472,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   assert(isa(out_body,Array))
   oblen = length(out_body)
   # the last output of genBody is a tuple of the outputs of the mmap
-  last_body = out_body[oblen]
-  assert(typeof(last_body) == Expr)
-  lbexpr::Expr = last_body
+  lbexpr::Expr = out_body[oblen] 
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
 
@@ -1489,8 +1482,8 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   output_element_sizes = 0
 
   out_body = out_body[1:oblen-1]
-else_body = Any[]
-elseLabel = next_label(state)
+  else_body = Any[]
+  elseLabel = next_label(state)
   condExprs = Any[]
   for i = 1:length(inputInfo)
     if inputInfo[i].rangeconds.head != :noop
