@@ -167,7 +167,8 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
 			"arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
 			"safe_arrayref", "safe_arrayset", "tupleref",
 			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
-			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last"
+			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
+            ":jl_array_ptr", "sizeof"
 ]
 
 # Intrinsics
@@ -185,7 +186,8 @@ _Intrinsics = [
 		"nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
 		"fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm", 
 		"trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
-		"checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int"
+		"checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
+        "checked_trunc_uint", "checked_trunc_sint"
 ]
 
 tokenXlate = Dict(
@@ -763,6 +765,14 @@ function from_builtins_comp(f, args)
     return eval(parse("from_$cmd()"))
 end
 
+function from_array_ptr(args)
+    return "$(from_expr(args[4])).data"
+end
+
+function from_sizeof(args)
+    return "sizeof($(toCtype(args[1])))"
+end
+
 function from_builtins(f, args)
 	tgt = string(f)
 	if tgt == "getindex" || tgt == "getindex!"
@@ -791,6 +801,8 @@ function from_builtins(f, args)
 		return from_arrayalloc(args)
 	elseif tgt == ":jl_alloc_array_2d"
 		return from_arrayalloc(args)
+    elseif tgt == ":jl_array_ptr"
+        return from_array_ptr(args)
 	elseif tgt == "getfield"
 		return from_getfield(args)
 	elseif tgt == "unsafe_arrayref"
@@ -803,6 +815,8 @@ function from_builtins(f, args)
 		return from_unsafe_setindex!(args) 
 	elseif tgt == "nfields"
 		return from_nfields(args)
+    elseif tgt == "sizeof"
+        return from_sizeof(args)
   elseif tgt =="steprange_last"
     return from_steprange_last(args)
 	end
@@ -922,6 +936,8 @@ function from_intrinsic(f :: ANY, args)
 		end
 		#return "assert(" * "isNan(" * from_expr(args[1]) * ") && !isNan(" * from_expr(args[2]) * "))"
 		return from_expr(args[1])
+    elseif intr in ["checked_trunc_uint", "checked_trunc_sint"]
+        return "$(from_expr(args[1])) $(from_expr(args[2]))"
 	else
 		dprintln(3,"Intrinsic ", intr, " is known but no translation available")
 		throw("Unhandled Intrinsic...")
@@ -967,6 +983,10 @@ end
 
 function from_labelnode(ast)
 	"label" * string(ast.label) * " : "
+end
+
+function from_ref(args)
+    "&$(from_expr(args[1]))"
 end
 
 function from_call1(ast::Array{Any, 1})
@@ -1489,6 +1509,10 @@ function from_expr(ast::Expr)
 	elseif head == :(=)
 		dprintln(3,"Compiling assignment")
 		s *= from_assignment(args)
+
+    elseif head == :(&)
+        dprintln(3, "Compiling ref")
+        s *= from_ref(args)
 
 	elseif head == :call
 		dprintln(3,"Compiling call")
