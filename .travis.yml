@@ -27,3 +27,5 @@ script:
  - julia --check-bounds=yes -e 'Pkg.clone("https://psl-travis-user:6mnZDX4Hf04Kcn1S2gog@github.com/IntelLabs/CompilerTools.jl.git")' # Pull in CompilerTools dependency
  - julia --check-bounds=yes -e 'Pkg.build("CompilerTools")'
  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
+ # Temporary: have Travis print generated output for debugging purposes.
+ - cat /home/travis/.julia/v0.5/ParallelAccelerator/deps/generated/cgen_output0.cpp
