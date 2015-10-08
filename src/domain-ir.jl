@@ -868,35 +868,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mk_copy(args[1])
     expr.typ = typ
   elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
-    dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
-    if is(fun, :cat_t)
-      typ1 = isa(args[2], GlobalRef) ? eval(args[2]) : args[2]
-      @assert (isa(typ1, DataType)) "expect second argument to cat_t to be a type"
-      dim1 = args[1]
-      @assert (isa(dim1, Int)) "expect first argument to cat_t to be constant"
-      typ1 = Array{typ1, dim1}
-    else
-      a1 = args[1]
-      if typeof(a1) == GlobalRef
-        a1 = eval(a1)
-      end
-      typ1 = typeOfOpr(state, a1)
-      if is(fun, :fptrunc)
-        if     is(a1, Float32) typ1 = Float32
-        elseif is(a1, Float64) typ1 = Float64
-        else throw(string("unknown target type for fptrunc: ", typ1, " args[1] = ", args[1]))
-        end
-      elseif is(fun, :fpsiround)
-        if     is(a1, Float32) typ1 = Int32
-        elseif is(a1, Float64) typ1 = Int64
-          #        if is(typ1, Float32) typ1 = Int32
-          #        elseif is(typ1, Float64) typ1 = Int64
-        else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
-        end
-      end
-    end
-    dprintln(env,"fix type ", typ, " => ", typ1)
-    typ = typ1
+    typ = translate_call_typefix(state, env, typ, fun, args) 
   elseif is(fun, :arraysize)
     args = normalize_args(state, env_, args)
     dprintln(env,"got arraysize, args=", args)
@@ -979,6 +951,39 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mk_expr(typ, head, oldfun, oldargs...)
   end
   return expr
+end
+
+function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
+  dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
+  local typ1    
+  if is(fun, :cat_t)
+    typ1 = isa(args[2], GlobalRef) ? eval(args[2]) : args[2]
+    @assert (isa(typ1, DataType)) "expect second argument to cat_t to be a type"
+    dim1 = args[1]
+    @assert (isa(dim1, Int)) "expect first argument to cat_t to be constant"
+    typ1 = Array{typ1, dim1}
+  else
+    a1 = args[1]
+    if typeof(a1) == GlobalRef
+      a1 = eval(a1)
+    end
+    typ1 = typeOfOpr(state, a1)
+    if is(fun, :fptrunc)
+      if     is(a1, Float32) typ1 = Float32
+      elseif is(a1, Float64) typ1 = Float64
+      else throw(string("unknown target type for fptrunc: ", typ1, " args[1] = ", args[1]))
+      end
+    elseif is(fun, :fpsiround)
+      if     is(a1, Float32) typ1 = Int32
+      elseif is(a1, Float64) typ1 = Int64
+        #        if is(typ1, Float32) typ1 = Int32
+        #        elseif is(typ1, Float64) typ1 = Int64
+      else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
+      end
+    end
+  end
+  dprintln(env,"fix type ", typ, " => ", typ1)
+  return typ1
 end
 
 function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
