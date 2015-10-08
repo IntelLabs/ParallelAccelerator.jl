@@ -1136,6 +1136,9 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
 
     if isa(input_array, Expr) && is(input_array.head, :select)
       thisInfo.array = input_array.args[1]
+      argtyp = typeof(thisInfo.array)
+      dprintln(3,"mk_parfor_args_from_mmap(!) inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+      @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
       select_kind = input_array.args[2].head
       @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
       if select_kind == :tomask
@@ -1158,6 +1161,18 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
       thisInfo.pre_offsets = Expr[]
     end
     return thisInfo
+end
+
+function gen_bitarray_mask(thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
+  # we only support bitarray selection for 1D arrays
+  if length(thisInfo.select_bitarrays)==1
+    mask_array = thisInfo.select_bitarrays[1] 
+    # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+    #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+    #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+    #      end
+    thisInfo.rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+  end
 end
 
 @doc """
@@ -1196,6 +1211,8 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   # Create variables to use for the loop indices.
   parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
+  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
+
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
@@ -1205,21 +1222,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
   for(i = 1:length(inputInfo))
-    argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
-
-    # we only support bitarray selection for 1D arrays
-    if length(inputInfo[i].select_bitarrays)==1
-      mask_array = inputInfo[i].select_bitarrays[1] 
-      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-#      end
-      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-
   end
 
   # Insert a statement to assign the length of the input arrays to a var
@@ -1407,6 +1410,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # Create variables to use for the loop indices.
   parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
+  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
 
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
@@ -1419,19 +1423,6 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # Make sure each input array is a SymbolNode.
   # Also, create indexed versions of those symbols for the loop body.
   for(i = 1:length(inputInfo))
-    argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    assert(argtyp <: SymAllGen)
-
-    # we only support bitarray selection for 1D arrays
-    if length(inputInfo[i].select_bitarrays)==1
-      mask_array = inputInfo[i].select_bitarrays[1]
-      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-#      end
-      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
   end
 
