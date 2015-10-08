@@ -894,65 +894,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   elseif is(fun, :cartesianarray)
     return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
-    # we handle the following runStencil form:
-    #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
-    # where kernelFunc takes the same number of bufs as inputs
-    # and returns the same number of them, but in different order,
-    # as a rotation specification for iterative stencils.
-    dprintln(env,"got runStencil, args=", args)
-    # need to retrieve stencil kernel lambda from inits, since it is already moved out.
-    local nargs = length(args)
-    args = normalize_args(state, env_, args)
-    assert(nargs >= 3) # needs at least a function, and two buffers
-    local iterations = 1               # default
-    local borderExp = nothing          # default
-    local kernelExp = args[1]
-    local bufs = Any[]
-    local bufstyp = Any[]
-    local i
-    for i = 2:nargs
-      oprTyp = typeOfOpr(state, args[i])
-      if isarray(oprTyp)
-        push!(bufs, args[i])
-        push!(bufstyp, oprTyp)
-      else
-        break
-      end
-    end
-    if i == nargs
-      if is(typeOfOpr(state, args[i]), Int)
-        iterations = args[i]
-      else
-        borderExp = args[i]
-      end
-    elseif i + 1 <= nargs
-      iterations = args[i]
-      borderExp = args[i+1]
-    end
-    assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
-    kernelExp = lookupConstDefForArg(state, kernelExp)
-    dprintln(env, "stencil kernelExp = ", kernelExp)
-    dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
-    assert(isa(kernelExp, LambdaStaticData))
-    # TODO: better infer type here
-    (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
-    #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
-    dprintln(env, "type inferred AST = ", ast)
-    kernelExp = from_expr(state, env_, ast)
-    if is(borderExp, nothing)
-      borderExp = QuoteNode(:oob_skip)
-    else
-      borderExp = lookupConstDefForArg(state, borderExp)
-    end
-    dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
-    local stat, kernelF
-    stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
-    dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
-    expr = mk_stencil!(stat, iterations, bufs, kernelF)
-    #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
-    # force typ to be Void, which means stencil doesn't return anything
-    typ = Void
-    expr.typ = typ
+    return translate_call_runstencil(state,env_,args)
   elseif is(fun, :copy)
     args = normalize_args(state, env_, args[1:1])
     dprintln(env,"got copy, args=", args)
@@ -1076,44 +1018,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
       expr.typ = typ
     end
   elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
-    is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray) 
-    etyp = elmTypOf(typ)
-    args = normalize_args(state, env_, args)
-    arr2 = nothing
-    if is(fun, :assign_bool_vector_1d!) # must has a mattching getindex_bool_1d
-      arr2 = args[2]
-      if isa(arr2, SymbolNode)
-        def = lookupConstDefForArg(state, arr2)
-        if isa(def, Expr) && is(def.head, :call) && def.args[1] == TopNode(:getindex_bool_1d) 
-          #dprintln(env, "matching :getindex_bool_1d")
-          b1 = lookupConstDefForArg(state, def.args[3])
-          b2 = lookupConstDefForArg(state, args[3])
-          if b1 == b2 # got a match?
-            arr2 = def.args[2]
-          end
-        end
-      end
-    end
-    if is(arr2, args[2]) 
-      error("expect :assign_bool_vector_1d! to be used with a matching :getindex_bool_1d")
-    elseif !is(arr2, nothing)
-      args[2] = arr2
-    end
-    assert(length(args) == 3)
-    typs = Type[typeOfOpr(state, a) for a in args]
-    (nonarrays, args, typs, f) = specialize(state, args, typs, 
-    as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    linfo = LambdaInfo()
-    for i=1:length(nonarrays)
-      # At this point, they are either symbol nodes, or constants
-      if isa(nonarrays[i], SymbolNode)
-        addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
-      end
-    end
-    domF = DomainLambda(elmtyps, Type[etyp], f, linfo)
-    expr = mmapRemoveDupArg!(mk_mmap!(args, domF))
-    expr.typ = typ
+    is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
+    return translate_call_assign_bool(state,env_,typ,fun, args) 
   elseif is(fun, :fill!)
     return translate_call_fill!(state, env_, typ, args)
   elseif is(fun, :_getindex!) # see if we can turn getindex! back into getindex
@@ -1161,6 +1067,112 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   end
   return expr
 end
+
+# this is legacy v0.3 call
+function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
+  etyp = elmTypOf(typ)
+  args = normalize_args(state, env, args)
+  arr2 = nothing
+  if is(fun, :assign_bool_vector_1d!) # must has a mattching getindex_bool_1d
+    arr2 = args[2]
+    if isa(arr2, SymbolNode)
+      def = lookupConstDefForArg(state, arr2)
+      if isa(def, Expr) && is(def.head, :call) && def.args[1] == TopNode(:getindex_bool_1d) 
+        #dprintln(env, "matching :getindex_bool_1d")
+        b1 = lookupConstDefForArg(state, def.args[3])
+        b2 = lookupConstDefForArg(state, args[3])
+        if b1 == b2 # got a match?
+          arr2 = def.args[2]
+        end
+      end
+    end
+  end
+  if is(arr2, args[2]) 
+    error("expect :assign_bool_vector_1d! to be used with a matching :getindex_bool_1d")
+  elseif !is(arr2, nothing)
+    args[2] = arr2
+  end
+  assert(length(args) == 3)
+  typs = Type[typeOfOpr(state, a) for a in args]
+  (nonarrays, args, typs, f) = specialize(state, args, typs, 
+  as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  linfo = LambdaInfo()
+  for i=1:length(nonarrays)
+    # At this point, they are either symbol nodes, or constants
+    if isa(nonarrays[i], SymbolNode)
+      addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+    end
+  end
+  domF = DomainLambda(elmtyps, Type[etyp], f, linfo)
+  expr = mmapRemoveDupArg!(mk_mmap!(args, domF))
+  expr.typ = typ
+  return expr
+end
+
+function translate_call_runstencil(state, env, args::Array{Any,1})
+  # we handle the following runStencil form:
+  #  runStencil(kernelFunc, buf1, buf2, ..., [iterations], [border], buffers)
+  # where kernelFunc takes the same number of bufs as inputs
+  # and returns the same number of them, but in different order,
+  # as a rotation specification for iterative stencils.
+  dprintln(env,"got runStencil, args=", args)
+  # need to retrieve stencil kernel lambda from inits, since it is already moved out.
+  local nargs = length(args)
+  args = normalize_args(state, env, args)
+  @assert nargs >= 3 "runstencil needs at least a function, and two buffers"
+  local iterations = 1               # default
+  local borderExp = nothing          # default
+  local kernelExp = args[1]
+  local bufs = Any[]
+  local bufstyp = Any[]
+  local i
+  for i = 2:nargs
+    oprTyp = typeOfOpr(state, args[i])
+    if isarray(oprTyp)
+      push!(bufs, args[i])
+      push!(bufstyp, oprTyp)
+    else
+      break
+    end
+  end
+  if i == nargs
+    if is(typeOfOpr(state, args[i]), Int)
+      iterations = args[i]
+    else
+      borderExp = args[i]
+    end
+  elseif i + 1 <= nargs
+    iterations = args[i]
+    borderExp = args[i+1]
+  end
+  assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
+  kernelExp = lookupConstDefForArg(state, kernelExp)
+  dprintln(env, "stencil kernelExp = ", kernelExp)
+  dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
+  assert(isa(kernelExp, LambdaStaticData))
+  # TODO: better infer type here
+  (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
+  #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
+  dprintln(env, "type inferred AST = ", ast)
+  kernelExp = from_expr(state, env, ast)
+  if is(borderExp, nothing)
+    borderExp = QuoteNode(:oob_skip)
+  else
+    borderExp = lookupConstDefForArg(state, borderExp)
+  end
+  dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
+  local stat, kernelF
+  stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
+  dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
+  expr = mk_stencil!(stat, iterations, bufs, kernelF)
+  #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
+  # force typ to be Void, which means stencil doesn't return anything
+  typ = Void
+  expr.typ = typ
+  return expr
+end
+
 
 function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
   # equivalent to creating an array first, then map! with indices.
