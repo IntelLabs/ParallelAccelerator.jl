@@ -14,7 +14,7 @@ import ParallelAccelerator, ..getPackageRoot
 
 # This controls the debug print level.
 DEBUG_LVL=0
-const ENABLE_DEBUG = false
+const ENABLE_DEBUG = true
 
 function set_debug_level(x)
     global DEBUG_LVL = x
@@ -1179,7 +1179,7 @@ function from_call(ast::Array{Any, 1})
 	s *= ")"
 	dprintln(3,"Finished translating call : ", s)
 	dprintln(3,ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
-	if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function))
+	if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function) || isa(fun, TopNode) || isa(fun, GlobalRef))
 		#=
 		dprintln(3,"Worklist is: ")
 		for i in 1:length(lstate.worklist)
@@ -1276,7 +1276,7 @@ function from_globalref(ast)
 end
 
 function from_topnode(ast)
-	from_symbol(ast)
+	canonicalize(ast)
 end
 
 function from_quotenode(ast)
@@ -1866,13 +1866,25 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 	c
 end
 
-function insert(func::Symbol, mod::Any, name, typs)
+function insert(func::Any, mod::Any, name, typs)
 	if mod == ""
 		insert(func, name, typs)
 		return
 	end
 	target = resolveFunction(func, mod, typs)
 	dprintln(3,"Resolved function ", func, " : ", name, " : ", typs)
+	insert(target, name, typs)
+end
+
+function insert(func::TopNode, name, typs)
+	target = eval(func)
+	dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
+	insert(target, name, typs)
+end
+
+function insert(func::SymbolNode, name, typs)
+	target = eval(func)
+	dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
 	insert(target, name, typs)
 end
 
