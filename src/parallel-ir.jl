@@ -1371,6 +1371,19 @@ function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, range
   return ret
 end
 
+
+# Create variables to use for the parfor loop indices.
+function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+  parfor_index_syms = Array(Symbol,num_dim_inputs)
+  for i = 1:num_dim_inputs
+    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
+    parfor_index_sym = symbol(parfor_index_var)
+    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
+    parfor_index_syms[i] = parfor_index_sym
+  end
+  return parfor_index_syms
+end
+
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
@@ -1400,13 +1413,8 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   loopNests      = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+
 
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
