@@ -1591,7 +1591,11 @@ function from_expr(ast::Any)
 
 	if isPrimitiveJuliaType(asttyp)
 		#s *= "(" * toCtype(asttyp) * ")" * string(ast)
-		s *= string(ast)
+        if asttyp == Char
+            s *= "'$(string(ast))'"
+        else
+		    s *= string(ast)
+        end
 	elseif isPrimitiveJuliaType(ast)
 		s *= "(" * toCtype(ast) * ")"
 	elseif asttyp == Expr
