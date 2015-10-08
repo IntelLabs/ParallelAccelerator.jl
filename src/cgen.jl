@@ -1931,9 +1931,12 @@ end
 # Utility methods to write, compile and link generated code
 #
 import Base.write
-function writec(s, outfile_name=nothing)
+function writec(s, outfile_name=nothing; with_headers=false)
     if outfile_name == nothing
         outfile_name = generate_new_file_name()
+    end
+    if with_headers
+        s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
     end
     packageroot = getPackageRoot()
     cgenOutput = "$packageroot/deps/generated/$(outfile_name).cpp"
