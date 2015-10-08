@@ -693,6 +693,12 @@ function from_ccall(args)
 	numInputs = length(args[3].args)-1
 	argsStart = 4
 	argsEnd = length(args)
+    if contains(s, "cblas") && contains(s, "gemm")
+        s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6])), "
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
+        argsStart = 10
+    end
 	s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
 	s *= ")"
 	dprintln(3,"from_ccall: ", s)
