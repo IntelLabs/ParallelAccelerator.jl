@@ -929,37 +929,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   elseif is(fun, :sitofp)
     typ = args[1]
   elseif is(fun, :getindex) || is(fun, :setindex!) 
-    dprintln(env, "got getindex or setindex!")
-    args = normalize_args(state, env_, args)
-    arr = args[1]
-    ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-    atyp = typeOfOpr(state, arr)
-    dprintln(env, "ranges = ", ranges)
-    if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
-      dprintln(env, "args is ", args)
-      dprintln(env, "ranges is ", ranges)
-      #newsize = addGenSym(Int, state.linfo)
-      #newlhs = addGenSym(typ, state.linfo)
-      etyp = elmTypOf(atyp)
-      ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
-      if is(fun, :getindex) 
-        expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
-      else
-        args = Any[mk_select(arr, ranges), args[2]]
-        typs = Type[atyp, typeOfOpr(state, args[2])]
-        (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
-        elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-        linfo = LambdaInfo()
-        for i=1:length(nonarrays)
-          # At this point, they are either symbol nodes, or constants
-          if isa(nonarrays[i], SymbolNode)
-            addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
-          end
-        end
-        expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
-      end
-      expr.typ = typ
-    end
+    expr = translate_call_getsetindex(state,env_,typ,fun,args)
   elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
     is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
     return translate_call_assign_bool(state,env_,typ,fun, args) 
@@ -1007,6 +977,42 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
       oldargs = normalize_args(state, env_, oldargs)
     end
     expr = mk_expr(typ, head, oldfun, oldargs...)
+  end
+  return expr
+end
+
+function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
+  dprintln(env, "got getindex or setindex!")
+  args = normalize_args(state, env, args)
+  arr = args[1]
+  ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
+  atyp = typeOfOpr(state, arr)
+  expr = nothing
+  dprintln(env, "ranges = ", ranges)
+  if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
+    dprintln(env, "args is ", args)
+    dprintln(env, "ranges is ", ranges)
+    #newsize = addGenSym(Int, state.linfo)
+    #newlhs = addGenSym(typ, state.linfo)
+    etyp = elmTypOf(atyp)
+    ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
+    if is(fun, :getindex) 
+      expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+    else
+      args = Any[mk_select(arr, ranges), args[2]]
+      typs = Type[atyp, typeOfOpr(state, args[2])]
+      (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
+      elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+      linfo = LambdaInfo()
+      for i=1:length(nonarrays)
+        # At this point, they are either symbol nodes, or constants
+        if isa(nonarrays[i], SymbolNode)
+          addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
+        end
+      end
+      expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
+    end
+    expr.typ = typ
   end
   return expr
 end
