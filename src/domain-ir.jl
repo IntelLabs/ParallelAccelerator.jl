@@ -857,40 +857,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
 
   dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
   if verifyMapOps(state, fun, args) && (isarray(typ) || isbitarray(typ)) 
-    # TODO: check for unboxed array type
-    args = normalize_args(state, env_, args)
-    etyp = elmTypOf(typ) 
-    if is(fun, :-) && length(args) == 1
-      fun = :negate
-    end
-    typs = Type[ typeOfOpr(state, arg) for arg in args ]
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    opr, reorder = specializeOp(mapOps[fun], elmtyps)
-    typs = reorder(typs)
-    args = reorder(args)
-    dprintln(env,"from_lambda: before specialize, opr=", opr, " args=", args, " typs=", typs)
-    (nonarrays, args, typs, f) = specialize(state, args, typs, 
-    as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
-    dprintln(env,"from_lambda: after specialize, typs=", typs)
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    # calculate escaping variables
-    linfo = LambdaInfo()
-    for i=1:length(nonarrays)
-      # At this point, they are either symbol nodes, or constants
-      if isa(nonarrays[i], SymbolNode)
-        addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
-      end
-    end
-    domF = DomainLambda(elmtyps, [etyp], f, linfo)
-    for i = 1:length(args)
-      arg_ = inline_select(env, state, args[i])
-      if arg_ != args[i] && i != 1 && length(args) > 1
-        error("Selector array must be the only array argument to mmap: ", args)
-      end
-      args[i] = arg_
-    end
-    expr = mmapRemoveDupArg!(mk_mmap(args, domF))
-    expr.typ = typ
+    return translate_call_map(state,env_,typ, fun, args)
   elseif is(fun, :cartesianarray)
     return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
@@ -901,35 +868,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     expr = mk_copy(args[1])
     expr.typ = typ
   elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
-    dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
-    if is(fun, :cat_t)
-      typ1 = isa(args[2], GlobalRef) ? eval(args[2]) : args[2]
-      @assert (isa(typ1, DataType)) "expect second argument to cat_t to be a type"
-      dim1 = args[1]
-      @assert (isa(dim1, Int)) "expect first argument to cat_t to be constant"
-      typ1 = Array{typ1, dim1}
-    else
-      a1 = args[1]
-      if typeof(a1) == GlobalRef
-        a1 = eval(a1)
-      end
-      typ1 = typeOfOpr(state, a1)
-      if is(fun, :fptrunc)
-        if     is(a1, Float32) typ1 = Float32
-        elseif is(a1, Float64) typ1 = Float64
-        else throw(string("unknown target type for fptrunc: ", typ1, " args[1] = ", args[1]))
-        end
-      elseif is(fun, :fpsiround)
-        if     is(a1, Float32) typ1 = Int32
-        elseif is(a1, Float64) typ1 = Int64
-          #        if is(typ1, Float32) typ1 = Int32
-          #        elseif is(typ1, Float64) typ1 = Int64
-        else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
-        end
-      end
-    end
-    dprintln(env,"fix type ", typ, " => ", typ1)
-    typ = typ1
+    typ = translate_call_typefix(state, env, typ, fun, args) 
   elseif is(fun, :arraysize)
     args = normalize_args(state, env_, args)
     dprintln(env,"got arraysize, args=", args)
@@ -957,66 +896,12 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   elseif is(fun, :checkbounds)
     dprintln(env, "got ", fun, " args = ", args)
     if length(args) == 2
-      args = normalize_args(state, env_, args)
-      typ = typeOfOpr(state, args[1])
-      if isarray(typ)
-        typ_second_arg = typeOfOpr(state, args[2])
-        if isarray(typ_second_arg) || isbitarray(typ_second_arg)
-          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
-        else
-          dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
-          error("Unhandled bound in checkbounds: ", args[2])
-        end
-      elseif isinttyp(typ)
-        if isinttyp(typeOfOpr(state, args[2]))
-          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
-          mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
-        elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
-          def = lookupConstDefForArg(state, args[2])
-          (start, step, final) = from_range(def)
-          expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
-          mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
-        else
-          error("Unhandled bound in checkbounds: ", args[2])
-        end
-      else
-        error("Unhandled bound in checkbounds: ", args[1])
-      end
+      return translate_call_checkbounds(state,env_,args) 
     end
   elseif is(fun, :sitofp)
     typ = args[1]
   elseif is(fun, :getindex) || is(fun, :setindex!) 
-    dprintln(env, "got getindex or setindex!")
-    args = normalize_args(state, env_, args)
-    arr = args[1]
-    ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-    atyp = typeOfOpr(state, arr)
-    dprintln(env, "ranges = ", ranges)
-    if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
-      dprintln(env, "args is ", args)
-      dprintln(env, "ranges is ", ranges)
-      #newsize = addGenSym(Int, state.linfo)
-      #newlhs = addGenSym(typ, state.linfo)
-      etyp = elmTypOf(atyp)
-      ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
-      if is(fun, :getindex) 
-        expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
-      else
-        args = Any[mk_select(arr, ranges), args[2]]
-        typs = Type[atyp, typeOfOpr(state, args[2])]
-        (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
-        elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-        linfo = LambdaInfo()
-        for i=1:length(nonarrays)
-          # At this point, they are either symbol nodes, or constants
-          if isa(nonarrays[i], SymbolNode)
-            addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
-          end
-        end
-        expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
-      end
-      expr.typ = typ
-    end
+    expr = translate_call_getsetindex(state,env_,typ,fun,args)
   elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
     is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
     return translate_call_assign_bool(state,env_,typ,fun, args) 
@@ -1064,6 +949,143 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
       oldargs = normalize_args(state, env_, oldargs)
     end
     expr = mk_expr(typ, head, oldfun, oldargs...)
+  end
+  return expr
+end
+
+function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
+  dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
+  local typ1    
+  if is(fun, :cat_t)
+    typ1 = isa(args[2], GlobalRef) ? eval(args[2]) : args[2]
+    @assert (isa(typ1, DataType)) "expect second argument to cat_t to be a type"
+    dim1 = args[1]
+    @assert (isa(dim1, Int)) "expect first argument to cat_t to be constant"
+    typ1 = Array{typ1, dim1}
+  else
+    a1 = args[1]
+    if typeof(a1) == GlobalRef
+      a1 = eval(a1)
+    end
+    typ1 = typeOfOpr(state, a1)
+    if is(fun, :fptrunc)
+      if     is(a1, Float32) typ1 = Float32
+      elseif is(a1, Float64) typ1 = Float64
+      else throw(string("unknown target type for fptrunc: ", typ1, " args[1] = ", args[1]))
+      end
+    elseif is(fun, :fpsiround)
+      if     is(a1, Float32) typ1 = Int32
+      elseif is(a1, Float64) typ1 = Int64
+        #        if is(typ1, Float32) typ1 = Int32
+        #        elseif is(typ1, Float64) typ1 = Int64
+      else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
+      end
+    end
+  end
+  dprintln(env,"fix type ", typ, " => ", typ1)
+  return typ1
+end
+
+function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
+  dprintln(env, "got getindex or setindex!")
+  args = normalize_args(state, env, args)
+  arr = args[1]
+  ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
+  atyp = typeOfOpr(state, arr)
+  expr = nothing
+  dprintln(env, "ranges = ", ranges)
+  if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
+    dprintln(env, "args is ", args)
+    dprintln(env, "ranges is ", ranges)
+    #newsize = addGenSym(Int, state.linfo)
+    #newlhs = addGenSym(typ, state.linfo)
+    etyp = elmTypOf(atyp)
+    ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
+    if is(fun, :getindex) 
+      expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+    else
+      args = Any[mk_select(arr, ranges), args[2]]
+      typs = Type[atyp, typeOfOpr(state, args[2])]
+      (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
+      elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+      linfo = LambdaInfo()
+      for i=1:length(nonarrays)
+        # At this point, they are either symbol nodes, or constants
+        if isa(nonarrays[i], SymbolNode)
+          addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
+        end
+      end
+      expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
+    end
+    expr.typ = typ
+  end
+  return expr
+end
+
+function translate_call_map(state, env, typ, fun, args::Array{Any,1})
+  # TODO: check for unboxed array type
+  args = normalize_args(state, env, args)
+  etyp = elmTypOf(typ) 
+  if is(fun, :-) && length(args) == 1
+    fun = :negate
+  end
+  typs = Type[ typeOfOpr(state, arg) for arg in args ]
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  opr, reorder = specializeOp(mapOps[fun], elmtyps)
+  typs = reorder(typs)
+  args = reorder(args)
+  dprintln(env,"from_lambda: before specialize, opr=", opr, " args=", args, " typs=", typs)
+  (nonarrays, args, typs, f) = specialize(state, args, typs, 
+  as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
+  dprintln(env,"from_lambda: after specialize, typs=", typs)
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  # calculate escaping variables
+  linfo = LambdaInfo()
+  for i=1:length(nonarrays)
+    # At this point, they are either symbol nodes, or constants
+    if isa(nonarrays[i], SymbolNode)
+      addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+    end
+  end
+  domF = DomainLambda(elmtyps, [etyp], f, linfo)
+  for i = 1:length(args)
+    arg_ = inline_select(env, state, args[i])
+    if arg_ != args[i] && i != 1 && length(args) > 1
+      error("Selector array must be the only array argument to mmap: ", args)
+    end
+    args[i] = arg_
+  end
+  expr = mmapRemoveDupArg!(mk_mmap(args, domF))
+  expr.typ = typ
+  return expr
+end
+
+function translate_call_checkbounds(state, env, args::Array{Any,1})
+  args = normalize_args(state, env, args)
+  typ = typeOfOpr(state, args[1])
+  local expr::Expr
+  if isarray(typ)
+    typ_second_arg = typeOfOpr(state, args[2])
+    if isarray(typ_second_arg) || isbitarray(typ_second_arg)
+      expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
+    else
+      dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
+      error("Unhandled bound in checkbounds: ", args[2])
+    end
+  elseif isinttyp(typ)
+    if isinttyp(typeOfOpr(state, args[2]))
+      expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
+      mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
+    elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
+      def = lookupConstDefForArg(state, args[2])
+      (start, step, final) = from_range(def)
+      expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
+      mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
+    else
+      error("Unhandled bound in checkbounds: ", args[2])
+    end
+  else
+    error("Unhandled bound in checkbounds: ", args[1])
   end
   return expr
 end
