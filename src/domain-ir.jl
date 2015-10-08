@@ -857,40 +857,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
 
   dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
   if verifyMapOps(state, fun, args) && (isarray(typ) || isbitarray(typ)) 
-    # TODO: check for unboxed array type
-    args = normalize_args(state, env_, args)
-    etyp = elmTypOf(typ) 
-    if is(fun, :-) && length(args) == 1
-      fun = :negate
-    end
-    typs = Type[ typeOfOpr(state, arg) for arg in args ]
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    opr, reorder = specializeOp(mapOps[fun], elmtyps)
-    typs = reorder(typs)
-    args = reorder(args)
-    dprintln(env,"from_lambda: before specialize, opr=", opr, " args=", args, " typs=", typs)
-    (nonarrays, args, typs, f) = specialize(state, args, typs, 
-    as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
-    dprintln(env,"from_lambda: after specialize, typs=", typs)
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
-    # calculate escaping variables
-    linfo = LambdaInfo()
-    for i=1:length(nonarrays)
-      # At this point, they are either symbol nodes, or constants
-      if isa(nonarrays[i], SymbolNode)
-        addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
-      end
-    end
-    domF = DomainLambda(elmtyps, [etyp], f, linfo)
-    for i = 1:length(args)
-      arg_ = inline_select(env, state, args[i])
-      if arg_ != args[i] && i != 1 && length(args) > 1
-        error("Selector array must be the only array argument to mmap: ", args)
-      end
-      args[i] = arg_
-    end
-    expr = mmapRemoveDupArg!(mk_mmap(args, domF))
-    expr.typ = typ
+    return translate_call_map(state,env_,typ, fun, args)
   elseif is(fun, :cartesianarray)
     return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
@@ -1041,6 +1008,44 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     end
     expr = mk_expr(typ, head, oldfun, oldargs...)
   end
+  return expr
+end
+
+function translate_call_map(state, env, typ, fun, args::Array{Any,1})
+  # TODO: check for unboxed array type
+  args = normalize_args(state, env, args)
+  etyp = elmTypOf(typ) 
+  if is(fun, :-) && length(args) == 1
+    fun = :negate
+  end
+  typs = Type[ typeOfOpr(state, arg) for arg in args ]
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  opr, reorder = specializeOp(mapOps[fun], elmtyps)
+  typs = reorder(typs)
+  args = reorder(args)
+  dprintln(env,"from_lambda: before specialize, opr=", opr, " args=", args, " typs=", typs)
+  (nonarrays, args, typs, f) = specialize(state, args, typs, 
+  as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
+  dprintln(env,"from_lambda: after specialize, typs=", typs)
+  elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+  # calculate escaping variables
+  linfo = LambdaInfo()
+  for i=1:length(nonarrays)
+    # At this point, they are either symbol nodes, or constants
+    if isa(nonarrays[i], SymbolNode)
+      addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
+    end
+  end
+  domF = DomainLambda(elmtyps, [etyp], f, linfo)
+  for i = 1:length(args)
+    arg_ = inline_select(env, state, args[i])
+    if arg_ != args[i] && i != 1 && length(args) > 1
+      error("Selector array must be the only array argument to mmap: ", args)
+    end
+    args[i] = arg_
+  end
+  expr = mmapRemoveDupArg!(mk_mmap(args, domF))
+  expr.typ = typ
   return expr
 end
 
