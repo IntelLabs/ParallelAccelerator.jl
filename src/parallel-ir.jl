@@ -1310,16 +1310,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  #if(len_input_arrays == 1)
-  if length(dl.outputs) == 1
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements, input_arrays[1])
-  else
-    ret_arrays = input_arrays[1:length(dl.outputs)]
-    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
-    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
-  end
+  post_statements = create_mmap!_post_statements(input_arrays, dl, state)
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
@@ -1336,6 +1327,21 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
   [new_parfor]
+end
+
+function create_mmap!_post_statements(input_arrays, dl, state)
+  post_statements = Any[]
+  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+  #if(len_input_arrays == 1)
+  if length(dl.outputs) == 1
+    # If there is only one output then put that output in the post_statements
+    push!(post_statements, input_arrays[1])
+  else
+    ret_arrays = input_arrays[1:length(dl.outputs)]
+    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
+  end
+  return post_statements
 end
 
 # ===============================================================================================================================
@@ -1539,18 +1545,7 @@ if length(condExprs) > 0
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  if(number_output_arrays == 1)
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-  else
-    all_sn = SymbolNode[]
-    assert(length(dl.outputs) == length(new_array_symbols))
-    for i = 1:length(dl.outputs)
-      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
-    end
-    push!(post_statements, all_sn)
-  end
+  post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
@@ -1568,6 +1563,24 @@ if length(condExprs) > 0
   retarr[1] = new_parfor
   #[new_parfor]
 end
+
+function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
+  post_statements = SymbolNode[]
+  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+  if(length(dl.outputs)==1)
+    # If there is only one output then put that output in the post_statements
+    push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
+  else
+    all_sn = SymbolNode[]
+    assert(length(dl.outputs) == length(new_array_symbols))
+    for i = 1:length(dl.outputs)
+      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+    end
+    push!(post_statements, all_sn)
+  end
+  return post_statements
+end
+
 
 # ===============================================================================================================================
 
