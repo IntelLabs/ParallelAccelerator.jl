@@ -7,39 +7,41 @@ Performance Scripting project at Intel Labs.
 
 ## Prerequisites
 
-  * Install a *nightly build* of Julia.  See "Nightly builds" at the
-    bottom of http://julialang.org/downloads/ .  The most recently
-    released version of Julia (0.3.11) is not new enough to support
-    all of ParallelAccelerator's features.
-  * Install the CompilerTools package, following the instructions
-    [here](https://github.com/IntelLabs/CompilerTools.jl#compilertools).
+  * Install Julia v0.4.0rc4.  Go to http://julialang.org/downloads/
+    and scroll down to "Release Candidates", then download the
+    appropriate version.  Then check that you can run Julia and get to
+    a `julia>` prompt.  You will know you're running the correct
+    version if when you run it, you see `Version 0.4.0-rc4`.
   * You will need a C++ compiler: either `gcc` or `icpc`.
 
 ## Installation
 
-Once you have completed the above steps, run Julia and then run the
-command
+At the `julia>` prompt, run these commands:
 
-    Pkg.clone("https://github.com/IntelLabs/ParallelAccelerator.jl.git")
+``` .julia
+Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl.git")        # Install the CompilerTools package on which this package depends.
+Pkg.clone("https://github.com/IntelLabs/ParallelAccelerator.jl.git")  # Install this package.
+Pkg.build("ParallelAccelerator")                                      # Build the C++ runtime component of the package.
+Pkg.test("CompilerTools")                                             # Run CompilerTools tests.
+Pkg.test("ParallelAccelerator")                                       # Run ParallelAccelerator tests.
+```
 
-at the `julia>` prompt.  You will be prompted for your GitHub username
-and password.
-
-Next, run:
-
-    Pkg.build("ParallelAccelerator")
-
-This will build the C++ runtime component of the package.
-
-## Running
-
-Once the packages are installed, you can try out examples from the
+For the two `Pkg.clone` commands, you will be prompted for your GitHub
+username and password.
+ 
+If all of the above succeeded, you should be ready to use
+`ParallelAccelerator`.  We're in the process of documenting how to use
+this package.  For now, a good place to look for examples is the code
+in the
 [ParallelAcceleratorBenchmarks](https://github.com/IntelLabs/ParallelAcceleratorBenchmarks)
-repo.  See the README files for each benchmark for instructions on how
-to run.
+repo.  For example, the `black-scholes/src` directory in that repo
+contains the file `blackscholes-pse.jl`, which you can include at the
+Julia REPL:
 
-<!-- Installation on Mac OS X: -->
+```
+julia> include("blackscholes-pse.jl")
+```
 
-<!-- install Intel Compiler -->
-<!-- install bcpp with Homebrew -->
-
+Each directory in `ParallelAcceleratorBenchmarks` has a README with
+some more information about each workload.  Caveat: some of the
+workloads require installing additional Julia packages.
