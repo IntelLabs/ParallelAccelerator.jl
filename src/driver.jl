@@ -100,9 +100,9 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
 
   package_root   = ParallelAccelerator.getPackageRoot()
 
-  function_name_string::ASCIIString = ParallelAccelerator.cgen.canonicalize(string(func.name))
+  function_name_string = ParallelAccelerator.cgen.canonicalize(string(func.name))
 
-  outfile_name::ASCIIString = cgen.writec(cgen.from_root(code, function_name_string))
+  outfile_name = cgen.writec(cgen.from_root(code, function_name_string))
   cgen.compile(outfile_name)
   dyn_lib = cgen.link(outfile_name)
  

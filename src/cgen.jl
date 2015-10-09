@@ -236,7 +236,7 @@ end
 
 # Emit declarations and "include" directives
 function from_header(isEntryPoint::Bool)
-	s::ASCIIString = from_UDTs()
+	s = from_UDTs()
 	isEntryPoint ? from_includes() * s : s
 end
 
@@ -259,13 +259,12 @@ end
 # and emit a C++ type declaration for each
 function from_UDTs()
 	global lstate
-	s::ASCIIString = isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
-  return s
+	isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
 end
 
 # Tuples are represented as structs
 function from_decl(k::Tuple)
-	s::ASCIIString = "typedef struct {\n"
+	s = "typedef struct {\n"
 	for i in 1:length(k)
 		s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
 	end
@@ -344,7 +343,7 @@ function lambdaparams(ast)
 end
 
 function from_lambda(ast, args)
-	s::ASCIIString = ""
+	s = ""
 	linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
 	params = linfo.input_params
 	vars = linfo.var_defs
@@ -386,7 +385,7 @@ end
 
 
 function from_exprs(args::Array)
-	s::ASCIIString = ""
+	s = ""
 	for a in args
 		se = from_expr(a)
 		s *= se * (!isempty(se) ? ";\n" : "")
@@ -435,7 +434,7 @@ function from_assignment(args::Array)
   # if this is a hvcat call, the array should be allocated and initialized
   if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
     dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
-    s::ASCIIString = ""
+    s = ""
     
     @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
     typ = toCtype(eval(rhs.args[2].name))
@@ -602,7 +601,7 @@ function from_tupleref(args)
 end
 
 function from_safegetindex(args)
-	s::ASCIIString = ""
+	s = ""
 	src = from_expr(args[1])
 	s *= src * ".SAFEARRAYELEM("
 	idxs = map((i)->from_expr(i), args[2:end])
@@ -614,7 +613,7 @@ function from_safegetindex(args)
 end
 
 function from_getindex(args)
-	s::ASCIIString = ""
+	s = ""
 	src = from_expr(args[1])
 	s *= src * ".ARRAYELEM("
 	idxs = map((i)->from_expr(i), args[2:end])
@@ -626,7 +625,7 @@ function from_getindex(args)
 end
 
 function from_setindex(args)
-	s::ASCIIString = ""
+	s = ""
 	src = from_expr(args[1])
 	s *= src * ".ARRAYELEM("
 	idxs = map((i)->from_expr(i), args[3:end])
@@ -842,7 +841,7 @@ function from_builtins(f, args)
 end
 
 function from_box(args)
-	s::ASCIIString = ""
+	s = ""
 	typ = args[1]
 	val = args[2]
 	s *= from_expr(val)
@@ -1009,7 +1008,7 @@ end
 
 function from_call1(ast::Array{Any, 1})
 	dprintln(3,"Call1 args")
-	s::ASCIIString = ""
+	s = ""
 	for i in 2:length(ast)
 		s *= from_expr(ast[i])
 		dprintln(3,ast[i])
@@ -1030,9 +1029,9 @@ end
 
 function resolveCallTarget(args::Array{Any, 1})
 	dprintln(3,"Trying to resolve target with args: ", args)
-	M::ASCIIString = ""
-	t::ASCIIString = ""
-	s::ASCIIString = ""
+	M = ""
+	t = ""
+	s = ""
 	#case 0:
 	f = args[1]
 	if isa(f, Symbol) && isInlineable(f, args[2:end])
@@ -1072,10 +1071,10 @@ function resolveCallTarget(args::Array{Any, 1})
 		return resolveCallTarget(args[1])
 		
 	elseif isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
-        M = string(args[1].value); s = string(args[1].name); t = ""
+        M = args[1].value; s = args[1].name; t = ""
 
 	elseif isdefined(:GlobalRef) && isa(args[1],GlobalRef) && isa(args[1].mod,Module)
-        M = string(args[1].mod); s = string(args[1].name); t = ""
+        M = args[1].mod; s = args[1].name; t = ""
 
 	# case 3:
 	elseif isa(args[1], TopNode) && isInlineable(args[1].name, args[2:end])
@@ -1139,10 +1138,10 @@ function from_call(ast::Array{Any, 1})
 	skipCompilation = has(lstate.compiledfunctions, funStr) ||
 		isPendingCompilation(lstate.worklist, funStr)
 	if(fun == :println)
-		s2::ASCIIString =  "std::cout << "
+		s =  "std::cout << "
 		argTyps = []
 		for a in 2:length(args)
-			s2 *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
+			s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
 			if !skipCompilation
 				# Attempt to find type
 				if typeAvailable(args[a])
@@ -1154,12 +1153,12 @@ function from_call(ast::Array{Any, 1})
 				end
 			end
 		end
-		s2 *= "<< std::endl;"
-		return s2
+		s *= "<< std::endl;"
+		return s
 	end
 
 
-	s::ASCIIString = ""
+	s = ""
 	map((i)->dprintln(3,i[2]), lstate.worklist)
 	map((i)->dprintln(3,i), lstate.compiledfunctions)
 	s *= "_" * from_expr(fun) * "("
@@ -1234,7 +1233,7 @@ end
 
 function from_gotonode(ast, exp = "")
 	labelId = ast.label
-	s::ASCIIString = ""
+	s = ""
 	dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
 	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
@@ -1246,7 +1245,7 @@ end
 function from_gotoifnot(args)
 	exp = args[1]
 	labelId = args[2]
-	s::ASCIIString = ""
+	s = ""
 	dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
 	if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
 		s *= "if (!(" * from_expr(exp) * ")) "
@@ -1290,7 +1289,7 @@ end
 
 function from_parforend(args)
 	global lstate
-	s::ASCIIString = ""
+	s = ""
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	for i in 1:length(lpNests)
@@ -1382,7 +1381,7 @@ function from_parforstart(args)
 		return loopheaders
 	end
 	
-	s::ASCIIString = ""
+	s = ""
 
 	# Generate initializers and OpenMP clauses for reductions
 	rds = parfor.reductions
@@ -1448,7 +1447,7 @@ function from_parforstart_serial(args)
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	global lstate
-	s::ASCIIString = ""
+	s = ""
 
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
 	starts = map((a)->from_expr(a.lower), lpNests)
@@ -1465,7 +1464,7 @@ end
 # TODO: Should simple objects be heap allocated ?
 # For now, we stick with stack allocation
 function from_new(args)
-	s::ASCIIString = ""
+	s = ""
 	typ = args[1] #type of the object
 	if isa(typ, DataType)
 		objtyp, ptyps = parseParametricType(typ)
@@ -1503,7 +1502,7 @@ end
 
 
 function from_expr(ast::Expr)
-	s::ASCIIString = ""
+	s = ""
 	head = ast.head
 	args = ast.args
 	typ = ast.typ
@@ -1586,7 +1585,7 @@ end
 
 function from_expr(ast::Any)
 	dprintln(3,"Compiling expression: ", ast)
-	s::ASCIIString = ""
+	s = ""
 	asttyp = typeof(ast)
 	dprintln(3,"With type: ", asttyp)
 
@@ -1673,7 +1672,7 @@ function from_varargpack(vargs)
 end
 
 function from_formalargs(params, vararglist, unaliased=false)
-	s::ASCIIString = ""
+	s = ""
 	ql = unaliased ? "__restrict" : ""
 	dprintln(3,"Compiling formal args: ", params)
 	dumpSymbolTable(lstate.symboltable)
@@ -1906,7 +1905,7 @@ end
 
 # Translate function nodes in breadth-first order
 function from_worklist()
-	s::ASCIIString = ""
+	s = ""
 	si = ""
 	global lstate
 	while !isempty(lstate.worklist)
@@ -1944,7 +1943,7 @@ end
 # Utility methods to write, compile and link generated code
 #
 import Base.write
-function writec(s::ASCIIString, outfile_name=nothing; with_headers=false)
+function writec(s, outfile_name=nothing; with_headers=false)
     if outfile_name == nothing
         outfile_name = generate_new_file_name()
     end
