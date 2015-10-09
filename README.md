@@ -7,11 +7,11 @@ Performance Scripting project at Intel Labs.
 
 ## Prerequisites
 
-  * Install Julia v0.4.0rc4.  Go to http://julialang.org/downloads/
-    and scroll down to "Release Candidates", then download the
-    appropriate version.  Then check that you can run Julia and get to
-    a `julia>` prompt.  You will know you're running the correct
-    version if when you run it, you see `Version 0.4.0-rc4`.
+  * Install Julia v0.4.0.  Go to http://julialang.org/downloads/ and
+    download the appropriate version listed under "Current Release".
+    Then check that you can run Julia and get to a `julia>` prompt.
+    You will know you're running the correct version if when you run
+    it, you see `Version 0.4.0`.
   * You will need a C++ compiler: either `gcc` or `icpc`.
 
 ## Installation
