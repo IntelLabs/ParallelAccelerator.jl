@@ -1593,6 +1593,12 @@ function from_expr(ast::Expr)
 	elseif head == :loopend
 		s *= from_loopend(args)
 
+	# type_goto is "a virtual control flow edge used to convey
+	# type data to static_typeof, also to be removed."  We can
+	# safely ignore it.
+	elseif head == :type_goto
+		#Nothing
+
 	else
 		dprintln(3,"Unknown head in expression: ", head)
 		throw("Unknown head")
