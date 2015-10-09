@@ -1208,7 +1208,9 @@ function from_return(args)
 	global inEntryPoint
 	dprintln(3,"Return args are: ", args)
 	retExp = ""
-	if inEntryPoint
+    if length(args) == 0
+        return "return"
+    elseif inEntryPoint
 		arg1 = args[1]
 		arg1_typ = Any
 		if typeAvailable(arg1)
