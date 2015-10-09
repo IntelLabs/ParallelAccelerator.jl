@@ -1175,6 +1175,24 @@ function gen_bitarray_mask(thisInfo::InputInfo, parfor_index_syms::Array{Symbol,
   end
 end
 
+
+function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+  loopNests = Array(PIRLoopNest, num_dim_inputs)
+  # Insert a statement to assign the length of the input arrays to a var
+  for i = 1:num_dim_inputs
+    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
+    # add that assignment to the set of statements to execute before the parfor
+    push!(pre_statements,array1_len)
+    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+    push!(save_array_lens, save_array_len)
+    loopNests[num_dim_inputs - i + 1] =
+    PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
+  end
+  return loopNests
+end
+
+
 @doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
@@ -1206,7 +1224,6 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   num_dim_inputs = getArrayNumDims(first_input, state)
   # verify the number of input arrays matches the number of input types in dl
   assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
-  loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
   parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
@@ -1217,7 +1234,6 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens = AbstractString[]
 
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
@@ -1225,21 +1241,10 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
   end
 
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements,array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-
-    loopNests[num_dim_inputs - i + 1] =
-      PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                  1,
-                  SymbolNode(symbol(save_array_len),Int),
-                  1)
-  end
+  # not used here?
+  save_array_lens = AbstractString[]
+  # generates loopnests and updates pre_statements
+  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
 
   for i in inputInfo
     append!(pre_statements, i.pre_offsets)
@@ -1429,22 +1434,9 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
   # TODO - extract the lower bound of the range into a variable
 
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements, array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-
-    loopNests[num_dim_inputs - i + 1] =
-      PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                  1,
-                  SymbolNode(symbol(save_array_len),Int),
-                  1)
-  end
-
+  # generates loopnests and updates pre_statements
+  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+  
   for i in inputInfo
     append!(pre_statements, i.pre_offsets)
   end
