@@ -157,10 +157,12 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
-    addOptPass(toCartesianArray, PASS_MACRO)
-    addOptPass(toDomainIR, PASS_TYPED)
-    addOptPass(toParallelIR, PASS_TYPED)
-    addOptPass(toCGen, PASS_TYPED)
+    if getPseMode() != OFF_MODE
+      addOptPass(toCartesianArray, PASS_MACRO)
+      addOptPass(toDomainIR, PASS_TYPED)
+      addOptPass(toParallelIR, PASS_TYPED)
+      addOptPass(toCGen, PASS_TYPED)
+    end
 end
 
 export @acc

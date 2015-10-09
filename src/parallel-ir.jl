@@ -942,14 +942,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
   dprintln(3,"input_array_ranges = ", input_array_ranges)
    
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
-
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+  
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
   argtyp = typeof(input_array)
@@ -1142,6 +1136,9 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
 
     if isa(input_array, Expr) && is(input_array.head, :select)
       thisInfo.array = input_array.args[1]
+      argtyp = typeof(thisInfo.array)
+      dprintln(3,"get_mmap_input_info inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+      @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
       select_kind = input_array.args[2].head
       @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
       if select_kind == :tomask
@@ -1166,6 +1163,36 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
     return thisInfo
 end
 
+function gen_bitarray_mask(thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
+  # we only support bitarray selection for 1D arrays
+  if length(thisInfo.select_bitarrays)==1
+    mask_array = thisInfo.select_bitarrays[1] 
+    # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+    #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+    #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+    #      end
+    thisInfo.rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+  end
+end
+
+
+function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+  loopNests = Array(PIRLoopNest, num_dim_inputs)
+  # Insert a statement to assign the length of the input arrays to a var
+  for i = 1:num_dim_inputs
+    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
+    # add that assignment to the set of statements to execute before the parfor
+    push!(pre_statements,array1_len)
+    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+    push!(save_array_lens, save_array_len)
+    loopNests[num_dim_inputs - i + 1] =
+    PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
+  end
+  return loopNests
+end
+
+
 @doc """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
@@ -1175,7 +1202,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   len_input_arrays = length(input_arrays)
   dprintln(1,"Number of input arrays: ", len_input_arrays)
   dprintln(2,"input arrays: ", input_arrays)
-  assert(len_input_arrays > 0)
+  @assert len_input_arrays>0 "mmap! should have input arrays"
 
   # handle range selector
   inputInfo = InputInfo[]
@@ -1187,7 +1214,8 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   dprintln(3,"dl = ", dl)
   dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
 
-  indexed_arrays = Any[]
+  # Create an expression to access one element of this input array with index symbols parfor_index_syms
+  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
@@ -1196,60 +1224,27 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   num_dim_inputs = getArrayNumDims(first_input, state)
   # verify the number of input arrays matches the number of input types in dl
   assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
-  loopNests = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+
+  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
 
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
   pre_statements  = Any[]
   post_statements = Any[]
-  save_array_lens = AbstractString[]
 
   # Make sure each input array is a SymbolNode
   # Also, create indexed versions of those symbols for the loop body
   for(i = 1:length(inputInfo))
-    argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap! inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
-
-    # we only support bitarray selection for 1D arrays
-    if length(inputInfo[i].select_bitarrays)==1
-      mask_array = inputInfo[i].select_bitarrays[1] 
-      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-#      end
-      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays, inputInfo[i].elementTemp)
   end
 
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements,array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-
-    loopNests[num_dim_inputs - i + 1] =
-      PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                  1,
-                  SymbolNode(symbol(save_array_len),Int),
-                  1)
-  end
+  # not used here?
+  save_array_lens = AbstractString[]
+  # generates loopnests and updates pre_statements
+  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
 
   for i in inputInfo
     append!(pre_statements, i.pre_offsets)
@@ -1273,9 +1268,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   assert(isa(out_body,Array))
   oblen = length(out_body)
   # the last output of genBody is a tuple of the outputs of the mmap!
-  last_body = out_body[oblen]
-  assert(typeof(last_body) == Expr)
-  lbexpr::Expr = last_body
+  lbexpr::Expr = out_body[oblen]
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
 
@@ -1322,16 +1315,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  #if(len_input_arrays == 1)
-  if length(dl.outputs) == 1
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements, input_arrays[1])
-  else
-    ret_arrays = input_arrays[1:length(dl.outputs)]
-    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
-    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
-  end
+  post_statements = create_mmap!_post_statements(input_arrays, dl, state)
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
@@ -1348,6 +1332,21 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
   dprintln(3,"Lowered parallel IR = ", new_parfor)
 
   [new_parfor]
+end
+
+function create_mmap!_post_statements(input_arrays, dl, state)
+  post_statements = Any[]
+  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+  #if(len_input_arrays == 1)
+  if length(dl.outputs) == 1
+    # If there is only one output then put that output in the post_statements
+    push!(post_statements, input_arrays[1])
+  else
+    ret_arrays = input_arrays[1:length(dl.outputs)]
+    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
+  end
+  return post_statements
 end
 
 # ===============================================================================================================================
@@ -1371,6 +1370,19 @@ function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, range
   return ret
 end
 
+
+# Create variables to use for the parfor loop indices.
+function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+  parfor_index_syms = Array(Symbol,num_dim_inputs)
+  for i = 1:num_dim_inputs
+    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
+    parfor_index_sym = symbol(parfor_index_var)
+    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
+    parfor_index_syms[i] = parfor_index_sym
+  end
+  return parfor_index_syms
+end
+
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
@@ -1379,7 +1391,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   len_input_arrays = length(input_arrays)
   dprintln(2,"Number of input arrays: ", len_input_arrays)
   dprintln(2,"input arrays: ", input_arrays)
-  assert(len_input_arrays > 0)
+  @assert len_input_arrays>0 "mmap should have input arrays"
 
   # handle range selector
   inputInfo = InputInfo[]
@@ -1390,7 +1402,8 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # Verify the number of input arrays matches the number of input types in dl
   assert(length(dl.inputs) == length(inputInfo))
 
-  indexed_arrays = Any[]
+  # Create an expression to access one element of this input array with index symbols parfor_index_syms
+  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
 
   # Get a unique number to embed in generated code for new variables to prevent name conflicts.
   unique_node_id = get_unique_num()
@@ -1400,13 +1413,9 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   loopNests      = Array(PIRLoopNest, num_dim_inputs)
 
   # Create variables to use for the loop indices.
-  parfor_index_syms = Symbol[]
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    push!(parfor_index_syms, parfor_index_sym)
-  end
+  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+
+  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
 
   out_body = Any[]
   # Create empty arrays to hold pre and post statements.
@@ -1419,44 +1428,15 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   # Make sure each input array is a SymbolNode.
   # Also, create indexed versions of those symbols for the loop body.
   for(i = 1:length(inputInfo))
-    argtyp = typeof(inputInfo[i].array)
-    dprintln(3,"mk_parfor_args_from_mmap inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-    assert(argtyp <: SymAllGen)
-
-    # we only support bitarray selection for 1D arrays
-    if length(inputInfo[i].select_bitarrays)==1
-      mask_array = inputInfo[i].select_bitarrays[1]
-      # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-#      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-#        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-#      end
-      inputInfo[i].rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-    end
     push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    push!(indexed_arrays, inputInfo[i].elementTemp)
   end
 
   # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
   # TODO - extract the lower bound of the range into a variable
 
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements, array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-
-    loopNests[num_dim_inputs - i + 1] =
-      PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                  1,
-                  SymbolNode(symbol(save_array_len),Int),
-                  1)
-  end
-
+  # generates loopnests and updates pre_statements
+  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+  
   for i in inputInfo
     append!(pre_statements, i.pre_offsets)
   end
@@ -1475,9 +1455,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   assert(isa(out_body,Array))
   oblen = length(out_body)
   # the last output of genBody is a tuple of the outputs of the mmap
-  last_body = out_body[oblen]
-  assert(typeof(last_body) == Expr)
-  lbexpr::Expr = last_body
+  lbexpr::Expr = out_body[oblen] 
   assert(lbexpr.head == :tuple)
   assert(length(lbexpr.args) == length(dl.outputs))
 
@@ -1487,8 +1465,8 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
   output_element_sizes = 0
 
   out_body = out_body[1:oblen-1]
-else_body = Any[]
-elseLabel = next_label(state)
+  else_body = Any[]
+  elseLabel = next_label(state)
   condExprs = Any[]
   for i = 1:length(inputInfo)
     if inputInfo[i].rangeconds.head != :noop
@@ -1543,18 +1521,7 @@ if length(condExprs) > 0
   simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
   dprintln(2,rws)
 
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  if(number_output_arrays == 1)
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-  else
-    all_sn = SymbolNode[]
-    assert(length(dl.outputs) == length(new_array_symbols))
-    for i = 1:length(dl.outputs)
-      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
-    end
-    push!(post_statements, all_sn)
-  end
+  post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
 
   new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
@@ -1572,6 +1539,24 @@ if length(condExprs) > 0
   retarr[1] = new_parfor
   #[new_parfor]
 end
+
+function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
+  post_statements = SymbolNode[]
+  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+  if(length(dl.outputs)==1)
+    # If there is only one output then put that output in the post_statements
+    push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
+  else
+    all_sn = SymbolNode[]
+    assert(length(dl.outputs) == length(new_array_symbols))
+    for i = 1:length(dl.outputs)
+      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+    end
+    push!(post_statements, all_sn)
+  end
+  return post_statements
+end
+
 
 # ===============================================================================================================================
 
@@ -5292,6 +5277,10 @@ function hasNoSideEffects(node :: Expr)
     end
   elseif node.head == :lambda
     return true
+  elseif node.head == :new
+    if node.args[1] <: Range
+      return true
+    end
   elseif node.head == :call
     func = node.args[1]
     if func == TopNode(:box) ||
@@ -7073,22 +7062,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
   elseif head == :alloc
     # turn array alloc back to plain Julia ccall
     head = :call
-    elemTyp = args[1]
-    sizes = args[2]
-    n = length(sizes)
-    assert(n >= 1 && n <= 3)
-    name = symbol(string("jl_alloc_array_", n, "d"))
-    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
-    #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-    #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
-    realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
-    #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
-    for i=1:n
-      push!(realArgs, sizes[i])
-      push!(realArgs, 0)
-    end
-    args = vcat(TopNode(:ccall), realArgs)
+    args = from_alloc(args)
   elseif head == :stencil!
     head = :parfor
     ast = mk_parfor_args_from_stencil(typ, head, args, state)
@@ -7127,6 +7101,26 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
   ast.typ = typ
   return [ast]
 end
+
+function from_alloc(args::Array{Any,1})
+  elemTyp = args[1]
+  sizes = args[2]
+  n = length(sizes)
+  assert(n >= 1 && n <= 3)
+  name = symbol(string("jl_alloc_array_", n, "d"))
+  appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+  #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
+  #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
+  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+  realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
+  #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
+  for i=1:n
+    push!(realArgs, sizes[i])
+    push!(realArgs, 0)
+  end
+  return vcat(TopNode(:ccall), realArgs)
+end
+
 
 @doc """
 Take something returned from AstWalk and assert it should be an array but in this
