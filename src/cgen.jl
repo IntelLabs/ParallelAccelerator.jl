@@ -6,7 +6,7 @@
 module cgen
 using ..ParallelIR
 using CompilerTools
-export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level
+export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 
 # uncomment this line for using Debug.jl
@@ -147,6 +147,11 @@ function setvectorizationlevel(x)
     global vectorizationlevel = x
 end
 
+include_blas = false
+function set_include_blas(val::Bool=true)
+    global include_blas = val
+end
+
 # Reset and reuse the LambdaGlobalData object across function
 # frames
 function resetLambdaState(l::LambdaGlobalData)
@@ -242,7 +247,17 @@ end
 
 function from_includes()
 	packageroot = getPackageRoot()
+    blas_include = ""
+    if include_blas != false
+        libblas = Base.libblas_name
+        if contains(libblas, "mkl")
+            blas_include = "#include <mkl.h>\n"
+        else
+            blas_include = "#include <cblas.h>\n"
+        end
+    end
 	reduce(*, "", (
+        blas_include,
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
