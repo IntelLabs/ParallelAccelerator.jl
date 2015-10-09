@@ -6946,7 +6946,7 @@ function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level
   return from_expr(ast, depth, state, top_level)
 end
 
-function from_expr(ast::Union{SymAllGen,TopNode,LineNumberNode,LabelNode,
+function from_expr(ast::Union{SymAllGen,TopNode,LineNumberNode,LabelNode,Char,
      GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]
