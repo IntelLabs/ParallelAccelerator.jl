@@ -1009,7 +1009,7 @@ function arrayToTuple(a)
 end
 
 function from_symbol(ast)
-    if ast == :Inf
+    if ast in [:Inf, :Inf32]
         return "INFINITY"
     end
 	hasfield(ast, :name) ? canonicalize(string(ast.name)) : canonicalize(ast)
