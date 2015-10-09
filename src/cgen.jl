@@ -173,7 +173,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
 			"safe_arrayref", "safe_arrayset", "tupleref",
 			"call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
 			"_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
-            ":jl_array_ptr", "sizeof"
+            ":jl_array_ptr", "sizeof", "pointer"
 ]
 
 # Intrinsics
@@ -802,6 +802,14 @@ function from_sizeof(args)
     return "sizeof($(toCtype(args[1])))"
 end
 
+function from_pointer(args)
+    if length(args) == 1
+        return "$(from_expr(args[1])).data"
+    else
+        return "$(from_expr(args[1])).data + $(from_expr(args[2]))"
+    end
+end
+
 function from_builtins(f, args)
 	tgt = string(f)
 	if tgt == "getindex" || tgt == "getindex!"
@@ -832,6 +840,8 @@ function from_builtins(f, args)
 		return from_arrayalloc(args)
     elseif tgt == ":jl_array_ptr"
         return from_array_ptr(args)
+    elseif tgt == "pointer"
+        return from_pointer(args)
 	elseif tgt == "getfield"
 		return from_getfield(args)
 	elseif tgt == "unsafe_arrayref"
@@ -999,7 +1009,7 @@ function arrayToTuple(a)
 end
 
 function from_symbol(ast)
-    if ast == :Inf
+    if ast in [:Inf, :Inf32]
         return "INFINITY"
     end
 	hasfield(ast, :name) ? canonicalize(string(ast.name)) : canonicalize(ast)

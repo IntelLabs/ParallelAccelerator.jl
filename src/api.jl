@@ -3,7 +3,7 @@ baremodule API
 using Base
 import Base: call
 
-export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod, setindex!, getindex
+export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod, setindex!, getindex, pointer
 
 export cartesianarray
 
@@ -52,6 +52,14 @@ end
 
 @noinline function getindex{T}(A::DenseArray{T}, args...) 
   Base.getindex(A, args...)
+end
+
+@noinline function pointer{T}(A::DenseArray{T})
+  Base.pointer(A)
+end
+
+@noinline function pointer{T}(A::DenseArray{T}, offset)
+  Base.pointer(A, offset)
 end
 
 function getindex(A, args...) 
