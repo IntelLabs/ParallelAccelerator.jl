@@ -242,7 +242,7 @@ end
 
 function from_includes()
 	packageroot = getPackageRoot()
-	reduce(*, "", (
+	s::ASCIIString = reduce(*, "", (
 		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
@@ -253,6 +253,7 @@ function from_includes()
 		"#include \"$packageroot/deps/include/j2c-array-pert.h\"\n",
 		"#include \"$packageroot/deps/include/pse-types.h\"\n")
 	)
+  return s
 end
 
 # Iterate over all the user defined types (UDTs) in a function
@@ -1907,7 +1908,7 @@ end
 # Translate function nodes in breadth-first order
 function from_worklist()
 	s::ASCIIString = ""
-	si = ""
+	si::ASCIIString = ""
 	global lstate
 	while !isempty(lstate.worklist)
 		a, fname, typs = splice!(lstate.worklist, 1)
