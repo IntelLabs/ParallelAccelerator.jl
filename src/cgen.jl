@@ -1827,7 +1827,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		bod = from_varargpack(vararglist) * bod
 	end
 
-	hdr::ASCIIString = ""
+	hdr = ""
 	wrapper = ""
 	if istupletyp(returnType)
 	    returnType = tuple(returnType.parameters...)
@@ -1860,7 +1860,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 		inEntryPoint = false
 	end
 	push!(lstate.compiledfunctions, functionName)
-	c::ASCIIString = hdr * forwarddecl * from_worklist() * s * wrapper
+	c = hdr * forwarddecl * from_worklist() * s * wrapper
 	if isEntryPoint
 		resetLambdaState(lstate)
 	end	
