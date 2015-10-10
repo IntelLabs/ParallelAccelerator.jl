@@ -5,7 +5,7 @@ os:
   - osx
 
 julia:
-  - release
+  - 0.4
   - nightly
 
 branches:
@@ -14,8 +14,7 @@ branches:
 
 matrix:
   allow_failures:
-  # Julia release is 0.3.11, so we shouldn't expect to run on it.
-    - julia: release
+    - julia: nightly
     - os: osx
 
 notifications:
