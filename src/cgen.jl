@@ -128,6 +128,7 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+const USE_OMP = 1
 
 # Globals
 inEntryPoint = false
@@ -256,9 +257,12 @@ function from_includes()
             blas_include = "#include <cblas.h>\n"
         end
     end
-	reduce(*, "", (
+	s = ""
+  if USE_OMP==1
+		s *= "#include <omp.h>\n"
+  end
+  s *= reduce(*, "", (
         blas_include,
-		"#include <omp.h>\n",
 		"#include <stdint.h>\n",
 		"#include <math.h>\n",
 		"#include <stdio.h>\n",
@@ -268,6 +272,7 @@ function from_includes()
 		"#include \"$packageroot/deps/include/j2c-array-pert.h\"\n",
 		"#include \"$packageroot/deps/include/pse-types.h\"\n")
 	)
+  return s
 end
 
 # Iterate over all the user defined types (UDTs) in a function
@@ -1474,18 +1479,20 @@ function from_parforstart_serial(args)
 	parfor = args[1]
 	lpNests = parfor.loopNests
 	global lstate
-	s = ""
+#	s = ""
 
 	ivs = map((a)->from_expr(a.indexVariable), lpNests)
 	starts = map((a)->from_expr(a.lower), lpNests)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
 
-	s *= "{\n{\n" * mapfoldl(
-			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
-			(a, b) -> "$a $b",
-			1:length(lpNests))
-	s
+	return from_loopnest(ivs, starts, stops, steps)
+	
+#  s *= "{\n{\n" * mapfoldl(
+#			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
+#			(a, b) -> "$a $b",
+#			1:length(lpNests))
+#	s
 end
 
 # TODO: Should simple objects be heap allocated ?
@@ -1578,7 +1585,11 @@ function from_expr(ast::Expr)
 		s *= from_gotoifnot(args)
 
 	elseif head == :parfor_start
+    if USE_OMP==1
 		s *= from_parforstart(args)
+  else
+		s *= from_parforstart_serial(args)
+  end
 
 	elseif head == :parfor_end
 		s *= from_parforend(args)
