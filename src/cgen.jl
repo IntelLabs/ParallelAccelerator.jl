@@ -2048,12 +2048,15 @@ function compile(outfile_name)
     run(`cp $cgenOutput $cgenOutputTmp`)
     # make cpp code readable
     beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+    if DEBUG_LVL < 1
+        beautifyCommand = pipeline(beautifyCommand, stdout=DevNull, stderr=DevNull)
+    end
     run(beautifyCommand)
   end
 
   full_outfile_name = `$packageroot/deps/generated/$outfile_name.o`
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
-  println(compileCommand)
+  dprintln(1,compileCommand)
   run(compileCommand)
 end
 
@@ -2080,7 +2083,7 @@ function link(outfile_name)
   packageroot = getPackageRoot()
   lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
   linkCommand = getLinkCommand(outfile_name, lib)
-  println(linkCommand)
+  dprintln(1,linkCommand)
   run(linkCommand)
   dprintln(3,"Done cgen linking")
   return lib
