@@ -55,9 +55,9 @@ type ASTDispatcher
         d = Dict{Any, Any}()
         n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
             GotoNode, TopNode, QuoteNode, NewvarNode,
-            isdefined(:GetfieldNode) ? GetfieldNode : 
+            isdefined(:GetfieldNode) ? GetfieldNode :
                 (isdefined(:GlobalRef) ? GlobalRef :
-                throw(string("Neither GetfieldNode or GlobalRef defined."))), 
+                throw(string("Neither GetfieldNode or GlobalRef defined."))),
             :block, :body, :new, :lambda, :(=), :call, :call1,
             :return, :line, :gotoifnot, :parfor_start, :parfor_end,
             :boundscheck, :loophead, :loopend]
@@ -66,7 +66,7 @@ type ASTDispatcher
             d[x] = symbol("from_" * lowercase(string(x)))
         end
         new(n, d, current_module())
-    end 
+    end
 end
 
 
@@ -119,7 +119,7 @@ end
 # flags are emitted in the code or passed to icc. These
 # levels are one of:
 
-# 0: default autovec - icc 
+# 0: default autovec - icc
 # 1: disable autovec - icc -no-vec
 # 2: force autovec   - icc with #pragma simd at OpenMP loops
 
@@ -128,11 +128,11 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
-@osx? ( 
-begin 
+@osx? (
+begin
     const USE_OMP = 0
 end
-: 
+:
 begin
 const USE_OMP = 1
 end
@@ -176,7 +176,7 @@ end
 # These are primitive operators on scalars and arrays
 _operators = ["*", "/", "+", "-", "<", ">"]
 # These are primitive "methods" for scalars and arrays
-_builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top", "box", 
+_builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top", "box",
             "unbox", "tuple", "arraysize", "arraylen", "ccall",
             "arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
             "safe_arrayref", "safe_arrayset", "tupleref",
@@ -198,7 +198,7 @@ _Intrinsics = [
         "le_float", "ne_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
         "nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
-        "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm", 
+        "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint"
@@ -296,7 +296,7 @@ function from_decl(k::Tuple)
     for i in 1:length(k)
         s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
     end
-    s *= "} Tuple" * 
+    s *= "} Tuple" *
         (!isempty(k) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", k) : "") * ";\n"
     if haskey(lstate.globalUDTs, k)
         lstate.globalUDTs[k] = 0
@@ -348,7 +348,7 @@ function from_decl(k::DataType)
         for i in 1:length(ftyps)
             s *= toCtype(ftyps[i]) * " " * canonicalize(fnames[i]) * ";\n"
         end
-        s *= "} " * canonicalize(k) * ";\n" 
+        s *= "} " * canonicalize(k) * ";\n"
         return s
     end
     throw(string("Could not translate Julia Type: " * string(k)))
@@ -379,15 +379,15 @@ function from_lambda(ast, args)
 
     decls = ""
     global lstate
-    # Populate the symbol table 
+    # Populate the symbol table
     for k in keys(vars)
         v = vars[k] # v is a VarDef
         lstate.symboltable[k] = v.typ
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
-        end 
+        end
     end
-    
+
     for k in 1:length(gensyms)
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
     end
@@ -395,7 +395,7 @@ function from_lambda(ast, args)
     dprintln(3,"lambda params = ", params)
     dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
-    
+
     for k in keys(lstate.symboltable)
         if !in(k, params) #|| (!in(k, locals) && !in(k, params))
             # If we have user defined types, record them
@@ -463,7 +463,7 @@ function from_assignment(args::Array)
   if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
     dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
     s = ""
-    
+
     @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
     typ = toCtype(eval(rhs.args[2].name))
 
@@ -559,7 +559,7 @@ end
 function toCtype(typ)
     if haskey(lstate.jtypes, typ)
         return lstate.jtypes[typ]
-    elseif isArrayType(typ) 
+    elseif isArrayType(typ)
         atyp, dims = parseArrayType(typ)
         atyp = toCtype(atyp)
         assert(dims >= 0)
@@ -681,7 +681,7 @@ function from_unsafe_setindex!(args)
 end
 
 function from_tuple(args)
-    "{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}" 
+    "{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}"
 end
 
 function from_arraysize(args)
@@ -712,7 +712,7 @@ function from_ccall(args)
     if isa(fun, QuoteNode)
         s = from_expr(fun)
     elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
-        s = canonicalize(string(fun.args[2])) 
+        s = canonicalize(string(fun.args[2]))
         dprintln(3,"ccall target: ", s)
     else
         throw("Invalid ccall format...")
@@ -734,15 +734,15 @@ function from_ccall(args)
 end
 
 function from_arrayset(args)
-    idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end]) 
+    idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
     "$src.ARRAYELEM($idxs) = $val"
 end
 
-function istupletyp(typ)                                                                               
-    isa(typ, DataType) && is(typ.name, Tuple.name) 
-end 
+function istupletyp(typ)
+    isa(typ, DataType) && is(typ.name, Tuple.name)
+end
 
 function from_getfield(args)
     dprintln(3,"from_getfield args are: ", args)
@@ -799,7 +799,7 @@ function from_arrayalloc(args)
         push!(shp, from_expr(args[6+(i-1)*2]))
     end
     shp = foldl((a, b) -> "$a, $b", shp)
-    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shp);\n" 
+    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shp);\n"
 end
 
 function from_builtins_comp(f, args)
@@ -858,13 +858,13 @@ function from_builtins(f, args)
     elseif tgt == "getfield"
         return from_getfield(args)
     elseif tgt == "unsafe_arrayref"
-        return from_getindex(args) 
+        return from_getindex(args)
     elseif tgt == "safe_arrayref"
-        return from_safegetindex(args) 
+        return from_safegetindex(args)
     elseif tgt == "unsafe_arrayset" || tgt == "safe_arrayset"
         return from_setindex(args)
     elseif tgt == "_unsafe_setindex!"
-        return from_unsafe_setindex!(args) 
+        return from_unsafe_setindex!(args)
     elseif tgt == "nfields"
         return from_nfields(args)
     elseif tgt == "sizeof"
@@ -873,7 +873,7 @@ function from_builtins(f, args)
     return from_steprange_last(args)
     end
 
-    
+
     dprintln(3,"Compiling ", string(f))
     throw("Unimplemented builtin")
 end
@@ -960,7 +960,7 @@ function from_intrinsic(f :: ANY, args)
     elseif intr == "sub_float"
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
     elseif intr == "div_float"
-        return "(" * from_expr(args[1]) * ")" * 
+        return "(" * from_expr(args[1]) * ")" *
             " / " * "(" * from_expr(args[2]) * ")"
     elseif intr == "sitofp"
         return from_expr(args[1]) * from_expr(args[2])
@@ -1078,9 +1078,9 @@ function resolveCallTarget(args::Array{Any, 1})
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
         arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[3:end])
         if isa(args[2], DataType)
-            t = "{" * arglist * "}" 
+            t = "{" * arglist * "}"
         else
-            t = from_expr(args[2]) * "(" * arglist * ")"    
+            t = from_expr(args[2]) * "(" * arglist * ")"
         end
     elseif isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) && is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
@@ -1107,7 +1107,7 @@ function resolveCallTarget(args::Array{Any, 1})
         end
     elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && hasfield(args[1], :head) && is(args[1].head, :call)
         return resolveCallTarget(args[1])
-        
+
     elseif isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
         M = args[1].value; s = args[1].name; t = ""
 
@@ -1125,7 +1125,7 @@ end
 
 #=
 function pattern_match_call(ast::Array{Any, 1})
-    # math functions 
+    # math functions
     libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
 
     dprintln(3,"pattern matching ",ast)
@@ -1167,7 +1167,7 @@ function from_call(ast::Array{Any, 1})
         return fs
     end
     dprintln(3,"Not inlinable")
-    funStr = "_" * string(fun)  
+    funStr = "_" * string(fun)
 
     # If we have previously compiled this function
     # we fallthru and simply emit the call.
@@ -1237,8 +1237,8 @@ function from_call(ast::Array{Any, 1})
 end
 
 # Generate return statements. The way we handle multiple return
-# values is different depending on whether this return statement is in 
-# the entry point or not. If it is, then the multiple return values are 
+# values is different depending on whether this return statement is in
+# the entry point or not. If it is, then the multiple return values are
 # pushed into spreallocated slots in the argument list (ret0, ret1...)
 # If not, just return a tuple.
 
@@ -1333,7 +1333,7 @@ function from_parforend(args)
     parfor = args[1]
     lpNests = parfor.loopNests
     for i in 1:length(lpNests)
-        s *= "}\n"  
+        s *= "}\n"
     end
     s *= lstate.ompdepth <=1 ? "}\n}/*parforend*/\n" : "" # end block introduced by private list
     dprintln(3,"Parforend = ", s)
@@ -1355,7 +1355,7 @@ function from_insert_divisible_task(args)
     dprintln(3,"Task Options: ", inserttasknode.task_options)
     dprintln(3,"Host Grain Size: ", inserttasknode.host_grain_size)
     dprintln(3,"Phi Grain Size: ", inserttasknode.phi_grain_size)
-    throw("Task mode is not supported yet") 
+    throw("Task mode is not supported yet")
 end
 
 function from_loopnest(ivs, starts, stops, steps)
@@ -1396,7 +1396,7 @@ function from_parforstart(args)
             if get(vgs, p.id, false)
                 push!(dups, i)
             else
-                vgs[p.id] = true    
+                vgs[p.id] = true
             end
         end
     end
@@ -1420,7 +1420,7 @@ function from_parforstart(args)
     if lstate.ompdepth > 1
         return loopheaders
     end
-    
+
     s = ""
 
     # Generate initializers and OpenMP clauses for reductions
@@ -1434,9 +1434,9 @@ function from_parforstart(args)
     rdsprolog = rdsclause = ""
     for i in 1:length(rds)
         rdsprolog *= "$(rdvars[i]) = $(rdinis[i]);\n"
-        rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) " 
+        rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) "
     end
-    
+
 
     # Check if there are private vars and emit the |private| clause
     dprintln(3,"Private Vars: ")
@@ -1445,7 +1445,7 @@ function from_parforstart(args)
     dprintln(3,"-----")
     privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
 
-    
+
     lcountexpr = ""
     for i in 1:length(lpNests)
         lcountexpr *= "(((" * starts[i] * ") + 1 - (" * stops[i] * ")) / (" * steps[i] * "))" * (i == length(lpNests) ? "" : " * ")
@@ -1495,7 +1495,7 @@ function from_parforstart_serial(args)
     steps = map((a)->from_expr(a.step), lpNests)
 
     return "{ {\n"*from_loopnest(ivs, starts, stops, steps)
-    
+
 #  s *= "{\n{\n" * mapfoldl(
 #           (i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
 #           (a, b) -> "$a $b",
@@ -1512,13 +1512,13 @@ function from_new(args)
         objtyp, ptyps = parseParametricType(typ)
         ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
         s = ctyp * "{"
-        s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}" 
+        s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}"
     elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
         typ = getfield(typ.args[2], typ.args[3].value)
         objtyp, ptyps = parseParametricType(typ)
         ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps))
         s = ctyp * "{"
-        s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}" 
+        s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}"
     end
     s
 end
@@ -1531,7 +1531,7 @@ function from_loophead(args)
     iv = from_expr(args[1])
     decl = "uint64_t"
     if haskey(lstate.symboltable, args[1])
-        decl = toCtype(lstate.symboltable[args[1]]) 
+        decl = toCtype(lstate.symboltable[args[1]])
     end
     start = from_expr(args[2])
     stop = from_expr(args[3])
@@ -1719,7 +1719,7 @@ function from_varargpack(vargs)
     args = vargs[1]
     vsym = canonicalize(args[1])
     vtyps = args[2]
-    toCtype(vtyps) * " " * vsym * " = " * 
+    toCtype(vtyps) * " " * vsym * " = " *
         "{" * mapfoldl((i) -> vsym * string(i), (a, b) -> "$a, $b", 1:length(vtyps.types)) * "};"
 end
 
@@ -1803,7 +1803,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
     retSlot = ""
     for i in 1:length(jtyp)
         delim = i < length(jtyp) ? ", " : ""
-        retSlot *= toCtype(jtyp[i]) * 
+        retSlot *= toCtype(jtyp[i]) *
             (isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
         if isArrayType(jtyp[i])
             typ = toCtype(jtyp[i])
@@ -1863,14 +1863,14 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
             end
         end
     end
-    
+
     # Translate arguments
     args = from_formalargs(params, vararglist, false)
 
     # If emitting unaliased versions, get "restrict"ed decls for arguments
     argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
 
-    if DEBUG_LVL>=3 
+    if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
     end
 
@@ -1914,7 +1914,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     c = hdr * forwarddecl * from_worklist() * s * wrapper
     if isEntryPoint
         resetLambdaState(lstate)
-    end 
+    end
     c
 end
 
@@ -1974,10 +1974,10 @@ function from_worklist()
         if isa(a, Symbol)
             a = ParallelAccelerator.Driver.code_typed(a, typs)
         end
-        dprintln(3,"============ Compiling AST for ", fname, " ============") 
+        dprintln(3,"============ Compiling AST for ", fname, " ============")
         dprintln(3,a)
         length(a) >= 1 ? dprintln(3,a[1].args) : ""
-        dprintln(3,"============ End of AST for ", fname, " ============") 
+        dprintln(3,"============ End of AST for ", fname, " ============")
         si = length(a) >= 1 ? from_root(a[1], fname, false) : ""
         dprintln(3,"============== C++ after compiling ", fname, " ===========")
         dprintln(3,si)
@@ -2017,7 +2017,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 
   packageroot = getPackageRoot()
   otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
-    
+
   Opts = "-O3"
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
@@ -2049,7 +2049,7 @@ function compile(outfile_name)
   full_outfile_name = `$packageroot/deps/generated/$outfile_name.o`
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
   println(compileCommand)
-  run(compileCommand)   
+  run(compileCommand)
 end
 
 function getLinkCommand(outfile_name, lib)
@@ -2067,7 +2067,7 @@ function getLinkCommand(outfile_name, lib)
     linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
   end
 
-  return linkCommand 
+  return linkCommand
 end
 
 
