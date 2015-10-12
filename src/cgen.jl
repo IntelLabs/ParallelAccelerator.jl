@@ -2016,16 +2016,21 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   compileCommand = `echo "invalid backend compiler"`
 
   packageroot = getPackageRoot()
-  otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
+  # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
+  otherArgs = []
 
-  Opts = "-O3"
+  Opts = ["-O3"]
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
-    Opts *= (USE_OMP==1 ? " -qopenmp" : "")
+    if USE_OMP == 1
+        push!(Opts, "-qopenmp")
+    end
     # Generate dyn_lib
     compileCommand = `icc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
-    Opts *= (USE_OMP==1 ? " -fopenmp" : "")
+    if USE_OMP == 1
+        push!(Opts, "-fopenmp")
+    end
     compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
