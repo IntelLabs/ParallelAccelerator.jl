@@ -128,7 +128,15 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+@osx? ( 
+begin 
+	const USE_OMP = 0
+end
+: 
+begin
 const USE_OMP = 1
+end
+)
 
 # Globals
 inEntryPoint = false
@@ -1486,7 +1494,7 @@ function from_parforstart_serial(args)
 	stops = map((a)->from_expr(a.upper), lpNests)
 	steps = map((a)->from_expr(a.step), lpNests)
 
-	return from_loopnest(ivs, starts, stops, steps)
+	return "{ {\n"*from_loopnest(ivs, starts, stops, steps)
 	
 #  s *= "{\n{\n" * mapfoldl(
 #			(i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
@@ -2009,13 +2017,16 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 
   packageroot = getPackageRoot()
   otherArgs = "-DJ2C_REFCOUNT_DEBUG -DDEBUGJ2C"
+    
   Opts = "-O3"
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
+    Opts *= (USE_OMP==1 ? "-qopenmp" : "")
     # Generate dyn_lib
-    compileCommand = `icc $Opts -g $vecOpts -qopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
-    compileCommand = `gcc $Opts -g -fopenmp -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    Opts *= (USE_OMP==1 ? "-fopenmp" : "")
+    compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -2047,10 +2058,13 @@ function getLinkCommand(outfile_name, lib)
 
   packageroot = getPackageRoot()
 
+  Opts = ""
   if backend_compiler == USE_ICC
-    linkCommand = `icc -g -shared -qopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    Opts *= (USE_OMP==1 ? "-qopenmp" : "")
+    linkCommand = `icc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
   elseif backend_compiler == USE_GCC
-    linkCommand = `gcc -g -shared -fopenmp -o $lib $packageroot/deps/generated/$outfile_name.o`
+    Opts *= (USE_OMP==1 ? "-fopenmp" : "")
+    linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
   end
 
   return linkCommand 

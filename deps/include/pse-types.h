@@ -26,12 +26,16 @@ public:
         m_file(file),
         m_host_min_par(host_min),
         m_phi_min_par(phi_min) {
+#ifdef _OPENMP
         unsigned max = omp_get_max_threads(); // the max number of threads for this device
+#else
+        unsigned max = 1;
+#endif
 
         // Don't oversubscribe too much
         if (cur_threads_used >= max) {
 #ifdef DEBUGJ2C
-            printf("%s %d %d %d enter max =%d thread %d\n", file, line, omp_get_thread_num(), _Offload_get_device_number(), max, cur_threads_used);
+            printf("%s %d %d %d enter max =%d thread %d\n", file, line, map, _Offload_get_device_number(), max, cur_threads_used);
 #endif
             num_threads_used = 1;
         } else {
@@ -47,7 +51,7 @@ public:
             }
 #endif
 #ifdef DEBUGJ2C
-            printf("%s %d %d %d enter ic = %d max = %d num_left = %d our_share = %d ntu = %d\n", file, line, omp_get_thread_num(), _Offload_get_device_number(), iteration_count, max, num_left, our_share, num_threads_used);
+            printf("%s %d %d %d enter ic = %d max = %d num_left = %d our_share = %d ntu = %d\n", file, line, max, _Offload_get_device_number(), iteration_count, max, num_left, our_share, num_threads_used);
 #endif
         }
 
@@ -55,7 +59,7 @@ public:
             // update the global
             unsigned prev = __sync_fetch_and_add(&cur_threads_used, num_threads_used);
 #ifdef DEBUGJ2C
-            printf("%s %d %d %d enter prev = %d new = %d\n", file, line, omp_get_thread_num(), _Offload_get_device_number(), prev, prev + num_threads_used);
+            printf("%s %d %d %d enter prev = %d new = %d\n", file, line, max, _Offload_get_device_number(), prev, prev + num_threads_used);
 #endif
         }
     }
@@ -64,11 +68,11 @@ public:
         if(num_threads_used > 1 && runInPar()) {
             unsigned prev = __sync_fetch_and_sub(&cur_threads_used, num_threads_used);
 #ifdef DEBUGJ2C
-            printf("%s %d %d %d exit prev = %d new = %d\n", m_file, m_line, omp_get_thread_num(), _Offload_get_device_number(), prev, prev - num_threads_used);
+            printf("%s %d %d %d exit prev = %d new = %d\n", m_file, m_line, max, _Offload_get_device_number(), prev, prev - num_threads_used);
 #endif
         } else {
 #ifdef DEBUGJ2C
-            printf("%s %d %d %d exit\n", m_file, m_line, omp_get_thread_num(), _Offload_get_device_number());
+          //  printf("%s %d %d %d exit\n", m_file, m_line, omp_get_thread_num(), _Offload_get_device_number());
 #endif
         }
     }
@@ -92,7 +96,11 @@ unsigned computeNumThreads(uint64_t instruction_count_estimate) {
 #else
     unsigned est = instruction_count_estimate / 21000000;
 #endif
+#ifdef _OPENMP
     int max = omp_get_max_threads();
+#else
+    int max = 1;
+#endif
     unsigned ret = est > max ? max : est == 0 ? 1 : est;
 //    printf("computeNumThreads: %lld => %d\n", instruction_count_estimate, ret);
     return ret;
