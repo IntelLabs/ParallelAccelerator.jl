@@ -2021,11 +2021,11 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   Opts = "-O3"
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
-    Opts *= (USE_OMP==1 ? "-qopenmp" : "")
+    Opts *= (USE_OMP==1 ? " -qopenmp" : "")
     # Generate dyn_lib
     compileCommand = `icc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
-    Opts *= (USE_OMP==1 ? "-fopenmp" : "")
+    Opts *= (USE_OMP==1 ? " -fopenmp" : "")
     compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
