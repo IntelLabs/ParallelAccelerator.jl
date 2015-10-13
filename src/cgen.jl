@@ -205,7 +205,7 @@ _Intrinsics = [
 ]
 
 # math functions
-libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :abs])
+libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
 
 tokenXlate = Dict(
     '*' => "star",
@@ -1132,6 +1132,16 @@ function pattern_match_call_math(fun::TopNode, input::GenSym)
         dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*from_expr(input)*");"
     end
+
+    # abs() needs special handling since fabs() in math.h should be called for floats
+    if is(fun.name,:abs) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "fabs("*from_expr(input)*");"
+    end
+    if is(fun.name,:abs) && (lstate.symboltable[input]==Int64 || lstate.symboltable[input]==Int32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "abs("*from_expr(input)*");"
+    end
     return s
 end
 
@@ -1141,6 +1151,15 @@ function pattern_match_call_math(fun::TopNode, input::SymbolNode)
     if in(fun.name,libm_math_functions) && (input.typ==Float64 || input.typ==Float32)
         dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*from_expr(input.name)*");"
+    end
+    # abs() needs special handling since fabs() in math.h should be called for floats
+    if is(fun.name,:abs) && (input.typ==Float64 || input.typ==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "fabs("*from_expr(input)*");"
+    end
+    if is(fun.name,:abs) && (input.typ==Int64 || input.typ==Int32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "abs("*from_expr(input)*");"
     end
     return s
 end
