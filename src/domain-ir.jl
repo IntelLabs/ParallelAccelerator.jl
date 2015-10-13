@@ -312,10 +312,10 @@ else
 
 end
 
-mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max]
-mapVal = Symbol[:negate, :<=,  :>=,  :<, :(==), :>,  :+,  :-,  :*,  :/,  :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max]
+mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs]
+mapVal = Symbol[:negate, :<=,  :>=,  :<, :(==), :>,  :+,  :-,  :*,  :/,  :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs]
 # * / are not point wise. it becomes point wise only when one argument is scalar.
-pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :sin, :erf, :log10, :exp, :sqrt, :min, :max])
+pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs])
 mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
 liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
