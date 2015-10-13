@@ -21,7 +21,7 @@ import CompilerTools.Loops
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
-const ENABLE_DEBUG = false
+const ENABLE_DEBUG = true
 
 function set_debug_level(x)
     global DEBUG_LVL = x
@@ -5541,10 +5541,17 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
         for copy in data.copies
           dprintln(4,"Current entry in data.copies = ", copy)
           # If the rhs of the copy is modified by the statement.
-          if in(def, copy)
-            dprintln(3,"LHS or RHS of data.copies is modified so removing ", copy," from data.copies.")
+          if def == copy[2]
+            dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
             # Then remove the lhs = rhs entry from copies.
             delete!(data.copies, copy[1])
+          elseif def == copy[1]
+            # LHS is def.  We can maintain the mapping if RHS is dead.
+            if in(copy[2], live_info.live_out)
+              dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
+              # Then remove the lhs = rhs entry from copies.
+              delete!(data.copies, copy[1])
+            end
           end
         end
       end
