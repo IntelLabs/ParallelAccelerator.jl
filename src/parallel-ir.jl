@@ -1349,6 +1349,51 @@ function create_mmap!_post_statements(input_arrays, dl, state)
   return post_statements
 end
 
+function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
+    @assert length(args[1]) == length(args[2])
+    n_loops = length(args[1])
+    loopvars = args[1]
+    ranges = args[2]
+    dl = args[3]
+    dl_inputs = [SymbolNode(s, Int) for s in loopvars]
+    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
+    state.max_label = max_label
+    out_body = nested_body
+    # Create empty arrays to hold pre and post statements.
+    pre_statements  = Any[]
+    post_statements = Any[]
+    loopNests = Array(PIRLoopNest, n_loops)
+    unique_node_id = get_unique_num()
+    # Insert a statement to assign the length of the input arrays to a var
+    for i = 1:n_loops
+        loopvar = loopvars[i]
+        range = ranges[i]
+        save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
+        loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($(range))), state)
+        # add that assignment to the set of statements to execute before the parfor
+        push!(pre_statements,loop_len)
+        CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
+    end
+
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
+        out_body,
+        pre_statements,
+        loopNests,
+        PIRReduction[],
+        post_statements,
+        [],
+        state.top_level_number,
+        rws,
+        unique_node_id,
+        simply_indexed)
+    [parfor]
+end
+
 # ===============================================================================================================================
 
 function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, ranges :: Array{RangeData,1})
@@ -7058,6 +7103,10 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     head = :parfor
     args = mk_parfor_args_from_reduce(args, state)
     dprintln(1,"switching to parfor node for reduce")
+  elseif head == :parallel_for
+    head = :parfor
+    args = mk_parfor_args_from_parallel_for(args, state)
+    dprintln(1,"switching to parfor node for parallel_for")
   elseif head == :copy
     # turn array copy back to plain Julia call
     head = :call
