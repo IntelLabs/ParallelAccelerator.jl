@@ -1145,6 +1145,10 @@ function pattern_match_call_math(fun::TopNode, input::SymbolNode)
     return s
 end
 
+function pattern_match_call_math(fun::ANY, input::ANY)
+    return ""
+end
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
