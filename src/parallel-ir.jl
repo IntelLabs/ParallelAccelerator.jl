@@ -5,7 +5,7 @@ using CompilerTools
 using CompilerTools.LambdaHandling
 using ..DomainIR
 using CompilerTools.AliasAnalysis
-using ..ParallelAccelerator
+import ..ParallelAccelerator
 #if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 #using Base.Threading
 #end
@@ -1137,7 +1137,7 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
     if isa(input_array, Expr) && is(input_array.head, :select)
       thisInfo.array = input_array.args[1]
       argtyp = typeof(thisInfo.array)
-      dprintln(3,"get_mmap_input_info inputInfo[i].array = ", inputInfo[i].array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+      dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
       @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
       select_kind = input_array.args[2].head
       @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
