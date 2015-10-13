@@ -227,10 +227,10 @@ end
 
 function cleanup_generated_files()
     package_root = getPackageRoot()
-    # TODO: Check debug level and save generated files
-    if false
+    if DEBUG_LVL == 0
         for file in readdir("$package_root/deps/generated")
-            if file == ".gitignore"
+            if file in [".gitignore", "config.jl"]
+                # Ignore
                 continue
             end
             rm("$package_root/deps/generated/$file")
