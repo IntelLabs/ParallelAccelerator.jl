@@ -114,6 +114,7 @@ mk_concats(dim, arrs) = Expr(:concats, dim, arrs)
 mk_gather(arr, idx) = Expr(:gather, arr, idx)
 mk_scatter!(base, arr, idx) = Expr(:scatter!, base, arr, idx)
 mk_stencil!(stat, iterations, bufs, f) = Expr(:stencil!, stat, iterations, bufs, f)
+mk_parallel_for(loopvars, ranges, f) = Expr(:parallel_for, loopvars, ranges, f)
 
 function mk_expr(typ, args...)
     e = Expr(args...)
@@ -865,6 +866,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     return translate_call_cartesianarray(state,env_,typ, args)
   elseif is(fun, :runStencil)
     return translate_call_runstencil(state,env_,args)
+  elseif is(fun, :parallel_for)
+    return translate_call_parallel_for(state,env_,args)
   elseif is(fun, :copy)
     args = normalize_args(state, env_, args[1:1])
     dprintln(env,"got copy, args=", args)
@@ -1384,6 +1387,29 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
   return expr
 end
 
+function translate_call_parallel_for(state, env, args::Array{Any,1})
+  (ast, ety) = lambdaTypeinf(args[1], (Int, ))
+  ast = from_expr("anonymous", env.cur_module, ast)
+  loopvars = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
+  etys = [Int for _ in length(loopvars)]
+  body = ast.args[3]
+  ranges = args[2:end]
+  linfo = lambdaExprToLambdaInfo(ast)
+  assert(isa(body, Expr) && is(body.head, :body))
+  lastExp = body.args[end]
+  assert(isa(lastExp, Expr) && is(lastExp.head, :return))
+  # Remove return statement
+  pop!(body.args)
+  function bodyF(plinfo, args)
+    ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+    # ldict = merge(ldict, Dict{SymGen,Any}(zip(loopvars, etys)))
+    ret = replaceExprWithDict(body, ldict).args
+    ret
+  end
+  domF = DomainLambda(etys, etys, bodyF, linfo)
+  return mk_parallel_for(loopvars, ranges, domF)
+end
+
 # translate a function call to domain IR if it matches
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, args)
   local env_ = nextEnv(env)
@@ -1595,6 +1621,11 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         args[3][i] = AstWalker.AstWalk(args[3][i], AstWalkCallback, dw)
       end
       return x
+    elseif head == :parallel_for
+      map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[1])
+      map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[2])
+      args[3] = AstWalker.AstWalk(args[3], AstWalkCallback, dw)
+      return x
     elseif head == :assertEqShape
       assert(length(args) == 2)
       for i = 1:length(args)
@@ -1712,6 +1743,21 @@ function dir_live_cb(ast :: ANY, cbdata :: ANY)
 
       dprintln(3, ":stencil! ", expr_to_process)
       return expr_to_process
+    elseif head == :parallel_for
+      expr_to_process = Any[]
+
+      assert(length(args) == 3)
+      loopvars = args[1]
+      ranges = args[2]
+      escaping_defs = args[3].linfo.escaping_defs
+      push!(expr_to_process, loopvars)
+      append!(expr_to_process, ranges)
+      for (v, d) in escaping_defs
+        push!(expr_to_process, v)
+      end
+
+      dprintln(3, ":parallel_for ", expr_to_process)
+      return expr_to_process
     elseif head == :assertEqShape
       assert(length(args) == 2)
       #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
@@ -1797,6 +1843,9 @@ function dir_alias_cb(ast, state, cbdata)
         end
       end
       return Any[] # empty array of Expr
+    elseif head == :parallel_for
+      # TODO: What should we do here?
+      return AliasAnalysis.NotArray
     elseif head == :assertEqShape
       return AliasAnalysis.NotArray
     elseif head == :assert

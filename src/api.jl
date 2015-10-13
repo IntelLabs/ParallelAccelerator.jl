@@ -5,7 +5,7 @@ import Base: call
 
 export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod, setindex!, getindex, pointer
 
-export cartesianarray
+export cartesianarray, @parallelize, parallel_for
 
 eval(x) = Core.eval(API, x)
 
@@ -96,6 +96,10 @@ function cartesianarray(body, T1, T2, T3, ndims)
     c[I.I...] = w
   end
   return a, b, c
+end
+
+function parallel_for(loopvar, range, body)
+  throw("Not Implemented")
 end
 
 end
