@@ -407,13 +407,13 @@ function from_range(rhs)
         start = rhs.args[2]
         step  = 1 # FIXME: could be wrong here!
         final = rhs.args[3].args[3]
-    elseif isa(rhs, Expr) && is(rhs.head, :call) && issteprange(rhs.args[1])
+    elseif isa(rhs, Expr) && is(rhs.head, :new) && issteprange(rhs.args[1])
         assert(length(rhs.args) == 4)
         start = rhs.args[2]
         step  = rhs.args[3]
         final = rhs.args[4]
     else
-        error("expect Expr(:new, UnitRange, ...) or Expr(StepRange, ...) but got ", rhs)
+        error("expect Expr(:new, UnitRange, ...) or Expr(:new, StepRange, ...) but got ", rhs)
     end
     return (start, step, final)
 end
