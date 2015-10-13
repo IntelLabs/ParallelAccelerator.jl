@@ -251,6 +251,8 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   ast = code_typed(func, signature)[1]
   global alreadyOptimized 
   if !haskey(alreadyOptimized, (func, signature))
+    # place holder to prevent recursive accelerate
+    alreadyOptimized[(func, signature)] = ast 
     dir_ast::Expr = toDomainIR(func_ref, ast, signature)
     pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
     alreadyOptimized[(func, signature)] = pir_ast
