@@ -116,14 +116,14 @@ mk_scatter!(base, arr, idx) = Expr(:scatter!, base, arr, idx)
 mk_stencil!(stat, iterations, bufs, f) = Expr(:stencil!, stat, iterations, bufs, f)
 
 function mk_expr(typ, args...)
-  e = Expr(args...)
-  e.typ = typ
-  return e
+    e = Expr(args...)
+    e.typ = typ
+    return e
 end
 
 function type_expr(typ, expr)
-  expr.typ = typ
-  return expr
+    expr.typ = typ
+    return expr
 end
 
 export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwapArg, isarray
@@ -151,39 +151,39 @@ export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwap
 # and domain IR expressions, but not custom IR nodes.
 
 type DomainLambda
-  inputs  :: Array{Type, 1}
-  outputs :: Array{Type, 1}
-  genBody :: Function
-  linfo   :: LambdaInfo
+    inputs  :: Array{Type, 1}
+    outputs :: Array{Type, 1}
+    genBody :: Function
+    linfo   :: LambdaInfo
 
-  function DomainLambda(i, o, gb, li)
-    # TODO: is the following necessary?
-    licopy = deepcopy(li) 
-    new(i, o, gb, licopy)
-  end
+    function DomainLambda(i, o, gb, li)
+        # TODO: is the following necessary?
+        licopy = deepcopy(li) 
+        new(i, o, gb, licopy)
+    end
 end
 
 function arraySwap(arr, i, j)
-  x = arr[i]
-  y = arr[j]
-  arr1 = copy(arr)
-  arr1[i] = y
-  arr1[j] = x
-  return arr1
+    x = arr[i]
+    y = arr[j]
+    arr1 = copy(arr)
+    arr1[i] = y
+    arr1[j] = x
+    return arr1
 end
 
 # swap the i-th and j-th argument to domain lambda
 function lambdaSwapArg(f::DomainLambda, i, j)
-  DomainLambda(f.inputs, f.outputs,
+    DomainLambda(f.inputs, f.outputs,
     (linfo, args) -> f.genBody(linfo, arraySwap(args, i, j)),
     f.linfo)
 end
 
 type IRState
-  linfo  :: LambdaInfo
-  defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
-  stmts  :: Array{Any, 1}
-  parent :: Union{Void, IRState}
+    linfo  :: LambdaInfo
+    defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
+    stmts  :: Array{Any, 1}
+    parent :: Union{Void, IRState}
 end
 
 emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
@@ -193,73 +193,73 @@ newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
 Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
-  s = isa(s, SymbolNode) ? s.name : s
-  #dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
-  @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
-           (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
-           (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
-  s = isa(s, GenSym) ? s.id : s
-  state.defs[s] = rhs
+    s = isa(s, SymbolNode) ? s.name : s
+    #dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
+    @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
+    (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
+    (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
+    s = isa(s, GenSym) ? s.id : s
+    state.defs[s] = rhs
 end
 
 @doc """
 Look up a definition of a variable.
-Return nothing if none is found.
+Return nothing If none is found.
 """
 function lookupDef(state::IRState, s::SymAllGen)
-  s = isa(s, SymbolNode) ? s.name : (isa(s, GenSym) ? s.id : s)
-  get(state.defs, s, nothing)
+    s = isa(s, SymbolNode) ? s.name : (isa(s, GenSym) ? s.id : s)
+    get(state.defs, s, nothing)
 end
 
 @doc """
 Look up a definition of a variable only when it is const or assigned once.
-Return nothing if none is found.
+Return nothing If none is found.
 """
 function lookupConstDef(state::IRState, s::SymAllGen)
-  def = lookupDef(state, s)
-  # we assume all GenSym is assigned once 
-  desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
-  if !is(def, nothing) && (desc & (ISASSIGNEDONCE | ISCONST)) != 0
-    return def
-  end
-  return nothing
+    def = lookupDef(state, s)
+    # we assume all GenSym is assigned once 
+    desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
+    if !is(def, nothing) && (desc & (ISASSIGNEDONCE | ISCONST)) != 0
+        return def
+    end
+    return nothing
 end
 
 @doc """
 Look up a definition of a variable recursively until the RHS is no-longer just a variable.
-Return the last rhs if found, or the input variable itself otherwise.
+Return the last rhs If found, or the input variable itself otherwise.
 """
 function lookupConstDefForArg(state::IRState, s::Any)
-  s1 = s
-  while isa(s, Symbol) || isa(s, SymbolNode) || isa(s, GenSym)
     s1 = s
-    s = lookupConstDef(state, s1)
-  end
-  is(s, nothing) ? s1 : s
+    while isa(s, Symbol) || isa(s, SymbolNode) || isa(s, GenSym)
+        s1 = s
+        s = lookupConstDef(state, s1)
+    end
+    is(s, nothing) ? s1 : s
 end
 
 @doc """
 Look up a definition of a variable throughout nested states until a definition is found.
-Return nothing if none is found.
+Return nothing If none is found.
 """
 function lookupDefInAllScopes(state::IRState, s::SymAllGen)
-  def = lookupDef(state, s)
-  if is(def, nothing) && !is(state.parent, nothing)
-    return lookupDefInAllScopes(state.parent, s)
-  else
-    return def
-  end
+    def = lookupDef(state, s)
+    if is(def, nothing) && !is(state.parent, nothing)
+        return lookupDefInAllScopes(state.parent, s)
+    else
+        return def
+    end
 end
 
 function emitStmt(state::IRState, stmt)
-  dprintln(2,"emit stmt: ", stmt)
-  push!(state.stmts, stmt)
+    dprintln(2,"emit stmt: ", stmt)
+    push!(state.stmts, stmt)
 end
 
 type IREnv
-  cur_module  :: Union{Module, Void}
-  debugLevel  :: Int
-  debugIndent :: Int
+    cur_module  :: Union{Module, Void}
+    debugLevel  :: Int
+    debugIndent :: Int
 end
 
 newEnv(m)=IREnv(m,2,0)
@@ -275,39 +275,39 @@ end
 
 if ENABLE_DEBUG==true
 
-  # A debug print routine.
-  function dprint(level,msgs...)
-    if(DEBUG_LVL >= level)
-      print(msgs...)
+    # A debug print routine.
+    function dprint(level,msgs...)
+        if(DEBUG_LVL >= level)
+            print(msgs...)
+        end
     end
-  end
 
-  # A debug print routine.
-  function dprintln(level,msgs...)
-    if(DEBUG_LVL >= level)
-      println(msgs...)
+    # A debug print routine.
+    function dprintln(level,msgs...)
+        if(DEBUG_LVL >= level)
+            println(msgs...)
+        end
     end
-  end
 
-  function dprint(env::IREnv,msgs...)
-    if(DEBUG_LVL >= env.debugLevel)
-      print(repeat(" ", env.debugIndent*2), msgs...)
+    function dprint(env::IREnv,msgs...)
+        if(DEBUG_LVL >= env.debugLevel)
+            print(repeat(" ", env.debugIndent*2), msgs...)
+        end
     end
-  end
 
-  function dprintln(env::IREnv,msgs...)
-    if(DEBUG_LVL >= env.debugLevel)
-      println(repeat(" ", env.debugIndent*2), msgs...)
+    function dprintln(env::IREnv,msgs...)
+        if(DEBUG_LVL >= env.debugLevel)
+            println(repeat(" ", env.debugIndent*2), msgs...)
+        end
     end
-  end
 
 else
 
-  function dprintln(args...)
-  end
-  
-  function dprint(args...)
-  end
+    function dprintln(args...)
+    end
+
+    function dprint(args...)
+    end
 
 end
 
@@ -323,9 +323,9 @@ topOpsTypeFix = Set{Symbol}([:neg_int, :add_int, :mul_int, :sub_int, :neg_float,
 opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
 opsSymSet = Set{Symbol}(opsSym)
 floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float,
-                                            :eq_float, :ne_float, :lt_float, :le_float]))
+:eq_float, :ne_float, :lt_float, :le_float]))
 sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
-                                            :seq_int, :sne_int, :slt_int, :sle_int]))
+:seq_int, :sne_int, :slt_int, :sle_int]))
 
 ignoreSym = Symbol[:box]
 ignoreSet = Set{Symbol}(ignoreSym)
@@ -333,16 +333,16 @@ ignoreSet = Set{Symbol}(ignoreSym)
 # some part of the code still requires this
 unique_id = 0
 function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
-  global unique_id
-  name = :tmpvar
-  unique = false
-  while (!unique)
-    unique_id = unique_id + 1
-    name = symbol(string(s, "##", unique_id))
-    unique = !isLocalVariable(name, linfo)
-  end
-  addLocalVariable(name, t, desc, linfo)
-  return SymbolNode(name, t)
+    global unique_id
+    name = :tmpvar
+    unique = false
+    while (!unique)
+        unique_id = unique_id + 1
+        name = symbol(string(s, "##", unique_id))
+        unique = !isLocalVariable(name, linfo)
+    end
+    addLocalVariable(name, t, desc, linfo)
+    return SymbolNode(name, t)
 end
 
 include("domain-ir-stencil.jl")
@@ -353,122 +353,122 @@ function isinttyp(typ)
 end
 
 function istupletyp(typ)
-  isa(typ, DataType) && is(typ.name, Tuple.name)
+    isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
 function isarray(typ)
-  isa(typ, DataType) && is(typ.name, Array.name)
+    isa(typ, DataType) && is(typ.name, Array.name)
 end
 
 function isbitarray(typ)
-  isa(typ, DataType) && is(typ.name, BitArray.name)
+    isa(typ, DataType) && is(typ.name, BitArray.name)
 end
 
 function isunitrange(typ)
-  isa(typ, DataType) && is(typ.name, UnitRange.name)
+    isa(typ, DataType) && is(typ.name, UnitRange.name)
 end
 
 function issteprange(typ)
-  isa(typ, DataType) && is(typ.name, StepRange.name)
+    isa(typ, DataType) && is(typ.name, StepRange.name)
 end
 
 function isrange(typ)
-  isunitrange(typ) || issteprange(typ)
+    isunitrange(typ) || issteprange(typ)
 end
 
 function ismask(typ)
-  isrange(typ) || isbitarray(typ)
+    isrange(typ) || isbitarray(typ)
 end
 
 function remove_typenode(expr)
-  if isa(expr, Expr)
-    if is(expr.head, :(::))
-       return remove_typenode(expr.args[1])
-    else
-      args = Any[]
-      for i = 1:length(expr.args)
-        push!(args, remove_typenode(expr.args[i]))
-      end
-      return mk_expr(expr.typ, expr.head, args...)
+    if isa(expr, Expr)
+        if is(expr.head, :(::))
+            return remove_typenode(expr.args[1])
+        else
+            args = Any[]
+            for i = 1:length(expr.args)
+                push!(args, remove_typenode(expr.args[i]))
+            end
+            return mk_expr(expr.typ, expr.head, args...)
+        end
     end
-  end
-  expr
+    expr
 end
 
 function from_range(rhs)
-  if isa(rhs, Expr) && is(rhs.head, :new) && isunitrange(rhs.args[1]) &&
-     isa(rhs.args[3], Expr) && is(rhs.args[3].head, :call) &&
-     isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
-     is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
-     is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
-     is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))
-    # only look at final value in select_value of UnitRange
-    start = rhs.args[2]
-    step  = 1 # FIXME: could be wrong here!
-    final = rhs.args[3].args[3]
-  elseif isa(rhs, Expr) && is(rhs.head, :call) && issteprange(rhs.args[1])
-    assert(length(rhs.args) == 4)
-    start = rhs.args[2]
-    step  = rhs.args[3]
-    final = rhs.args[4]
-  else
-    error("expect Expr(:new, UnitRange, ...) or Expr(StepRange, ...) but got ", rhs)
-  end
-  return (start, step, final)
+    if isa(rhs, Expr) && is(rhs.head, :new) && isunitrange(rhs.args[1]) &&
+        isa(rhs.args[3], Expr) && is(rhs.args[3].head, :call) &&
+        isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
+        is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
+        is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
+        is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))
+        # only look at final value in select_value of UnitRange
+        start = rhs.args[2]
+        step  = 1 # FIXME: could be wrong here!
+        final = rhs.args[3].args[3]
+    elseif isa(rhs, Expr) && is(rhs.head, :call) && issteprange(rhs.args[1])
+        assert(length(rhs.args) == 4)
+        start = rhs.args[2]
+        step  = rhs.args[3]
+        final = rhs.args[4]
+    else
+        error("expect Expr(:new, UnitRange, ...) or Expr(StepRange, ...) but got ", rhs)
+    end
+    return (start, step, final)
 end
 
 function rangeToMask(state, r)
-  if isa(r, SymbolNode) || isa(r, GenSym)
-    typ = getType(r, state.linfo)
-    if isbitarray(typ)
-      mk_tomask(r)
-    elseif isunitrange(typ)
-      r = lookupConstDefForArg(state, r)
-      (start, step, final) = from_range(r)
-      mk_range(start, step, final)
-    elseif isinttyp(typ) 
-      mk_range(r, convert(typ, 1), r)
+    if isa(r, SymbolNode) || isa(r, GenSym)
+        typ = getType(r, state.linfo)
+        if isbitarray(typ)
+            mk_tomask(r)
+        elseif isunitrange(typ)
+            r = lookupConstDefForArg(state, r)
+            (start, step, final) = from_range(r)
+            mk_range(start, step, final)
+        elseif isinttyp(typ) 
+            mk_range(r, convert(typ, 1), r)
+        else
+            error("Unhandled range object: ", r)
+        end
+    elseif isa(r, Int)
+        mk_range(r, r, 1)
     else
-      error("Unhandled range object: ", r)
+        error("unhandled range object: ", r)
     end
-  elseif isa(r, Int)
-    mk_range(r, r, 1)
-  else
-    error("unhandled range object: ", r)
-  end
 end
 
 # check if a given function can be considered as a map operation.
 # Some operations depends on types.
 function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
-  if !haskey(mapOps, fun)
-    return false
-  elseif in(fun, pointWiseOps)
-    return true
-  else
-    # for non-pointwise operators, only one argument can be array, the rest must be scalar
-    n = 0
-    for i = 1:length(args)
-      typ = typeOfOpr(state, args[i])
-      if isarray(typ) || isbitarray(typ)
-        n = n + 1
-      end
-    end
-    return (n == 1)
-  end     
+    if !haskey(mapOps, fun)
+        return false
+    elseif in(fun, pointWiseOps)
+        return true
+    else
+        # for non-pointwise operators, only one argument can be array, the rest must be scalar
+        n = 0
+        for i = 1:length(args)
+            typ = typeOfOpr(state, args[i])
+            if isarray(typ) || isbitarray(typ)
+                n = n + 1
+            end
+        end
+        return (n == 1)
+    end     
 end
 
 function specializeOp(opr, argstyp)
-  reorder = x -> x # default no reorder
-  if opr == :>= 
-    opr = :<=
-    reorder = reverse
-  elseif opr == :>
-    opr = :<
-    reorder = reverse
-  end
-  # try to guess argument type
-  typ = nothing
+    reorder = x -> x # default no reorder
+    if opr == :>= 
+        opr = :<=
+        reorder = reverse
+    elseif opr == :>
+        opr = :<
+        reorder = reverse
+    end
+    # try to guess argument type
+    typ = nothing
   for i = 1:length(argstyp)
     atyp = argstyp[i]
     if typ == nothing && atyp != nothing
@@ -855,7 +855,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
   # new mainline Julia puts functions in Main module but PSE expects the symbol only
   #if isa(fun, GlobalRef) && fun.mod == Main
-  #	  fun = fun.name
+  #   fun = fun.name
   # end
 
   dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
@@ -1391,7 +1391,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
   dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
   # new mainline Julia puts functions in Main module but PSE expects the symbol only
   #if isa(fun, GlobalRef) && fun.mod == Main
-  #	  fun = fun.name
+  #   fun = fun.name
   # end
   if is(fun.mod, Base.Math)
     # NOTE: we simply bypass all math functions for now
