@@ -326,7 +326,7 @@ opsSymSet = Set{Symbol}(opsSym)
 floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float,
 :eq_float, :ne_float, :lt_float, :le_float]))
 sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
-:seq_int, :sne_int, :slt_int, :sle_int]))
+:eq_int, :ne_int, :slt_int, :sle_int]))
 
 ignoreSym = Symbol[:box]
 ignoreSet = Set{Symbol}(ignoreSym)
