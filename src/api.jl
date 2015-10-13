@@ -3,17 +3,32 @@ baremodule API
 using Base
 import Base: call
 
-export .+, .-, .*, ./, .\, .%, .<<, .>>, div, mod, rem, &, |, $, cos, cosh, acos, sec, csc, cot, acot, sech, csch, coth, asech, acsch, cospi, sinc, cosd, cotd, cscd, secd, acosd, acotd, log, log2, log10, exp, exp2, exp10, sum, prod, setindex!, getindex, pointer
-
-export cartesianarray, @parallelize, parallel_for
-
 eval(x) = Core.eval(API, x)
 
+@noinline function setindex!{T}(A::DenseArray{T}, args...) 
+  Base.setindex!(A, args...)
+end
+
+function setindex!(A, args...) 
+  Base.setindex!(A, args...)
+end
+
+@noinline function getindex{T}(A::DenseArray{T}, args...) 
+  Base.getindex(A, args...)
+end
+
+function getindex(A, args...) 
+  Base.getindex(A, args...)
+end
+
 # Unary operators/functions
-for f in (:-, :+, :cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech,
-           :csch, :coth, :asech, :acsch, :cospi, :sinc, :cosd,
-           :cotd, :cscd, :secd, :acosd, :acotd, :log, :log2, :log10,
-           :exp, :exp2, :exp10, :sum, :prod)
+const unary_operators = Symbol[
+    :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
+    :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
+    :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh, 
+    :sum, :prod]
+
+for f in unary_operators
     @eval begin
         @noinline function ($f){T<:Number}(A::DenseArray{T})
             (Base.$f)(A)
@@ -25,7 +40,10 @@ for f in (:-, :+, :cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech,
 end
 
 # Binary operators/functions
-for f in (:-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
+const binary_operators = Symbol[
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$]
+
+for f in binary_operators
     @eval begin
         @noinline function ($f){T}(A::T, B::DenseArray{T})
             (Base.$f)(A, B)
@@ -40,30 +58,6 @@ for f in (:-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&
             (Base.$f)(A, B)
         end
     end
-end
-
-@noinline function setindex!{T}(A::DenseArray{T}, args...) 
-  Base.setindex!(A, args...)
-end
-
-function setindex!(A, args...) 
-  Base.setindex!(A, args...)
-end
-
-@noinline function getindex{T}(A::DenseArray{T}, args...) 
-  Base.getindex(A, args...)
-end
-
-@noinline function pointer{T}(A::DenseArray{T})
-  Base.pointer(A)
-end
-
-@noinline function pointer{T}(A::DenseArray{T}, offset)
-  Base.pointer(A, offset)
-end
-
-function getindex(A, args...) 
-  Base.getindex(A, args...)
 end
 
 function cartesianarray(body, T, ndims)
@@ -100,6 +94,12 @@ end
 
 function parallel_for(loopvar, range, body)
   throw("Not Implemented")
+end
+
+const operators = vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex, :cartesianarray, :parallel_for])
+
+for opr in operators
+  @eval export $opr
 end
 
 end

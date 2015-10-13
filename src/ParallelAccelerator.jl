@@ -3,10 +3,9 @@
 module ParallelAccelerator
 
 export decompose, accelerate, Optimize
-export cartesianarray, runStencil, @runStencil
 
-using CompilerTools
-using CompilerTools.OptFramework
+importall CompilerTools
+importall CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
@@ -137,8 +136,8 @@ include("comprehension.jl")
 include("driver.jl")
 
 importall .API
-using .StencilAPI
-using .Driver
+importall .StencilAPI
+importall .Driver
 
 @doc """
 Called when the package is loaded to do initialization.
@@ -165,7 +164,12 @@ function __init__()
     end
 end
 
-export @acc
 export CompilerTools
+export @acc
+
+for opr in API.operators
+  @eval export $opr
+end
+export runStencil, @runStencil
 
 end

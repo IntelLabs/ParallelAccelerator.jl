@@ -4,8 +4,8 @@
 #
 
 module cgen
-using ..ParallelIR
-using CompilerTools
+import ..ParallelIR
+import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 
