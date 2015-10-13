@@ -204,6 +204,9 @@ _Intrinsics = [
         "checked_trunc_uint", "checked_trunc_sint"
 ]
 
+# math functions
+libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+
 tokenXlate = Dict(
     '*' => "star",
     '/' => "slash",
@@ -1123,22 +1126,42 @@ function resolveCallTarget(args::Array{Any, 1})
     return M, s, t
 end
 
-#=
-function pattern_match_call(ast::Array{Any, 1})
-    # math functions
-    libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+function pattern_match_call_math(fun::TopNode, input::GenSym)
+    s = ""
+    if in(fun.name,libm_math_functions) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = string(fun.name)*"("*from_expr(input)*");"
+    end
+    return s
+end
 
+
+function pattern_match_call_math(fun::TopNode, input::SymbolNode)
+    s = ""
+    if in(fun.name,libm_math_functions) && (input.typ==Float64 || input.typ==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = string(fun.name)*"("*from_expr(input.name)*");"
+    end
+    return s
+end
+
+function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
-    if( length(ast)==2 && typeof(ast[1])==Symbol && in(ast[1],libm_math_functions) && typeof(ast[2])==SymbolNode && (ast[2].typ==Float64 || ast[2].typ==Float32))
-      dprintln(3,"FOUND ", ast[1])
-      s = string(ast[1])*"("*from_expr(ast[2].name)*");"
+    if(length(ast)==2)
+        s = pattern_match_call_math(ast[1],ast[2])
     end
-    s
+    return s
 end
-=#
+
 
 function from_call(ast::Array{Any, 1})
+
+    pat_out = pattern_match_call(ast)
+    if pat_out != ""
+        dprintln(3, "pattern matched: ",ast)
+        return pat_out
+    end
 
     dprintln(3,"Compiling call: ast = ", ast, " args are: ")
     for i in 1:length(ast)
