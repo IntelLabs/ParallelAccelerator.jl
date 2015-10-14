@@ -102,5 +102,7 @@ for opr in operators
   @eval export $opr
 end
 
+export cartesianarray, parallel_for
+
 end
 
