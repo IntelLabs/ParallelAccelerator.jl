@@ -7152,6 +7152,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :meta
         # skip
+    elseif head == :type_goto
+        # skip
     else
         #println("from_expr: unknown Expr head :", head)
         throw(string("from_expr: unknown Expr head :", head))
