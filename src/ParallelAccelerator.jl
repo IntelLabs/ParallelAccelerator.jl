@@ -3,10 +3,9 @@
 module ParallelAccelerator
 
 export decompose, accelerate, Optimize
-export cartesianarray, runStencil, @runStencil
 
-using CompilerTools
-using CompilerTools.OptFramework
+importall CompilerTools
+importall CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
@@ -26,6 +25,8 @@ const OFFLOAD1_MODE = 2
 const OFFLOAD2_MODE = 3
 const TASK_MODE = 4
 const THREADS_MODE = 5
+
+const RELEASE_MODE = false
 
 @doc """
 Return internal mode number by looking up environment variable "INTEL_PSE_MODE".
@@ -122,6 +123,10 @@ function dprintln(level, msgs...)
     end
 end
 
+type UnsupportedFeature <: Exception
+    text :: AbstractString
+end
+
 # a hack to make accelerate function and DomainIR mutually recursive.
 _accelerate(function_name, signature) = accelerate(function_name, signature, 0)
 
@@ -137,8 +142,8 @@ include("comprehension.jl")
 include("driver.jl")
 
 importall .API
-using .StencilAPI
-using .Driver
+importall .StencilAPI
+importall .Driver
 
 @doc """
 Called when the package is loaded to do initialization.
@@ -165,7 +170,16 @@ function __init__()
     end
 end
 
-export @acc
 export CompilerTools
+export @acc
+
+for opr in API.operators
+  @eval export $opr
+end
+export runStencil, @runStencil
 
 end
+
+#tmp_f(A,B)=begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
+#ParallelAccelerator.accelerate(tmp_f,(Array{Float64,1},Array{Float64,1},))
+

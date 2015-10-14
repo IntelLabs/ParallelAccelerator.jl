@@ -4,8 +4,8 @@
 #
 
 module cgen
-using ..ParallelIR
-using CompilerTools
+import ..ParallelIR
+import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 
@@ -204,6 +204,9 @@ _Intrinsics = [
         "checked_trunc_uint", "checked_trunc_sint"
 ]
 
+# math functions
+libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+
 tokenXlate = Dict(
     '*' => "star",
     '/' => "slash",
@@ -227,10 +230,10 @@ end
 
 function cleanup_generated_files()
     package_root = getPackageRoot()
-    # TODO: Check debug level and save generated files
-    if false
+    if DEBUG_LVL == 0
         for file in readdir("$package_root/deps/generated")
-            if file == ".gitignore"
+            if file in [".gitignore", "config.jl"]
+                # Ignore
                 continue
             end
             rm("$package_root/deps/generated/$file")
@@ -1065,24 +1068,39 @@ function isPendingCompilation(list, tgt)
     return false
 end
 
-function resolveCallTarget(args::Array{Any, 1})
-    dprintln(3,"Trying to resolve target with args: ", args)
+function resolveCallTarget(ast::Array{Any, 1})
+    # julia doesn't have GetfieldNode anymore
+    #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
+    #   M = args[1].value; s = args[1].name; t = ""
+
+    dprintln(3,"Trying to resolve target with args: ", ast)
+    return resolveCallTarget(ast[1], ast[2:end])
+end
+
+#case 0:
+function resolveCallTarget(f::Symbol, args::Array{Any, 1})
     M = ""
     t = ""
     s = ""
-    #case 0:
-    f = args[1]
-    if isa(f, Symbol) && isInlineable(f, args[2:end])
-        return M, string(f), from_inlineable(f, args[2:end])
-    elseif isa(f, Symbol) && is(f, :call)
+    if isInlineable(f, args)
+        return M, string(f), from_inlineable(f, args)
+    elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
-        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[3:end])
-        if isa(args[2], DataType)
+        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[2:end])
+        if isa(args[1], DataType)
             t = "{" * arglist * "}"
         else
-            t = from_expr(args[2]) * "(" * arglist * ")"
+            t = from_expr(args[1]) * "(" * arglist * ")"
         end
-    elseif isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
+    end
+    return M, s, t
+end
+
+function resolveCallTarget(f::Expr, args::Array{Any, 1})
+    M = ""
+    t = ""
+    s = ""
+    if is(f.head,:call) || is(f.head,:call1) # :call1 is gone in v0.4
         if length(f.args) == 3 && isa(f.args[1], TopNode) && is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
             s = f.args[3].value
             if isa(f.args[2],Module)
@@ -1090,55 +1108,113 @@ function resolveCallTarget(args::Array{Any, 1})
             end
         end
         dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
+    return M, s, t
+end
+    
+function resolveCallTarget(f::GlobalRef, args::Array{Any, 1})
+    M = ""
+    t = ""
+    s = ""
+    M = f.mod; s = f.name; t = ""
+    return M, s, t
+end
+    
+    
+function resolveCallTarget(f::TopNode, args::Array{Any, 1})
+    dprintln(3,"Trying to resolve target with args: ", args)
+    M = ""
+    t = ""
+    s = ""
     #case 1:
-    elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && isa(args[3], QuoteNode)
-        dprintln(3,"Case 1: args[3] is ", args[3])
-        s = args[3].value
-        if isa(args[2], Module)
-            M = args[2]
+    if is(f.name, :getfield) && isa(args[2], QuoteNode)
+        dprintln(3,"Case 1: args[2] is ", args[2])
+        s = args[2].value
+        if isa(args[1], Module)
+            M = args[1]
             dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         else
             #case 2:
             M = ""
             s = ""
-            t = from_expr(args[2]) * "." * from_expr(args[3])
-            #M, _s = resolveCallTarget([args[2]])
+            t = from_expr(args[1]) * "." * from_expr(args[2])
+            #M, _s = resolveCallTarget([args[1]])
             dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         end
-    elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && hasfield(args[1], :head) && is(args[1].head, :call)
-        return resolveCallTarget(args[1])
-
-    elseif isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
-        M = args[1].value; s = args[1].name; t = ""
-
-    elseif isdefined(:GlobalRef) && isa(args[1],GlobalRef) && isa(args[1].mod,Module)
-        M = args[1].mod; s = args[1].name; t = ""
+    elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
+        return resolveCallTarget(f)
 
     # case 3:
-    elseif isa(args[1], TopNode) && isInlineable(args[1].name, args[2:end])
-        t = from_inlineable(args[1].name, args[2:end])
+    elseif isInlineable(f.name, args)
+        t = from_inlineable(f.name, args)
         dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
     dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
     return M, s, t
 end
 
-#=
-function pattern_match_call(ast::Array{Any, 1})
-    # math functions
-    libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+function resolveCallTarget(f::ANY, args::Array{Any, 1})
+    return "","",""
+end
 
+function pattern_match_call_math(fun::TopNode, input::GenSym)
+    s = ""
+    if in(fun.name,libm_math_functions) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = string(fun.name)*"("*from_expr(input)*");"
+    end
+
+    # abs() needs special handling since fabs() in math.h should be called for floats
+    if is(fun.name,:abs) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "fabs("*from_expr(input)*");"
+    end
+    if is(fun.name,:abs) && (lstate.symboltable[input]==Int64 || lstate.symboltable[input]==Int32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "abs("*from_expr(input)*");"
+    end
+    return s
+end
+
+
+function pattern_match_call_math(fun::TopNode, input::SymbolNode)
+    s = ""
+    if in(fun.name,libm_math_functions) && (input.typ==Float64 || input.typ==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = string(fun.name)*"("*from_expr(input.name)*");"
+    end
+    # abs() needs special handling since fabs() in math.h should be called for floats
+    if is(fun.name,:abs) && (input.typ==Float64 || input.typ==Float32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "fabs("*from_expr(input)*");"
+    end
+    if is(fun.name,:abs) && (input.typ==Int64 || input.typ==Int32)
+        dprintln(3,"FOUND ", fun.name)
+        s = "abs("*from_expr(input)*");"
+    end
+    return s
+end
+
+function pattern_match_call_math(fun::ANY, input::ANY)
+    return ""
+end
+
+function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
-    if( length(ast)==2 && typeof(ast[1])==Symbol && in(ast[1],libm_math_functions) && typeof(ast[2])==SymbolNode && (ast[2].typ==Float64 || ast[2].typ==Float32))
-      dprintln(3,"FOUND ", ast[1])
-      s = string(ast[1])*"("*from_expr(ast[2].name)*");"
+    if(length(ast)==2)
+        s = pattern_match_call_math(ast[1],ast[2])
     end
-    s
+    return s
 end
-=#
+
 
 function from_call(ast::Array{Any, 1})
+
+    pat_out = pattern_match_call(ast)
+    if pat_out != ""
+        dprintln(3, "pattern matched: ",ast)
+        return pat_out
+    end
 
     dprintln(3,"Compiling call: ast = ", ast, " args are: ")
     for i in 1:length(ast)
