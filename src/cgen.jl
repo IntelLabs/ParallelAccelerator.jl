@@ -90,7 +90,7 @@ type LambdaGlobalData
   tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
     compiledfunctions::Array{Any, 1}
     worklist::Array{Any, 1}
-    jtypes::Dict{Any, Any}
+    jtypes::Dict{Type, AbstractString}
     ompdepth::Int64
     function LambdaGlobalData()
         _j = Dict(
@@ -1750,27 +1750,30 @@ function from_expr(ast::GenSym)
     s = "GenSym" * string(ast.id)
 end
 
-function from_expr(ast::Any)
-    dprintln(3,"Compiling expression: ", ast)
+function from_expr(ast::Type)
     s = ""
-    asttyp = typeof(ast)
-    dprintln(3,"With type: ", asttyp)
-
-    if isPrimitiveJuliaType(asttyp)
-        #s *= "(" * toCtype(asttyp) * ")" * string(ast)
-        if asttyp == Char
-            s *= "'$(string(ast))'"
-        else
-            s *= string(ast)
-        end
-    elseif isPrimitiveJuliaType(ast)
-        s *= "(" * toCtype(ast) * ")"
+    if isPrimitiveJuliaType(ast)
+        s = "(" * toCtype(ast) * ")"
     else
-        #s *= dispatch(lstate.adp, ast, ast)
-        dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
-        throw("Fatal Error: Could not translate node")
+        throw("Unknown julia type")
     end
     s
+end
+
+function from_expr(ast::Char)
+    s = "'$(string(ast))'"
+end
+
+function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
+    s = string(ast)
+end
+
+
+function from_expr(ast::ANY)
+    #s *= dispatch(lstate.adp, ast, ast)
+    asttyp = typeof(ast)
+    dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
+    throw("CGen Error: Could not translate node")
 end
 
 function resolveFunction(func::Symbol, mod::Module, typs)
