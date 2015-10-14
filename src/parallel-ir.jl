@@ -684,11 +684,11 @@ end
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymbolNode,1}, unique_id :: Int64, state :: expr_state)
+function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymNodeGen,1}, unique_id :: Int64, state :: expr_state)
     key = toSymGen(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     # Is it okay to just use range[1] here instead of all the ranges?
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", range[1].name, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 @doc """
@@ -1396,7 +1396,7 @@ end
 
 # ===============================================================================================================================
 
-function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, ranges :: Array{RangeData,1})
+function generatePreOffsetStatements(range_offsets :: Array{SymNodeGen,1}, ranges :: Array{RangeData,1})
     assert(length(range_offsets) == length(ranges))
 
     ret = Expr[]
@@ -2915,6 +2915,10 @@ end
 function getSName(ssn :: Expr)
     assert(ssn.head == :(::))
     return ssn.args[1]
+end
+
+function getSName(ssn :: GenSym)
+    return ssn
 end
 
 function getSName(ssn)

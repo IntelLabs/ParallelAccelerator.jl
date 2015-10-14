@@ -1108,6 +1108,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
             end
         end
         dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
+    end
     return M, s, t
 end
     

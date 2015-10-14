@@ -1044,7 +1044,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
                 for i=1:length(nonarrays)
                     # At this point, they are either symbol nodes, or constants
                     if isa(nonarrays[i], SymbolNode)
-                        addEscapingVariable(nonarrays[i].name, nonarrays[i].atyp, 0, linfo)
+                        addEscapingVariable(nonarrays[i].name, nonarrays[i].typ, 0, linfo)
                     end
                 end
                 expr = mk_mmap!(args, DomainLambda(elmtyps, Type[etyp], f, linfo))
