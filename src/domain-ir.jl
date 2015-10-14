@@ -219,7 +219,7 @@ Return nothing If none is found.
 function lookupConstDef(state::IRState, s::SymAllGen)
     def = lookupDef(state, s)
     # we assume all GenSym is assigned once 
-    desc = isa(s, SymbolNode) ? getDesc(s.name, stat.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
+    desc = isa(s, SymbolNode) ? getDesc(s.name, state.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
     if !is(def, nothing) && (desc & (ISASSIGNEDONCE | ISCONST)) != 0
         return def
     end
