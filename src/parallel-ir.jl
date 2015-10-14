@@ -4205,236 +4205,236 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
                     end
                 end
 
-        # Insert call to wait on the scheduler to complete all tasks.
-        #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
+                # Insert call to wait on the scheduler to complete all tasks.
+                #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
 
-        # Add the statements that copy results out of temp arrays into real variables.
-        append!(new_body, copy_back)
+                # Add the statements that copy results out of temp arrays into real variables.
+                append!(new_body, copy_back)
 
-        # Then appends the post-task graph portion
-        append!(new_body, body[rr[i].end_index+1:end])
+                # Then appends the post-task graph portion
+                append!(new_body, body[rr[i].end_index+1:end])
 
-        body = new_body
+                body = new_body
 
-        dprintln(3,"new_body after region ", i, " replaced")
-        printBody(3,body)
-      elseif ParallelAccelerator.client_intel_task_graph
-        # new body starts with the pre-task graph portion
-        new_body = body[1:rr[i].start_index-1]
-        copy_back = Any[]
+                dprintln(3,"new_body after region ", i, " replaced")
+                printBody(3,body)
+            elseif ParallelAccelerator.client_intel_task_graph
+                # new body starts with the pre-task graph portion
+                new_body = body[1:rr[i].start_index-1]
+                copy_back = Any[]
 
-        # then adds calls for each task
-        for j = 1:length(rr[i].tasks)
-          cur_task = rr[i].tasks[j]
-          dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
-          if typeof(cur_task) == TaskInfo
-            dprintln(3,"Inserting call to insert_divisible_task")
-            dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+                # then adds calls for each task
+                for j = 1:length(rr[i].tasks)
+                    cur_task = rr[i].tasks[j]
+                    dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
+                    if typeof(cur_task) == TaskInfo
+                        dprintln(3,"Inserting call to insert_divisible_task")
+                        dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
-            in_len  = length(cur_task.input_symbols)
-            mod_len = length(cur_task.modified_inputs)
-            io_len  = length(cur_task.io_symbols)
-            red_len = length(cur_task.reduction_vars)
-            dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
+                        in_len  = length(cur_task.input_symbols)
+                        mod_len = length(cur_task.modified_inputs)
+                        io_len  = length(cur_task.io_symbols)
+                        red_len = length(cur_task.reduction_vars)
+                        dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
 
-            dims = length(cur_task.loopNests)
-            if dims > 0
-              itn = InsertTaskNode()
+                        dims = length(cur_task.loopNests)
+                        if dims > 0
+                            itn = InsertTaskNode()
 
-              if ParallelAccelerator.client_intel_task_graph_mode == 0
-                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_XEON
-              elseif ParallelAccelerator.client_intel_task_graph_mode == 1
-                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_PHI
-              elseif ParallelAccelerator.client_intel_task_graph_mode == 2
-                itn.task_options = 0
-              else
-                throw(string("Unknown task graph mode option ", ParallelAccelerator.client_intel_task_graph_mode))
-              end
+                            if ParallelAccelerator.client_intel_task_graph_mode == 0
+                                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_XEON
+                            elseif ParallelAccelerator.client_intel_task_graph_mode == 1
+                                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_PHI
+                            elseif ParallelAccelerator.client_intel_task_graph_mode == 2
+                                itn.task_options = 0
+                            else
+                                throw(string("Unknown task graph mode option ", ParallelAccelerator.client_intel_task_graph_mode))
+                            end
 
-              if task_graph_mode == SEQUENTIAL_TASKS
-                # intentionally do nothing
-              elseif task_graph_mode == ONE_AT_A_TIME
-                itn.task_options |= TASK_FINISH
-              elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
-                # intentionally do nothing
-              else
-                throw(string("Unknown task_graph_mode."))
-              end
+                            if task_graph_mode == SEQUENTIAL_TASKS
+                                # intentionally do nothing
+                            elseif task_graph_mode == ONE_AT_A_TIME
+                                itn.task_options |= TASK_FINISH
+                            elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
+                                # intentionally do nothing
+                            else
+                                throw(string("Unknown task_graph_mode."))
+                            end
 
-              # Fill in pir_range
-              # Fill in the min and max grain sizes.
-              itn.ranges.dim = dims
-              itn.host_grain_size.dim = dims
-              itn.phi_grain_size.dim = dims
-              for l = 1:dims
-                # Note that loopNest is outer-dimension first
-                push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
-                push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
-                push!(itn.host_grain_size.sizes, 2)
-                push!(itn.phi_grain_size.sizes, 2)
-              end
+                            # Fill in pir_range
+                            # Fill in the min and max grain sizes.
+                            itn.ranges.dim = dims
+                            itn.host_grain_size.dim = dims
+                            itn.phi_grain_size.dim = dims
+                            for l = 1:dims
+                                # Note that loopNest is outer-dimension first
+                                push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
+                                push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
+                                push!(itn.host_grain_size.sizes, 2)
+                                push!(itn.phi_grain_size.sizes, 2)
+                            end
 
-              # Fill in the arg metadata.
-              for l = 1:in_len
-                if cur_task.input_symbols[l].typ.name == Array.name
-                  dprintln(3, "is array")
-                  push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN, create_array_access_desc(cur_task.input_symbols[l])))
-                else
-                  dprintln(3, "is not array")
-                  push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN))
+                            # Fill in the arg metadata.
+                            for l = 1:in_len
+                                if cur_task.input_symbols[l].typ.name == Array.name
+                                    dprintln(3, "is array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN, create_array_access_desc(cur_task.input_symbols[l])))
+                                else
+                                    dprintln(3, "is not array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN))
+                                end
+                            end
+                            for l = 1:mod_len
+                                dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
+                                if cur_task.modified_inputs[l].typ.name == Array.name
+                                    dprintln(3, "is array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
+                                else
+                                    dprintln(3, "is not array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT))
+                                end
+                            end
+                            for l = 1:io_len
+                                dprintln(3, "io_len loop: ", l, " ", cur_task.io_symbols[l])
+                                if cur_task.io_symbols[l].typ.name == Array.name
+                                    dprintln(3, "is array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT, create_array_access_desc(cur_task.io_symbols[l])))
+                                else
+                                    dprintln(3, "is not array")
+                                    push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT))
+                                end
+                            end
+                            for l = 1:red_len
+                                dprintln(3, "red_len loop: ", l, " ", cur_task.reduction_vars[l])
+                                push!(itn.args, pir_arg_metadata(cur_task.reduction_vars[l], ARG_OPT_ACCUMULATOR))
+                            end
+
+                            # Fill in the task function.
+                            itn.task_func = cur_task.task_func
+                            itn.join_func = cur_task.join_func
+
+                            dprintln(3,"InsertTaskNode = ", itn)
+
+                            insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn) 
+                            push!(new_body, insert_task_expr)
+                        else
+                            throw(string("insert sequential task not implemented yet"))
+                        end
+                    else
+                        push!(new_body, cur_task)
+                    end
                 end
-              end
-              for l = 1:mod_len
-                dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
-                if cur_task.modified_inputs[l].typ.name == Array.name
-                  dprintln(3, "is array")
-                  push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
-                else
-                  dprintln(3, "is not array")
-                  push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT))
+
+                # Insert call to wait on the scheduler to complete all tasks.
+                #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
+
+                # Add the statements that copy results out of temp arrays into real variables.
+                append!(new_body, copy_back)
+
+                # Then appends the post-task graph portion
+                append!(new_body, body[rr[i].end_index+1:end])
+
+                body = new_body
+
+                dprintln(3,"new_body after region ", i, " replaced")
+                printBody(3,body)
+            elseif run_as_task_decrement()
+                # new body starts with the pre-task graph portion
+                new_body = body[1:rr[i].start_index-1]
+
+                # then adds calls for each task
+                for j = 1:length(rr[i].tasks)
+                    cur_task = rr[i].tasks[j]
+                    assert(typeof(cur_task) == TaskInfo)
+
+                    dprintln(3,"Inserting call to function")
+                    dprintln(3,cur_task, " type = ", typeof(cur_task))
+                    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+
+                    in_len = length(cur_task.input_symbols)
+                    out_len = length(cur_task.output_symbols)
+
+                    real_out_params = Any[]
+
+                    for k = 1:out_len
+                        this_param = cur_task.output_symbols[k]
+                        assert(typeof(this_param) == SymbolNode)
+                        atype = Array{this_param.typ, 1}
+                        temp_param_array = createStateVar(state, string(this_param.name, "_out_array"), atype, ISASSIGNED)
+                        push!(real_out_params, temp_param_array)
+                        new_temp_array = mk_alloc_array_1d_expr(this_param.typ, atype, 1)
+                        push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
+                    end
+
+                    #push!(new_body, TypedExpr(Void, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
+                    #push!(new_body, TypedExpr(Void, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
+                    push!(new_body, TypedExpr(Void, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
+
+                    for k = 1:out_len
+                        push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state), state))
+                    end
                 end
-              end
-              for l = 1:io_len
-                dprintln(3, "io_len loop: ", l, " ", cur_task.io_symbols[l])
-                if cur_task.io_symbols[l].typ.name == Array.name
-                  dprintln(3, "is array")
-                  push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT, create_array_access_desc(cur_task.io_symbols[l])))
-                else
-                  dprintln(3, "is not array")
-                  push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT))
-                end
-              end
-              for l = 1:red_len
-                dprintln(3, "red_len loop: ", l, " ", cur_task.reduction_vars[l])
-                push!(itn.args, pir_arg_metadata(cur_task.reduction_vars[l], ARG_OPT_ACCUMULATOR))
-              end
 
-              # Fill in the task function.
-              itn.task_func = cur_task.task_func
-              itn.join_func = cur_task.join_func
+                # then appends the post-task graph portion
+                append!(new_body, body[rr[i].end_index+1:end])
 
-              dprintln(3,"InsertTaskNode = ", itn)
+                body = new_body
 
-              insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn) 
-              push!(new_body, insert_task_expr)
-            else
-              throw(string("insert sequential task not implemented yet"))
+                dprintln(3,"new_body after region ", i, " replaced")
+                printBody(3,body)
             end
-          else
-            push!(new_body, cur_task)
-          end
         end
 
-        # Insert call to wait on the scheduler to complete all tasks.
-        #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
+        #    throw(string("debugging task graph"))
+        dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
+    end  # end of task graph formation section
 
-        # Add the statements that copy results out of temp arrays into real variables.
-        append!(new_body, copy_back)
+    flatten_start = time_ns()
 
-        # Then appends the post-task graph portion
-        append!(new_body, body[rr[i].end_index+1:end])
-
-        body = new_body
-
-        dprintln(3,"new_body after region ", i, " replaced")
-        printBody(3,body)
-      elseif run_as_task_decrement()
-        # new body starts with the pre-task graph portion
-        new_body = body[1:rr[i].start_index-1]
-
-        # then adds calls for each task
-        for j = 1:length(rr[i].tasks)
-          cur_task = rr[i].tasks[j]
-          assert(typeof(cur_task) == TaskInfo)
-
-          dprintln(3,"Inserting call to function")
-          dprintln(3,cur_task, " type = ", typeof(cur_task))
-          dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
-
-          in_len = length(cur_task.input_symbols)
-          out_len = length(cur_task.output_symbols)
-
-          real_out_params = Any[]
-
-          for k = 1:out_len
-            this_param = cur_task.output_symbols[k]
-            assert(typeof(this_param) == SymbolNode)
-            atype = Array{this_param.typ, 1}
-            temp_param_array = createStateVar(state, string(this_param.name, "_out_array"), atype, ISASSIGNED)
-            push!(real_out_params, temp_param_array)
-            new_temp_array = mk_alloc_array_1d_expr(this_param.typ, atype, 1)
-            push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
-          end
-
-          #push!(new_body, TypedExpr(Void, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
-          #push!(new_body, TypedExpr(Void, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
-          push!(new_body, TypedExpr(Void, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
-
-          for k = 1:out_len
-            push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state), state))
-          end
-        end
-
-        # then appends the post-task graph portion
-        append!(new_body, body[rr[i].end_index+1:end])
-
-        body = new_body
-
-        dprintln(3,"new_body after region ", i, " replaced")
-        printBody(3,body)
-      end
-    end
-
-  #    throw(string("debugging task graph"))
-    dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
-  end  # end of task graph formation section
-
-  flatten_start = time_ns()
-
-  expanded_body = Any[]
-
-  for i = 1:length(body)
-    dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
-    if isBareParfor(body[i])
-      flattenParfor(expanded_body, body[i].args[1])
-    else
-      push!(expanded_body, body[i])
-    end
-  end
-
-  body = expanded_body
-
-  dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
-
-  dprintln(3, "After flattening")
-  for j = 1:length(body)
-    dprintln(3, body[j])
-  end
-
-  if shortcut_array_assignment != 0
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+    expanded_body = Any[]
 
     for i = 1:length(body)
-      node = body[i]
-      if isAssignmentNode(node)
-        lhs = node.args[1]
-        rhs = node.args[2]
-        dprintln(3,"shortcut_array_assignment = ", node)
-        if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
-          dprintln(3,"shortcut_array_assignment to array detected")
-          live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
-          if !in(rhs.name, live_info.live_out)
-            dprintln(3,"rhs is dead")
-            # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
-            push!(node.args, RhsDead())
-          end
+        dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
+        if isBareParfor(body[i])
+            flattenParfor(expanded_body, body[i].args[1])
+        else
+            push!(expanded_body, body[i])
         end
-      end
     end
-  end
 
-  return body
+    body = expanded_body
+
+    dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
+
+    dprintln(3, "After flattening")
+    for j = 1:length(body)
+        dprintln(3, body[j])
+    end
+
+    if shortcut_array_assignment != 0
+        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+
+        for i = 1:length(body)
+            node = body[i]
+            if isAssignmentNode(node)
+                lhs = node.args[1]
+                rhs = node.args[2]
+                dprintln(3,"shortcut_array_assignment = ", node)
+                if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
+                    dprintln(3,"shortcut_array_assignment to array detected")
+                    live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
+                    if !in(rhs.name, live_info.live_out)
+                        dprintln(3,"rhs is dead")
+                        # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
+                        push!(node.args, RhsDead())
+                    end
+                end
+            end
+        end
+    end
+
+    return body
 end
 
 @doc """
@@ -4442,14 +4442,14 @@ An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
 """
 function isf(t::Function, 
-             full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
-             rest...)
+    full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
+    rest...)
     println("Starting isf.")
     tid = Base.Threading.threadid()
 
     # This isn't working so this is debugging code at the moment.
 
-#    println("isf ", t, " ", full_iteration_space, " ", args)
+    #    println("isf ", t, " ", full_iteration_space, " ", args)
     if full_iteration_space.dim == 1
         # Compute how many iterations to run.
         num_iters = full_iteration_space.upper_bounds[1] - full_iteration_space.lower_bounds[1] + 1
@@ -4457,33 +4457,33 @@ function isf(t::Function,
         println("num_iters = ", num_iters)
         # Handle the case where iterations is less than the core count.
         if num_iters <= nthreads()
-if true
-    if tid == 1
-      #println("ISF tid = ", tid, " t = ", t, " fis = ", full_iteration_space, " args = ", rest...)
-      return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
-      #return t(full_iteration_space, rest...)
-    else
-      return nothing
-    end
-else
-          if tid <= num_iters
-              return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
-              #return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
-          else
-              #return t(pir_range_actual([0],[-1]), rest...)
-              return nothing
-          end
-end
+            if true
+                if tid == 1
+                    #println("ISF tid = ", tid, " t = ", t, " fis = ", full_iteration_space, " args = ", rest...)
+                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
+                    #return t(full_iteration_space, rest...)
+                else
+                    return nothing
+                end
+            else
+                if tid <= num_iters
+                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
+                    #return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
+                else
+                    #return t(pir_range_actual([0],[-1]), rest...)
+                    return nothing
+                end
+            end
         else
-          # one dimensional scheduling
-          len, rem = divrem(num_iters, nthreads())
-          ls = len * tid
-          if tid == nthreads()
-             le = full_iteration_space.upper_bounds[1]
-          else
-             le = (len * (tid+1)) - 1
-          end
-          return t(pir_range_actual([ls],[le]), rest...)
+            # one dimensional scheduling
+            len, rem = divrem(num_iters, nthreads())
+            ls = len * tid
+            if tid == nthreads()
+                le = full_iteration_space.upper_bounds[1]
+            else
+                le = (len * (tid+1)) - 1
+            end
+            return t(pir_range_actual([ls],[le]), rest...)
         end
     elseif full_iteration_space.dim == 2
         assert(0)
@@ -4496,91 +4496,91 @@ end
 Returns true if a given SymbolNode "x" is an Array type.
 """
 function isArrayType(x :: SymbolNode)
-  the_type = x.typ
-  if typeof(the_type) == DataType
-    return isArrayType(x.typ)
-  end
-  return false
+    the_type = x.typ
+    if typeof(the_type) == DataType
+        return isArrayType(x.typ)
+    end
+    return false
 end
 
 @doc """
 For a given start and stop index in some body and liveness information, form a set of tasks.
 """
 function makeTasks(start_index, stop_index, body, bb_live_info, state, task_graph_mode)
-  task_list = Any[]
-  seq_accum = Any[]
-  dprintln(3,"makeTasks starting")
+    task_list = Any[]
+    seq_accum = Any[]
+    dprintln(3,"makeTasks starting")
 
-  # ONE_AT_A_TIME mode should only have parfors in the list of things to replace so we assert if we see a non-parfor in this mode.
-  # SEQUENTIAL_TASKS mode bunches up all non-parfors into one sequential task.  Maybe it would be better to do one sequential task per non-parfor stmt?
-  # MULTI_PARFOR_SEQ_NO mode converts parfors to tasks but leaves non-parfors as non-tasks.  This implies that the code calling this function has ensured
-  #     that none of the non-parfor stmts depend on the completion of a parfor in the batch.
+    # ONE_AT_A_TIME mode should only have parfors in the list of things to replace so we assert if we see a non-parfor in this mode.
+    # SEQUENTIAL_TASKS mode bunches up all non-parfors into one sequential task.  Maybe it would be better to do one sequential task per non-parfor stmt?
+    # MULTI_PARFOR_SEQ_NO mode converts parfors to tasks but leaves non-parfors as non-tasks.  This implies that the code calling this function has ensured
+    #     that none of the non-parfor stmts depend on the completion of a parfor in the batch.
 
-  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
-    if task_graph_mode == SEQUENTIAL_TASKS
-      task_finish = false
-    elseif task_graph_mode == ONE_AT_A_TIME
-      task_finish = true
-    elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
-      task_finish = false
-    else
-      throw(string("Unknown task_graph_mode in makeTasks"))
+    if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
+        if task_graph_mode == SEQUENTIAL_TASKS
+            task_finish = false
+        elseif task_graph_mode == ONE_AT_A_TIME
+            task_finish = true
+        elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
+            task_finish = false
+        else
+            throw(string("Unknown task_graph_mode in makeTasks"))
+        end
     end
-  end
 
-  for j = start_index:stop_index
-    if taskableParfor(body[j])
-      # is a parfor node
-      if length(seq_accum) > 0
-        assert(task_graph_mode == SEQUENTIAL_TASKS)
-        st = seqTask(seq_accum, bb_live_info.statements, body, state)
-        dprintln(3,"Adding sequential task to task_list. ", st)
-        push!(task_list, st)
-        seq_accum = Any[]
-      end
-      ptt = parforToTask(j, bb_live_info.statements, body, state)
-      dprintln(3,"Adding parfor task to task_list. ", ptt)
-      push!(task_list, ptt)
-    else
-      # is not a parfor node
-      assert(task_graph_mode != ONE_AT_A_TIME)
-      if task_graph_mode == SEQUENTIAL_TASKS
-        # Collect the non-parfor stmts in a batch to be turned into one sequential task.
-        push!(seq_accum, body[j])
-      else
-        dprintln(3,"Adding non-parfor node to task_list. ", body[j])
-        # MULTI_PARFOR_SEQ_NO mode.
-        # Just add the non-parfor stmts directly to the output statements.
-        push!(task_list, body[j])
-      end
+    for j = start_index:stop_index
+        if taskableParfor(body[j])
+            # is a parfor node
+            if length(seq_accum) > 0
+                assert(task_graph_mode == SEQUENTIAL_TASKS)
+                st = seqTask(seq_accum, bb_live_info.statements, body, state)
+                dprintln(3,"Adding sequential task to task_list. ", st)
+                push!(task_list, st)
+                seq_accum = Any[]
+            end
+            ptt = parforToTask(j, bb_live_info.statements, body, state)
+            dprintln(3,"Adding parfor task to task_list. ", ptt)
+            push!(task_list, ptt)
+        else
+            # is not a parfor node
+            assert(task_graph_mode != ONE_AT_A_TIME)
+            if task_graph_mode == SEQUENTIAL_TASKS
+                # Collect the non-parfor stmts in a batch to be turned into one sequential task.
+                push!(seq_accum, body[j])
+            else
+                dprintln(3,"Adding non-parfor node to task_list. ", body[j])
+                # MULTI_PARFOR_SEQ_NO mode.
+                # Just add the non-parfor stmts directly to the output statements.
+                push!(task_list, body[j])
+            end
+        end
     end
-  end
-  
-  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
-    # If each task doesn't wait to finish then add a call to pert_wait_all_task to wait for the batch to finish.
-    if !task_finish
-      #julia_root      = ParallelAccelerator.getJuliaRoot()
-      #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
-      #runtime_libpath = ParallelAccelerator.runtime_libpath
 
-      #call_wait = Expr(:ccall, Expr(:tuple, QuoteNode(:pert_wait_all_task), runtime_libpath), :Void, Expr(:tuple))
-      #push!(task_list, call_wait) 
+    if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
+        # If each task doesn't wait to finish then add a call to pert_wait_all_task to wait for the batch to finish.
+        if !task_finish
+            #julia_root      = ParallelAccelerator.getJuliaRoot()
+            #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
+            #runtime_libpath = ParallelAccelerator.runtime_libpath
 
-      call_wait = TypedExpr(Void, 
-                            :call, 
-                            TopNode(:ccall), 
-                            Expr(:call1, TopNode(:tuple), QuoteNode(:pert_wait_all_task), runtime_libpath), 
-                            :Void, 
-                            Expr(:call1, TopNode(:tuple)))
-      push!(task_list, call_wait)
+            #call_wait = Expr(:ccall, Expr(:tuple, QuoteNode(:pert_wait_all_task), runtime_libpath), :Void, Expr(:tuple))
+            #push!(task_list, call_wait) 
 
-#    call_wait = quote ccall((:pert_wait_all_task, $runtime_libpath), Void, ()) end
-#    assert(typeof(call_wait) == Expr && call_wait.head == :block)
-#    append!(task_list, call_wait.args) 
+            call_wait = TypedExpr(Void, 
+            :call, 
+            TopNode(:ccall), 
+            Expr(:call1, TopNode(:tuple), QuoteNode(:pert_wait_all_task), runtime_libpath), 
+            :Void, 
+            Expr(:call1, TopNode(:tuple)))
+            push!(task_list, call_wait)
+
+            #    call_wait = quote ccall((:pert_wait_all_task, $runtime_libpath), Void, ()) end
+            #    assert(typeof(call_wait) == Expr && call_wait.head == :block)
+            #    append!(task_list, call_wait.args) 
+        end
     end
-  end
 
-  task_list
+    task_list
 end
 
 @doc """
@@ -4588,38 +4588,38 @@ Given a set of statement IDs and liveness information for the statements of the 
 which symbols are needed at input and which symbols are purely local to the functio.
 """
 function getIO(stmt_ids, bb_statements)
-  assert(length(stmt_ids) > 0)
+    assert(length(stmt_ids) > 0)
 
-  # Get the statements out of the basic block statement array such that those statement's ID's are in the stmt_ids ID array.
-  stmts_for_ids = filter(x -> in(x.tls.index, stmt_ids) , bb_statements)
-  # Make sure that we found a statement for every statement ID.
-  if length(stmt_ids) != length(stmts_for_ids)
-    dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
-    dprintln(0,"length(stmts_for_ids) = ", length(stmts_for_ids))
-    dprintln(0,"stmt_ids = ", stmt_ids)
-    dprintln(0,"stmts_for_ids = ", stmts_for_ids)
-    assert(length(stmt_ids) == length(stmts_for_ids))
-  end
-  # The initial set of inputs is those variables "use"d by the first statement.
-  # The inputs to the task are those variables used in the set of statements before they are defined in any of those statements.
-  cur_inputs = stmts_for_ids[1].use
-  # Keep track of variables defined in the set of statements processed thus far.
-  cur_defs   = stmts_for_ids[1].def
-  for i = 2:length(stmts_for_ids)
-    # For each additional statement, the new set of inputs is the previous set plus uses in the current statement except for those symbols already defined in the function.
-    cur_inputs = union(cur_inputs, setdiff(stmts_for_ids[i].use, cur_defs))
-    # For each additional statement, the defs are just union with the def for the current statement.
-    cur_defs   = union(cur_defs, stmts_for_ids[i].def)
-  end
-  IntrinsicSet = Set()
-  # We will ignore the :Intrinsics symbol as it isn't something you need to pass as a param.
-  push!(IntrinsicSet, :Intrinsics)
-  # Task functions don't return anything.  They must return via an input parameter so outputs should be empty.
-  outputs = setdiff(intersect(cur_defs, stmts_for_ids[end].live_out), IntrinsicSet)
-  cur_defs = setdiff(cur_defs, IntrinsicSet)
-  cur_inputs = setdiff(filter(x -> !(is(x, :Int64) || is(x, :Float32)), cur_inputs), IntrinsicSet)
-  # The locals are those things defined that aren't inputs or outputs of the function.
-  cur_inputs, outputs, setdiff(cur_defs, union(cur_inputs, outputs))
+    # Get the statements out of the basic block statement array such that those statement's ID's are in the stmt_ids ID array.
+    stmts_for_ids = filter(x -> in(x.tls.index, stmt_ids) , bb_statements)
+    # Make sure that we found a statement for every statement ID.
+    if length(stmt_ids) != length(stmts_for_ids)
+        dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
+        dprintln(0,"length(stmts_for_ids) = ", length(stmts_for_ids))
+        dprintln(0,"stmt_ids = ", stmt_ids)
+        dprintln(0,"stmts_for_ids = ", stmts_for_ids)
+        assert(length(stmt_ids) == length(stmts_for_ids))
+    end
+    # The initial set of inputs is those variables "use"d by the first statement.
+    # The inputs to the task are those variables used in the set of statements before they are defined in any of those statements.
+    cur_inputs = stmts_for_ids[1].use
+    # Keep track of variables defined in the set of statements processed thus far.
+    cur_defs   = stmts_for_ids[1].def
+    for i = 2:length(stmts_for_ids)
+        # For each additional statement, the new set of inputs is the previous set plus uses in the current statement except for those symbols already defined in the function.
+        cur_inputs = union(cur_inputs, setdiff(stmts_for_ids[i].use, cur_defs))
+        # For each additional statement, the defs are just union with the def for the current statement.
+        cur_defs   = union(cur_defs, stmts_for_ids[i].def)
+    end
+    IntrinsicSet = Set()
+    # We will ignore the :Intrinsics symbol as it isn't something you need to pass as a param.
+    push!(IntrinsicSet, :Intrinsics)
+    # Task functions don't return anything.  They must return via an input parameter so outputs should be empty.
+    outputs = setdiff(intersect(cur_defs, stmts_for_ids[end].live_out), IntrinsicSet)
+    cur_defs = setdiff(cur_defs, IntrinsicSet)
+    cur_inputs = setdiff(filter(x -> !(is(x, :Int64) || is(x, :Float32)), cur_inputs), IntrinsicSet)
+    # The locals are those things defined that aren't inputs or outputs of the function.
+    cur_inputs, outputs, setdiff(cur_defs, union(cur_inputs, outputs))
 end
 
 @doc """
@@ -4654,10 +4654,10 @@ end
 Just to hold the "found" Bool that says whether a unsafe variant was replaced with a regular version.
 """
 type cuw_state
-  found
-  function cuw_state()
-    new(false)
-  end
+    found
+    function cuw_state()
+        new(false)
+    end
 end
 
 @doc """
@@ -4666,26 +4666,26 @@ replace them with the regular Julia versions.  Sets the "found" flag
 in the state when such a replacement is performed.
 """
 function convertUnsafeWalk(x, state, top_level_number, is_top_level, read)
-  use_dbg_level = 3
-  dprintln(use_dbg_level,"convertUnsafeWalk ", x)
+    use_dbg_level = 3
+    dprintln(use_dbg_level,"convertUnsafeWalk ", x)
 
-  if typeof(x) == Expr
-    dprintln(use_dbg_level,"convertUnsafeWalk is Expr")
-    if x.head == :call
-      dprintln(use_dbg_level,"convertUnsafeWalk is :call")
-      if x.args[1] == TopNode(:unsafe_arrayset)
-        x.args[1] = TopNode(:arrayset)
-        state.found = true
-        return x
-      elseif x.args[1] == TopNode(:unsafe_arrayref)
-        x.args[1] = TopNode(:arrayref)
-        state.found = true
-        return x
-      end
+    if typeof(x) == Expr
+        dprintln(use_dbg_level,"convertUnsafeWalk is Expr")
+        if x.head == :call
+            dprintln(use_dbg_level,"convertUnsafeWalk is :call")
+            if x.args[1] == TopNode(:unsafe_arrayset)
+                x.args[1] = TopNode(:arrayset)
+                state.found = true
+                return x
+            elseif x.args[1] == TopNode(:unsafe_arrayref)
+                x.args[1] = TopNode(:arrayref)
+                state.found = true
+                return x
+            end
+        end
     end
-  end
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -4693,20 +4693,20 @@ Remove unsafe array access Symbols from the incoming "stmt".
 Returns the updated statement if something was modifed, else returns "nothing".
 """
 function convertUnsafe(stmt)
-  dprintln(3,"convertUnsafe: ", stmt)
-  state = cuw_state() 
-  # Uses AstWalk to do the pattern match and replace.
-  res = AstWalk(stmt, convertUnsafeWalk, state)
-  # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
-  if state.found
-    dprintln(3, "state.found ", state, " ", res)
-    assert(isa(res,Array))
-    assert(length(res) == 1)
-    dprintln(3,"Replaced unsafe: ", res[1])
-    return res[1]
-  else
-    return nothing
-  end
+    dprintln(3,"convertUnsafe: ", stmt)
+    state = cuw_state() 
+    # Uses AstWalk to do the pattern match and replace.
+    res = AstWalk(stmt, convertUnsafeWalk, state)
+    # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
+    if state.found
+        dprintln(3, "state.found ", state, " ", res)
+        assert(isa(res,Array))
+        assert(length(res) == 1)
+        dprintln(3,"Replaced unsafe: ", res[1])
+        return res[1]
+    else
+        return nothing
+    end
 end
 
 @doc """
@@ -4714,11 +4714,11 @@ Try to remove unsafe array access Symbols from the incoming "stmt".  If successf
 statement, else return the unmodified statement.
 """
 function convertUnsafeOrElse(stmt)
-  res = convertUnsafe(stmt)
-  if res == nothing
-    res = stmt
-  end
-  return res
+    res = convertUnsafe(stmt)
+    if res == nothing
+        res = stmt
+    end
+    return res
 end
 
 @doc """
@@ -4728,91 +4728,91 @@ If the incoming loop nest level is more than the number of loops nests in the pa
 insert the body of the parfor into the new function body in "new_body".
 """
 function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state)
-  dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
-  if loop_nest_level > length(the_parfor.loopNests)
-    # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
-    # For each statement in the parfor body.
-    for i = 1:length(the_parfor.body)
-      dprintln(3, "Body index ", i)
-      # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
-      # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
-      cu_res = convertUnsafe(the_parfor.body[i])
-      dprintln(3, "cu_res = ", cu_res)
-      if cu_res != nothing
-        push!(new_body, Expr(:boundscheck, false)) 
-        push!(new_body, cu_res)
-        push!(new_body, Expr(:boundscheck, Expr(:call, TopNode(:getfield), Base, QuoteNode(:pop))))
-      else
-        push!(new_body, the_parfor.body[i])
-      end
+    dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
+    if loop_nest_level > length(the_parfor.loopNests)
+        # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
+        # For each statement in the parfor body.
+        for i = 1:length(the_parfor.body)
+            dprintln(3, "Body index ", i)
+            # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
+            # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
+            cu_res = convertUnsafe(the_parfor.body[i])
+            dprintln(3, "cu_res = ", cu_res)
+            if cu_res != nothing
+                push!(new_body, Expr(:boundscheck, false)) 
+                push!(new_body, cu_res)
+                push!(new_body, Expr(:boundscheck, Expr(:call, TopNode(:getfield), Base, QuoteNode(:pop))))
+            else
+                push!(new_body, the_parfor.body[i])
+            end
+        end
+    else
+        # See the following example from the REPL for how Julia structures loop nests into labels and gotos.
+        # Our code below generates the same structure for each loop in the parfor.
+
+        # julia> function f1(x,y)
+        #        for i = x:y
+        #        println(i)
+        #        end
+        #        end
+        # f1 (generic function with 1 method)
+        # 
+        # julia> ct = code_typed(f1,(Int64,Int64))
+        # 1-element Array{Any,1}:
+        #  :($(Expr(:lambda, Any[:x,:y], Any[Any[Any[:x,Int64,0],Any[:y,Int64,0],Any[symbol("#s1"),Int64,2],Any[:i,Int64,18],Any[symbol("##xs#6369"),Tuple{Int64},0]],Any[],Any[UnitRange{Int64},Tuple{Int64,Int64},Int64,Int64],Any[]], :(begin  # none, line 2:
+        #         GenSym(0) = $(Expr(:new, UnitRange{Int64}, :(x::Int64), :(((top(getfield))(Base.Intrinsics,:select_value)::I)((Base.sle_int)(x::Int64,y::Int64)::Bool,y::Int64,(Base.box)(Int64,(Base.sub_int)(x::Int64,1))::Int64)::Int64)))
+        #         #s1 = (top(getfield))(GenSym(0),:start)::Int64
+        #         unless (Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool goto 1
+        #         2: 
+        #         GenSym(2) = #s1::Int64
+        #         GenSym(3) = (Base.box)(Base.Int,(Base.add_int)(#s1::Int64,1))::Int64
+        #         i = GenSym(2)
+        #         #s1 = GenSym(3) # line 3:
+        #         (Base.println)(Base.STDOUT,i::Int64)
+        #         3: 
+        #         unless (Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool))::Bool goto 2
+        #         1: 
+        #         0: 
+        #         return
+        #     end::Void))))
+
+        this_nest = the_parfor.loopNests[loop_nest_level]
+
+        label_after_first_unless   = next_available_label
+        label_before_second_unless = next_available_label + 1
+        label_after_second_unless  = next_available_label + 2
+        label_last                 = next_available_label + 3
+
+        colon_var = string("#recreate_colon_", (loop_nest_level-1) * 3 + 0)
+        colon_sym = symbol(colon_var)
+        start_var = string("#recreate_start_", (loop_nest_level-1) * 3 + 1)
+        start_sym = symbol(start_var)
+        next_var  = string("#recreate_next_",  (loop_nest_level-1) * 3 + 1)
+        next_sym  = symbol(next_var)
+
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
+
+        push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
+        push!(new_body, LabelNode(label_after_first_unless))
+
+        push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
+        push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
+
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
+        recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state)
+
+        push!(new_body, LabelNode(label_before_second_unless))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
+        push!(new_body, LabelNode(label_after_second_unless))
+        push!(new_body, LabelNode(label_last))
     end
-  else
-    # See the following example from the REPL for how Julia structures loop nests into labels and gotos.
-    # Our code below generates the same structure for each loop in the parfor.
-
-    # julia> function f1(x,y)
-    #        for i = x:y
-    #        println(i)
-    #        end
-    #        end
-    # f1 (generic function with 1 method)
-    # 
-    # julia> ct = code_typed(f1,(Int64,Int64))
-    # 1-element Array{Any,1}:
-    #  :($(Expr(:lambda, Any[:x,:y], Any[Any[Any[:x,Int64,0],Any[:y,Int64,0],Any[symbol("#s1"),Int64,2],Any[:i,Int64,18],Any[symbol("##xs#6369"),Tuple{Int64},0]],Any[],Any[UnitRange{Int64},Tuple{Int64,Int64},Int64,Int64],Any[]], :(begin  # none, line 2:
-    #         GenSym(0) = $(Expr(:new, UnitRange{Int64}, :(x::Int64), :(((top(getfield))(Base.Intrinsics,:select_value)::I)((Base.sle_int)(x::Int64,y::Int64)::Bool,y::Int64,(Base.box)(Int64,(Base.sub_int)(x::Int64,1))::Int64)::Int64)))
-    #         #s1 = (top(getfield))(GenSym(0),:start)::Int64
-    #         unless (Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool goto 1
-    #         2: 
-    #         GenSym(2) = #s1::Int64
-    #         GenSym(3) = (Base.box)(Base.Int,(Base.add_int)(#s1::Int64,1))::Int64
-    #         i = GenSym(2)
-    #         #s1 = GenSym(3) # line 3:
-    #         (Base.println)(Base.STDOUT,i::Int64)
-    #         3: 
-    #         unless (Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool))::Bool goto 2
-    #         1: 
-    #         0: 
-    #         return
-    #     end::Void))))
-
-    this_nest = the_parfor.loopNests[loop_nest_level]
-
-    label_after_first_unless   = next_available_label
-    label_before_second_unless = next_available_label + 1
-    label_after_second_unless  = next_available_label + 2
-    label_last                 = next_available_label + 3
-
-    colon_var = string("#recreate_colon_", (loop_nest_level-1) * 3 + 0)
-    colon_sym = symbol(colon_var)
-    start_var = string("#recreate_start_", (loop_nest_level-1) * 3 + 1)
-    start_sym = symbol(start_var)
-    next_var  = string("#recreate_next_",  (loop_nest_level-1) * 3 + 1)
-    next_sym  = symbol(next_var)
-
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
-
-    push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-    push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
-    push!(new_body, LabelNode(label_after_first_unless))
-
-    push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
-    push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
-    push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
-
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-    recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state)
-
-    push!(new_body, LabelNode(label_before_second_unless))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
-    push!(new_body, LabelNode(label_after_second_unless))
-    push!(new_body, LabelNode(label_last))
-  end
 end
 
 @doc """
@@ -4821,13 +4821,13 @@ we have to reconstruct a loop infrastructure based on the parfor's loop nest inf
 and outputs that parfor to the new function body as regular Julia loops.
 """
 function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state)
-  max_label = getMaxLabel(0, the_parfor.body)
-  dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
-  # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-  recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state)
-  nothing
+    max_label = getMaxLabel(0, the_parfor.body)
+    dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
+    # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
+    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state)
+    nothing
 end
- 
+
 @doc """
 Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that
 body.  This parfor is in the nested (parfor code is in the parfor node itself) temporary form we use for fusion although 
@@ -4835,286 +4835,286 @@ pre-statements and post-statements are already elevated by this point.  We repla
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
 function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
-  dprintln(2,"Flattening ", the_parfor)
+    dprintln(2,"Flattening ", the_parfor)
 
-  private_set = getPrivateSet(the_parfor.body)
-  private_array = collect(private_set)
+    private_set = getPrivateSet(the_parfor.body)
+    private_array = collect(private_set)
 
-  # Output to the new body that this is the start of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
-  # Output the body of the parfor as top-level statements in the new function body.
-  append!(new_body, the_parfor.body)
-  # Output to the new body that this is the end of a parfor.
-  push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
-  nothing
+    # Output to the new body that this is the start of a parfor.
+    push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
+    # Output the body of the parfor as top-level statements in the new function body.
+    append!(new_body, the_parfor.body)
+    # Output to the new body that this is the end of a parfor.
+    push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
+    nothing
 end
 
 @doc """
 Given a parfor statement index in "parfor_index" in the "body"'s statements, create a TaskInfo node for this parfor.
 """
 function parforToTask(parfor_index, bb_statements, body, state)
-  assert(typeof(body[parfor_index]) == Expr)
-  assert(body[parfor_index].head == :parfor)  # Make sure we got a parfor node to convert.
-  the_parfor = body[parfor_index].args[1]     # Get the PIRParForAst object from the :parfor Expr.
-  dprintln(3,"parforToTask = ", the_parfor)
+    assert(typeof(body[parfor_index]) == Expr)
+    assert(body[parfor_index].head == :parfor)  # Make sure we got a parfor node to convert.
+    the_parfor = body[parfor_index].args[1]     # Get the PIRParForAst object from the :parfor Expr.
+    dprintln(3,"parforToTask = ", the_parfor)
 
-  # Create an array of the reduction vars used in this parfor.
-  reduction_vars = Symbol[]
-  for i in the_parfor.reductions
-    push!(reduction_vars, i.reductionVar.name)
-  end
+    # Create an array of the reduction vars used in this parfor.
+    reduction_vars = Symbol[]
+    for i in the_parfor.reductions
+        push!(reduction_vars, i.reductionVar.name)
+    end
 
-  # The call to getIO determines which variables are live at input to this parfor, live at output from this parfor
-  # or just used exclusively in the parfor.  These latter become local variables.
-  in_vars , out, locals = getIO([parfor_index], bb_statements)
-  dprintln(3,"in_vars = ", in_vars)
-  dprintln(3,"out_vars = ", out)
-  dprintln(3,"local_vars = ", locals)
+    # The call to getIO determines which variables are live at input to this parfor, live at output from this parfor
+    # or just used exclusively in the parfor.  These latter become local variables.
+    in_vars , out, locals = getIO([parfor_index], bb_statements)
+    dprintln(3,"in_vars = ", in_vars)
+    dprintln(3,"out_vars = ", out)
+    dprintln(3,"local_vars = ", locals)
 
-  # Convert Set to Array
-  in_array_names   = Any[]
-  modified_symbols = Any[]
-  io_symbols       = Any[]
-  for i in in_vars
-    # Determine for each input var whether the variable is just read, just written, or both.
-    swritten = CompilerTools.ReadWriteSet.isWritten(i, the_parfor.rws)
-    sread    = CompilerTools.ReadWriteSet.isRead(i, the_parfor.rws)
-    sio      = swritten & sread
-    if in(i, reduction_vars)
-      assert(sio)   # reduction_vars must be initialized before the parfor and updated during the parfor so must be io
-    elseif sio
-      push!(io_symbols, i)       # If input is both read and written then remember this symbol is input and output.
-    elseif swritten
-      push!(modified_symbols, i)
+    # Convert Set to Array
+    in_array_names   = Any[]
+    modified_symbols = Any[]
+    io_symbols       = Any[]
+    for i in in_vars
+        # Determine for each input var whether the variable is just read, just written, or both.
+        swritten = CompilerTools.ReadWriteSet.isWritten(i, the_parfor.rws)
+        sread    = CompilerTools.ReadWriteSet.isRead(i, the_parfor.rws)
+        sio      = swritten & sread
+        if in(i, reduction_vars)
+            assert(sio)   # reduction_vars must be initialized before the parfor and updated during the parfor so must be io
+        elseif sio
+            push!(io_symbols, i)       # If input is both read and written then remember this symbol is input and output.
+        elseif swritten
+            push!(modified_symbols, i)
+        else
+            push!(in_array_names, i)
+        end
+    end
+    # Convert Set to Array
+    if length(out) != 0
+        throw(string("out variable of parfor task not supported right now."))
+    end
+    # Convert Set to Array
+    locals_array = CompilerTools.LambdaHandling.VarDef[]
+    gensyms = Any[]
+    gensyms_table = Dict{SymGen, Any}()
+    for i in locals
+        if isa(i, Symbol) 
+            push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.lambdaInfo))
+        elseif isa(i, GenSym) 
+            push!(gensyms, CompilerTools.LambdaHandling.getType(i,state.lambdaInfo))
+            gensyms_table[i] = GenSym(length(gensyms) - 1)
+        else
+            assert(false)
+        end
+    end
+
+    # Form an array of argument access flags for each argument.
+    arg_types = Cint[]
+    push!(arg_types, ARG_OPT_IN) # for ranges parameter
+    for i = 1:length(in_array_names)
+        push!(arg_types, ARG_OPT_IN)
+    end
+    for i = 1:length(modified_symbols)
+        push!(arg_types, ARG_OPT_OUT)
+    end
+    for i = 1:length(io_symbols)
+        push!(arg_types, ARG_OPT_INOUT)
+    end
+    for i in 1:length(reduction_vars)
+        push!(arg_types, ARG_OPT_ACCUMULATOR)
+    end
+
+    dprintln(3,"in_array_names = ", in_array_names)
+    dprintln(3,"modified_symbols = ", modified_symbols)
+    dprintln(3,"io_symbols = ", io_symbols)
+    dprintln(3,"reduction_vars = ", reduction_vars)
+    dprintln(3,"locals_array = ", locals_array)
+    dprintln(3,"gensyms = ", gensyms)
+    dprintln(3,"gensyms_table = ", gensyms_table)
+    dprintln(3,"arg_types = ", arg_types)
+
+    # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
+    all_arg_names = [:ranges;
+    map(x -> symbol(x), in_array_names);
+    map(x -> symbol(x), modified_symbols);
+    map(x -> symbol(x), io_symbols);
+    map(x -> symbol(x), reduction_vars)]
+    # Form a tuple that contains the type of each parameter.
+    all_arg_types_tuple = Expr(:tuple)
+    all_arg_types_tuple.args = [pir_range_actual;
+    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
+    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
+    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
+    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
+    all_arg_type = eval(all_arg_types_tuple)
+    # Forms VarDef's for the local variables to the task function.
+    args_var = CompilerTools.LambdaHandling.VarDef[]
+    push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
+    append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names);
+    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols);
+    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols);
+    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), reduction_vars)])
+    dprintln(3,"all_arg_names = ", all_arg_names)
+    dprintln(3,"all_arg_type = ", all_arg_type)
+    dprintln(3,"args_var = ", args_var)
+
+    unique_node_id = get_unique_num()
+
+    # The name of the new task function.
+    task_func_name = string("task_func_",unique_node_id)
+    task_func_sym  = symbol(task_func_name)
+
+    # Just stub out the new task function...the body and lambda will be replaced below.
+    task_func = @eval function ($task_func_sym)($(all_arg_names...))
+        throw(string("Some task function's body was not replaced."))
+    end
+    dprintln(3,"task_func = ", task_func)
+
+    # DON'T DELETE.  Forces function into existence.
+    unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
+    dprintln(3, "unused_ct = ", unused_ct)
+
+    newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
+    CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaInfo)
+    newLambdaInfo.gen_sym_typs = gensyms
+
+    # Creating the new body for the task function.
+    task_body = TypedExpr(Int, :body)
+    saved_loopNests = deepcopy(the_parfor.loopNests)
+
+    #  for i in all_arg_names
+    #    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
+    #  end
+
+    if ParallelAccelerator.getTaskMode() != ParallelAccelerator.NO_TASK_MODE
+        for i = 1:length(the_parfor.loopNests)
+            # Put outerloop first in the loopNest
+            j = length(the_parfor.loopNests) - i + 1
+            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:add_int),
+            TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i),
+            1)
+            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:add_int), 
+            TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i),
+            1)
+        end
+    elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+        for i = 1:length(the_parfor.loopNests)
+            # Put outerloop first in the loopNest
+            j = length(the_parfor.loopNests) - i + 1
+            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i)
+            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i)
+        end
+    end
+
+    dprintln(3, "Before recreation or flattening")
+
+    # Add the parfor stmt to the task function body.
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+        recreateLoops(task_body.args, the_parfor, state)
     else
-      push!(in_array_names, i)
+        flattenParfor(task_body.args, the_parfor)
     end
-  end
-  # Convert Set to Array
-  if length(out) != 0
-    throw(string("out variable of parfor task not supported right now."))
-  end
-  # Convert Set to Array
-  locals_array = CompilerTools.LambdaHandling.VarDef[]
-  gensyms = Any[]
-  gensyms_table = Dict{SymGen, Any}()
-  for i in locals
-    if isa(i, Symbol) 
-      push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.lambdaInfo))
-    elseif isa(i, GenSym) 
-      push!(gensyms, CompilerTools.LambdaHandling.getType(i,state.lambdaInfo))
-      gensyms_table[i] = GenSym(length(gensyms) - 1)
+
+    push!(task_body.args, TypedExpr(Int, :return, 0))
+    task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
+    # Create the new :lambda Expr for the task function.
+    code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
+
+    dprintln(3, "New task = ", code)
+
+    m = methods(task_func, all_arg_type)
+    if length(m) < 1
+        error("Method for ", task_func_name, " is not found")
     else
-      assert(false)
+        dprintln(3,"New ", task_func_name, " = ", m)
     end
-  end
+    def = m[1].func.code
+    dprintln(3, "def = ", def, " type = ", typeof(def))
+    dprintln(3, "tfunc = ", def.tfunc)
+    def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
 
-  # Form an array of argument access flags for each argument.
-  arg_types = Cint[]
-  push!(arg_types, ARG_OPT_IN) # for ranges parameter
-  for i = 1:length(in_array_names)
-    push!(arg_types, ARG_OPT_IN)
-  end
-  for i = 1:length(modified_symbols)
-    push!(arg_types, ARG_OPT_OUT)
-  end
-  for i = 1:length(io_symbols)
-    push!(arg_types, ARG_OPT_INOUT)
-  end
-  for i in 1:length(reduction_vars)
-    push!(arg_types, ARG_OPT_ACCUMULATOR)
-  end
-
-  dprintln(3,"in_array_names = ", in_array_names)
-  dprintln(3,"modified_symbols = ", modified_symbols)
-  dprintln(3,"io_symbols = ", io_symbols)
-  dprintln(3,"reduction_vars = ", reduction_vars)
-  dprintln(3,"locals_array = ", locals_array)
-  dprintln(3,"gensyms = ", gensyms)
-  dprintln(3,"gensyms_table = ", gensyms_table)
-  dprintln(3,"arg_types = ", arg_types)
-
-  # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
-  all_arg_names = [:ranges;
-                   map(x -> symbol(x), in_array_names);
-                   map(x -> symbol(x), modified_symbols);
-                   map(x -> symbol(x), io_symbols);
-                   map(x -> symbol(x), reduction_vars)]
-  # Form a tuple that contains the type of each parameter.
-  all_arg_types_tuple = Expr(:tuple)
-  all_arg_types_tuple.args = [pir_range_actual;
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
-                              map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
-  all_arg_type = eval(all_arg_types_tuple)
-  # Forms VarDef's for the local variables to the task function.
-  args_var = CompilerTools.LambdaHandling.VarDef[]
-  push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
-  append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names);
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols);
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols);
-                      map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), reduction_vars)])
-  dprintln(3,"all_arg_names = ", all_arg_names)
-  dprintln(3,"all_arg_type = ", all_arg_type)
-  dprintln(3,"args_var = ", args_var)
-
-  unique_node_id = get_unique_num()
-
-  # The name of the new task function.
-  task_func_name = string("task_func_",unique_node_id)
-  task_func_sym  = symbol(task_func_name)
-
-  # Just stub out the new task function...the body and lambda will be replaced below.
-  task_func = @eval function ($task_func_sym)($(all_arg_names...))
-                      throw(string("Some task function's body was not replaced."))
-                    end
-  dprintln(3,"task_func = ", task_func)
-
-  # DON'T DELETE.  Forces function into existence.
-  unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
-  dprintln(3, "unused_ct = ", unused_ct)
-
-  newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
-  CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaInfo)
-  newLambdaInfo.gen_sym_typs = gensyms
-
-  # Creating the new body for the task function.
-  task_body = TypedExpr(Int, :body)
-  saved_loopNests = deepcopy(the_parfor.loopNests)
-
-#  for i in all_arg_names
-#    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
-#  end
- 
-  if ParallelAccelerator.getTaskMode() != ParallelAccelerator.NO_TASK_MODE
-    for i = 1:length(the_parfor.loopNests)
-      # Put outerloop first in the loopNest
-      j = length(the_parfor.loopNests) - i + 1
-      the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:add_int),
-                                                TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i),
-                                                1)
-      the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:add_int), 
-                                                TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i),
-                                                1)
+    m = methods(task_func, all_arg_type)
+    def = m[1].func.code
+    if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
+        def.j2cflag = convert(Int32,6)
+        ccall(:set_j2c_task_arg_types, Void, (Ptr{UInt8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
     end
-  elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-    for i = 1:length(the_parfor.loopNests)
-      # Put outerloop first in the loopNest
-      j = length(the_parfor.loopNests) - i + 1
-      the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i)
-      the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i)
-    end
-  end
+    precompile(task_func, all_arg_type)
+    dprintln(3, "def post = ", def, " type = ", typeof(def))
 
-  dprintln(3, "Before recreation or flattening")
-
-  # Add the parfor stmt to the task function body.
-  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-    recreateLoops(task_body.args, the_parfor, state)
-  else
-    flattenParfor(task_body.args, the_parfor)
-  end
-
-  push!(task_body.args, TypedExpr(Int, :return, 0))
-  task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
-  # Create the new :lambda Expr for the task function.
-  code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
-
-  dprintln(3, "New task = ", code)
-
-  m = methods(task_func, all_arg_type)
-  if length(m) < 1
-    error("Method for ", task_func_name, " is not found")
-  else
-    dprintln(3,"New ", task_func_name, " = ", m)
-  end
-  def = m[1].func.code
-  dprintln(3, "def = ", def, " type = ", typeof(def))
-  dprintln(3, "tfunc = ", def.tfunc)
-  def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
-
-  m = methods(task_func, all_arg_type)
-  def = m[1].func.code
-  if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
-    def.j2cflag = convert(Int32,6)
-    ccall(:set_j2c_task_arg_types, Void, (Ptr{UInt8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
-  end
-  precompile(task_func, all_arg_type)
-  dprintln(3, "def post = ", def, " type = ", typeof(def))
-
-  if DEBUG_LVL >= 3
-    task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
-    if length(task_func_ct) == 0
-      println("Error getting task func code.\n")
-    else
-      task_func_ct = task_func_ct[1]
-      println("Task func code for ", task_func)
-      println(task_func_ct)    
-    end
-  end
- 
-  # If this task has reductions, then we create a Julia buffer that holds a C function that we build up in the section below.
-  # We then force this C code into the rest of the C code generated by cgen with a special call.
-  reduction_func_name = string("")
-  if length(the_parfor.reductions) > 0
-    # The name of the new reduction function.
-    reduction_func_name = string("reduction_func_",unique_node_id)
-
-    the_types = AbstractString[]
-    for i = 1:length(the_parfor.reductions)
-      if the_parfor.reductions[i].reductionVar.typ == Float64
-        push!(the_types, "double")
-      elseif the_parfor.reductions[i].reductionVar.typ == Float32
-        push!(the_types, "float")
-      elseif the_parfor.reductions[i].reductionVar.typ == Int64
-        push!(the_types, "int64_t")
-      elseif the_parfor.reductions[i].reductionVar.typ == Int32
-        push!(the_types, "int32_t")
-      else
-        throw(string("Unsupported reduction var type ", the_parfor.reductions[i].reductionVar.typ))
-      end
+    if DEBUG_LVL >= 3
+        task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
+        if length(task_func_ct) == 0
+            println("Error getting task func code.\n")
+        else
+            task_func_ct = task_func_ct[1]
+            println("Task func code for ", task_func)
+            println(task_func_ct)    
+        end
     end
 
-    # The reduction function doesn't return anything.
-    c_reduction_func = string("void _")
-    c_reduction_func = string(c_reduction_func, reduction_func_name)
-    # All reduction functions have the same signature so that the runtime can call back into them.
-    # The accumulator is effectively a pointer to Any[].  This accumulator is initialized by the runtime with the initial reduction value for the given type.
-    # The new_reduction_vars are also a pointer to Any[] and contains new value to merge into the accumulating reduction var in accumulator.
-    c_reduction_func = string(c_reduction_func, "(void **accumulator, void **new_reduction_vars) {\n")
-    for i = 1:length(the_parfor.reductions)
-      # For each reduction, put one statement in the C function.  Figure out here if it is a + or * reduction.
-      if the_parfor.reductions[i].reductionFunc == :+
-        this_op = "+"
-      elseif the_parfor.reductions[i].reductionFunc == :*
-        this_op = "*"
-      else
-        throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
-      end
-      # Add the statement to the function basically of this form *(accumulator[i]) = *(accumulator[i]) + *(new_reduction_vars[i]).
-      # but instead of "+" use the operation type determined above stored in "this_op" and before you can dereference each element, you have to cast
-      # the pointer to the appropriate type for this reduction element as stored in the_types[i].
-      c_reduction_func = string(c_reduction_func, "*((", the_types[i], "*)accumulator[", i-1, "]) = *((", the_types[i], "*)accumulator[", i-1, "]) ", this_op, " *((", the_types[i], "*)new_reduction_vars[", i-1, "]);\n")
+    # If this task has reductions, then we create a Julia buffer that holds a C function that we build up in the section below.
+    # We then force this C code into the rest of the C code generated by cgen with a special call.
+    reduction_func_name = string("")
+    if length(the_parfor.reductions) > 0
+        # The name of the new reduction function.
+        reduction_func_name = string("reduction_func_",unique_node_id)
+
+        the_types = AbstractString[]
+        for i = 1:length(the_parfor.reductions)
+            if the_parfor.reductions[i].reductionVar.typ == Float64
+                push!(the_types, "double")
+            elseif the_parfor.reductions[i].reductionVar.typ == Float32
+                push!(the_types, "float")
+            elseif the_parfor.reductions[i].reductionVar.typ == Int64
+                push!(the_types, "int64_t")
+            elseif the_parfor.reductions[i].reductionVar.typ == Int32
+                push!(the_types, "int32_t")
+            else
+                throw(string("Unsupported reduction var type ", the_parfor.reductions[i].reductionVar.typ))
+            end
+        end
+
+        # The reduction function doesn't return anything.
+        c_reduction_func = string("void _")
+        c_reduction_func = string(c_reduction_func, reduction_func_name)
+        # All reduction functions have the same signature so that the runtime can call back into them.
+        # The accumulator is effectively a pointer to Any[].  This accumulator is initialized by the runtime with the initial reduction value for the given type.
+        # The new_reduction_vars are also a pointer to Any[] and contains new value to merge into the accumulating reduction var in accumulator.
+        c_reduction_func = string(c_reduction_func, "(void **accumulator, void **new_reduction_vars) {\n")
+        for i = 1:length(the_parfor.reductions)
+            # For each reduction, put one statement in the C function.  Figure out here if it is a + or * reduction.
+            if the_parfor.reductions[i].reductionFunc == :+
+                this_op = "+"
+            elseif the_parfor.reductions[i].reductionFunc == :*
+                this_op = "*"
+            else
+                throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
+            end
+            # Add the statement to the function basically of this form *(accumulator[i]) = *(accumulator[i]) + *(new_reduction_vars[i]).
+            # but instead of "+" use the operation type determined above stored in "this_op" and before you can dereference each element, you have to cast
+            # the pointer to the appropriate type for this reduction element as stored in the_types[i].
+            c_reduction_func = string(c_reduction_func, "*((", the_types[i], "*)accumulator[", i-1, "]) = *((", the_types[i], "*)accumulator[", i-1, "]) ", this_op, " *((", the_types[i], "*)new_reduction_vars[", i-1, "]);\n")
+        end
+        c_reduction_func = string(c_reduction_func, "}\n")
+        dprintln(3,"Created reduction function is:")
+        dprintln(3,c_reduction_func)
+
+        # Tell cgen to put this reduction function directly into the C code.
+        ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
     end
-    c_reduction_func = string(c_reduction_func, "}\n")
-    dprintln(3,"Created reduction function is:")
-    dprintln(3,c_reduction_func)
 
-    # Tell cgen to put this reduction function directly into the C code.
-    ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
-  end
-
-  return TaskInfo(task_func,     # The task function that we just generated of type Function.
-                  task_func_sym, # The task function's Symbol name.
-                  reduction_func_name, # The name of the C reduction function created for this task.
-                  map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), in_array_names),
-                  map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), modified_symbols),
-                  map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), io_symbols),
-                  map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), reduction_vars),
-                  code,          # The AST for the task function.
-                  saved_loopNests)
+    return TaskInfo(task_func,     # The task function that we just generated of type Function.
+    task_func_sym, # The task function's Symbol name.
+    reduction_func_name, # The name of the C reduction function created for this task.
+    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), in_array_names),
+    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), modified_symbols),
+    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), io_symbols),
+    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), reduction_vars),
+    code,          # The AST for the task function.
+    saved_loopNests)
 end
 
 @doc """
@@ -5122,43 +5122,43 @@ Form a task out of a range of sequential statements.
 This is not currently implemented.
 """
 function seqTask(body_indices, bb_statements, body, state)
-  getIO(body_indices, bb_statements)  
-  throw(string("seqTask construction not implemented yet."))
-  TaskInfo(:FIXFIXFIX, :FIXFIXFIX, Any[], Any[], nothing, PIRLoopNest[])
+    getIO(body_indices, bb_statements)  
+    throw(string("seqTask construction not implemented yet."))
+    TaskInfo(:FIXFIXFIX, :FIXFIXFIX, Any[], Any[], nothing, PIRLoopNest[])
 end
 
 @doc """
 Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".
 """
 function printBody(dlvl, body :: Array{Any,1})
-  for i = 1:length(body)
-    dprintln(dlvl, "    ", body[i])
-  end
+    for i = 1:length(body)
+        dprintln(dlvl, "    ", body[i])
+    end
 end
 
 function printBody(dlvl, body :: Expr)
-  printBody(dlvl, body.args)
+    printBody(dlvl, body.args)
 end
 
 @doc """
 Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 """
 function printLambda(dlvl, node :: Expr)
-  assert(node.head == :lambda)
-  dprintln(dlvl, "Lambda:")
-  dprintln(dlvl, "Input parameters: ", node.args[1])
-  dprintln(dlvl, "Metadata: ", node.args[2])
-  body = node.args[3]
-  if typeof(body) != Expr
-    dprintln(0, "printLambda got ", typeof(body), " for a body, len = ", length(node.args))
-    dprintln(0, node)
-  end
-  assert(body.head == :body)
-  dprintln(dlvl, "typeof(body): ", body.typ)
-  printBody(dlvl, body.args)
-  if body.typ == Any
-    dprintln(1,"Body type is Any.")
-  end
+    assert(node.head == :lambda)
+    dprintln(dlvl, "Lambda:")
+    dprintln(dlvl, "Input parameters: ", node.args[1])
+    dprintln(dlvl, "Metadata: ", node.args[2])
+    body = node.args[3]
+    if typeof(body) != Expr
+        dprintln(0, "printLambda got ", typeof(body), " for a body, len = ", length(node.args))
+        dprintln(0, node)
+    end
+    assert(body.head == :body)
+    dprintln(dlvl, "typeof(body): ", body.typ)
+    printBody(dlvl, body.args)
+    if body.typ == Any
+        dprintln(1,"Body type is Any.")
+    end
 end
 
 @doc """
@@ -5169,128 +5169,128 @@ If we read a symbol it is sufficient to just return that symbol as one of the ex
 If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
 function pir_live_cb(ast :: ANY, cbdata :: ANY)
-  dprintln(4,"pir_live_cb")
-  asttyp = typeof(ast)
-  if asttyp == Expr
-    head = ast.head
-    args = ast.args
-    if head == :parfor
-      dprintln(3,"pir_live_cb for :parfor")
-      expr_to_process = Any[]
+    dprintln(4,"pir_live_cb")
+    asttyp = typeof(ast)
+    if asttyp == Expr
+        head = ast.head
+        args = ast.args
+        if head == :parfor
+            dprintln(3,"pir_live_cb for :parfor")
+            expr_to_process = Any[]
 
-      assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-      this_parfor = args[1]
+            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+            this_parfor = args[1]
 
-      append!(expr_to_process, this_parfor.preParFor)
-      for i = 1:length(this_parfor.loopNests)
-        # force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
-        push!(expr_to_process, this_parfor.loopNests[i].lower)
-        push!(expr_to_process, this_parfor.loopNests[i].upper)
-        push!(expr_to_process, this_parfor.loopNests[i].step)
-      end
-      #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-      #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
-      assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
-      fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+            append!(expr_to_process, this_parfor.preParFor)
+            for i = 1:length(this_parfor.loopNests)
+                # force the indexVariable to be treated as an rvalue
+                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+                push!(expr_to_process, this_parfor.loopNests[i].lower)
+                push!(expr_to_process, this_parfor.loopNests[i].upper)
+                push!(expr_to_process, this_parfor.loopNests[i].step)
+            end
+            #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
+            #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
+            assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
+            fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
 
-      body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
-      live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
-      all_defs = Set()
-      for bb in body_lives.basic_blocks
-        all_defs = union(all_defs, bb[2].def)
-      end 
-      as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
+            body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
+            live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
+            all_defs = Set()
+            for bb in body_lives.basic_blocks
+                all_defs = union(all_defs, bb[2].def)
+            end 
+            as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
 
-      push!(expr_to_process, as)
+            push!(expr_to_process, as)
 
-      append!(expr_to_process, this_parfor.postParFor)
+            append!(expr_to_process, this_parfor.postParFor)
 
-      return expr_to_process
-    elseif head == :parfor_start
-      dprintln(3,"pir_live_cb for :parfor_start")
-      expr_to_process = Any[]
+            return expr_to_process
+        elseif head == :parfor_start
+            dprintln(3,"pir_live_cb for :parfor_start")
+            expr_to_process = Any[]
 
-      assert(typeof(args[1]) == PIRParForStartEnd)
-      this_parfor = args[1]
+            assert(typeof(args[1]) == PIRParForStartEnd)
+            this_parfor = args[1]
 
-      for i = 1:length(this_parfor.loopNests)
-        # Force the indexVariable to be treated as an rvalue
-        push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
-        push!(expr_to_process, this_parfor.loopNests[i].lower)
-        push!(expr_to_process, this_parfor.loopNests[i].upper)
-        push!(expr_to_process, this_parfor.loopNests[i].step)
-      end
+            for i = 1:length(this_parfor.loopNests)
+                # Force the indexVariable to be treated as an rvalue
+                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+                push!(expr_to_process, this_parfor.loopNests[i].lower)
+                push!(expr_to_process, this_parfor.loopNests[i].upper)
+                push!(expr_to_process, this_parfor.loopNests[i].step)
+            end
 
-      return expr_to_process
-    elseif head == :parfor_end
-      # Intentionally do nothing
-      return Any[]
-    elseif head == :insert_divisible_task
-      # Is this right?  Do I need pir_range stuff here too?
-      dprintln(3,"pir_live_cb for :insert_divisible_task")
-      expr_to_process = Any[]
+            return expr_to_process
+        elseif head == :parfor_end
+            # Intentionally do nothing
+            return Any[]
+        elseif head == :insert_divisible_task
+            # Is this right?  Do I need pir_range stuff here too?
+            dprintln(3,"pir_live_cb for :insert_divisible_task")
+            expr_to_process = Any[]
 
-      cur_task = args[1]
-      assert(typeof(cur_task) == InsertTaskNode)
+            cur_task = args[1]
+            assert(typeof(cur_task) == InsertTaskNode)
 
-      for i = 1:length(cur_task.args)
-        if cur_task.args[i].options == ARG_OPT_IN
-          push!(expr_to_process, cur_task.args[i].value)
-        else
-          push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
+            for i = 1:length(cur_task.args)
+                if cur_task.args[i].options == ARG_OPT_IN
+                    push!(expr_to_process, cur_task.args[i].value)
+                else
+                    push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
+                end
+            end
+
+            return expr_to_process
+        elseif head == :loophead
+            dprintln(3,"pir_live_cb for :loophead")
+            assert(length(args) == 3)
+
+            expr_to_process = Any[]
+            push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
+            push!(expr_to_process, args[2])
+            push!(expr_to_process, args[3])
+
+            return expr_to_process
+        elseif head == :loopend
+            # There is nothing really interesting in the loopend node to signify something being read or written.
+            assert(length(args) == 1)
+            return Any[]
+        elseif head == :call
+            if args[1] == TopNode(:unsafe_arrayref)
+                expr_to_process = Any[]
+                new_expr = deepcopy(ast)
+                new_expr.args[1] = TopNode(:arrayref)
+                push!(expr_to_process, new_expr)
+                return expr_to_process
+            elseif args[1] == TopNode(:safe_arrayref)
+                expr_to_process = Any[]
+                new_expr = deepcopy(ast)
+                new_expr.args[1] = TopNode(:arrayref)
+                push!(expr_to_process, new_expr)
+                return expr_to_process
+            elseif args[1] == TopNode(:unsafe_arrayset)
+                expr_to_process = Any[]
+                new_expr = deepcopy(ast)
+                new_expr.args[1] = TopNode(:arrayset)
+                push!(expr_to_process, new_expr)
+                return expr_to_process
+            end
+        elseif head == :(=)
+            dprintln(3,"pir_live_cb for :(=)")
+            if length(args) > 2
+                expr_to_process = Any[]
+                push!(expr_to_process, args[1])
+                push!(expr_to_process, args[2])
+                for i = 4:length(args)
+                    push!(expr_to_process, args[i])
+                end
+                return expr_to_process
+            end
         end
-      end
-
-      return expr_to_process
-    elseif head == :loophead
-      dprintln(3,"pir_live_cb for :loophead")
-      assert(length(args) == 3)
-
-      expr_to_process = Any[]
-      push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
-      push!(expr_to_process, args[2])
-      push!(expr_to_process, args[3])
-
-      return expr_to_process
-    elseif head == :loopend
-      # There is nothing really interesting in the loopend node to signify something being read or written.
-      assert(length(args) == 1)
-      return Any[]
-    elseif head == :call
-      if args[1] == TopNode(:unsafe_arrayref)
-        expr_to_process = Any[]
-        new_expr = deepcopy(ast)
-        new_expr.args[1] = TopNode(:arrayref)
-        push!(expr_to_process, new_expr)
-        return expr_to_process
-      elseif args[1] == TopNode(:safe_arrayref)
-        expr_to_process = Any[]
-        new_expr = deepcopy(ast)
-        new_expr.args[1] = TopNode(:arrayref)
-        push!(expr_to_process, new_expr)
-        return expr_to_process
-      elseif args[1] == TopNode(:unsafe_arrayset)
-        expr_to_process = Any[]
-        new_expr = deepcopy(ast)
-        new_expr.args[1] = TopNode(:arrayset)
-        push!(expr_to_process, new_expr)
-        return expr_to_process
-      end
-    elseif head == :(=)
-      dprintln(3,"pir_live_cb for :(=)")
-      if length(args) > 2
-        expr_to_process = Any[]
-        push!(expr_to_process, args[1])
-        push!(expr_to_process, args[2])
-        for i = 4:length(args)
-          push!(expr_to_process, args[i])
-        end
-        return expr_to_process
-      end
     end
-  end
-  return DomainIR.dir_live_cb(ast, cbdata)
+    return DomainIR.dir_live_cb(ast, cbdata)
 end
 
 @doc """
@@ -5300,57 +5300,57 @@ side effects before we can do that.  This function says whether the right-hand s
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
 function hasNoSideEffects(node :: Union{Symbol, SymbolNode, LambdaStaticData, Number})
-  return true
+    return true
 end
 
 function hasNoSideEffects(node)
-  return false
+    return false
 end
 
 function hasNoSideEffects(node :: Expr)
-  if node.head == :ccall
-    func = node.args[1]
-    if func == QuoteNode(:jl_alloc_array_1d) ||
-       func == QuoteNode(:jl_alloc_array_2d)
-      return true
+    if node.head == :ccall
+        func = node.args[1]
+        if func == QuoteNode(:jl_alloc_array_1d) ||
+            func == QuoteNode(:jl_alloc_array_2d)
+            return true
+        end
+    elseif node.head == :call1
+        func = node.args[1]
+        if func == TopNode(:apply_type) ||
+            func == TopNode(:tuple)
+            return true
+        end
+    elseif node.head == :lambda
+        return true
+    elseif node.head == :new
+        if node.args[1] <: Range
+            return true
+        end
+    elseif node.head == :call
+        func = node.args[1]
+        if func == TopNode(:box) ||
+            func == TopNode(:tuple) ||
+            func == TopNode(:getindex_bool_1d) ||
+            func == :getindex
+            return true
+        end
     end
-  elseif node.head == :call1
-    func = node.args[1]
-    if func == TopNode(:apply_type) ||
-       func == TopNode(:tuple)
-      return true
-    end
-  elseif node.head == :lambda
-    return true
-  elseif node.head == :new
-    if node.args[1] <: Range
-      return true
-    end
-  elseif node.head == :call
-    func = node.args[1]
-    if func == TopNode(:box) ||
-       func == TopNode(:tuple) ||
-       func == TopNode(:getindex_bool_1d) ||
-       func == :getindex
-      return true
-    end
-  end
 
-  return false
+    return false
 end
 
 @doc """
 Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.
 """
 function removeAssertEqShape(args :: Array{Any,1}, state)
-  newBody = Any[]
-  for i = 1:length(args)
-    # Add the current statement to the new body unless the statement is an assertEqShape Expr and the array in the assertEqShape are known to be the same size.
-    if !(typeof(args[i]) == Expr && args[i].head == :assertEqShape && from_assertEqShape(args[i], state))
-      push!(newBody, args[i])
+    newBody = Any[]
+    for i = 1:length(args)
+        # Add the current statement to the new body unless the statement is an assertEqShape Expr and the array in the assertEqShape are known to be the same size.
+        if !(typeof(args[i]) == Expr && args[i].head == :assertEqShape && from_assertEqShape(args[i], state))
+            push!(newBody, args[i])
+        end
     end
-  end
-  return newBody
+    return newBody
 end
 
 @doc """
@@ -5358,148 +5358,148 @@ Create array equivalences from an assertEqShape AST node.
 There are two arrays in the args to assertEqShape.
 """
 function from_assertEqShape(node, state)
-  dprintln(3,"from_assertEqShape ", node)
-  a1 = node.args[1]    # first array to compare
-  a2 = node.args[2]    # second array to compare
-  a1_corr = getOrAddArrayCorrelation(toSymGen(a1), state)  # get the length set of the first array
-  a2_corr = getOrAddArrayCorrelation(toSymGen(a2), state)  # get the length set of the second array
-  if a1_corr == a2_corr
-    # If they are the same then return an empty array so that the statement is eliminated.
-    dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
-    return true
-  else
-    dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations = ", state.array_length_correlation)
-    # If assertEqShape is called on e.g., inputs, then we can't statically eliminate the assignment
-    # but if the assert doesn't fire then we do thereafter know that the arrays are in the same length set.
-    merge_correlations(state, a1_corr, a2_corr)
-    dprintln(3,"assertEqShape NOT statically verified.  Merge correlations = ", state.array_length_correlation)
-    return false
-  end
+    dprintln(3,"from_assertEqShape ", node)
+    a1 = node.args[1]    # first array to compare
+    a2 = node.args[2]    # second array to compare
+    a1_corr = getOrAddArrayCorrelation(toSymGen(a1), state)  # get the length set of the first array
+    a2_corr = getOrAddArrayCorrelation(toSymGen(a2), state)  # get the length set of the second array
+    if a1_corr == a2_corr
+        # If they are the same then return an empty array so that the statement is eliminated.
+        dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
+        return true
+    else
+        dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations = ", state.array_length_correlation)
+        # If assertEqShape is called on e.g., inputs, then we can't statically eliminate the assignment
+        # but if the assert doesn't fire then we do thereafter know that the arrays are in the same length set.
+        merge_correlations(state, a1_corr, a2_corr)
+        dprintln(3,"assertEqShape NOT statically verified.  Merge correlations = ", state.array_length_correlation)
+        return false
+    end
 end
 
 @doc """
 Process an assignment expression.
 Starts by recurisvely processing the right-hand side of the assignment.
 Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
-Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.
+    Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.
 """
 function from_assignment(ast::Array{Any,1}, depth, state)
-  # :(=) assignment
-  # ast = [ ... ]
-  assert(length(ast) == 2)
-  lhs = ast[1]
-  rhs = ast[2]
-  dprintln(3,"from_assignment lhs = ", lhs)
-  dprintln(3,"from_assignment rhs = ", rhs)
-  if isa(rhs, Expr) && rhs.head == :lambda
-    # skip handling rhs lambdas
-    rhs = [rhs]
-  else
-    rhs = from_expr(rhs, depth, state, false)
-  end
-  dprintln(3,"from_assignment rhs after = ", rhs)
-  assert(isa(rhs,Array))
-  assert(length(rhs) == 1)
-  rhs = rhs[1]
+    # :(=) assignment
+    # ast = [ ... ]
+    assert(length(ast) == 2)
+    lhs = ast[1]
+    rhs = ast[2]
+    dprintln(3,"from_assignment lhs = ", lhs)
+    dprintln(3,"from_assignment rhs = ", rhs)
+    if isa(rhs, Expr) && rhs.head == :lambda
+        # skip handling rhs lambdas
+        rhs = [rhs]
+    else
+        rhs = from_expr(rhs, depth, state, false)
+    end
+    dprintln(3,"from_assignment rhs after = ", rhs)
+    assert(isa(rhs,Array))
+    assert(length(rhs) == 1)
+    rhs = rhs[1]
 
-  # Eliminate assignments to variables which are immediately dead.
-  # The variable name.
-  lhsName = toSymGen(lhs)
-  # Get liveness information for the current statement.
-  statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
-  if statement_live_info == nothing
-    dprintln(0, state.top_level_number, " ", state.block_lives)
-  end
-  assert(statement_live_info != nothing)
+    # Eliminate assignments to variables which are immediately dead.
+    # The variable name.
+    lhsName = toSymGen(lhs)
+    # Get liveness information for the current statement.
+    statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+    if statement_live_info == nothing
+        dprintln(0, state.top_level_number, " ", state.block_lives)
+    end
+    assert(statement_live_info != nothing)
 
-  dprintln(3,statement_live_info)
-  dprintln(3,"def = ", statement_live_info.def)
+    dprintln(3,statement_live_info)
+    dprintln(3,"def = ", statement_live_info.def)
 
-  # Make sure this variable is listed as a "def" for this statement.
-  assert(CompilerTools.LivenessAnalysis.isDef(lhsName, statement_live_info))
+    # Make sure this variable is listed as a "def" for this statement.
+    assert(CompilerTools.LivenessAnalysis.isDef(lhsName, statement_live_info))
 
-  # If the lhs symbol is not in the live out information for this statement then it is dead.
-  if !in(lhsName, statement_live_info.live_out) && hasNoSideEffects(rhs)
-    dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
-    # Eliminate the statement.
-    return [], nothing
-  end
-
-  if typeof(rhs) == Expr
-    out_typ = rhs.typ
-    #dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
-
-    # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
-    if rhs.head == :parfor
-      the_parfor = rhs.args[1]
-      if length(ast) > 2
-        assert(typeof(ast[3]) == FusionSentinel)
-        for i = 4:length(ast)
-          rhs_entry = the_parfor.postParFor[end][i-3]
-          assert(typeof(ast[i]) == SymbolNode)
-          assert(typeof(rhs_entry) == SymbolNode)
-          if rhs_entry.typ.name == Array.name
-            add_merge_correlations(toSymGen(rhs_entry), toSymGen(ast[i]), state)
-          end
-        end
-      else
-        if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
-          dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
-          add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
-        end
-      end
-    # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
-    # statically if our array length correlations indicate they are in the same length set.
-    elseif rhs.head == :assertEqShape
-      if from_assertEqShape(rhs, state)
+    # If the lhs symbol is not in the live out information for this statement then it is dead.
+    if !in(lhsName, statement_live_info.live_out) && hasNoSideEffects(rhs)
+        dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+        # Eliminate the statement.
         return [], nothing
-      end
-    elseif rhs.head == :call
-      dprintln(3, "Detected call rhs in from_assignment.")
-      dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
-      if length(rhs.args) > 1
-        dprintln(3, " arg2 = ", rhs.args[2])
-      end
-      if rhs.args[1] == TopNode(:ccall)
-        if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-          dim1 = rhs.args[7]
-          dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-          if typeof(dim1) == SymbolNode
-            si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
-            if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
-              dprintln(3, "Will establish array length correlation for const size ", dim1)
-              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
-            end
-          end
-        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-          dim1 = rhs.args[7]
-          dim2 = rhs.args[9]
-          dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-          if typeof(dim1) == SymbolNode && typeof(dim2) == SymbolNode
-            si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
-            si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
-            if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
-              dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-              getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
-              dprintln(3, "correlations = ", state.array_length_correlation)
-            end
-          end
-        end
-      end
     end
-  elseif typeof(rhs) == SymbolNode
-    out_typ = rhs.typ
-    if DomainIR.isarray(out_typ)
-      # Add a length correlation of the form "a = b".
-      dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
-      add_merge_correlations(toSymGen(rhs), lhsName, state)
-    end
-  else
-    # Get the type of the lhs from its metadata declaration.
-    out_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
-  end
 
-  return [toSNGen(lhs, out_typ); rhs], out_typ
+    if typeof(rhs) == Expr
+        out_typ = rhs.typ
+        #dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
+
+        # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
+        if rhs.head == :parfor
+            the_parfor = rhs.args[1]
+            if length(ast) > 2
+                assert(typeof(ast[3]) == FusionSentinel)
+                for i = 4:length(ast)
+                    rhs_entry = the_parfor.postParFor[end][i-3]
+                    assert(typeof(ast[i]) == SymbolNode)
+                    assert(typeof(rhs_entry) == SymbolNode)
+                    if rhs_entry.typ.name == Array.name
+                        add_merge_correlations(toSymGen(rhs_entry), toSymGen(ast[i]), state)
+                    end
+                end
+            else
+                if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
+                    dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
+                    add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
+                end
+            end
+            # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
+            # statically if our array length correlations indicate they are in the same length set.
+        elseif rhs.head == :assertEqShape
+            if from_assertEqShape(rhs, state)
+                return [], nothing
+            end
+        elseif rhs.head == :call
+            dprintln(3, "Detected call rhs in from_assignment.")
+            dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
+            if length(rhs.args) > 1
+                dprintln(3, " arg2 = ", rhs.args[2])
+            end
+            if rhs.args[1] == TopNode(:ccall)
+                if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                    dim1 = rhs.args[7]
+                    dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+                    if typeof(dim1) == SymbolNode
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
+                        if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
+                            dprintln(3, "Will establish array length correlation for const size ", dim1)
+                            getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
+                        end
+                    end
+                elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                    dim1 = rhs.args[7]
+                    dim2 = rhs.args[9]
+                    dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+                    if typeof(dim1) == SymbolNode && typeof(dim2) == SymbolNode
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
+                        si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
+                        if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
+                            dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
+                            getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
+                            dprintln(3, "correlations = ", state.array_length_correlation)
+                        end
+                    end
+                end
+            end
+        end
+    elseif typeof(rhs) == SymbolNode
+        out_typ = rhs.typ
+        if DomainIR.isarray(out_typ)
+            # Add a length correlation of the form "a = b".
+            dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
+            add_merge_correlations(toSymGen(rhs), lhsName, state)
+        end
+    else
+        # Get the type of the lhs from its metadata declaration.
+        out_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
+    end
+
+    return [toSNGen(lhs, out_typ); rhs], out_typ
 end
 
 @doc """
@@ -5507,56 +5507,56 @@ If we have the type, convert a Symbol to SymbolNode.
 If we have a GenSym then we have to keep it.
 """
 function toSNGen(x :: Symbol, typ)
-  return SymbolNode(x, typ)
+    return SymbolNode(x, typ)
 end
 
 function toSNGen(x :: SymbolNode, typ)
-  return x
+    return x
 end
 
 function toSNGen(x :: GenSym, typ)
-  return x
+    return x
 end
 
 function toSNGen(x, typ)
-  xtyp = typeof(x)
-  throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
+    xtyp = typeof(x)
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
 end
 
 @doc """
 Process a call AST node.
 """
 function from_call(ast::Array{Any,1}, depth, state)
-  assert(length(ast) >= 1)
-  fun  = ast[1]
-  args = ast[2:end]
-  dprintln(2,"from_call fun = ", fun, " typeof fun = ", typeof(fun))
-  if length(args) > 0
-    dprintln(2,"first arg = ",args[1], " type = ", typeof(args[1]))
-  end
-  # We don't need to translate Function Symbols but potentially other call targets we do.
-  if typeof(fun) != Symbol
-      fun = from_expr(fun, depth, state, false)
-      assert(isa(fun,Array))
-      assert(length(fun) == 1)
-      fun = fun[1]
-  end
-  # Recursively process the arguments to the call.  
-  args = from_exprs(args, depth+1, state)
+    assert(length(ast) >= 1)
+    fun  = ast[1]
+    args = ast[2:end]
+    dprintln(2,"from_call fun = ", fun, " typeof fun = ", typeof(fun))
+    if length(args) > 0
+        dprintln(2,"first arg = ",args[1], " type = ", typeof(args[1]))
+    end
+    # We don't need to translate Function Symbols but potentially other call targets we do.
+    if typeof(fun) != Symbol
+        fun = from_expr(fun, depth, state, false)
+        assert(isa(fun,Array))
+        assert(length(fun) == 1)
+        fun = fun[1]
+    end
+    # Recursively process the arguments to the call.  
+    args = from_exprs(args, depth+1, state)
 
-  return [fun; args]
+    return [fun; args]
 end
 
 @doc """
 State to aide in the copy propagation phase.
 """
 type CopyPropagateState
-  lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-  copies :: Dict{SymGen, SymGen}
+    lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
+    copies :: Dict{SymGen, SymGen}
 
-  function CopyPropagateState(l, c)
-    new(l,c)
-  end
+    function CopyPropagateState(l, c)
+        new(l,c)
+    end
 end
 
 @doc """
@@ -5566,153 +5566,153 @@ that in copies as copies[a] = b.  Then, later in the basic block if you see the 
 and if it is then it must be removed from copies.
 """
 function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
-  dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-  dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
-  if typeof(node) == Expr
-    dprintln(3,"node.head = ", node.head)
-  end
-  ntype = typeof(node)
+    dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        dprintln(3,"node.head = ", node.head)
+    end
+    ntype = typeof(node)
 
-  if is_top_level
-    dprintln(3,"copy_propagate is_top_level")
-    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-     
-    if live_info != nothing
-      # Remove elements from data.copies if the original RHS is modified by this statement.
-      # For each symbol modified by this statement...
-      for def in live_info.def
-        dprintln(4,"Symbol ", def, " is modifed by current statement.")
-        # For each copy we currently have recorded.
-        for copy in data.copies
-          dprintln(4,"Current entry in data.copies = ", copy)
-          # If the rhs of the copy is modified by the statement.
-          if def == copy[2]
-            dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
-            # Then remove the lhs = rhs entry from copies.
-            delete!(data.copies, copy[1])
-          elseif def == copy[1]
-            # LHS is def.  We can maintain the mapping if RHS is dead.
-            if in(copy[2], live_info.live_out)
-              dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
-              # Then remove the lhs = rhs entry from copies.
-              delete!(data.copies, copy[1])
+    if is_top_level
+        dprintln(3,"copy_propagate is_top_level")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+
+        if live_info != nothing
+            # Remove elements from data.copies if the original RHS is modified by this statement.
+            # For each symbol modified by this statement...
+            for def in live_info.def
+                dprintln(4,"Symbol ", def, " is modifed by current statement.")
+                # For each copy we currently have recorded.
+                for copy in data.copies
+                    dprintln(4,"Current entry in data.copies = ", copy)
+                    # If the rhs of the copy is modified by the statement.
+                    if def == copy[2]
+                        dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
+                        # Then remove the lhs = rhs entry from copies.
+                        delete!(data.copies, copy[1])
+                    elseif def == copy[1]
+                        # LHS is def.  We can maintain the mapping if RHS is dead.
+                        if in(copy[2], live_info.live_out)
+                            dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
+                            # Then remove the lhs = rhs entry from copies.
+                            delete!(data.copies, copy[1])
+                        end
+                    end
+                end
             end
-          end
         end
-      end
+
+        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+            # Only copy propagate within a basic block.  this is now a new basic block.
+            data.copies = Dict{SymGen, SymGen}() 
+        elseif isAssignmentNode(node)
+            dprintln(3,"Is an assignment node.")
+            lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
+            dprintln(4,lhs)
+            rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
+            dprintln(4,rhs)
+
+            if isa(rhs, SymAllGen)
+                dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
+                # Record that the left-hand side is a copy of the right-hand side.
+                data.copies[toSymGen(lhs)] = toSymGen(rhs)
+            end
+            return node
+        end
     end
 
-    if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-      # Only copy propagate within a basic block.  this is now a new basic block.
-      data.copies = Dict{SymGen, SymGen}() 
-    elseif isAssignmentNode(node)
-      dprintln(3,"Is an assignment node.")
-      lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
-      dprintln(4,lhs)
-      rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
-      dprintln(4,rhs)
+    if isa(node, Symbol)
+        if haskey(data.copies, node)
+            dprintln(3,"Replacing ", node, " with ", data.copies[node])
+            return data.copies[node]
+        end
+    elseif isa(node, SymbolNode)
+        if haskey(data.copies, node.name)
+            dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
+            tmp_node = data.copies[node.name]
+            return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
+        end
+    elseif isa(node, GenSym)
+        if haskey(data.copies, node)
+            dprintln(3,"Replacing ", node, " with ", data.copies[node])
+            return data.copies[node]
+        end
+    elseif isa(node, DomainLambda)
+        dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
+        intersection_dict = Dict{SymGen,Any}()
+        for copy in data.copies
+            if haskey(node.linfo.escaping_defs, copy[1])
+                ed = node.linfo.escaping_defs[copy[1]]
+                intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
+                delete!(node.linfo.escaping_defs, copy[1])
+                node.linfo.escaping_defs[copy[2]] = ed
+            end
+        end 
+        dprintln(3,"Intersection dict = ", intersection_dict)
+        if !isempty(intersection_dict)
+            origBody      = node.genBody
+            newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
+            node.genBody  = newBody
+            return node
+        end 
+    end
 
-      if isa(rhs, SymAllGen)
-        dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
-        # Record that the left-hand side is a copy of the right-hand side.
-        data.copies[toSymGen(lhs)] = toSymGen(rhs)
-      end
-      return node
-    end
-  end
-
-  if isa(node, Symbol)
-    if haskey(data.copies, node)
-      dprintln(3,"Replacing ", node, " with ", data.copies[node])
-      return data.copies[node]
-    end
-  elseif isa(node, SymbolNode)
-    if haskey(data.copies, node.name)
-      dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
-      tmp_node = data.copies[node.name]
-      return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
-    end
-  elseif isa(node, GenSym)
-    if haskey(data.copies, node)
-      dprintln(3,"Replacing ", node, " with ", data.copies[node])
-      return data.copies[node]
-    end
-  elseif isa(node, DomainLambda)
-    dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-    intersection_dict = Dict{SymGen,Any}()
-    for copy in data.copies
-      if haskey(node.linfo.escaping_defs, copy[1])
-        ed = node.linfo.escaping_defs[copy[1]]
-        intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
-        delete!(node.linfo.escaping_defs, copy[1])
-        node.linfo.escaping_defs[copy[2]] = ed
-      end
-    end 
-    dprintln(3,"Intersection dict = ", intersection_dict)
-    if !isempty(intersection_dict)
-      origBody      = node.genBody
-      newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
-      node.genBody  = newBody
-      return node
-    end 
-  end
-
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
 Holds liveness information for the remove_dead AstWalk phase.
 """
 type RemoveDeadState
-  lives :: CompilerTools.LivenessAnalysis.BlockLiveness
+    lives :: CompilerTools.LivenessAnalysis.BlockLiveness
 end
 
 @doc """
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
 function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_level, read)
-  dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-  dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
-  if typeof(node) == Expr
-    dprintln(3,"node.head = ", node.head)
-  end
-  ntype = typeof(node)
-
-  if is_top_level
-    dprintln(3,"remove_dead is_top_level")
-    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-    if live_info != nothing
-      dprintln(3,"remove_dead live_info = ", live_info)
-      dprintln(3,"remove_dead live_info.use = ", live_info.use)
-
-      if isAssignmentNode(node)
-        dprintln(3,"Is an assignment node.")
-        lhs = node.args[1]
-        dprintln(4,lhs)
-        rhs = node.args[2]
-        dprintln(4,rhs)
-
-        if typeof(lhs) == SymbolNode || typeof(lhs) == Symbol
-          lhs_sym = getSName(lhs)
-          dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
-          # Remove a dead store
-          if !in(lhs_sym, live_info.live_out)
-            dprintln(3,"remove_dead lhs is NOT live out")
-            if hasNoSideEffects(rhs)
-              dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
-              return CompilerTools.AstWalker.ASTWALK_REMOVE
-            else
-              # Just eliminate the assignment but keep the rhs
-              dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym, " rhs = ", rhs)
-              return rhs
-            end
-          end
-        end
-      end
+    dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        dprintln(3,"node.head = ", node.head)
     end
-  end
-  
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    ntype = typeof(node)
+
+    if is_top_level
+        dprintln(3,"remove_dead is_top_level")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info != nothing
+            dprintln(3,"remove_dead live_info = ", live_info)
+            dprintln(3,"remove_dead live_info.use = ", live_info.use)
+
+            if isAssignmentNode(node)
+                dprintln(3,"Is an assignment node.")
+                lhs = node.args[1]
+                dprintln(4,lhs)
+                rhs = node.args[2]
+                dprintln(4,rhs)
+
+                if typeof(lhs) == SymbolNode || typeof(lhs) == Symbol
+                    lhs_sym = getSName(lhs)
+                    dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
+                    # Remove a dead store
+                    if !in(lhs_sym, live_info.live_out)
+                        dprintln(3,"remove_dead lhs is NOT live out")
+                        if hasNoSideEffects(rhs)
+                            dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+                            return CompilerTools.AstWalker.ASTWALK_REMOVE
+                        else
+                            # Just eliminate the assignment but keep the rhs
+                            dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym, " rhs = ", rhs)
+                            return rhs
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 
@@ -5720,24 +5720,24 @@ end
 State for the remove_no_deps and insert_no_deps_beginning phases.
 """
 type RemoveNoDepsState
-  lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
-  top_level_no_deps :: Array{Any,1}
-  hoistable_scalars :: Set{SymGen}
-  dict_sym          :: Dict{SymGen, Any}
+    lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
+    top_level_no_deps :: Array{Any,1}
+    hoistable_scalars :: Set{SymGen}
+    dict_sym          :: Dict{SymGen, Any}
 
-  function RemoveNoDepsState(l, hs)
-    new(l, Any[], hs, Dict{SymGen, Any}())
-  end
+    function RemoveNoDepsState(l, hs)
+        new(l, Any[], hs, Dict{SymGen, Any}())
+    end
 end
 
 @doc """
 Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.
 """
 function insert_no_deps_beginning(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
-  if is_top_level && top_level_number == 1
-    return [data.top_level_no_deps; node]
-  end
-  nothing
+    if is_top_level && top_level_number == 1
+        return [data.top_level_no_deps; node]
+    end
+    nothing
 end
 
 @doc """
@@ -5747,130 +5747,130 @@ end
 # where they can't prevent fusion.
 """
 function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
-  dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-  dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
-  if typeof(node) == Expr
-    dprintln(3,"node.head = ", node.head)
-  end
-  ntype = typeof(node)
-
-  if is_top_level
-    dprintln(3,"remove_no_deps is_top_level")
-
-    if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-      # Empty the state at the end or begining of a basic block
-      data.dict_sym = Dict{SymGen,Any}()
+    dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        dprintln(3,"node.head = ", node.head)
     end
+    ntype = typeof(node)
 
-    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-    # Remove line number statements.
-    if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
-      return CompilerTools.AstWalker.ASTWALK_REMOVE
-    end
-    if live_info == nothing
-      dprintln(3,"remove_no_deps no live_info")
-    else
-      dprintln(3,"remove_no_deps live_info = ", live_info)
-      dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
+    if is_top_level
+        dprintln(3,"remove_no_deps is_top_level")
 
-      if isAssignmentNode(node)
-        dprintln(3,"Is an assignment node.")
-        lhs = node.args[1]
-        dprintln(4,lhs)
-        rhs = node.args[2]
-        dprintln(4,rhs)
-
-        if isa(rhs, Expr) && (is(rhs.head, :parfor) || is(rhs.head, :mmap!))
-          # Always keep parfor assignment in order to work with fusion
-          dprintln(3, "keep assignment due to parfor or mmap! node")
-          return node
+        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+            # Empty the state at the end or begining of a basic block
+            data.dict_sym = Dict{SymGen,Any}()
         end
-        if isa(lhs, SymAllGen)
-          lhs_sym = toSymGen(lhs)
-          dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
-          # Remove a dead store
-          if !in(lhs_sym, live_info.live_out)
-            dprintln(3,"remove_no_deps lhs is NOT live out")
-            if hasNoSideEffects(rhs)
-              dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
-              return CompilerTools.AstWalker.ASTWALK_REMOVE
-            else
-              # Just eliminate the assignment but keep the rhs
-              dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym)
-              return rhs
-            end
-          else
-            dprintln(3,"remove_no_deps lhs is live out")
-            if isa(rhs, SymAllGen)
-              rhs_sym = toSymGen(rhs)
-              dprintln(3,"remove_no_deps rhs is symbol ", rhs_sym)
-              if !in(rhs_sym, live_info.live_out)
-                dprintln(3,"remove_no_deps rhs is NOT live out")
-                if haskey(data.dict_sym, rhs_sym)
-                  prev_expr = data.dict_sym[rhs_sym]
-                  prev_expr.args[1] = lhs_sym
-                  delete!(data.dict_sym, rhs_sym)
-                  data.dict_sym[lhs_sym] = prev_expr
-                  dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
-                  dprintln(3,"New expr = ", prev_expr)
-                  return CompilerTools.AstWalker.ASTWALK_REMOVE
-                end
-              else
-                dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
-                delete!(data.dict_sym, rhs_sym)
-              end
-            else
-              data.dict_sym[lhs_sym] = node
-              dprintln(3,"Remembering assignment for symbol ", lhs_sym, " ", rhs)
-            end
-          end
-        end
-      else
-        dprintln(3,"Not an assignment node.")
-      end
 
-      for j = live_info.use
-        delete!(data.dict_sym, j)
-      end
-
-      # Here we try to determine which scalar assigns can be hoisted to the beginning of the function.
-      #
-      # If this statement defines some variable.
-      if !isempty(live_info.def)
-        # Assume that hoisting is safe until proven otherwise.
-        dep_only_on_parameter = true
-        # Look at all the variables on which this statement depends.
-        # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
-        for i in live_info.use
-          if !in(i, data.hoistable_scalars)
-            dep_only_on_parameter = false
-            break
-          end
-        end
-        if dep_only_on_parameter 
-          # If this statement is defined in more than one place then it isn't hoistable.
-          for i in live_info.def 
-             if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
-               dep_only_on_parameter = false
-               dprintln(3,"variable ", i, " assigned more than once")
-               break
-             end
-          end
-          if dep_only_on_parameter 
-            dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
-            push!(data.top_level_no_deps, node)
-            # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
-            for i in live_info.def
-              push!(data.hoistable_scalars, i)
-            end
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        # Remove line number statements.
+        if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
             return CompilerTools.AstWalker.ASTWALK_REMOVE
-          end
         end
-      end
-    end
-  end
+        if live_info == nothing
+            dprintln(3,"remove_no_deps no live_info")
+        else
+            dprintln(3,"remove_no_deps live_info = ", live_info)
+            dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+            if isAssignmentNode(node)
+                dprintln(3,"Is an assignment node.")
+                lhs = node.args[1]
+                dprintln(4,lhs)
+                rhs = node.args[2]
+                dprintln(4,rhs)
+
+                if isa(rhs, Expr) && (is(rhs.head, :parfor) || is(rhs.head, :mmap!))
+                    # Always keep parfor assignment in order to work with fusion
+                    dprintln(3, "keep assignment due to parfor or mmap! node")
+                    return node
+                end
+                if isa(lhs, SymAllGen)
+                    lhs_sym = toSymGen(lhs)
+                    dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
+                    # Remove a dead store
+                    if !in(lhs_sym, live_info.live_out)
+                        dprintln(3,"remove_no_deps lhs is NOT live out")
+                        if hasNoSideEffects(rhs)
+                            dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+                            return CompilerTools.AstWalker.ASTWALK_REMOVE
+                        else
+                            # Just eliminate the assignment but keep the rhs
+                            dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym)
+                            return rhs
+                        end
+                    else
+                        dprintln(3,"remove_no_deps lhs is live out")
+                        if isa(rhs, SymAllGen)
+                            rhs_sym = toSymGen(rhs)
+                            dprintln(3,"remove_no_deps rhs is symbol ", rhs_sym)
+                            if !in(rhs_sym, live_info.live_out)
+                                dprintln(3,"remove_no_deps rhs is NOT live out")
+                                if haskey(data.dict_sym, rhs_sym)
+                                    prev_expr = data.dict_sym[rhs_sym]
+                                    prev_expr.args[1] = lhs_sym
+                                    delete!(data.dict_sym, rhs_sym)
+                                    data.dict_sym[lhs_sym] = prev_expr
+                                    dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
+                                    dprintln(3,"New expr = ", prev_expr)
+                                    return CompilerTools.AstWalker.ASTWALK_REMOVE
+                                end
+                            else
+                                dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
+                                delete!(data.dict_sym, rhs_sym)
+                            end
+                        else
+                            data.dict_sym[lhs_sym] = node
+                            dprintln(3,"Remembering assignment for symbol ", lhs_sym, " ", rhs)
+                        end
+                    end
+                end
+            else
+                dprintln(3,"Not an assignment node.")
+            end
+
+            for j = live_info.use
+                delete!(data.dict_sym, j)
+            end
+
+            # Here we try to determine which scalar assigns can be hoisted to the beginning of the function.
+            #
+            # If this statement defines some variable.
+            if !isempty(live_info.def)
+                # Assume that hoisting is safe until proven otherwise.
+                dep_only_on_parameter = true
+                # Look at all the variables on which this statement depends.
+                # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
+                for i in live_info.use
+                    if !in(i, data.hoistable_scalars)
+                        dep_only_on_parameter = false
+                        break
+                    end
+                end
+                if dep_only_on_parameter 
+                    # If this statement is defined in more than one place then it isn't hoistable.
+                    for i in live_info.def 
+                        if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                            dep_only_on_parameter = false
+                            dprintln(3,"variable ", i, " assigned more than once")
+                            break
+                        end
+                    end
+                    if dep_only_on_parameter 
+                        dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
+                        push!(data.top_level_no_deps, node)
+                        # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
+                        for i in live_info.def
+                            push!(data.hoistable_scalars, i)
+                        end
+                        return CompilerTools.AstWalker.ASTWALK_REMOVE
+                    end
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -5878,49 +5878,49 @@ end
 don't already have one and make sure they all share one equivalence class.
 """
 function extractArrayEquivalencies(node :: ANY, state)
-  input_args = node.args
+    input_args = node.args
 
-  # Make sure we get what we expect from domain IR.
-  # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-  if(length(input_args) < 2)
-    throw(string("extractArrayEquivalencies input_args length should be at least 2 but is ", length(input_args)))
-  end
-
-  # First arg is an array of input arrays to the mmap!
-  input_arrays = input_args[1]
-  len_input_arrays = length(input_arrays)
-  dprintln(2,"Number of input arrays: ", len_input_arrays)
-  dprintln(3,"input_arrays =  ", input_arrays)
-  assert(len_input_arrays > 0)
-
-  # Second arg is a DomainLambda
-  ftype = typeof(input_args[2])
-  dprintln(2,"extractArrayEquivalencies function = ",input_args[2])
-  if(ftype != DomainLambda)
-    throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
-  end
-
-  if !isa(input_arrays[1], SymAllGen)
-    dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
-    return nothing
-  end
-
-  # Get the correlation set of the first input array.
-  main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
-
-  # Make sure each input array is a SymbolNode
-  # Also, create indexed versions of those symbols for the loop body
-  for i = 2:len_input_arrays
-    dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
-    this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
-    # Verify that all the inputs are the same size by verifying they are in the same correlation set.
-    if this_correlation != main_length_correlation
-      merge_correlations(state, main_length_correlation, this_correlation)
+    # Make sure we get what we expect from domain IR.
+    # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+    if(length(input_args) < 2)
+        throw(string("extractArrayEquivalencies input_args length should be at least 2 but is ", length(input_args)))
     end
-  end
 
-  dprintln(3,"extractArrayEq result = ", state.array_length_correlation)
-  return main_length_correlation
+    # First arg is an array of input arrays to the mmap!
+    input_arrays = input_args[1]
+    len_input_arrays = length(input_arrays)
+    dprintln(2,"Number of input arrays: ", len_input_arrays)
+    dprintln(3,"input_arrays =  ", input_arrays)
+    assert(len_input_arrays > 0)
+
+    # Second arg is a DomainLambda
+    ftype = typeof(input_args[2])
+    dprintln(2,"extractArrayEquivalencies function = ",input_args[2])
+    if(ftype != DomainLambda)
+        throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
+    end
+
+    if !isa(input_arrays[1], SymAllGen)
+        dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
+        return nothing
+    end
+
+    # Get the correlation set of the first input array.
+    main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
+
+    # Make sure each input array is a SymbolNode
+    # Also, create indexed versions of those symbols for the loop body
+    for i = 2:len_input_arrays
+        dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
+        this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
+        # Verify that all the inputs are the same size by verifying they are in the same correlation set.
+        if this_correlation != main_length_correlation
+            merge_correlations(state, main_length_correlation, this_correlation)
+        end
+    end
+
+    dprintln(3,"extractArrayEq result = ", state.array_length_correlation)
+    return main_length_correlation
 end
 
 @doc """
@@ -5929,29 +5929,29 @@ Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
 function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
-  dim_names = SymGen[]
-  for i = 1:length(dim_array)
-    if typeof(dim_array[i]) != SymbolNode
-      return false
+    dim_names = SymGen[]
+    for i = 1:length(dim_array)
+        if typeof(dim_array[i]) != SymbolNode
+            return false
+        end
+        if CompilerTools.LambdaHandling.getDesc(dim_array[i].name, state.lambdaInfo) & ISASSIGNEDONCE != ISASSIGNEDONCE
+            return false
+        end
+        push!(dim_names, dim_array[i].name)
     end
-    if CompilerTools.LambdaHandling.getDesc(dim_array[i].name, state.lambdaInfo) & ISASSIGNEDONCE != ISASSIGNEDONCE
-      return false
-    end
-    push!(dim_names, dim_array[i].name)
-  end
 
-  dprintln(3, "Will establish array length correlation for const size lhs = ", lhs, " dims = ", dim_names)
-  getOrAddSymbolCorrelation(lhs, state, dim_names)
-  return true
+    dprintln(3, "Will establish array length correlation for const size lhs = ", lhs, " dims = ", dim_names)
+    getOrAddSymbolCorrelation(lhs, state, dim_names)
+    return true
 end
 
 @doc """
 Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.
 """
 function processAndUpdateBody(lambda :: Expr, f :: Function, state)
-  assert(lambda.head == :lambda) 
-  lambda.args[3].args = f(lambda.args[3].args, state)
-  return lambda
+    assert(lambda.head == :lambda) 
+    lambda.args[3].args = f(lambda.args[3].args, state)
+    return lambda
 end
 
 @doc """
@@ -5959,235 +5959,235 @@ Empty statements can be added to the AST by some passes in ParallelIR.
 This pass over the statements of the :body excludes such "nothing" statements from the new :body.
 """
 function removeNothingStmts(args :: Array{Any,1}, state)
-  newBody = Any[]
-  for i = 1:length(args)
-    if args[i] != nothing
-      push!(newBody, args[i])
+    newBody = Any[]
+    for i = 1:length(args)
+        if args[i] != nothing
+            push!(newBody, args[i])
+        end
     end
-  end
-  return newBody
+    return newBody
 end
 
 @doc """
 AstWalk callback to determine the array equivalence classes.
 """
 function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-  dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-  dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-  if typeof(node) == Expr
-    dprintln(3,"node.head = ", node.head)
-  end
-  ntype = typeof(node)
-
-  if ntype == Expr && node.head == :lambda
-    save_lambdaInfo  = state.lambdaInfo
-    state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
-    body = CompilerTools.LambdaHandling.getBody(node)
-
-    AstWalk(body, create_equivalence_classes, state)
-
-    state.lambdaInfo = save_lambdaInfo
-
-    return node
-  end
-
-  # We can only extract array equivalences from top-level statements.
-  if is_top_level
-    dprintln(3,"create_equivalence_classes is_top_level")
-
-    if isAssignmentNode(node)
-      # Here the node is an assignment.
-      dprintln(3,"Is an assignment node.")
-      lhs = node.args[1]
-      dprintln(4,lhs)
-      rhs = node.args[2]
-      dprintln(4,rhs)
-
-      if isa(rhs, Expr)
-        if rhs.head == :assertEqShape
-          # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
-          dprintln(3,"Creating array length assignment from assertEqShape")
-          from_assertEqShape(rhs, state)
-        elseif rhs.head == :alloc
-          # Here an array on the left-hand side is being created from size specification on the right-hand side.
-          # Map those array sizes to the corresponding array equivalence class.
-          sizes = rhs.args[2]
-          n = length(sizes)
-          assert(n >= 1 && n <= 3)
-          dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
-          checkAndAddSymbolCorrelation(lhs, state, sizes)            
-        elseif rhs.head == :call
-          dprintln(3, "Detected call rhs in from_assignment.")
-          dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
-          if length(rhs.args) > 1
-            dprintln(3, " arg2 = ", rhs.args[2])
-          end
-          if rhs.args[1] == TopNode(:ccall)
-            # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
-            if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-              dim1 = rhs.args[7]
-              dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-              checkAndAddSymbolCorrelation(lhs, state, [dim1])            
-            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-              dim1 = rhs.args[7]
-              dim2 = rhs.args[9]
-              dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-              checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
-            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
-              dim1 = rhs.args[7]
-              dim2 = rhs.args[9]
-              dim3 = rhs.args[11]
-              dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
-              checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
-            end
-          elseif rhs.args[1] == TopNode(:arraylen)
-            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-            array_param = rhs.args[2]                  # length takes one param, which is the array
-            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-            array_param_type = array_param.typ         # get its type
-            if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
-              dim_symbols = [getSName(lhs)]
-              dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-              checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-            end
-          elseif rhs.args[1] == TopNode(:arraysize)
-            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-            if length(rhs.args) == 2
-              array_param = rhs.args[2]                  # length takes one param, which is the array
-              assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-              array_param_type = array_param.typ         # get its type
-              array_dims = ndims(array_param_type)
-              dim_symbols = Symbol[]
-              for dim_i = 1:array_dims
-                push!(dim_symbols, lhs[dim_i])
-              end
-              dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-              checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-            elseif length(rhs.args) == 3
-              dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
-            else
-              throw(string("arraysize AST node didn't have 2 or 3 arguments."))
-            end
-          end
-        elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
-          # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
-          rhs_corr = extractArrayEquivalencies(rhs, state)
-          dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
-          if rhs_corr != nothing && isa(lhs, SymAllGen)
-            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
-            merge_correlations(state, lhs_corr, rhs_corr)
-            dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
-          end
-        end
-      end
-    elseif isa(node, Expr)
-      if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
-        extractArrayEquivalencies(node, state)
-      end
-    else
-      dprintln(3,"Not an assignment or expr node.")
+    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        dprintln(3,"node.head = ", node.head)
     end
-  end
+    ntype = typeof(node)
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    if ntype == Expr && node.head == :lambda
+        save_lambdaInfo  = state.lambdaInfo
+        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
+        body = CompilerTools.LambdaHandling.getBody(node)
+
+        AstWalk(body, create_equivalence_classes, state)
+
+        state.lambdaInfo = save_lambdaInfo
+
+        return node
+    end
+
+    # We can only extract array equivalences from top-level statements.
+    if is_top_level
+        dprintln(3,"create_equivalence_classes is_top_level")
+
+        if isAssignmentNode(node)
+            # Here the node is an assignment.
+            dprintln(3,"Is an assignment node.")
+            lhs = node.args[1]
+            dprintln(4,lhs)
+            rhs = node.args[2]
+            dprintln(4,rhs)
+
+            if isa(rhs, Expr)
+                if rhs.head == :assertEqShape
+                    # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
+                    dprintln(3,"Creating array length assignment from assertEqShape")
+                    from_assertEqShape(rhs, state)
+                elseif rhs.head == :alloc
+                    # Here an array on the left-hand side is being created from size specification on the right-hand side.
+                    # Map those array sizes to the corresponding array equivalence class.
+                    sizes = rhs.args[2]
+                    n = length(sizes)
+                    assert(n >= 1 && n <= 3)
+                    dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
+                    checkAndAddSymbolCorrelation(lhs, state, sizes)            
+                elseif rhs.head == :call
+                    dprintln(3, "Detected call rhs in from_assignment.")
+                    dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
+                    if length(rhs.args) > 1
+                        dprintln(3, " arg2 = ", rhs.args[2])
+                    end
+                    if rhs.args[1] == TopNode(:ccall)
+                        # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
+                        if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                            dim1 = rhs.args[7]
+                            dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+                            checkAndAddSymbolCorrelation(lhs, state, [dim1])            
+                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                            dim1 = rhs.args[7]
+                            dim2 = rhs.args[9]
+                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
+                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
+                            dim1 = rhs.args[7]
+                            dim2 = rhs.args[9]
+                            dim3 = rhs.args[11]
+                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
+                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
+                        end
+                    elseif rhs.args[1] == TopNode(:arraylen)
+                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+                        array_param = rhs.args[2]                  # length takes one param, which is the array
+                        assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+                        array_param_type = array_param.typ         # get its type
+                        if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
+                            dim_symbols = [getSName(lhs)]
+                            dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+                        end
+                    elseif rhs.args[1] == TopNode(:arraysize)
+                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+                        if length(rhs.args) == 2
+                            array_param = rhs.args[2]                  # length takes one param, which is the array
+                            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+                            array_param_type = array_param.typ         # get its type
+                            array_dims = ndims(array_param_type)
+                            dim_symbols = Symbol[]
+                            for dim_i = 1:array_dims
+                                push!(dim_symbols, lhs[dim_i])
+                            end
+                            dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+                        elseif length(rhs.args) == 3
+                            dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
+                        else
+                            throw(string("arraysize AST node didn't have 2 or 3 arguments."))
+                        end
+                    end
+                elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
+                    # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
+                    rhs_corr = extractArrayEquivalencies(rhs, state)
+                    dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
+                    if rhs_corr != nothing && isa(lhs, SymAllGen)
+                        lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
+                        merge_correlations(state, lhs_corr, rhs_corr)
+                        dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
+                    end
+                end
+            end
+        elseif isa(node, Expr)
+            if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
+                extractArrayEquivalencies(node, state)
+            end
+        else
+            dprintln(3,"Not an assignment or expr node.")
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 # mmapInline() helper function
 function modify!(dict, lhs, i)
-  if haskey(dict, lhs)
-    push!(dict[lhs], i)
-  else
-    dict[lhs] = Int[i]
-  end
+    if haskey(dict, lhs)
+        push!(dict[lhs], i)
+    else
+        dict[lhs] = Int[i]
+    end
 end
 
 # function that inlines from src mmap into dst mmap
 function inline!(src, dst, lhs)
-  args = dst.args[1]
-  pos = 0
-  for k = 1:length(args)
-    s = args[k]
-    if isa(s, SymbolNode) s = s.name end
-    if s == lhs
-      pos = k
-      break
+    args = dst.args[1]
+    pos = 0
+    for k = 1:length(args)
+        s = args[k]
+        if isa(s, SymbolNode) s = s.name end
+        if s == lhs
+            pos = k
+            break
+        end
     end
-  end
-  @assert pos>0 "mmapInline(): position of mmap output not found"
-  args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
-  f = src.args[2]
-  assert(length(f.outputs)==1)
-  dst.args[1] = args
-  g = dst.args[2]
-  inputs = g.inputs
-  g_inps = length(inputs) 
-  inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
-  linfo = g.linfo
-  # add escaping variables from f into g, since mergeLambdaInfo only deals
-  # with nesting lambda, but not parallel ones.
-  for (v, d) in f.linfo.escaping_defs
-    if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
-      CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
+    @assert pos>0 "mmapInline(): position of mmap output not found"
+    args = vcat(args[1:pos-1], args[pos+1:end], src.args[1])
+    f = src.args[2]
+    assert(length(f.outputs)==1)
+    dst.args[1] = args
+    g = dst.args[2]
+    inputs = g.inputs
+    g_inps = length(inputs) 
+    inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
+    linfo = g.linfo
+    # add escaping variables from f into g, since mergeLambdaInfo only deals
+    # with nesting lambda, but not parallel ones.
+    for (v, d) in f.linfo.escaping_defs
+        if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
+            CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
+        end
     end
-  end
-  # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
-  tmp_t = f.outputs[1]
-  dst.args[2] = DomainLambda(inputs, g.outputs, 
-  (linfo, args) -> begin
-    fb = f.genBody(linfo, args[g_inps:end])
-    tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
-    expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
-    gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
-    return [fb[1:end-1]; [expr]; gb]
-  end, linfo)
-  DomainIR.mmapRemoveDupArg!(dst)
+    # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+    tmp_t = f.outputs[1]
+    dst.args[2] = DomainLambda(inputs, g.outputs, 
+    (linfo, args) -> begin
+        fb = f.genBody(linfo, args[g_inps:end])
+        tmp_v = CompilerTools.LambdaHandling.addGenSym(tmp_t, linfo)
+        expr = TypedExpr(tmp_t, :(=), tmp_v, fb[end].args[1])
+        gb = g.genBody(linfo, vcat(args[1:pos-1], [tmp_v], args[pos:g_inps-1]))
+        return [fb[1:end-1]; [expr]; gb]
+    end, linfo)
+    DomainIR.mmapRemoveDupArg!(dst)
 end
 
 # mmapInline() helper function
 function eliminateShapeAssert(dict, lhs, body)
-  if haskey(dict, lhs)
-    for k in dict[lhs]
-      dprintln(3, "MI: eliminate shape assert at line ", k)
-      body.args[k] = nothing
+    if haskey(dict, lhs)
+        for k in dict[lhs]
+            dprintln(3, "MI: eliminate shape assert at line ", k)
+            body.args[k] = nothing
+        end
     end
-  end
 end
 
 # mmapInline() helper function
 function check_used(defs, usedAt, shapeAssertAt, expr,i)
-  if isa(expr, Expr)
-    if is(expr.head, :assertEqShape)
-      # handle assertEqShape separately, do not consider them
-      # as valid references
-      for arg in expr.args
-        s = isa(arg, SymbolNode) ? arg.name : arg 
-        if isa(s, Symbol) || isa(s, GenSym)
-          modify!(shapeAssertAt, s, i)
+    if isa(expr, Expr)
+        if is(expr.head, :assertEqShape)
+            # handle assertEqShape separately, do not consider them
+            # as valid references
+            for arg in expr.args
+                s = isa(arg, SymbolNode) ? arg.name : arg 
+                if isa(s, Symbol) || isa(s, GenSym)
+                    modify!(shapeAssertAt, s, i)
+                end
+            end
+        else
+            for arg in expr.args
+                check_used(defs, usedAt, shapeAssertAt, arg,i)
+            end
         end
-      end
-    else
-      for arg in expr.args
-        check_used(defs, usedAt, shapeAssertAt, arg,i)
-      end
+    elseif isa(expr, Symbol) || isa(expr, GenSym)
+        if haskey(usedAt, expr) # already used? remove from defs
+            delete!(defs, expr)
+        else
+            usedAt[expr] = i
+        end 
+    elseif isa(expr, SymbolNode)
+        if haskey(usedAt, expr.name) # already used? remove from defs
+            dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
+            delete!(defs, expr.name)
+        else
+            usedAt[expr.name] = i
+        end 
+    elseif isa(expr, Array) || isa(expr, Tuple)
+        for e in expr
+            check_used(defs, usedAt, shapeAssertAt, e, i)
+        end
     end
-  elseif isa(expr, Symbol) || isa(expr, GenSym)
-    if haskey(usedAt, expr) # already used? remove from defs
-      delete!(defs, expr)
-    else
-      usedAt[expr] = i
-    end 
-  elseif isa(expr, SymbolNode)
-    if haskey(usedAt, expr.name) # already used? remove from defs
-      dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
-      delete!(defs, expr.name)
-    else
-      usedAt[expr.name] = i
-    end 
-  elseif isa(expr, Array) || isa(expr, Tuple)
-    for e in expr
-      check_used(defs, usedAt, shapeAssertAt, e, i)
-    end
-  end
 end
 
 
@@ -6197,193 +6197,193 @@ end
 # FIXME: is the implementation still correct when branches are present?
 """
 function mmapInline(ast, lives, uniqSet)
-  body = ast.args[3]
-  defs = Dict{Union{Symbol, GenSym}, Int}()
-  usedAt = Dict{Union{Symbol, GenSym}, Int}()
-  modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-  shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-  assert(isa(body, Expr) && is(body.head, :body))
+    body = ast.args[3]
+    defs = Dict{Union{Symbol, GenSym}, Int}()
+    usedAt = Dict{Union{Symbol, GenSym}, Int}()
+    modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
+    shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
+    assert(isa(body, Expr) && is(body.head, :body))
 
-  # first do a loop to see which def is only referenced once
-  for i =1:length(body.args)
-    expr = body.args[i]
-    head = isa(expr, Expr) ? expr.head : nothing
-    # record usedAt, and reject those used more than once
-    # record definition
-    if is(head, :(=))
-      lhs = expr.args[1]
-      rhs = expr.args[2]
-      check_used(defs, usedAt, shapeAssertAt, rhs,i)
-      assert(isa(lhs, Symbol) || isa(lhs, GenSym))
-      modify!(modifiedAt, lhs, i)
-      if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
-        ok = true
-        for j in rhs.args[1]
-          if isa(j, SymbolNode) j = j.name end
-          if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
-            ok=false
-            break
-          end
-        end
-        if (ok) defs[lhs] = i end
-        dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
-      end
-    else
-      check_used(defs, usedAt, shapeAssertAt, expr,i)
-    end
-    # check if args may be modified in place
-    if is(head, :mmap!)
-      for j in 1:length(expr.args[2].outputs)
-        v = expr.args[1][j]
-        if isa(v, SymbolNode)
-          v = v.name
-        end
-        if isa(v, Symbol) || isa(v, GenSym)
-          modify!(modifiedAt, v, i)
-        end
-      end
-    elseif is(head, :stencil!)
-      krnStat = expr.args[1]
-      iterations = expr.args[2]
-      bufs = expr.args[3]
-      for k in krnStat.modified
-        s = bufs[k]
-        if isa(s, SymbolNode) s = s.name end
-        modify!(modifiedAt, s, i)
-      end
-      if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
-        for j in 1:min(krnStat.rotateNum, length(bufs))
-          s = bufs[j]
-          if isa(s, SymbolNode) s = s.name end
-          modify!(modifiedAt, s, i)
-        end
-      end
-    end
-  end
-  dprintln(3, "MI: defs = ", defs)
-  # print those that are used once
-
-  revdefs = Dict()
-  for (lhs, i) in defs
-    revdefs[i] = lhs
-  end
-  for i in sort!([keys(revdefs)...])
-    lhs = revdefs[i]
-    expr = body.args[i] # must be an assignment
-    src = expr.args[2]  # must be a mmap
-    # dprintln(3, "MI: def of ", lhs)
-    if haskey(usedAt, lhs)
-      j = usedAt[lhs]
-      ok = true
-      # dprintln(3, "MI: def of ", lhs, " at line ", i, " used by line ", j)
-      for v in src.args[1]
-        @assert isa(v,Symbol) || isa(v,GenSym) || isa(v,SymbolNode) "mmapInline(): Arguments of mmap should be Symbol or GenSym or SymbolNode."
-        if isa(v, SymbolNode) v = v.name end
-        if haskey(modifiedAt, v)
-          for k in modifiedAt[v]
-            if k >= i && k <= j
-              ok = false
-              break
+    # first do a loop to see which def is only referenced once
+    for i =1:length(body.args)
+        expr = body.args[i]
+        head = isa(expr, Expr) ? expr.head : nothing
+        # record usedAt, and reject those used more than once
+        # record definition
+        if is(head, :(=))
+            lhs = expr.args[1]
+            rhs = expr.args[2]
+            check_used(defs, usedAt, shapeAssertAt, rhs,i)
+            assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+            modify!(modifiedAt, lhs, i)
+            if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
+                ok = true
+                for j in rhs.args[1]
+                    if isa(j, SymbolNode) j = j.name end
+                    if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
+                        ok=false
+                        break
+                    end
+                end
+                if (ok) defs[lhs] = i end
+                dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
             end
-          end
-        end
-        if (!ok) break end
-      end 
-      if (!ok) continue end
-      dprintln(3, "MI: found mmap: ", lhs, " can be inlined into defintion of line ", j)
-      dst = body.args[j]
-      if isa(dst, Expr) && is(dst.head, :(=))
-        dst = dst.args[2]
-      end
-      if isa(dst, Expr) && is(dst.head, :mmap) && in(lhs, dst.args[1])
-         # inline mmap into mmap
-        inline!(src, dst, lhs)
-        body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs, body)
-        dprintln(3, "MI: result: ", body.args[j])
-      elseif isa(dst, Expr) && is(dst.head, :mmap!) && in(lhs, dst.args[1])
-        s = dst.args[1][1]
-        if isa(s, SymbolNode) s = s.name end
-        if s == lhs 
-          # when lhs is the inplace array that dst operates on
-          # change dst to mmap
-          inline!(src, dst, lhs)
-          dst.head = :mmap
         else
-          # otherwise just normal inline
-          inline!(src, dst, lhs)
+            check_used(defs, usedAt, shapeAssertAt, expr,i)
         end
-        body.args[i] = nothing
-        eliminateShapeAssert(shapeAssertAt, lhs, body)
-        # inline mmap into mmap!
-        dprintln(3, "MI: result: ", body.args[j])
-      else
-        # otherwise ignore, e.g., when dst is some simple assignments.
-      end
+        # check if args may be modified in place
+        if is(head, :mmap!)
+            for j in 1:length(expr.args[2].outputs)
+                v = expr.args[1][j]
+                if isa(v, SymbolNode)
+                    v = v.name
+                end
+                if isa(v, Symbol) || isa(v, GenSym)
+                    modify!(modifiedAt, v, i)
+                end
+            end
+        elseif is(head, :stencil!)
+            krnStat = expr.args[1]
+            iterations = expr.args[2]
+            bufs = expr.args[3]
+            for k in krnStat.modified
+                s = bufs[k]
+                if isa(s, SymbolNode) s = s.name end
+                modify!(modifiedAt, s, i)
+            end
+            if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
+                for j in 1:min(krnStat.rotateNum, length(bufs))
+                    s = bufs[j]
+                    if isa(s, SymbolNode) s = s.name end
+                    modify!(modifiedAt, s, i)
+                end
+            end
+        end
     end
-  end
+    dprintln(3, "MI: defs = ", defs)
+    # print those that are used once
+
+    revdefs = Dict()
+    for (lhs, i) in defs
+        revdefs[i] = lhs
+    end
+    for i in sort!([keys(revdefs)...])
+        lhs = revdefs[i]
+        expr = body.args[i] # must be an assignment
+        src = expr.args[2]  # must be a mmap
+        # dprintln(3, "MI: def of ", lhs)
+        if haskey(usedAt, lhs)
+            j = usedAt[lhs]
+            ok = true
+            # dprintln(3, "MI: def of ", lhs, " at line ", i, " used by line ", j)
+            for v in src.args[1]
+                @assert isa(v,Symbol) || isa(v,GenSym) || isa(v,SymbolNode) "mmapInline(): Arguments of mmap should be Symbol or GenSym or SymbolNode."
+                if isa(v, SymbolNode) v = v.name end
+                if haskey(modifiedAt, v)
+                    for k in modifiedAt[v]
+                        if k >= i && k <= j
+                            ok = false
+                            break
+                        end
+                    end
+                end
+                if (!ok) break end
+            end 
+            if (!ok) continue end
+            dprintln(3, "MI: found mmap: ", lhs, " can be inlined into defintion of line ", j)
+            dst = body.args[j]
+            if isa(dst, Expr) && is(dst.head, :(=))
+                dst = dst.args[2]
+            end
+            if isa(dst, Expr) && is(dst.head, :mmap) && in(lhs, dst.args[1])
+                # inline mmap into mmap
+                inline!(src, dst, lhs)
+                body.args[i] = nothing
+                eliminateShapeAssert(shapeAssertAt, lhs, body)
+                dprintln(3, "MI: result: ", body.args[j])
+            elseif isa(dst, Expr) && is(dst.head, :mmap!) && in(lhs, dst.args[1])
+                s = dst.args[1][1]
+                if isa(s, SymbolNode) s = s.name end
+                if s == lhs 
+                    # when lhs is the inplace array that dst operates on
+                    # change dst to mmap
+                    inline!(src, dst, lhs)
+                    dst.head = :mmap
+                else
+                    # otherwise just normal inline
+                    inline!(src, dst, lhs)
+                end
+                body.args[i] = nothing
+                eliminateShapeAssert(shapeAssertAt, lhs, body)
+                # inline mmap into mmap!
+                dprintln(3, "MI: result: ", body.args[j])
+            else
+                # otherwise ignore, e.g., when dst is some simple assignments.
+            end
+        end
+    end
 end
 
 @doc """
 Try to hoist allocations outside the loop if possible.
 """
 function hoistAllocation(ast, lives, domLoop, state :: expr_state)
-  for l in domLoop.loops
-    dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
-    headBlk = lives.cfg.basic_blocks[ l.head ]
-    tailBlk = lives.cfg.basic_blocks[ l.back_edge ]
-    if length(headBlk.preds) != 2
-      continue
-    end
-    preBlk = nothing
-    for blk in headBlk.preds
-      if blk.label != tailBlk.label
-        preBlk = blk
-        break
-      end
-    end
-    if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
-    tls = lives.basic_blocks[ preBlk ]
-    preHead = preBlk.statements[end].index
-    head = headBlk.statements[1].index
-    tail = tailBlk.statements[1].index
-    dprintln(3, "HA: line before head is ", ast[preHead-1])
-    # Is iterating through statement indices this way safe?
-    for i = head:tail
-      if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
-        dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
-        lhs = ast[i].args[1]
-        rhs = ast[i].args[2]
-        if isa(lhs, SymbolNode) lhs = lhs.name end
-        if (haskey(state.array_length_correlation, lhs))
-          c = state.array_length_correlation[lhs]
-          for (d, v) in state.symbol_array_correlation
-            if v == c
-              ok = true
-              for j = 1:length(d)
-                if !in(d[j], tls.live_out)
-                  ok = false
-                  break
-                end
-              end
-              dprintln(3, "HA: found correlation dimension ", d, " ", ok, " ", length(rhs.args)-6)
-              if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
-                rhs.args = rhs.args[1:6]
-                for s in d
-                  push!(rhs.args, SymbolNode(s, Int))
-                  push!(rhs.args, 0)
-                end
-                dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
-                ast = [ ast[1:preHead-1], ast[i], ast[preHead:i-1], ast[i+1:end] ]
-                break
-              end
-            end
-          end
+    for l in domLoop.loops
+        dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
+        headBlk = lives.cfg.basic_blocks[ l.head ]
+        tailBlk = lives.cfg.basic_blocks[ l.back_edge ]
+        if length(headBlk.preds) != 2
+            continue
         end
-      end
+        preBlk = nothing
+        for blk in headBlk.preds
+            if blk.label != tailBlk.label
+                preBlk = blk
+                break
+            end
+        end
+        if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
+        tls = lives.basic_blocks[ preBlk ]
+        preHead = preBlk.statements[end].index
+        head = headBlk.statements[1].index
+        tail = tailBlk.statements[1].index
+        dprintln(3, "HA: line before head is ", ast[preHead-1])
+        # Is iterating through statement indices this way safe?
+        for i = head:tail
+            if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
+                dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
+                lhs = ast[i].args[1]
+                rhs = ast[i].args[2]
+                if isa(lhs, SymbolNode) lhs = lhs.name end
+                if (haskey(state.array_length_correlation, lhs))
+                    c = state.array_length_correlation[lhs]
+                    for (d, v) in state.symbol_array_correlation
+                        if v == c
+                            ok = true
+                            for j = 1:length(d)
+                                if !in(d[j], tls.live_out)
+                                    ok = false
+                                    break
+                                end
+                            end
+                            dprintln(3, "HA: found correlation dimension ", d, " ", ok, " ", length(rhs.args)-6)
+                            if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
+                                rhs.args = rhs.args[1:6]
+                                for s in d
+                                    push!(rhs.args, SymbolNode(s, Int))
+                                    push!(rhs.args, 0)
+                                end
+                                dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
+                                ast = [ ast[1:preHead-1], ast[i], ast[preHead:i-1], ast[i+1:end] ]
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
-  end
-  return ast
+    return ast
 end
 
 @doc """
@@ -6392,53 +6392,53 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
-  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-  body = ast.args[3]
-  assert(isa(body, Expr) && is(body.head, :body))
-  # For each statement in the body.
-  for i =1:length(body.args)
-    expr = body.args[i]
-    # If the statement is an assignment.
-    if isa(expr, Expr) && is(expr.head, :(=))
-      lhs = expr.args[1]
-      rhs = expr.args[2]
-      # right now assume all
-      assert(isa(lhs, SymAllGen))
-      lhsTyp = CompilerTools.LambdaHandling.getType(lhs, lambdaInfo) 
-      # If the right-hand side is an mmap.
-      if isa(rhs, Expr) && is(rhs.head, :mmap)
-        args = rhs.args[1]
-        tls = CompilerTools.LivenessAnalysis.find_top_number(i, lives)
-        assert(tls != nothing)
-        assert(CompilerTools.LivenessAnalysis.isDef(lhs, tls))
-        dprintln(4, "mmap lhs=", lhs, " args=", args, " live_out = ", tls.live_out)
-        reuse = nothing
-        j = 0
-        # Find some input array to the mmap that is dead after this statement.
-        while j < length(args)
-          j = j + 1
-          v = args[j]
-          v = isa(v, SymbolNode) ? v.name : v
-          if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
-             CompilerTools.LambdaHandling.getType(v, lambdaInfo) == lhsTyp
-            reuse = v  # Found a dying symbol.
-            break
-          end
+    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    body = ast.args[3]
+    assert(isa(body, Expr) && is(body.head, :body))
+    # For each statement in the body.
+    for i =1:length(body.args)
+        expr = body.args[i]
+        # If the statement is an assignment.
+        if isa(expr, Expr) && is(expr.head, :(=))
+            lhs = expr.args[1]
+            rhs = expr.args[2]
+            # right now assume all
+            assert(isa(lhs, SymAllGen))
+            lhsTyp = CompilerTools.LambdaHandling.getType(lhs, lambdaInfo) 
+            # If the right-hand side is an mmap.
+            if isa(rhs, Expr) && is(rhs.head, :mmap)
+                args = rhs.args[1]
+                tls = CompilerTools.LivenessAnalysis.find_top_number(i, lives)
+                assert(tls != nothing)
+                assert(CompilerTools.LivenessAnalysis.isDef(lhs, tls))
+                dprintln(4, "mmap lhs=", lhs, " args=", args, " live_out = ", tls.live_out)
+                reuse = nothing
+                j = 0
+                # Find some input array to the mmap that is dead after this statement.
+                while j < length(args)
+                    j = j + 1
+                    v = args[j]
+                    v = isa(v, SymbolNode) ? v.name : v
+                    if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
+                        CompilerTools.LambdaHandling.getType(v, lambdaInfo) == lhsTyp
+                        reuse = v  # Found a dying symbol.
+                        break
+                    end
+                end
+                # If we found a dying array whose space we can reuse.
+                if !is(reuse, nothing)
+                    rhs.head = :mmap!   # Change to mmap!
+                    dprintln(2, "mmapToMMap!: successfully reuse ", reuse, " for ", lhs)
+                    if j != 1  # The array to reuse has to be first.  If it isn't already then reorder the args to make it so.
+                        # swap j-th and 1st argument
+                        rhs.args[1] = DomainIR.arraySwap(rhs.args[1], 1, j)
+                        rhs.args[2] = DomainIR.lambdaSwapArg(rhs.args[2], 1, j)
+                        dprintln(3, "mmapToMMap!: after swap, ", lhs, " = ", rhs)
+                    end
+                end
+            end
         end
-        # If we found a dying array whose space we can reuse.
-        if !is(reuse, nothing)
-          rhs.head = :mmap!   # Change to mmap!
-          dprintln(2, "mmapToMMap!: successfully reuse ", reuse, " for ", lhs)
-          if j != 1  # The array to reuse has to be first.  If it isn't already then reorder the args to make it so.
-            # swap j-th and 1st argument
-            rhs.args[1] = DomainIR.arraySwap(rhs.args[1], 1, j)
-            rhs.args[2] = DomainIR.lambdaSwapArg(rhs.args[2], 1, j)
-            dprintln(3, "mmapToMMap!: after swap, ", lhs, " = ", rhs)
-          end
-        end
-      end
     end
-  end
 end
 
 mmap_to_mmap! = 1
@@ -6446,7 +6446,7 @@ mmap_to_mmap! = 1
 If set to non-zero, perform the phase where non-inplace maps are converted to inplace maps to reduce allocations.
 """
 function PIRInplace(x)
-  global mmap_to_mmap! = x
+    global mmap_to_mmap! = x
 end
 
 hoist_allocation = 1
@@ -6454,7 +6454,7 @@ hoist_allocation = 1
 If set to non-zero, perform the rearrangement phase that tries to moves alllocations outside of loops.
 """
 function PIRHoistAllocation(x)
-  global hoist_allocation = x
+    global hoist_allocation = x
 end
 
 bb_reorder = 0
@@ -6462,7 +6462,7 @@ bb_reorder = 0
 If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.
 """
 function PIRBbReorder(x)
-  global bb_reorder = x
+    global bb_reorder = x
 end 
 
 shortcut_array_assignment = 0
@@ -6471,65 +6471,65 @@ Enables an experimental mode where if there is a statement a = b and they are ar
 use a special assignment node like a move assignment in C++.
 """
 function PIRShortcutArrayAssignment(x)
-  global shortcut_array_assignment = x
+    global shortcut_array_assignment = x
 end
 
 @doc """
 Type for dependence graph creation and topological sorting.
 """
 type StatementWithDeps
-  stmt :: CompilerTools.LivenessAnalysis.TopLevelStatement
-  deps :: Set{StatementWithDeps}
-  dfs_color :: Int64 # 0 = white, 1 = gray, 2 = black
-  discovery :: Int64
-  finished  :: Int64
+    stmt :: CompilerTools.LivenessAnalysis.TopLevelStatement
+    deps :: Set{StatementWithDeps}
+    dfs_color :: Int64 # 0 = white, 1 = gray, 2 = black
+    discovery :: Int64
+    finished  :: Int64
 
-  function StatementWithDeps(s)
-    new(s, Set{StatementWithDeps}(), 0, 0, 0)
-  end
+    function StatementWithDeps(s)
+        new(s, Set{StatementWithDeps}(), 0, 0, 0)
+    end
 end
 
 @doc """
 Construct a topological sort of the dependence graph.
 """
 function dfsVisit(swd :: StatementWithDeps, vtime :: Int64, topo_sort :: Array{StatementWithDeps})
-  swd.dfs_color = 1 # color gray
-  swd.discovery = vtime
-  vtime += 1
-  for dep in swd.deps
-    if dep.dfs_color == 0
-      vtime = dfsVisit(dep, vtime, topo_sort)
+    swd.dfs_color = 1 # color gray
+    swd.discovery = vtime
+    vtime += 1
+    for dep in swd.deps
+        if dep.dfs_color == 0
+            vtime = dfsVisit(dep, vtime, topo_sort)
+        end
     end
-  end
-  swd.dfs_color = 2 # color black
-  swd.finished  = vtime
-  vtime += 1
-  unshift!(topo_sort, swd)
-  return vtime
+    swd.dfs_color = 2 # color black
+    swd.finished  = vtime
+    vtime += 1
+    unshift!(topo_sort, swd)
+    return vtime
 end
 
 @doc """
 Returns true if the given "ast" node is a DomainIR operation.
 """
 function isDomainNode(ast)
-  return false
+    return false
 end
 
 function isDomainNode(ast :: Expr)
-  head = ast.head
-  args = ast.args
+    head = ast.head
+    args = ast.args
 
-  if head == :mmap || head == :mmap! || head == :reduce || head == :stencil!
-    return true
-  end
- 
-  for i = 1:length(args)
-    if isDomainNode(args[i])
-      return true
+    if head == :mmap || head == :mmap! || head == :reduce || head == :stencil!
+        return true
     end
-  end
 
-  return false
+    for i = 1:length(args)
+        if isDomainNode(args[i])
+            return true
+        end
+    end
+
+    return false
 end
 
 @doc """
@@ -6537,15 +6537,15 @@ Returns true if the given AST "node" must remain the last statement in a basic b
 This is true if the node is a GotoNode or a :gotoifnot Expr.
 """
 function mustRemainLastStatementInBlock(node :: GotoNode)
-  return true
+    return true
 end
 
 function mustRemainLastStatementInBlock(node)
-  return false
+    return false
 end
 
 function mustRemainLastStatementInBlock(node :: Expr)
-  return node.head == :gotoifnot  ||  node.head == :return
+    return node.head == :gotoifnot  ||  node.head == :return
 end
 
 @doc """
@@ -6553,139 +6553,139 @@ For every basic block, try to push domain IR statements down and non-domain IR s
 are next to each other and can be fused.
 """
 function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
-  # We will try to optimize the order in each basic block.
-  for bb in collect(values(bl.basic_blocks))
-    if false
-      # One approach to this problem is to create a dependency graph and then use that to calculate valid reorderings
-      # that maximize fusion.  We may still want to switch to this at some point but it is more complicated and the 
-      # simpler approach works for now.
+    # We will try to optimize the order in each basic block.
+    for bb in collect(values(bl.basic_blocks))
+        if false
+            # One approach to this problem is to create a dependency graph and then use that to calculate valid reorderings
+            # that maximize fusion.  We may still want to switch to this at some point but it is more complicated and the 
+            # simpler approach works for now.
 
-      # Start with a pseudo-statement corresponding to the variables live-in to this basic block.
-      livein     = StatementWithDeps(nothing)
-      # The variable "last_write" is a dictionary mapping a symbol to the last statement to have written that variable.
-      last_write = Dict{Symbol, StatementWithDeps}()
-      # For each symbol live-in to this basic block, add it to "last_write".
-      for def in bb.live_in
-        assert(typeof(def) == Symbol)
-        last_write[def] = livein
-      end
-
-      # Create the dependency graph.
-      for i = 1:length(bb.statements)
-        # Get the i'th statement in this basic block.
-        stmt    = bb.statements[i]
-        # Create an object to associate this statement with its dependencies.
-        new_swd = StatementWithDeps(stmt)
-
-        # Establish dependency links from prior statements to this one based on the last statement to have written each symbol used in this statement.
-        for use in stmt.use
-          assert(typeof(use) == Symbol)
-          assert(haskey(last_write, use))
-          push!(last_write[use].deps, new_swd)
-        end
-        # Update last_write with any symbols def in this statement.
-        for def in stmt.def
-          assert(typeof(def) == Symbol)
-          last_write[def] = new_swd
-        end
-      end
-
-      topo_sort = StatementWithDeps[]
-      dfsVisit(livein, 1, topo_sort)
-    else
-      dprintln(3, "Doing maxFusion in block ", bb)
-      # A bubble-sort style of coalescing domain nodes together in the AST.
-      earliest_parfor = 1
-      found_change = true
-
-      # While the lastest pass over the AST created some change, keep searching for more interchanges that can coalesce domain nodes.
-      while found_change
-        found_change = false
-
-        # earliest_parfor is an optimization that we don't have to scan every statement in the block but only those statements from
-        # the first parfor to the last statement in the block.
-        i = earliest_parfor
-        # dprintln(3,"bb.statements = ", bb.statements)
-        earliest_parfor = length(bb.statements)
-
-        while i < length(bb.statements)
-          cur  = bb.statements[i]
-          next = bb.statements[i+1]
-          cannot_move_next = mustRemainLastStatementInBlock(next.tls.expr)
-          dprintln(3,"maxFusion cur = ", cur.tls.expr)
-          dprintln(3,"maxFusion next = ", next.tls.expr)
-          cur_domain_node  = isDomainNode(cur.tls.expr)  
-          next_domain_node = isDomainNode(next.tls.expr) 
-          intersection     = intersect(cur.def, next.use)
-          dprintln(3,"cur_domain_node = ", cur_domain_node, " next_domain_node = ", next_domain_node, " intersection = ", intersection)
-          if cur_domain_node && !cannot_move_next
-            if !next_domain_node && isempty(intersection)
-              # If the current statement is a domain node and the next staterment isn't and we are allowed to move the next node
-              # in the block and the next statement doesn't use anything produced by this statement then we can switch the order of
-              # the current and next statement.
-              dprintln(3,"bubbling domain node down")
-              (bb.statements[i], bb.statements[i+1]) = (bb.statements[i+1], bb.statements[i])
-              (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
-              (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
-              found_change = true
-            else
-              if i < earliest_parfor
-                earliest_parfor = i
-              end
+            # Start with a pseudo-statement corresponding to the variables live-in to this basic block.
+            livein     = StatementWithDeps(nothing)
+            # The variable "last_write" is a dictionary mapping a symbol to the last statement to have written that variable.
+            last_write = Dict{Symbol, StatementWithDeps}()
+            # For each symbol live-in to this basic block, add it to "last_write".
+            for def in bb.live_in
+                assert(typeof(def) == Symbol)
+                last_write[def] = livein
             end
-          end
-          i += 1
+
+            # Create the dependency graph.
+            for i = 1:length(bb.statements)
+                # Get the i'th statement in this basic block.
+                stmt    = bb.statements[i]
+                # Create an object to associate this statement with its dependencies.
+                new_swd = StatementWithDeps(stmt)
+
+                # Establish dependency links from prior statements to this one based on the last statement to have written each symbol used in this statement.
+                for use in stmt.use
+                    assert(typeof(use) == Symbol)
+                    assert(haskey(last_write, use))
+                    push!(last_write[use].deps, new_swd)
+                end
+                # Update last_write with any symbols def in this statement.
+                for def in stmt.def
+                    assert(typeof(def) == Symbol)
+                    last_write[def] = new_swd
+                end
+            end
+
+            topo_sort = StatementWithDeps[]
+            dfsVisit(livein, 1, topo_sort)
+        else
+            dprintln(3, "Doing maxFusion in block ", bb)
+            # A bubble-sort style of coalescing domain nodes together in the AST.
+            earliest_parfor = 1
+            found_change = true
+
+            # While the lastest pass over the AST created some change, keep searching for more interchanges that can coalesce domain nodes.
+            while found_change
+                found_change = false
+
+                # earliest_parfor is an optimization that we don't have to scan every statement in the block but only those statements from
+                # the first parfor to the last statement in the block.
+                i = earliest_parfor
+                # dprintln(3,"bb.statements = ", bb.statements)
+                earliest_parfor = length(bb.statements)
+
+                while i < length(bb.statements)
+                    cur  = bb.statements[i]
+                    next = bb.statements[i+1]
+                    cannot_move_next = mustRemainLastStatementInBlock(next.tls.expr)
+                    dprintln(3,"maxFusion cur = ", cur.tls.expr)
+                    dprintln(3,"maxFusion next = ", next.tls.expr)
+                    cur_domain_node  = isDomainNode(cur.tls.expr)  
+                    next_domain_node = isDomainNode(next.tls.expr) 
+                    intersection     = intersect(cur.def, next.use)
+                    dprintln(3,"cur_domain_node = ", cur_domain_node, " next_domain_node = ", next_domain_node, " intersection = ", intersection)
+                    if cur_domain_node && !cannot_move_next
+                        if !next_domain_node && isempty(intersection)
+                            # If the current statement is a domain node and the next staterment isn't and we are allowed to move the next node
+                            # in the block and the next statement doesn't use anything produced by this statement then we can switch the order of
+                            # the current and next statement.
+                            dprintln(3,"bubbling domain node down")
+                            (bb.statements[i], bb.statements[i+1]) = (bb.statements[i+1], bb.statements[i])
+                            (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
+                            (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
+                            found_change = true
+                        else
+                            if i < earliest_parfor
+                                earliest_parfor = i
+                            end
+                        end
+                    end
+                    i += 1
+                end
+            end 
         end
-      end 
     end
-  end
 end
 
 @doc """
 Debug print the parts of a DomainLambda.
 """
 function pirPrintDl(dbg_level, dl)
-  dprintln(dbg_level, "inputs = ", dl.inputs)
-  dprintln(dbg_level, "output = ", dl.outputs)
-  dprintln(dbg_level, "linfo  = ", dl.linfo)
+    dprintln(dbg_level, "inputs = ", dl.inputs)
+    dprintln(dbg_level, "output = ", dl.outputs)
+    dprintln(dbg_level, "linfo  = ", dl.linfo)
 end
 
 @doc """
 Scan the body of a function in "stmts" and return the max label in a LabelNode AST seen in the body.
 """
 function getMaxLabel(max_label, stmts :: Array{Any, 1})
-  for i =1:length(stmts)
-    if isa(stmts[i], LabelNode)
-      max_label = max(max_label, stmts[i].label)
+    for i =1:length(stmts)
+        if isa(stmts[i], LabelNode)
+            max_label = max(max_label, stmts[i].label)
+        end
     end
-  end
-  return max_label
+    return max_label
 end
 
 @doc """
 Form a Julia :lambda Expr from a DomainLambda.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
-#  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
-  type_data = CompilerTools.LambdaHandling.VarDef[]
-  input_arrays = Symbol[]
-  for di in dl_inputs
-    push!(type_data, CompilerTools.LambdaHandling.VarDef(di.name, di.typ, 0))
-    if isArrayType(di.typ)
-      push!(input_arrays, di.name)
+    #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
+    type_data = CompilerTools.LambdaHandling.VarDef[]
+    input_arrays = Symbol[]
+    for di in dl_inputs
+        push!(type_data, CompilerTools.LambdaHandling.VarDef(di.name, di.typ, 0))
+        if isArrayType(di.typ)
+            push!(input_arrays, di.name)
+        end
     end
-  end
-#  dprintln(3,"inputs = ", inputs_as_symbols)
-  dprintln(3,"types = ", type_data)
-  dprintln(3,"DomainLambda is:")
-  pirPrintDl(3, domain_lambda)
-  newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-  CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-  stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
-  newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
-  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
-  # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
-  return (ast, input_arrays) 
+    #  dprintln(3,"inputs = ", inputs_as_symbols)
+    dprintln(3,"types = ", type_data)
+    dprintln(3,"DomainLambda is:")
+    pirPrintDl(3, domain_lambda)
+    newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
+    CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
+    stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
+    newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
+    ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+    # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
+    return (ast, input_arrays) 
 end
 
 @doc """
@@ -6693,124 +6693,124 @@ A routine similar to the main parallel IR entry put but designed to process the 
 domain IR AST nodes.
 """
 function nested_function_exprs(max_label, domain_lambda, dl_inputs)
-  dprintln(2,"nested_function_exprs max_label = ", max_label)
-  dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
-  (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
-  dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
+    dprintln(2,"nested_function_exprs max_label = ", max_label)
+    dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
+    (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
+    dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
 
-  start_time = time_ns()
+    start_time = time_ns()
 
-  dprintln(1,"Starting liveness analysis.")
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(1,"Finished liveness analysis.")
-
-  dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
-
-  mtm_start = time_ns()
-
-  if mmap_to_mmap! != 0
-    dprintln(1, "starting mmap to mmap! transformation.")
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
-    dprintln(3, "uniqSet = ", uniqSet)
-    mmapInline(ast, lives, uniqSet)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
-    mmapToMmap!(ast, lives, uniqSet)
-    dprintln(1, "Finished mmap to mmap! transformation.")
-    dprintln(3, "AST = ", ast)
-  end
-
-  dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
-
-  # We pass only the non-array params to the rearrangement code because if we pass array params then
-  # the code will detect statements that depend only on array params and move them to the top which
-  # leaves other non-array operations after that and so prevents fusion.
-  dprintln(3,"All params = ", ast.args[1])
-  non_array_params = Set{SymGen}()
-  for param in ast.args[1]
-    if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
-      push!(non_array_params, param)
-    end
-  end
-  dprintln(3,"Non-array params = ", non_array_params)
-
-  # Find out max_label.
-  body = ast.args[3]
-  assert(isa(body, Expr) && is(body.head, :body))
-  max_label = getMaxLabel(max_label, body.args)
-
-  eq_start = time_ns()
-
-  new_vars = expr_state(lives, max_label, input_arrays)
-  dprintln(3,"Creating equivalence classes.")
-  AstWalk(ast, create_equivalence_classes, new_vars)
-  dprintln(3,"Done creating equivalence classes.")
-
-  dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
-
-  rep_start = time_ns()
-
-  for i = 1:rearrange_passes
-    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
-    rnd_state = RemoveNoDepsState(lives, non_array_params)
-    ast = AstWalk(ast, remove_no_deps, rnd_state)
-    dprintln(3,"ast after no dep stmts removed = ", ast)
-      
-    dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
-
-    dprintln(1,"Adding statements with no dependencies to the start of the AST.")
-    ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
-    dprintln(3,"ast after no dep stmts re-inserted = ", ast)
-
-    dprintln(1,"Re-starting liveness analysis.")
+    dprintln(1,"Starting liveness analysis.")
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     dprintln(1,"Finished liveness analysis.")
-  end
 
-  dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+    dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
 
-  dprintln(1,"Doing conversion to parallel IR.")
+    mtm_start = time_ns()
 
-  new_vars.block_lives = lives
+    if mmap_to_mmap! != 0
+        dprintln(1, "starting mmap to mmap! transformation.")
+        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        dprintln(3, "uniqSet = ", uniqSet)
+        mmapInline(ast, lives, uniqSet)
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        mmapToMmap!(ast, lives, uniqSet)
+        dprintln(1, "Finished mmap to mmap! transformation.")
+        dprintln(3, "AST = ", ast)
+    end
 
-  # Do the main work of Parallel IR.
-  ast = from_expr(ast, 1, new_vars, false)
-  assert(isa(ast,Array))
-  assert(length(ast) == 1)
-  ast = ast[1]
-  
-  dprintln(3,"Final ParallelIR = ", ast)
+    dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
 
-  #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-  (new_vars.max_label, ast, ast.args[3].args)
+    # We pass only the non-array params to the rearrangement code because if we pass array params then
+    # the code will detect statements that depend only on array params and move them to the top which
+    # leaves other non-array operations after that and so prevents fusion.
+    dprintln(3,"All params = ", ast.args[1])
+    non_array_params = Set{SymGen}()
+    for param in ast.args[1]
+        if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
+            push!(non_array_params, param)
+        end
+    end
+    dprintln(3,"Non-array params = ", non_array_params)
+
+    # Find out max_label.
+    body = ast.args[3]
+    assert(isa(body, Expr) && is(body.head, :body))
+    max_label = getMaxLabel(max_label, body.args)
+
+    eq_start = time_ns()
+
+    new_vars = expr_state(lives, max_label, input_arrays)
+    dprintln(3,"Creating equivalence classes.")
+    AstWalk(ast, create_equivalence_classes, new_vars)
+    dprintln(3,"Done creating equivalence classes.")
+
+    dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+
+    rep_start = time_ns()
+
+    for i = 1:rearrange_passes
+        dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
+        rnd_state = RemoveNoDepsState(lives, non_array_params)
+        ast = AstWalk(ast, remove_no_deps, rnd_state)
+        dprintln(3,"ast after no dep stmts removed = ", ast)
+
+        dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
+
+        dprintln(1,"Adding statements with no dependencies to the start of the AST.")
+        ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
+        dprintln(3,"ast after no dep stmts re-inserted = ", ast)
+
+        dprintln(1,"Re-starting liveness analysis.")
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        dprintln(1,"Finished liveness analysis.")
+    end
+
+    dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+
+    dprintln(1,"Doing conversion to parallel IR.")
+
+    new_vars.block_lives = lives
+
+    # Do the main work of Parallel IR.
+    ast = from_expr(ast, 1, new_vars, false)
+    assert(isa(ast,Array))
+    assert(length(ast) == 1)
+    ast = ast[1]
+
+    dprintln(3,"Final ParallelIR = ", ast)
+
+    #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
+    (new_vars.max_label, ast, ast.args[3].args)
 end
 
 function addStatementsToBeginning(lambda :: Expr, stmts :: Array{Any,1})
-  assert(lambda.head == :lambda)
-  assert(typeof(lambda.args[3]) == Expr)
-  assert(lambda.args[3].head == :body)
-  lambda.args[3].args = [stmts; lambda.args[3].args]
-  return lambda
+    assert(lambda.head == :lambda)
+    assert(typeof(lambda.args[3]) == Expr)
+    assert(lambda.args[3].head == :body)
+    lambda.args[3].args = [stmts; lambda.args[3].args]
+    return lambda
 end
 
 doRemoveAssertEqShape = true
 generalSimplification = true
 
 function get_input_arrays(linfo::LambdaInfo)
-  ret = Symbol[]
-  input_vars = linfo.input_params
-  dprintln(3,"input_vars = ", input_vars)
+    ret = Symbol[]
+    input_vars = linfo.input_params
+    dprintln(3,"input_vars = ", input_vars)
 
-  for iv in input_vars
-    it = getType(iv, linfo)
-    dprintln(3,"iv = ", iv, " type = ", it)
-    if it.name == Array.name
-      dprintln(3,"Parameter is an Array.")
-      push!(ret, iv)
+    for iv in input_vars
+        it = getType(iv, linfo)
+        dprintln(3,"iv = ", iv, " type = ", it)
+        if it.name == Array.name
+            dprintln(3,"Parameter is an Array.")
+            push!(ret, iv)
+        end
     end
-  end
 
-  ret
+    ret
 end
 
 @doc """
@@ -6821,360 +6821,360 @@ The main ENTRY point into ParallelIR.
 4) Create array equivalence classes within the function.
 5) Rearrange statements within a basic block to push domain operations to the bottom so more fusion.
 6) Call the main from_expr to process the AST for the function.  This will
-   a) Lower domain IR to parallel IR AST nodes.
-   b) Fuse parallel IR nodes where possible.
-   c) Convert to task IR nodes if task mode enabled.
+a) Lower domain IR to parallel IR AST nodes.
+b) Fuse parallel IR nodes where possible.
+c) Convert to task IR nodes if task mode enabled.
 """
 function from_expr(function_name, ast :: Expr)
-  assert(ast.head == :lambda)
-  dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
+    assert(ast.head == :lambda)
+    dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
-  start_time = time_ns()
+    start_time = time_ns()
 
-  # Create CFG from AST.  This will automatically filter out dead basic blocks.
-  cfg = CompilerTools.CFGs.from_ast(ast)
-  lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-  input_arrays = get_input_arrays(lambdaInfo)
-  body = CompilerTools.LambdaHandling.getBody(ast)
-  # Re-create the body minus any dead basic blocks.
-  body.args = CompilerTools.CFGs.createFunctionBody(cfg)
-  # Re-create the lambda minus any dead basic blocks.
-  ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
-  dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
- 
-  #CompilerTools.LivenessAnalysis.set_debug_level(3)
+    # Create CFG from AST.  This will automatically filter out dead basic blocks.
+    cfg = CompilerTools.CFGs.from_ast(ast)
+    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    input_arrays = get_input_arrays(lambdaInfo)
+    body = CompilerTools.LambdaHandling.getBody(ast)
+    # Re-create the body minus any dead basic blocks.
+    body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+    # Re-create the lambda minus any dead basic blocks.
+    ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
+    dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
 
-  dprintln(1,"Starting liveness analysis. function = ", function_name)
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
- 
-#  udinfo = CompilerTools.UDChains.getUDChains(lives)
-  dprintln(3,"lives = ", lives)
-#  dprintln(3,"udinfo = ", udinfo)
-  dprintln(1,"Finished liveness analysis. function = ", function_name)
+    #CompilerTools.LivenessAnalysis.set_debug_level(3)
 
-  dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
-
-  mtm_start = time_ns()
-
-  if mmap_to_mmap! != 0
-    dprintln(1, "starting mmap to mmap! transformation.")
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
-    dprintln(3, "uniqSet = ", uniqSet)
-    mmapInline(ast, lives, uniqSet)
+    dprintln(1,"Starting liveness analysis. function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
-    mmapToMmap!(ast, lives, uniqSet)
-    dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
-    printLambda(3, ast)
-  end
 
-  dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
-
-  # We pass only the non-array params to the rearrangement code because if we pass array params then
-  # the code will detect statements that depend only on array params and move them to the top which
-  # leaves other non-array operations after that and so prevents fusion.
-  dprintln(3,"All params = ", ast.args[1])
-  non_array_params = Set{SymGen}()
-  for param in ast.args[1]
-    if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
-      push!(non_array_params, param)
-    end
-  end
-  dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
-
-  # Find out max_label
-  body = ast.args[3]
-  assert(isa(body, Expr) && is(body.head, :body))
-  max_label = getMaxLabel(0, body.args)
-  dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
-
-  rep_start = time_ns()
-
-  for i = 1:rearrange_passes
-    dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
-    rnd_state = RemoveNoDepsState(lives, non_array_params)
-    ast = AstWalk(ast, remove_no_deps, rnd_state)
-    dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
-    printLambda(3, ast)
-      
-    dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
-
-    dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
-    ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
-    dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
-    printLambda(3, ast)
-
-    dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-    dprintln(1,"Finished liveness analysis.", " function = ", function_name)
+    #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     dprintln(3,"lives = ", lives)
-  end
+    #  dprintln(3,"udinfo = ", udinfo)
+    dprintln(1,"Finished liveness analysis. function = ", function_name)
 
-  dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+    dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
 
-  processAndUpdateBody(ast, removeNothingStmts, nothing)
-  dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
-  printLambda(3, ast)
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    mtm_start = time_ns()
 
-  if generalSimplification
-  ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}()))
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
-  printLambda(3, ast)
-  end
+    if mmap_to_mmap! != 0
+        dprintln(1, "starting mmap to mmap! transformation.")
+        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        dprintln(3, "uniqSet = ", uniqSet)
+        mmapInline(ast, lives, uniqSet)
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        mmapToMmap!(ast, lives, uniqSet)
+        dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
+        printLambda(3, ast)
+    end
 
-  ast   = AstWalk(ast, remove_dead, RemoveDeadState(lives))
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  dprintln(3,"ast after remove_dead = ", " function = ", function_name)
-  printLambda(3, ast)
+    dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
 
-  eq_start = time_ns()
+    # We pass only the non-array params to the rearrangement code because if we pass array params then
+    # the code will detect statements that depend only on array params and move them to the top which
+    # leaves other non-array operations after that and so prevents fusion.
+    dprintln(3,"All params = ", ast.args[1])
+    non_array_params = Set{SymGen}()
+    for param in ast.args[1]
+        if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
+            push!(non_array_params, param)
+        end
+    end
+    dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
-  new_vars = expr_state(lives, max_label, input_arrays)
-  dprintln(3,"Creating equivalence classes.", " function = ", function_name)
-  AstWalk(ast, create_equivalence_classes, new_vars)
-  dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
-  dprintln(3,"symbol_correlations = ", new_vars.symbol_array_correlation)
-  dprintln(3,"array_correlations  = ", new_vars.array_length_correlation)
+    # Find out max_label
+    body = ast.args[3]
+    assert(isa(body, Expr) && is(body.head, :body))
+    max_label = getMaxLabel(0, body.args)
+    dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
 
-  dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
- 
-  if doRemoveAssertEqShape
-  processAndUpdateBody(ast, removeAssertEqShape, new_vars)
-  dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
-  printLambda(3, ast)
-  lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  end
+    rep_start = time_ns()
 
-  if bb_reorder != 0
-    maxFusion(lives)
-    # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
-    ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
-    dprintln(3,"ast after maxFusion = ", " function = ", function_name)
+    for i = 1:rearrange_passes
+        dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
+        rnd_state = RemoveNoDepsState(lives, non_array_params)
+        ast = AstWalk(ast, remove_no_deps, rnd_state)
+        dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
+        printLambda(3, ast)
+
+        dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
+
+        dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
+        ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
+        dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
+        printLambda(3, ast)
+
+        dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        dprintln(1,"Finished liveness analysis.", " function = ", function_name)
+        dprintln(3,"lives = ", lives)
+    end
+
+    dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+
+    processAndUpdateBody(ast, removeNothingStmts, nothing)
+    dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
     printLambda(3, ast)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-  end
 
-  dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
+    if generalSimplification
+        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{Symbol,Symbol}()))
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
+        printLambda(3, ast)
+    end
 
-  new_vars.block_lives = lives
-  dprintln(3,"Lives before main Parallel IR = ")
-  dprintln(3,lives)
+    ast   = AstWalk(ast, remove_dead, RemoveDeadState(lives))
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    dprintln(3,"ast after remove_dead = ", " function = ", function_name)
+    printLambda(3, ast)
 
-  # Do the main work of Parallel IR.
-  ast = from_expr(ast, 1, new_vars, false)
-  assert(isa(ast,Array))
-  assert(length(ast) == 1)
-  ast = ast[1]
-  
-  dprintln(3,"Final ParallelIR function = ", function_name, " ast = ")
-  printLambda(3, ast)
-  if pir_stop != 0
-    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-  end
-  ast
+    eq_start = time_ns()
+
+    new_vars = expr_state(lives, max_label, input_arrays)
+    dprintln(3,"Creating equivalence classes.", " function = ", function_name)
+    AstWalk(ast, create_equivalence_classes, new_vars)
+    dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
+    dprintln(3,"symbol_correlations = ", new_vars.symbol_array_correlation)
+    dprintln(3,"array_correlations  = ", new_vars.array_length_correlation)
+
+    dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+
+    if doRemoveAssertEqShape
+        processAndUpdateBody(ast, removeAssertEqShape, new_vars)
+        dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
+        printLambda(3, ast)
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    end
+
+    if bb_reorder != 0
+        maxFusion(lives)
+        # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
+        ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
+        dprintln(3,"ast after maxFusion = ", " function = ", function_name)
+        printLambda(3, ast)
+        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    end
+
+    dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
+
+    new_vars.block_lives = lives
+    dprintln(3,"Lives before main Parallel IR = ")
+    dprintln(3,lives)
+
+    # Do the main work of Parallel IR.
+    ast = from_expr(ast, 1, new_vars, false)
+    assert(isa(ast,Array))
+    assert(length(ast) == 1)
+    ast = ast[1]
+
+    dprintln(3,"Final ParallelIR function = ", function_name, " ast = ")
+    printLambda(3, ast)
+    if pir_stop != 0
+        throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
+    end
+    ast
 end
 
 @doc """
 Returns true if input "a" is a tuple and each element of the tuple of isbits type.
 """
 function isbitstuple(a)
-  if isa(a, Tuple)
-    for i in a
-      if !isbits(i)
-        return false
-      end
+    if isa(a, Tuple)
+        for i in a
+            if !isbits(i)
+                return false
+            end
+        end
+        return true
     end
-    return true
-  end
-  return false
+    return false
 end
 
 
 
 function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
-  ast = uncompressed_ast(ast)
-  return from_expr(ast, depth, state, top_level)
+    ast = uncompressed_ast(ast)
+    return from_expr(ast, depth, state, top_level)
 end
 
 function from_expr(ast::Union{SymAllGen,TopNode,LineNumberNode,LabelNode,Char,
-     GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
+    GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]
 end
 
 function from_expr(ast::GlobalRef, depth, state :: expr_state, top_level)
-  mod = ast.mod
-  name = ast.name
-  # typ = ast.typ  # FIXME: is this type needed?
-  typ = typeof(mod)
-  dprintln(2,"GlobalRef type ",typeof(mod))
+    mod = ast.mod
+    name = ast.name
+    # typ = ast.typ  # FIXME: is this type needed?
+    typ = typeof(mod)
+    dprintln(2,"GlobalRef type ",typeof(mod))
     return [ast]
 end
 
 
 function from_expr(ast::QuoteNode, depth, state :: expr_state, top_level)
-  value = ast.value
-  #TODO: fields: value
-  dprintln(2,"QuoteNode type ",typeof(value))
-  return [ast] 
+    value = ast.value
+    #TODO: fields: value
+    dprintln(2,"QuoteNode type ",typeof(value))
+    return [ast] 
 end
 
 function from_expr(ast::Tuple, depth, state :: expr_state, top_level)
-  @assert isbitstuple(ast) "Only bits type tuples allowed in from_expr()"
-  return [ast] 
+    @assert isbitstuple(ast) "Only bits type tuples allowed in from_expr()"
+    return [ast] 
 end
 
 function from_expr(ast::Number, depth, state :: expr_state, top_level)
-  @assert isbits(ast) "only bits (plain) types supported in from_expr()"
-  return [ast] 
+    @assert isbits(ast) "only bits (plain) types supported in from_expr()"
+    return [ast] 
 end
 
 @doc """
 The main ParallelIR function for processing some node in the AST.
 """
 function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
-  if is(ast, nothing)
-    return [nothing]
-  end
-  dprintln(2,"from_expr depth=",depth," ")
-  dprint(2,"Expr ")
-  head = ast.head
-  args = ast.args
-  typ  = ast.typ
-  dprintln(2,head, " ", args)
-  if head == :lambda
-    ast = from_lambda(ast, depth, state)
-    dprintln(3,"After from_lambda = ", ast)
+    if is(ast, nothing)
+        return [nothing]
+    end
+    dprintln(2,"from_expr depth=",depth," ")
+    dprint(2,"Expr ")
+    head = ast.head
+    args = ast.args
+    typ  = ast.typ
+    dprintln(2,head, " ", args)
+    if head == :lambda
+        ast = from_lambda(ast, depth, state)
+        dprintln(3,"After from_lambda = ", ast)
+        return [ast]
+    elseif head == :body
+        dprintln(3,"Processing body start")
+        args = from_exprs(args,depth+1,state)
+        dprintln(3,"Processing body end")
+    elseif head == :(=)
+        dprintln(3,"Before from_assignment typ is ", typ)
+        args, new_typ = from_assignment(args, depth, state)
+        if length(args) == 0
+            return []
+        end
+        if new_typ != nothing
+            typ = new_typ
+        end
+    elseif head == :return
+        args = from_exprs(args,depth,state)
+    elseif head == :call
+        args = from_call(args,depth,state)
+        # TODO: catch domain IR result here
+    elseif head == :call1
+        args = from_call(args, depth, state)
+        # TODO?: tuple
+    elseif head == :line
+        # remove line numbers
+        return []
+        # skip
+    elseif head == :mmap
+        head = :parfor
+        # Make sure we get what we expect from domain IR.
+        # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+        if(length(args) < 2)
+            throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
+        end
+        # first arg is input arrays, second arg is DomainLambda
+        domain_oprs = [DomainOperation(:mmap, args)]
+        retarr = Any[nothing]
+        mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state, retarr)
+        args = retarr
+        dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
+    elseif head == :mmap!
+        head = :parfor
+        # Make sure we get what we expect from domain IR.
+        # There should be two entries in the array, another array of input array symbols and a DomainLambda type
+        if(length(args) < 2)
+            throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
+        end
+        # third arg is withIndices
+        with_indices = length(args) >= 3 ? args[3] : false
+        # first arg is input arrays, second arg is DomainLambda
+        domain_oprs = [DomainOperation(:mmap!, args)]
+        args = mk_parfor_args_from_mmap!(args[1], args[2], with_indices, domain_oprs, state)
+        dprintln(1,"switching to parfor node for mmap!")
+    elseif head == :reduce
+        head = :parfor
+        args = mk_parfor_args_from_reduce(args, state)
+        dprintln(1,"switching to parfor node for reduce")
+    elseif head == :parallel_for
+        head = :parfor
+        args = mk_parfor_args_from_parallel_for(args, state)
+        dprintln(1,"switching to parfor node for parallel_for")
+    elseif head == :copy
+        # turn array copy back to plain Julia call
+        head = :call
+        args = vcat(:copy, args)
+    elseif head == :arraysize
+        # turn array size back to plain Julia call
+        head = :call
+        args = vcat(TopNode(:arraysize), args)
+    elseif head == :alloc
+        # turn array alloc back to plain Julia ccall
+        head = :call
+        args = from_alloc(args)
+    elseif head == :stencil!
+        head = :parfor
+        ast = mk_parfor_args_from_stencil(typ, head, args, state)
+        dprintln(1,"switching to parfor node for stencil")
+        return ast
+    elseif head == :copyast
+        dprintln(2,"copyast type")
+        # skip
+    elseif head == :assertEqShape
+        if top_level && from_assertEqShape(ast, state)
+            return []
+        end
+    elseif head == :gotoifnot
+        assert(length(args) == 2)
+        args[1] = get_one(from_expr(args[1], depth, state, false))
+    elseif head == :new
+        args = from_exprs(args,depth,state)
+    elseif head == :tuple
+        for i = 1:length(args)
+            args[i] = get_one(from_expr(args[i], depth, state, false))
+        end
+    elseif head == :getindex
+        args = from_exprs(args,depth,state)
+    elseif head == :assert
+        args = from_exprs(args,depth,state)
+    elseif head == :boundscheck
+        # skip
+    elseif head == :meta
+        # skip
+    else
+        #println("from_expr: unknown Expr head :", head)
+        throw(string("from_expr: unknown Expr head :", head))
+    end
+    ast = Expr(head, args...)
+    dprintln(3,"New expr type = ", typ, " ast = ", ast)
+    ast.typ = typ
     return [ast]
-  elseif head == :body
-    dprintln(3,"Processing body start")
-    args = from_exprs(args,depth+1,state)
-    dprintln(3,"Processing body end")
-  elseif head == :(=)
-    dprintln(3,"Before from_assignment typ is ", typ)
-    args, new_typ = from_assignment(args, depth, state)
-    if length(args) == 0
-      return []
-    end
-    if new_typ != nothing
-      typ = new_typ
-    end
-  elseif head == :return
-    args = from_exprs(args,depth,state)
-  elseif head == :call
-    args = from_call(args,depth,state)
-    # TODO: catch domain IR result here
-  elseif head == :call1
-    args = from_call(args, depth, state)
-    # TODO?: tuple
-  elseif head == :line
-    # remove line numbers
-    return []
-    # skip
-  elseif head == :mmap
-    head = :parfor
-    # Make sure we get what we expect from domain IR.
-    # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-    if(length(args) < 2)
-      throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
-    end
-    # first arg is input arrays, second arg is DomainLambda
-    domain_oprs = [DomainOperation(:mmap, args)]
-    retarr = Any[nothing]
-    mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state, retarr)
-    args = retarr
-    dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
-  elseif head == :mmap!
-    head = :parfor
-    # Make sure we get what we expect from domain IR.
-    # There should be two entries in the array, another array of input array symbols and a DomainLambda type
-    if(length(args) < 2)
-      throw(string("mk_parfor_args_from_mmap! input_args length should be at least 2 but is ", length(args)))
-    end
-    # third arg is withIndices
-    with_indices = length(args) >= 3 ? args[3] : false
-    # first arg is input arrays, second arg is DomainLambda
-    domain_oprs = [DomainOperation(:mmap!, args)]
-    args = mk_parfor_args_from_mmap!(args[1], args[2], with_indices, domain_oprs, state)
-    dprintln(1,"switching to parfor node for mmap!")
-  elseif head == :reduce
-    head = :parfor
-    args = mk_parfor_args_from_reduce(args, state)
-    dprintln(1,"switching to parfor node for reduce")
-  elseif head == :parallel_for
-    head = :parfor
-    args = mk_parfor_args_from_parallel_for(args, state)
-    dprintln(1,"switching to parfor node for parallel_for")
-  elseif head == :copy
-    # turn array copy back to plain Julia call
-    head = :call
-    args = vcat(:copy, args)
-  elseif head == :arraysize
-    # turn array size back to plain Julia call
-    head = :call
-    args = vcat(TopNode(:arraysize), args)
-  elseif head == :alloc
-    # turn array alloc back to plain Julia ccall
-    head = :call
-    args = from_alloc(args)
-  elseif head == :stencil!
-    head = :parfor
-    ast = mk_parfor_args_from_stencil(typ, head, args, state)
-    dprintln(1,"switching to parfor node for stencil")
-    return ast
-  elseif head == :copyast
-    dprintln(2,"copyast type")
-    # skip
-  elseif head == :assertEqShape
-    if top_level && from_assertEqShape(ast, state)
-      return []
-    end
-  elseif head == :gotoifnot
-    assert(length(args) == 2)
-    args[1] = get_one(from_expr(args[1], depth, state, false))
-  elseif head == :new
-    args = from_exprs(args,depth,state)
-  elseif head == :tuple
-    for i = 1:length(args)
-      args[i] = get_one(from_expr(args[i], depth, state, false))
-    end
-  elseif head == :getindex
-    args = from_exprs(args,depth,state)
-  elseif head == :assert
-    args = from_exprs(args,depth,state)
-  elseif head == :boundscheck
-    # skip
-  elseif head == :meta
-    # skip
-  else
-    #println("from_expr: unknown Expr head :", head)
-    throw(string("from_expr: unknown Expr head :", head))
-  end
-  ast = Expr(head, args...)
-  dprintln(3,"New expr type = ", typ, " ast = ", ast)
-  ast.typ = typ
-  return [ast]
 end
 
 function from_alloc(args::Array{Any,1})
-  elemTyp = args[1]
-  sizes = args[2]
-  n = length(sizes)
-  assert(n >= 1 && n <= 3)
-  name = symbol(string("jl_alloc_array_", n, "d"))
-  appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
-  #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-  #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
-  realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
-  #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
-  for i=1:n
-    push!(realArgs, sizes[i])
-    push!(realArgs, 0)
-  end
-  return vcat(TopNode(:ccall), realArgs)
+    elemTyp = args[1]
+    sizes = args[2]
+    n = length(sizes)
+    assert(n >= 1 && n <= 3)
+    name = symbol(string("jl_alloc_array_", n, "d"))
+    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+    #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
+    #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
+    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+    realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
+    #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
+    for i=1:n
+        push!(realArgs, sizes[i])
+        push!(realArgs, 0)
+    end
+    return vcat(TopNode(:ccall), realArgs)
 end
 
 
@@ -7183,116 +7183,116 @@ Take something returned from AstWalk and assert it should be an array but in thi
 context that the array should also be of length 1 and then return that single element.
 """
 function get_one(ast)
-  assert(isa(ast,Array))
-  assert(length(ast) == 1)
-  ast[1]
+    assert(isa(ast,Array))
+    assert(length(ast) == 1)
+    ast[1]
 end
 
 @doc """
 Wraps the callback and opaque data passed from the user of ParallelIR's AstWalk.
 """
 type DirWalk
-  callback
-  cbdata
+    callback
+    cbdata
 end
 
 @doc """
 Return one element array with element x.
 """
 function asArray(x)
-  ret = Any[]
-  push!(ret, x)
-  return ret
+    ret = Any[]
+    push!(ret, x)
+    return ret
 end
 
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-  dprintln(3,"PIR AstWalkCallback starting")
-  ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-  dprintln(3,"PIR AstWalkCallback ret = ", ret)
-  if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
-    return ret
-  end
-
-  asttyp = typeof(x)
-  if asttyp == Expr
-    head = x.head
-    args = x.args
-#    typ  = x.typ
-    if head == :parfor
-      cur_parfor = args[1]
-      for i = 1:length(cur_parfor.preParFor)
-        x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.loopNests)
-        x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-        # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
-        AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.reductions)
-        x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-        x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-        x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.body)
-        x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.postParFor)-1
-        x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
-      end
-      return x
-    elseif head == :parfor_start || head == :parfor_end
-      dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
-      dprintln(3, "pre x = ", x)
-      cur_parfor = args[1]
-      for i = 1:length(cur_parfor.loopNests)
-        x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-        AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-        x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.reductions)
-        x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-        x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-        x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
-      end
-      for i = 1:length(cur_parfor.private_vars)
-        x.args[1].private_vars[i] = AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata)
-      end
-      dprintln(3, "post x = ", x)
-      return x
-    elseif head == :insert_divisible_task
-      cur_task = args[1]
-      for i = 1:length(cur_task.args)
-        x.args[1].value = AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
-      end
-      return x
-    elseif head == :loophead
-      for i = 1:length(args)
-        x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
-      end
-      return x
-    elseif head == :loopend
-      for i = 1:length(args)
-        x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
-      end
-      return x
+    dprintln(3,"PIR AstWalkCallback starting")
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
     end
-  elseif asttyp == pir_range_actual
-    for i = 1:length(x.dim)
-      x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
-      x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
-    end
-    return x
-  end
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    asttyp = typeof(x)
+    if asttyp == Expr
+        head = x.head
+        args = x.args
+        #    typ  = x.typ
+        if head == :parfor
+            cur_parfor = args[1]
+            for i = 1:length(cur_parfor.preParFor)
+                x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.loopNests)
+                x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
+                # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
+                AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.reductions)
+                x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+                x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+                x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.body)
+                x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.postParFor)-1
+                x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
+            end
+            return x
+        elseif head == :parfor_start || head == :parfor_end
+            dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
+            dprintln(3, "pre x = ", x)
+            cur_parfor = args[1]
+            for i = 1:length(cur_parfor.loopNests)
+                x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
+                AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+                x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.reductions)
+                x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+                x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+                x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+            end
+            for i = 1:length(cur_parfor.private_vars)
+                x.args[1].private_vars[i] = AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata)
+            end
+            dprintln(3, "post x = ", x)
+            return x
+        elseif head == :insert_divisible_task
+            cur_task = args[1]
+            for i = 1:length(cur_task.args)
+                x.args[1].value = AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
+            end
+            return x
+        elseif head == :loophead
+            for i = 1:length(args)
+                x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
+            end
+            return x
+        elseif head == :loopend
+            for i = 1:length(args)
+                x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
+            end
+            return x
+        end
+    elseif asttyp == pir_range_actual
+        for i = 1:length(x.dim)
+            x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
+            x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
+        end
+        return x
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -7308,47 +7308,47 @@ The Parallel IR callback will return "nothing" if the node isn't a Parallel IR n
 The Domain IR callback will return "nothing" if the node isn't a Domain IR node.
 """
 function AstWalk(ast::Any, callback, cbdata)
-  dw = DirWalk(callback, cbdata)
-  DomainIR.AstWalk(ast, AstWalkCallback, dw)
+    dw = DirWalk(callback, cbdata)
+    DomainIR.AstWalk(ast, AstWalkCallback, dw)
 end
 
 @doc """
 An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.
 For each ParallelIR specific node type, form an array of expressions that AliasAnalysis
-can analyze to reflect the aliases of the given AST node.
-If we read a symbol it is sufficient to just return that symbol as one of the expressions.
-If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
+    can analyze to reflect the aliases of the given AST node.
+    If we read a symbol it is sufficient to just return that symbol as one of the expressions.
+    If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
 function pir_alias_cb(ast, state, cbdata)
-  dprintln(4,"pir_alias_cb")
-  asttyp = typeof(ast)
-  if asttyp == Expr
-    head = ast.head
-    args = ast.args
-    if head == :parfor
-      dprintln(3,"pir_alias_cb for :parfor")
-      expr_to_process = Any[]
+    dprintln(4,"pir_alias_cb")
+    asttyp = typeof(ast)
+    if asttyp == Expr
+        head = ast.head
+        args = ast.args
+        if head == :parfor
+            dprintln(3,"pir_alias_cb for :parfor")
+            expr_to_process = Any[]
 
-      assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-      this_parfor = args[1]
+            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+            this_parfor = args[1]
 
-      AliasAnalysis.increaseNestLevel(state);
-      AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
-      AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
-      ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
-      AliasAnalysis.decreaseNestLevel(state);
+            AliasAnalysis.increaseNestLevel(state);
+            AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
+            AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
+            ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
+            AliasAnalysis.decreaseNestLevel(state);
 
-      return ret[end]
+            return ret[end]
 
-    elseif head == :call
-      if args[1] == TopNode(:unsafe_arrayref)
-        return AliasAnalysis.NotArray 
-      elseif args[1] == TopNode(:unsafe_arrayset)
-        return AliasAnalysis.NotArray 
-      end
+        elseif head == :call
+            if args[1] == TopNode(:unsafe_arrayref)
+                return AliasAnalysis.NotArray 
+            elseif args[1] == TopNode(:unsafe_arrayset)
+                return AliasAnalysis.NotArray 
+            end
+        end
     end
-  end
-  return DomainIR.dir_alias_cb(ast, state, cbdata)
+    return DomainIR.dir_alias_cb(ast, state, cbdata)
 end
 
 end
