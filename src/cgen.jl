@@ -1074,7 +1074,6 @@ function resolveCallTarget(ast::Array{Any, 1})
     #   M = args[1].value; s = args[1].name; t = ""
 
     dprintln(3,"Trying to resolve target with args: ", ast)
-    @assert length(args)>=2 "function call AST length error"
     return resolveCallTarget(ast[1], ast[2:end])
 end
 
