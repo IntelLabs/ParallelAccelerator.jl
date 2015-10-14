@@ -831,12 +831,14 @@ function inline_select(env, state, arr)
         def = lookupConstDef(state, arr.name)
         if !isa(def, Void)  
             if isa(def, Expr) && is(def.head, :call) 
-                assert(length(def.args) > 2)
+                assert(length(def.args) >= 2)
                 if is(def.args[1], :getindex)
                     arr = def.args[2]
                     range_extra = def.args[3:end]
                 elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
                     error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
+                else
+                    error("DomainIR does not handle range selection ", def)
                 end
                 dprintln(env, "inline-select: arr = ", arr, " range = ", range_extra)
                 if length(range_extra) > 0

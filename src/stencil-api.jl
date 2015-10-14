@@ -1,6 +1,7 @@
 module StencilAPI
 
 import Base: getindex, setindex!
+import CompilerTools
 export runStencil, @runStencil
 
 type AbstractStencilArray
@@ -155,7 +156,7 @@ end
 # Analyze a stencil kernel specified as a lambda expression.
 # Return both the kernel stat, and the modified kernel LHS expression.
 # Note that the input kernel is modified in-place.
-function analyze_kernel(krn)
+function analyze_kernel(krn, esc)
   assert(krn.head == :(->))
   local stat = ()
   local params = krn.args[1]  # parameter of the kernel lambda, must be a tuple of symbols
@@ -220,7 +221,7 @@ function analyze_kernel(krn)
           traverse(e)
         elseif isa(e, Symbol)
           if !(expr.head == :line || expr.head == :method) && !(expr.head == :call && i == 1) && !haskey(bufMap, e)
-            expr.args[i] = Expr(:escape, e)
+            expr.args[i] = esc(e)
           end
         end
       end
@@ -279,9 +280,13 @@ end
 # A macro version of runStencil that unfolds stencil call into nested sequential loops.
 # Note that it has yet to handle border settings.
 macro runStencil(krn, args...)
+  translateStencil(krn, Any[x for x in args], esc)
+end
+
+function translateStencil(krn, args::Array, esc)
   local steps = 1
   local borderSty = :oob_skip
-  stat, krnExpr, nbufs = analyze_kernel(krn)
+  stat, krnExpr, nbufs = analyze_kernel(krn, esc)
   @assert (length(args) >= nbufs) "Expect number of array arguments to runStencil to be no less than that of the kernel"
   # get the real buffer arguments
   bufs = args[1:nbufs]
@@ -335,9 +340,33 @@ macro runStencil(krn, args...)
       $(swapExpr)
     end
   end
-  #println(expr)
   return expr
 end
+
+@doc """
+This function is a AstWalker callback.
+"""
+function process_node(node, state, top_level_number, is_top_level, read)
+  if !isa(node,Expr)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+  end
+  if node.head == :call && node.args[1] == :runStencil
+    return translateStencil(node.args[2], node.args[3:end], x -> x)
+  else
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+  end
+end
+
+
+@doc """
+Translate all comprehension in an AST into equivalent code that uses cartesianarray call.
+"""
+macro comprehend(ast)
+  AstWalker.AstWalk(ast, process_node, nothing)
+  Core.eval(current_module(), ast)
+end
+
+
 
 end
 
