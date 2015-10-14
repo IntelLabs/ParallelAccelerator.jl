@@ -2,7 +2,6 @@
 
 module ParallelAccelerator
 
-export decompose, accelerate, Optimize
 
 importall CompilerTools
 importall CompilerTools.OptFramework
@@ -162,21 +161,22 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
-    if getPseMode() != OFF_MODE
+    if getPseMode() == OFF_MODE
+      addOptPass(runStencilMacro, PASS_MACRO)
+      #addOptPass(cleanupAPI, PASS_MACRO)
+    else
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
       addOptPass(toCGen, PASS_TYPED)
+      for opr in API.operators
+        @eval export $opr
+      end
     end
 end
 
 export CompilerTools
-export @acc
-
-for opr in API.operators
-  @eval export $opr
-end
-export runStencil, @runStencil
+export accelerate, @acc, runStencil, cartesianarray, parallel_for
 
 end
 

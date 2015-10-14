@@ -96,7 +96,7 @@ function parallel_for(loopvar, range, body)
   throw("Not Implemented")
 end
 
-const operators = vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex, :cartesianarray, :parallel_for])
+const operators = vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex])
 
 for opr in operators
   @eval export $opr

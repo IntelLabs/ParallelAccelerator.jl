@@ -1,12 +1,12 @@
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray
+export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray, runStencilMacro
 
 using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray, ..StencilAPI
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -65,6 +65,14 @@ function noPrecompile(x)
 end
 
 alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
+
+@doc """
+Pass for comprehension to cartesianarray translation.
+"""
+function runStencilMacro(func, ast, sig)
+  AstWalk(ast, StencilAPI.process_node, nothing)
+  return ast
+end
 
 @doc """
 Pass for comprehension to cartesianarray translation.
