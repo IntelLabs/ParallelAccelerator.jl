@@ -1069,6 +1069,10 @@ function isPendingCompilation(list, tgt)
 end
 
 function resolveCallTarget(ast::Array{Any, 1})
+    # julia doesn't have GetfieldNode anymore
+    #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
+    #   M = args[1].value; s = args[1].name; t = ""
+
     dprintln(3,"Trying to resolve target with args: ", ast)
     @assert length(args)>=2 "function call AST length error"
     return resolveCallTarget(ast[1], ast[2:end])
@@ -1108,44 +1112,49 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
     return M, s, t
 end
     
-function resolveCallTarget(args::Array{Any, 1})
+function resolveCallTarget(f::GlobalRef, args::Array{Any, 1})
+    M = ""
+    t = ""
+    s = ""
+    M = f.mod; s = f.name; t = ""
+    return M, s, t
+end
+    
+    
+function resolveCallTarget(f::TopNode, args::Array{Any, 1})
     dprintln(3,"Trying to resolve target with args: ", args)
     M = ""
     t = ""
     s = ""
-    #case 0:
-    f = args[1]
     #case 1:
-    if isa(args[1], TopNode) && is(args[1].name, :getfield) && isa(args[3], QuoteNode)
-        dprintln(3,"Case 1: args[3] is ", args[3])
-        s = args[3].value
-        if isa(args[2], Module)
-            M = args[2]
+    if is(f.name, :getfield) && isa(args[2], QuoteNode)
+        dprintln(3,"Case 1: args[2] is ", args[2])
+        s = args[2].value
+        if isa(args[1], Module)
+            M = args[1]
             dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         else
             #case 2:
             M = ""
             s = ""
-            t = from_expr(args[2]) * "." * from_expr(args[3])
-            #M, _s = resolveCallTarget([args[2]])
+            t = from_expr(args[1]) * "." * from_expr(args[2])
+            #M, _s = resolveCallTarget([args[1]])
             dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         end
-    elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && hasfield(args[1], :head) && is(args[1].head, :call)
-        return resolveCallTarget(args[1])
-
-    elseif isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
-        M = args[1].value; s = args[1].name; t = ""
-
-    elseif isdefined(:GlobalRef) && isa(args[1],GlobalRef) && isa(args[1].mod,Module)
-        M = args[1].mod; s = args[1].name; t = ""
+    elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
+        return resolveCallTarget(f)
 
     # case 3:
-    elseif isa(args[1], TopNode) && isInlineable(args[1].name, args[2:end])
-        t = from_inlineable(args[1].name, args[2:end])
+    elseif isInlineable(f.name, args)
+        t = from_inlineable(f.name, args)
         dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
     dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
     return M, s, t
+end
+
+function resolveCallTarget(f::ANY, args::Array{Any, 1})
+    return "","",""
 end
 
 function pattern_match_call_math(fun::TopNode, input::GenSym)
