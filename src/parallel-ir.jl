@@ -508,11 +508,11 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2" and "length3".
 """
 function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
-  dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
-  ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 3)
-  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+    dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
+    ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 3)
+    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
 
-  TypedExpr(
+    TypedExpr(
        atype,
        :call,
        TopNode(:ccall),
@@ -533,90 +533,90 @@ end
 Returns true if the incoming type in "typ" is an array type.
 """
 function isArrayType(typ)
-  return (typ.name == Array.name || typ.name == BitArray.name)
+    return (typ.name == Array.name || typ.name == BitArray.name)
 end
 
 @doc """
 Returns the element type of an Array.
 """
 function getArrayElemType(atyp :: DataType)
-  if atyp.name == Array.name
-    atyp.parameters[1]
-  elseif atyp.name == BitArray.name
-    Bool
-  else
-    assert(false)
-  end
+    if atyp.name == Array.name
+        atyp.parameters[1]
+    elseif atyp.name == BitArray.name
+        Bool
+    else
+        assert(false)
+    end
 end
 
 @doc """
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: SymbolNode, state :: expr_state)
-  return getArrayElemType(array.typ)
+    return getArrayElemType(array.typ)
 end
 
 @doc """
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: GenSym, state :: expr_state)
-  atyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
-  return getArrayElemType(atyp)
+    atyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+    return getArrayElemType(atyp)
 end
 
 @doc """
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: SymbolNode, state :: expr_state)
-  assert(array.typ.name == Array.name)
-  array.typ.parameters[2]
+    assert(array.typ.name == Array.name)
+    array.typ.parameters[2]
 end
 
 @doc """
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: GenSym, state :: expr_state)
-  gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
-  assert(gstyp.name == Array.name)
-  gstyp.parameters[2]
+    gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+    assert(gstyp.name == Array.name)
+    gstyp.parameters[2]
 end
 
 @doc """
 Returns a :call expression to add_int for two operands.
 """
 function mk_add_int_expr(op1, op2)
-  return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
+    return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
 end
 
 @doc """
 Returns a :call expression to sub_int for two operands.
 """
 function mk_sub_int_expr(op1, op2)
-  return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
+    return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
 end
 
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1})
-  dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
-  xtyp = typeof(index_vars[dim])
+    dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
+    xtyp = typeof(index_vars[dim])
 
-  if xtyp == Int64 || xtyp == GenSym
-    base = index_vars[dim]
-  else
-    base = SymbolNode(index_vars[dim],Int64)
-  end
+    if xtyp == Int64 || xtyp == GenSym
+        base = index_vars[dim]
+    else
+        base = SymbolNode(index_vars[dim],Int64)
+    end
 
-  dprintln(3,"pre-base = ", base)
+    dprintln(3,"pre-base = ", base)
 
-  if dim <= length(range_var)
-    base = mk_add_int_expr(base, range_var[dim])
-  end
+    if dim <= length(range_var)
+        base = mk_add_int_expr(base, range_var[dim])
+    end
 
-  dprintln(3,"post-base = ", base)
+    dprintln(3,"post-base = ", base)
 
-  return base
+    return base
 end
 
 @doc """
@@ -624,27 +624,27 @@ Return an expression that corresponds to getting the index_var index from the ar
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
 function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
-  dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
-  dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-  elem_typ = getArrayElemType(array_name, state)
-  dprintln(3,"mk_arrayref1 element type = ", elem_typ)
-  dprintln(3,"mk_arrayref1 range_var = ", range_var)
+    dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
+    dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
+    elem_typ = getArrayElemType(array_name, state)
+    dprintln(3,"mk_arrayref1 element type = ", elem_typ)
+    dprintln(3,"mk_arrayref1 range_var = ", range_var)
 
-  if inbounds
-    fname = :unsafe_arrayref
-  else
-    fname = :arrayref
-  end
+    if inbounds
+        fname = :unsafe_arrayref
+    else
+        fname = :arrayref
+    end
 
-  indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
-  dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
+    indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
+    dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
 
-  TypedExpr(
-       elem_typ,
-       :call,
-       TopNode(fname),
-       :($array_name),
-       indsyms...)
+    TypedExpr(
+    elem_typ,
+    :call,
+    TopNode(fname),
+    :($array_name),
+    indsyms...)
 end
 
 @doc """
@@ -652,43 +652,43 @@ Add a local variable to the current function's lambdaInfo.
 Returns a symbol node of the new variable.
 """
 function createStateVar(state, name, typ, access)
-  new_temp_sym = symbol(name)
-  CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
-  return SymbolNode(new_temp_sym, typ)
+    new_temp_sym = symbol(name)
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
+    return SymbolNode(new_temp_sym, typ)
 end
 
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
 function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state)
-  key = toSymGen(array_sn) 
-  temp_type = getArrayElemType(array_sn, state)
-  return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    key = toSymGen(array_sn) 
+    temp_type = getArrayElemType(array_sn, state)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 @doc """
 Create a variable to hold the offset of a range offset from the start of the array.
 """
 function createTempForRangeOffset(ranges :: Array{RangeData,1}, unique_id :: Int64, state :: expr_state)
-  range_array = SymbolNode[]
+    range_array = SymbolNode[]
 
-  for i = 1:length(ranges)
-    range = ranges[i]
+    for i = 1:length(ranges)
+        range = ranges[i]
 
-    push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
-  end
+        push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
+    end
 
-  return range_array
+    return range_array
 end
 
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
 function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymbolNode,1}, unique_id :: Int64, state :: expr_state)
-  key = toSymGen(array_sn) 
-  temp_type = getArrayElemType(array_sn, state)
-  # Is it okay to just use range[1] here instead of all the ranges?
-  return createStateVar(state, string("parallel_ir_temp_", key, "_", range[1].name, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    key = toSymGen(array_sn) 
+    temp_type = getArrayElemType(array_sn, state)
+    # Is it okay to just use range[1] here instead of all the ranges?
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", range[1].name, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 @doc """
@@ -696,8 +696,8 @@ Takes an existing variable whose name is in "var_name" and adds the descriptor f
 variable to be parfor loop private and eventually go in an OMP private clause.
 """
 function makePrivateParfor(var_name :: Symbol, state)
-  res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.lambdaInfo)
-  assert(res)
+    res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    assert(res)
 end
 
 @doc """
@@ -705,25 +705,25 @@ Return a new AST node that corresponds to setting the index_var index from the a
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
 function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
-  dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
-  dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-  elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
-  dprintln(3,"mk_arrayset1 element type = ", elem_typ)
-  dprintln(3,"mk_arrayset1 range_var = ", range_var)
+    dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
+    dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
+    elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
+    dprintln(3,"mk_arrayset1 element type = ", elem_typ)
+    dprintln(3,"mk_arrayset1 range_var = ", range_var)
 
-  # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
-  if inbounds
-    fname = :unsafe_arrayset
-  else
-    fname = :arrayset
-  end
+    # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
+    if inbounds
+        fname = :unsafe_arrayset
+    else
+        fname = :arrayset
+    end
 
-  # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
-  # a SymbolNode containing the index expression type "Int".
-  indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
-  dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
+    # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
+    # a SymbolNode containing the index expression type "Int".
+    indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
+    dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
 
-  TypedExpr(
+    TypedExpr(
        elem_typ,
        :call,
        TopNode(fname),
@@ -737,29 +737,29 @@ Returns true if all array references use singular index variables and nothing mo
 for example, addition or subtraction by a constant.
 """
 function simpleIndex(dict)
-  # Prepare to iterate over all the keys in the dictionary.
-  kv = collect(keys(dict))
-  # For each key in the dictionary.
-  for k in kv
-    # Get the corresponding array of seen indexing expressions.
-    array_ae = dict[k]
-    # For each indexing expression.
-    for i = 1:length(array_ae)
-      ae = array_ae[i]
-      dprintln(3,"typeof(ae) = ", typeof(ae), " ae = ", ae)
-      for j = 1:length(ae)
-        # If the indexing expression isn't simple then return false.
-        if (typeof(ae[j]) != SymbolNode &&
-           (typeof(ae[j]) != Expr ||
-            ae[j].head != :(::)   ||
-            typeof(ae[j].args[1]) != Symbol))
-          return false
+    # Prepare to iterate over all the keys in the dictionary.
+    kv = collect(keys(dict))
+    # For each key in the dictionary.
+    for k in kv
+        # Get the corresponding array of seen indexing expressions.
+        array_ae = dict[k]
+        # For each indexing expression.
+        for i = 1:length(array_ae)
+            ae = array_ae[i]
+            dprintln(3,"typeof(ae) = ", typeof(ae), " ae = ", ae)
+            for j = 1:length(ae)
+                # If the indexing expression isn't simple then return false.
+                if (typeof(ae[j]) != SymbolNode &&
+                    (typeof(ae[j]) != Expr ||
+                    ae[j].head != :(::)   ||
+                    typeof(ae[j].args[1]) != Symbol))
+                    return false
+                end
+            end
         end
-      end
     end
-  end
-  # All indexing expressions must have been fine so return true.
-  return true
+    # All indexing expressions must have been fine so return true.
+    return true
 end
 
 @doc """
@@ -767,77 +767,77 @@ In various places we need a SymGen type which is the union of Symbol and GenSym.
 This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.
 """
 function toSymGen(x :: Symbol)
-  return x
+    return x
 end
 
 function toSymGen(x :: SymbolNode)
-  return x.name
+    return x.name
 end
 
 function toSymGen(x :: GenSym)
-  return x
+    return x
 end
 
 function toSymGen(x)
-  xtyp = typeof(x)
-  throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
+    xtyp = typeof(x)
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
 end
 
 @doc """
 Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
 """
 function toSymNodeGen(x :: Symbol, typ)
-  return SymbolNode(x, typ)
+    return SymbolNode(x, typ)
 end
 
 function toSymNodeGen(x :: SymbolNode, typ)
-  return x
+    return x
 end
 
 function toSymNodeGen(x :: GenSym, typ)
-  return x
+    return x
 end
 
 function toSymNodeGen(x, typ)
-  xtyp = typeof(x)
-  throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
+    xtyp = typeof(x)
+    throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
 end
 
 @doc """
 Returns the next usable label for the current function.
 """
 function next_label(state :: expr_state)
-  state.max_label = state.max_label + 1
-  return state.max_label
+    state.max_label = state.max_label + 1
+    return state.max_label
 end
 
 @doc """
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
 function addUnknownArray(x :: SymGen, state :: expr_state)
-  a = collect(values(state.array_length_correlation))
-  m = length(a) == 0 ? 0 : maximum(a)
-  state.array_length_correlation[x] = m + 1
+    a = collect(values(state.array_length_correlation))
+    m = length(a) == 0 ? 0 : maximum(a)
+    state.array_length_correlation[x] = m + 1
 end
 
 @doc """
 If we somehow determine that two sets of correlations are actually the same length then merge one into the other.
 """
 function merge_correlations(state, unchanging, eliminate)
-  # For each array in the dictionary.
-  for i in state.array_length_correlation
-    # If it is in the "eliminate" class...
-    if i[2] == eliminate
-      # ...move it to the "unchanging" class.
-      state.array_length_correlation[i[1]] = unchanging
+    # For each array in the dictionary.
+    for i in state.array_length_correlation
+        # If it is in the "eliminate" class...
+        if i[2] == eliminate
+            # ...move it to the "unchanging" class.
+            state.array_length_correlation[i[1]] = unchanging
+        end
     end
-  end
-  for i in state.symbol_array_correlation
-    if i[2] == eliminate
-      state.symbol_array_correlation[i[1]] = unchanging
+    for i in state.symbol_array_correlation
+        if i[2] == eliminate
+            state.symbol_array_correlation[i[1]] = unchanging
+        end
     end
-  end
-  nothing
+    nothing
 end
 
 @doc """
@@ -845,52 +845,52 @@ If we somehow determine that two arrays must be the same length then
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
 function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: expr_state)
-  dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
-  old_corr = getOrAddArrayCorrelation(old_sym, state)
-  new_corr = getOrAddArrayCorrelation(new_sym, state)
-  merge_correlations(state, old_corr, new_corr)
-  dprintln(3, "add_merge_correlations post ", state.array_length_correlation)
+    dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
+    old_corr = getOrAddArrayCorrelation(old_sym, state)
+    new_corr = getOrAddArrayCorrelation(new_sym, state)
+    merge_correlations(state, old_corr, new_corr)
+    dprintln(3, "add_merge_correlations post ", state.array_length_correlation)
 end
 
 @doc """
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
 function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
-  if !haskey(state.array_length_correlation, x)
-    dprintln(3,"Correlation for array not found = ", x)
-    addUnknownArray(x, state)
-  end
-  state.array_length_correlation[x]
+    if !haskey(state.array_length_correlation, x)
+        dprintln(3,"Correlation for array not found = ", x)
+        addUnknownArray(x, state)
+    end
+    state.array_length_correlation[x]
 end
 
 @doc """
 A new array is being created with an explicit size specification in dims.
 """
 function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{SymGen,1})
-  if !haskey(state.symbol_array_correlation, dims)
-    # We haven't yet seen this combination of dims used to create an array.
-    dprintln(3,"Correlation for symbol set not found, dims = ", dims)
-    if haskey(state.array_length_correlation, array)
-      return state.symbol_array_correlation[dims] = state.array_length_correlation[array]
+    if !haskey(state.symbol_array_correlation, dims)
+        # We haven't yet seen this combination of dims used to create an array.
+        dprintln(3,"Correlation for symbol set not found, dims = ", dims)
+        if haskey(state.array_length_correlation, array)
+            return state.symbol_array_correlation[dims] = state.array_length_correlation[array]
+        else
+            # Create a new array correlation number for this array and associate that number with the dim sizes.
+            return state.symbol_array_correlation[dims] = addUnknownArray(array, state)
+        end
     else
-      # Create a new array correlation number for this array and associate that number with the dim sizes.
-      return state.symbol_array_correlation[dims] = addUnknownArray(array, state)
+        dprintln(3,"Correlation for symbol set found, dims = ", dims)
+        # We have previously seen this combination of dim sizes used to create an array so give the new
+        # array the same array length correlation number as the previous one.
+        return state.array_length_correlation[array] = state.symbol_array_correlation[dims]
     end
-  else
-    dprintln(3,"Correlation for symbol set found, dims = ", dims)
-    # We have previously seen this combination of dim sizes used to create an array so give the new
-    # array the same array length correlation number as the previous one.
-    return state.array_length_correlation[array] = state.symbol_array_correlation[dims]
-  end
 end
 
 @doc """
 If we need to generate a name and make sure it is unique then include an monotonically increasing number.
 """
 function get_unique_num()
-  ret = unique_num
-  global unique_num = unique_num + 1
-  ret
+    ret = unique_num
+    global unique_num = unique_num + 1
+    ret
 end
 
 # ===============================================================================================================================
@@ -899,189 +899,189 @@ end
 The main routine that converts a reduce AST node to a parfor AST node.
 """
 function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
-  # Make sure we get what we expect from domain IR.
-  # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
-  assert(length(input_args) == 3)
+    # Make sure we get what we expect from domain IR.
+    # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
+    assert(length(input_args) == 3)
 
-  zero_val = input_args[1]      # The initial value of the reduction variable.
-  input_array = input_args[2]   # The array expression to reduce.
-  input_array_ranges = nothing
-  if isa(input_array, Expr) && is(input_array.head, :select)
-    dprintln(3,"mk_parfor_args_from_reduce. head is :select")
-    input_array_ranges = input_array.args[2] # range object
-    input_array = input_array.args[1]
-    assert(isa(input_array_ranges, Expr)) # TODO: may need to handle SymbolNodes in the future
-    if input_array_ranges.head == :ranges
-      dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is :ranges")
-      input_array_ranges = input_array_ranges.args
-    else
-      dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is NOT :ranges")
-      input_array_ranges = Any[ input_array_ranges ]
+    zero_val = input_args[1]      # The initial value of the reduction variable.
+    input_array = input_args[2]   # The array expression to reduce.
+    input_array_ranges = nothing
+    if isa(input_array, Expr) && is(input_array.head, :select)
+        dprintln(3,"mk_parfor_args_from_reduce. head is :select")
+        input_array_ranges = input_array.args[2] # range object
+        input_array = input_array.args[1]
+        assert(isa(input_array_ranges, Expr)) # TODO: may need to handle SymbolNodes in the future
+        if input_array_ranges.head == :ranges
+            dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is :ranges")
+            input_array_ranges = input_array_ranges.args
+        else
+            dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is NOT :ranges")
+            input_array_ranges = Any[ input_array_ranges ]
+        end
     end
-  end
-  dl = input_args[3]            # Get the DomainLambda from the AST node's args.
-  assert(isa(dl, DomainLambda))
+    dl = input_args[3]            # Get the DomainLambda from the AST node's args.
+    assert(isa(dl, DomainLambda))
 
-  dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val))
-  dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
-  dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
+    dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val))
+    dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
+    dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
 
-  # Verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == 2)
+    # Verify the number of input arrays matches the number of input types in dl
+    assert(length(dl.inputs) == 2)
 
-  # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-  unique_node_id = get_unique_num()
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
 
-  # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
-  num_dim_inputs = getArrayNumDims(input_array, state)
-  loopNests = Array(PIRLoopNest, num_dim_inputs)
-  if is(input_array_ranges, nothing)
-    input_array_ranges = Any[ Expr(:range, 1, 1, mk_arraylen_expr(input_array,i)) for i = 1:num_dim_inputs ]
-  end
-  assert(length(input_array_ranges) == num_dim_inputs)
-  dprintln(3,"input_array_ranges = ", input_array_ranges)
-   
-  # Create variables to use for the loop indices.
-  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-  
-  # Make sure each input array is a SymbolNode
-  # Also, create indexed versions of those symbols for the loop body
-  argtyp = typeof(input_array)
-  dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
-  assert(argtyp <: SymNodeGen)
-
-  reduce_body = Any[]
-  atm = createTempForArray(input_array, 1, state)
-  push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true, state), state))
-
-  # Create an expression to access one element of this input array with index symbols parfor_index_syms
-  indexed_array = atm
-  #indexed_array = mk_arrayref1(input_array, parfor_index_syms, true, state)
-
-  # Create empty arrays to hold pre and post statements.
-  pre_statements  = Any[]
-  post_statements = Any[]
-  save_array_lens  = AbstractString[]
-  input_array_rangeconds = Array(Any, num_dim_inputs)
-
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_start = string("parallel_ir_save_array_start_", i, "_", unique_node_id)
-    save_array_step  = string("parallel_ir_save_array_step_", i, "_", unique_node_id)
-    save_array_len   = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    if isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :range)
-      array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), input_array_ranges[i].args[1], state)
-      array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), input_array_ranges[i].args[2], state)
-      array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), input_array_ranges[i].args[3], state)
-      input_array_rangeconds[i] = nothing
-    elseif isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :tomask)
-      assert(length(input_array_ranges[i].args) == 1)
-      assert(isa(input_array_ranges[i].args[1], SymbolNode) && DomainIR.isbitarray(input_array_ranges[i].args[1].typ))
-      mask_array = input_array_ranges[i].args[1]
-      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-      end
-      # TODO: generate dimension check on mask_array
-      array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
-      array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
-      array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_array,i), state)
-      input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
-    end 
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements,array1_start)
-    push!(pre_statements,array1_step)
-    push!(pre_statements,array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_start, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-
-    loopNests[num_dim_inputs - i + 1] =
-      PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                  SymbolNode(symbol(save_array_start), Int),
-                  SymbolNode(symbol(save_array_len),Int),
-                  SymbolNode(symbol(save_array_step), Int))
-  end
-
-  assert(length(dl.outputs) == 1)
-  out_type = dl.outputs[1]
-  dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
-  reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
-  reduction_output_snode = SymbolNode(symbol(reduction_output_name), out_type)
-  dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-  CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.lambdaInfo)
-  push!(post_statements, reduction_output_snode)
-
-  # Call Domain IR to generate most of the body of the function (except for saving the output)
-  dl_inputs = [reduction_output_snode, atm]
-  (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
-  state.max_label = max_label
-  assert(isa(temp_body,Array))
-  assert(length(temp_body) == 1)
-  temp_body = temp_body[1]
-  assert(typeof(temp_body) == Expr)
-  assert(temp_body.head == :tuple)
-  assert(length(temp_body.args) == 1)
-  temp_body = temp_body.args[1]
-
-  #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-  out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
-
-  fallthroughLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:num_dim_inputs
-    if input_array_rangeconds[i] != nothing
-      push!(condExprs, Expr(:gotoifnot, input_array_rangeconds[i], fallthroughLabel))
+    # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
+    num_dim_inputs = getArrayNumDims(input_array, state)
+    loopNests = Array(PIRLoopNest, num_dim_inputs)
+    if is(input_array_ranges, nothing)
+        input_array_ranges = Any[ Expr(:range, 1, 1, mk_arraylen_expr(input_array,i)) for i = 1:num_dim_inputs ]
     end
-  end
-  if length(condExprs) > 0
-    out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
-  end
-  #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
-  dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
+    assert(length(input_array_ranges) == num_dim_inputs)
+    dprintln(3,"input_array_ranges = ", input_array_ranges)
 
-  # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
- 
-  # Make sure that for reduce that the array indices are all of the simple variety
-  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-  dprintln(2,rws)
+    # Create variables to use for the loop indices.
+    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
-  reduce_func = nothing
+    # Make sure each input array is a SymbolNode
+    # Also, create indexed versions of those symbols for the loop body
+    argtyp = typeof(input_array)
+    dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
+    assert(argtyp <: SymNodeGen)
 
-  dprintln(3,"type of reduce_body = ", typeof(temp_body))
-  if typeof(temp_body) == Expr
-    dprintln(3,"head of reduce body = ", temp_body.head)
+    reduce_body = Any[]
+    atm = createTempForArray(input_array, 1, state)
+    push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true, state), state))
 
-    dprintln(3,"length(reduce_body.args) = ", length(temp_body.args))
-    for k = 1:length(temp_body.args)
-      dprintln(3,"reduce_body.args[", k, "] = ", temp_body.args[k], " type = ", typeof(temp_body.args[k]))
+    # Create an expression to access one element of this input array with index symbols parfor_index_syms
+    indexed_array = atm
+    #indexed_array = mk_arrayref1(input_array, parfor_index_syms, true, state)
+
+    # Create empty arrays to hold pre and post statements.
+    pre_statements  = Any[]
+    post_statements = Any[]
+    save_array_lens  = AbstractString[]
+    input_array_rangeconds = Array(Any, num_dim_inputs)
+
+    # Insert a statement to assign the length of the input arrays to a var
+    for i = 1:num_dim_inputs
+        save_array_start = string("parallel_ir_save_array_start_", i, "_", unique_node_id)
+        save_array_step  = string("parallel_ir_save_array_step_", i, "_", unique_node_id)
+        save_array_len   = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+        if isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :range)
+            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), input_array_ranges[i].args[1], state)
+            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), input_array_ranges[i].args[2], state)
+            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), input_array_ranges[i].args[3], state)
+            input_array_rangeconds[i] = nothing
+        elseif isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :tomask)
+            assert(length(input_array_ranges[i].args) == 1)
+            assert(isa(input_array_ranges[i].args[1], SymbolNode) && DomainIR.isbitarray(input_array_ranges[i].args[1].typ))
+            mask_array = input_array_ranges[i].args[1]
+            if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+                mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+            end
+            # TODO: generate dimension check on mask_array
+            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
+            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
+            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_array,i), state)
+            input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
+        end 
+        # add that assignment to the set of statements to execute before the parfor
+        push!(pre_statements,array1_start)
+        push!(pre_statements,array1_step)
+        push!(pre_statements,array1_len)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_start, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        push!(save_array_lens, save_array_len)
+
+        loopNests[num_dim_inputs - i + 1] =
+        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
+        SymbolNode(symbol(save_array_start), Int),
+        SymbolNode(symbol(save_array_len),Int),
+        SymbolNode(symbol(save_array_step), Int))
     end
-    if temp_body.head == :call
-      dprintln(3,"Found a call")
-      if length(temp_body.args) != 3
-        throw(string("Non-binary reduction function used."))
-      end
-      op = temp_body.args[1]
 
-      if op == TopNode(:add_float) || op == TopNode(:add_int)
-        reduce_func = :+
-      elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
-        reduce_func = :*
-      end
+    assert(length(dl.outputs) == 1)
+    out_type = dl.outputs[1]
+    dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
+    reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
+    reduction_output_snode = SymbolNode(symbol(reduction_output_name), out_type)
+    dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
+    CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.lambdaInfo)
+    push!(post_statements, reduction_output_snode)
+
+    # Call Domain IR to generate most of the body of the function (except for saving the output)
+    dl_inputs = [reduction_output_snode, atm]
+    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
+    state.max_label = max_label
+    assert(isa(temp_body,Array))
+    assert(length(temp_body) == 1)
+    temp_body = temp_body[1]
+    assert(typeof(temp_body) == Expr)
+    assert(temp_body.head == :tuple)
+    assert(length(temp_body.args) == 1)
+    temp_body = temp_body.args[1]
+
+    #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
+    out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
+
+    fallthroughLabel = next_label(state)
+    condExprs = Any[]
+    for i = 1:num_dim_inputs
+        if input_array_rangeconds[i] != nothing
+            push!(condExprs, Expr(:gotoifnot, input_array_rangeconds[i], fallthroughLabel))
+        end
     end
-  end
+    if length(condExprs) > 0
+        out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
+    end
+    #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
+    dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
 
-  if reduce_func == nothing
-    throw(string("Parallel IR only supports + and * reductions right now."))
-  end
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
 
-#  makeLhsPrivate(out_body, state)
+    # Make sure that for reduce that the array indices are all of the simple variety
+    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    dprintln(2,rws)
 
-  # The parfor node that will go into the AST.
-  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
+    reduce_func = nothing
+
+    dprintln(3,"type of reduce_body = ", typeof(temp_body))
+    if typeof(temp_body) == Expr
+        dprintln(3,"head of reduce body = ", temp_body.head)
+
+        dprintln(3,"length(reduce_body.args) = ", length(temp_body.args))
+        for k = 1:length(temp_body.args)
+            dprintln(3,"reduce_body.args[", k, "] = ", temp_body.args[k], " type = ", typeof(temp_body.args[k]))
+        end
+        if temp_body.head == :call
+            dprintln(3,"Found a call")
+            if length(temp_body.args) != 3
+                throw(string("Non-binary reduction function used."))
+            end
+            op = temp_body.args[1]
+
+            if op == TopNode(:add_float) || op == TopNode(:add_int)
+                reduce_func = :+
+            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
+                reduce_func = :*
+            end
+        end
+    end
+
+    if reduce_func == nothing
+        throw(string("Parallel IR only supports + and * reductions right now."))
+    end
+
+    #  makeLhsPrivate(out_body, state)
+
+    # The parfor node that will go into the AST.
+    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
       out_body,
       pre_statements,
       loopNests,
@@ -1093,9 +1093,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
       unique_node_id,
       simply_indexed)
 
-  dprintln(3,"Lowered parallel IR = ", new_parfor)
+      dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  [new_parfor]
+      [new_parfor]
 end
 
 
@@ -1105,91 +1105,91 @@ end
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
 function rangeToRangeData(range :: Expr)
-  @assert (range.head == :range) ":range expression expected"
+    @assert (range.head == :range) ":range expression expected"
 
-  return RangeData(range.args[1], range.args[2], range.args[3])
+    return RangeData(range.args[1], range.args[2], range.args[3])
 end
 
 @doc """
 Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.
 """
 function selectToRangeData(select :: Expr)
-  assert(select.head == :select)
+    assert(select.head == :select)
 
-  input_array_ranges = select.args[2] # range object
+    input_array_ranges = select.args[2] # range object
 
-  range_array = RangeData[]
+    range_array = RangeData[]
 
-  if input_array_ranges.head == :ranges
-    for i = 1:length(input_array_ranges.args)
-      push!(range_array, rangeToRangeData(input_array_ranges.args[i]))
+    if input_array_ranges.head == :ranges
+        for i = 1:length(input_array_ranges.args)
+            push!(range_array, rangeToRangeData(input_array_ranges.args[i]))
+        end
+    else
+        push!(range_array, rangeToRangeData(input_array_ranges))
     end
-  else
-    push!(range_array, rangeToRangeData(input_array_ranges))
-  end
- 
-  return range_array
+
+    return range_array
 end
 
 function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, state)
     thisInfo = InputInfo()
 
     if isa(input_array, Expr) && is(input_array.head, :select)
-      thisInfo.array = input_array.args[1]
-      argtyp = typeof(thisInfo.array)
-      dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-      @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
-      select_kind = input_array.args[2].head
-      @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
-      if select_kind == :tomask
-        thisInfo.select_bitarrays = input_array.args[2].args
+        thisInfo.array = input_array.args[1]
+        argtyp = typeof(thisInfo.array)
+        dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+        @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
+        select_kind = input_array.args[2].head
+        @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+        if select_kind == :tomask
+            thisInfo.select_bitarrays = input_array.args[2].args
+            thisInfo.range = RangeData[]
+            thisInfo.range_offset = SymbolNode[]
+            thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+            thisInfo.pre_offsets = Expr[]
+        else
+            thisInfo.range = selectToRangeData(input_array)
+            thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
+            thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
+            thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+        end
+    else
+        thisInfo.array = input_array
         thisInfo.range = RangeData[]
         thisInfo.range_offset = SymbolNode[]
         thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
         thisInfo.pre_offsets = Expr[]
-      else
-        thisInfo.range = selectToRangeData(input_array)
-        thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-        thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-        thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
-      end
-    else
-      thisInfo.array = input_array
-      thisInfo.range = RangeData[]
-      thisInfo.range_offset = SymbolNode[]
-      thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-      thisInfo.pre_offsets = Expr[]
     end
     return thisInfo
 end
 
 function gen_bitarray_mask(thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
-  # we only support bitarray selection for 1D arrays
-  if length(thisInfo.select_bitarrays)==1
-    mask_array = thisInfo.select_bitarrays[1] 
-    # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-    #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-    #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-    #      end
-    thisInfo.rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-  end
+    # we only support bitarray selection for 1D arrays
+    if length(thisInfo.select_bitarrays)==1
+        mask_array = thisInfo.select_bitarrays[1] 
+        # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+        #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+        #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+        #      end
+        thisInfo.rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
+    end
 end
 
 
 function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-  loopNests = Array(PIRLoopNest, num_dim_inputs)
-  # Insert a statement to assign the length of the input arrays to a var
-  for i = 1:num_dim_inputs
-    save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-    array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-    # add that assignment to the set of statements to execute before the parfor
-    push!(pre_statements,array1_len)
-    CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    push!(save_array_lens, save_array_len)
-    loopNests[num_dim_inputs - i + 1] =
-    PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
-  end
-  return loopNests
+    loopNests = Array(PIRLoopNest, num_dim_inputs)
+    # Insert a statement to assign the length of the input arrays to a var
+    for i = 1:num_dim_inputs
+        save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+        array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
+        # add that assignment to the set of statements to execute before the parfor
+        push!(pre_statements,array1_len)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        push!(save_array_lens, save_array_len)
+        loopNests[num_dim_inputs - i + 1] =
+        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
+    end
+    return loopNests
 end
 
 
@@ -1198,155 +1198,155 @@ The main routine that converts a mmap! AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_indices, domain_oprs, state)
 
-  # First arg is an array of input arrays to the mmap!
-  len_input_arrays = length(input_arrays)
-  dprintln(1,"Number of input arrays: ", len_input_arrays)
-  dprintln(2,"input arrays: ", input_arrays)
-  @assert len_input_arrays>0 "mmap! should have input arrays"
+    # First arg is an array of input arrays to the mmap!
+    len_input_arrays = length(input_arrays)
+    dprintln(1,"Number of input arrays: ", len_input_arrays)
+    dprintln(2,"input arrays: ", input_arrays)
+    @assert len_input_arrays>0 "mmap! should have input arrays"
 
-  # handle range selector
-  inputInfo = InputInfo[]
-  for i = 1 : length(input_arrays)
-    push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
-  end
-
-
-  dprintln(3,"dl = ", dl)
-  dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
-
-  # Create an expression to access one element of this input array with index symbols parfor_index_syms
-  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
-
-  # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-  unique_node_id = get_unique_num()
-
-  first_input    = inputInfo[1].array
-  num_dim_inputs = getArrayNumDims(first_input, state)
-  # verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
-
-  # Create variables to use for the loop indices.
-  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-
-  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
-
-  out_body = Any[]
-  # Create empty arrays to hold pre and post statements.
-  pre_statements  = Any[]
-  post_statements = Any[]
-
-  # Make sure each input array is a SymbolNode
-  # Also, create indexed versions of those symbols for the loop body
-  for(i = 1:length(inputInfo))
-    push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-  end
-
-  # not used here?
-  save_array_lens = AbstractString[]
-  # generates loopnests and updates pre_statements
-  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-
-  for i in inputInfo
-    append!(pre_statements, i.pre_offsets)
-  end
-
-  # add local vars to state
-  #for (v, d) in dl.locals
-  #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-  #end
-
-  dprintln(3,"indexed_arrays = ", indexed_arrays)
-  dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
-  dprintln(3,"dl_inputs = ", dl_inputs)
-  # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
-  state.max_label = max_label
-  out_body = [out_body; nested_body...]
-  dprintln(2,"typeof(out_body) = ",typeof(out_body))
-  assert(isa(out_body,Array))
-  oblen = length(out_body)
-  # the last output of genBody is a tuple of the outputs of the mmap!
-  lbexpr::Expr = out_body[oblen]
-  assert(lbexpr.head == :tuple)
-  assert(length(lbexpr.args) == length(dl.outputs))
-
-  dprintln(2,"out_body is of length ",length(out_body))
-  printBody(3,out_body)
-
-  else_body = Any[]
-  elseLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    # handle range selector
+    inputInfo = InputInfo[]
+    for i = 1 : length(input_arrays)
+        push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
     end
-  end
-  out_body = out_body[1:oblen-1]
-  for i = 1:length(dl.outputs)
-    if length(inputInfo[i].range) != 0
-      tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
-    else
-      tfa = createTempForArray(inputInfo[i].array, 2, state)
+
+
+    dprintln(3,"dl = ", dl)
+    dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
+
+    # Create an expression to access one element of this input array with index symbols parfor_index_syms
+    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
+
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
+
+    first_input    = inputInfo[1].array
+    num_dim_inputs = getArrayNumDims(first_input, state)
+    # verify the number of input arrays matches the number of input types in dl
+    assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
+
+    # Create variables to use for the loop indices.
+    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+
+    map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
+
+    out_body = Any[]
+    # Create empty arrays to hold pre and post statements.
+    pre_statements  = Any[]
+    post_statements = Any[]
+
+    # Make sure each input array is a SymbolNode
+    # Also, create indexed versions of those symbols for the loop body
+    for(i = 1:length(inputInfo))
+        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
     end
-    #tfa = createTempForArray(dl.outputs[i], 2, state)
-    #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
-    push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-    push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+
+    # not used here?
+    save_array_lens = AbstractString[]
+    # generates loopnests and updates pre_statements
+    loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+
+    for i in inputInfo
+        append!(pre_statements, i.pre_offsets)
+    end
+
+    # add local vars to state
+    #for (v, d) in dl.locals
+    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+    #end
+
+    dprintln(3,"indexed_arrays = ", indexed_arrays)
+    dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
+    dprintln(3,"dl_inputs = ", dl_inputs)
+    # Call Domain IR to generate most of the body of the function (except for saving the output)
+    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
+    state.max_label = max_label
+    out_body = [out_body; nested_body...]
+    dprintln(2,"typeof(out_body) = ",typeof(out_body))
+    assert(isa(out_body,Array))
+    oblen = length(out_body)
+    # the last output of genBody is a tuple of the outputs of the mmap!
+    lbexpr::Expr = out_body[oblen]
+    assert(lbexpr.head == :tuple)
+    assert(length(lbexpr.args) == length(dl.outputs))
+
+    dprintln(2,"out_body is of length ",length(out_body))
+    printBody(3,out_body)
+
+    else_body = Any[]
+    elseLabel = next_label(state)
+    condExprs = Any[]
+    for i = 1:length(inputInfo)
+        if inputInfo[i].rangeconds.head != :noop
+            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+        end
+    end
+    out_body = out_body[1:oblen-1]
+    for i = 1:length(dl.outputs)
+        if length(inputInfo[i].range) != 0
+            tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
+        else
+            tfa = createTempForArray(inputInfo[i].array, 2, state)
+        end
+        #tfa = createTempForArray(dl.outputs[i], 2, state)
+        #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
+        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
+        push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+        if length(condExprs) > 0
+            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+            push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+        end
+        #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
+        #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
+    end
+
+    # add conditional expressions to body if array elements are selected by bit arrays
+    fallthroughLabel = next_label(state)
     if length(condExprs) > 0
-      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+        out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
     end
-    #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
-    #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
-  end
 
-  # add conditional expressions to body if array elements are selected by bit arrays
-  fallthroughLabel = next_label(state)
-  if length(condExprs) > 0
-  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
-  end
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
 
-  # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    # Make sure that for mmap! that the array indices are all of the simple variety
+    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    dprintln(2,rws)
 
-  # Make sure that for mmap! that the array indices are all of the simple variety
-  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-  dprintln(2,rws)
+    post_statements = create_mmap!_post_statements(input_arrays, dl, state)
 
-  post_statements = create_mmap!_post_statements(input_arrays, dl, state)
+    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
+    out_body,
+    pre_statements,
+    loopNests,
+    PIRReduction[],
+    post_statements,
+    domain_oprs,
+    state.top_level_number,
+    rws,
+    unique_node_id,
+    simply_indexed)
 
-  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-      out_body,
-      pre_statements,
-      loopNests,
-      PIRReduction[],
-      post_statements,
-      domain_oprs,
-      state.top_level_number,
-      rws,
-      unique_node_id,
-      simply_indexed)
+    dprintln(3,"Lowered parallel IR = ", new_parfor)
 
-  dprintln(3,"Lowered parallel IR = ", new_parfor)
-
-  [new_parfor]
+    [new_parfor]
 end
 
 function create_mmap!_post_statements(input_arrays, dl, state)
-  post_statements = Any[]
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  #if(len_input_arrays == 1)
-  if length(dl.outputs) == 1
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements, input_arrays[1])
-  else
-    ret_arrays = input_arrays[1:length(dl.outputs)]
-    ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
-    push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
-  end
-  return post_statements
+    post_statements = Any[]
+    # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+    #if(len_input_arrays == 1)
+    if length(dl.outputs) == 1
+        # If there is only one output then put that output in the post_statements
+        push!(post_statements, input_arrays[1])
+    else
+        ret_arrays = input_arrays[1:length(dl.outputs)]
+        ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+        push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
+    end
+    return post_statements
 end
 
 function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
@@ -1381,51 +1381,51 @@ function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-        out_body,
-        pre_statements,
-        loopNests,
-        PIRReduction[],
-        post_statements,
-        [],
-        state.top_level_number,
-        rws,
-        unique_node_id,
-        simply_indexed)
+    out_body,
+    pre_statements,
+    loopNests,
+    PIRReduction[],
+    post_statements,
+    [],
+    state.top_level_number,
+    rws,
+    unique_node_id,
+    simply_indexed)
     [parfor]
 end
 
 # ===============================================================================================================================
 
 function generatePreOffsetStatements(range_offsets :: Array{SymbolNode,1}, ranges :: Array{RangeData,1})
-  assert(length(range_offsets) == length(ranges))
+    assert(length(range_offsets) == length(ranges))
 
-  ret = Expr[]
+    ret = Expr[]
 
-  for i = 1:length(ranges)
-    range = ranges[i]
-    range_offset = range_offsets[i]
+    for i = 1:length(ranges)
+        range = ranges[i]
+        range_offset = range_offsets[i]
 
-    dprintln(3,"range = ", range)
-    dprintln(3,"range_offset = ", range_offset)
+        dprintln(3,"range = ", range)
+        dprintln(3,"range_offset = ", range_offset)
 
-    range_expr = mk_assignment_expr(range_offset, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
-    push!(ret, range_expr)
-  end
+        range_expr = mk_assignment_expr(range_offset, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
+        push!(ret, range_expr)
+    end
 
-  return ret
+    return ret
 end
 
 
 # Create variables to use for the parfor loop indices.
 function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-  parfor_index_syms = Array(Symbol,num_dim_inputs)
-  for i = 1:num_dim_inputs
-    parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-    parfor_index_sym = symbol(parfor_index_var)
-    CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-    parfor_index_syms[i] = parfor_index_sym
-  end
-  return parfor_index_syms
+    parfor_index_syms = Array(Symbol,num_dim_inputs)
+    for i = 1:num_dim_inputs
+        parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
+        parfor_index_sym = symbol(parfor_index_var)
+        CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
+        parfor_index_syms[i] = parfor_index_sym
+    end
+    return parfor_index_syms
 end
 
 @doc """
@@ -1433,173 +1433,173 @@ The main routine that converts a mmap AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_oprs, state, retarr) 
 
-  len_input_arrays = length(input_arrays)
-  dprintln(2,"Number of input arrays: ", len_input_arrays)
-  dprintln(2,"input arrays: ", input_arrays)
-  @assert len_input_arrays>0 "mmap should have input arrays"
+    len_input_arrays = length(input_arrays)
+    dprintln(2,"Number of input arrays: ", len_input_arrays)
+    dprintln(2,"input arrays: ", input_arrays)
+    @assert len_input_arrays>0 "mmap should have input arrays"
 
-  # handle range selector
-  inputInfo = InputInfo[]
-  for i = 1 : length(input_arrays)
-    push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
-  end
- 
-  # Verify the number of input arrays matches the number of input types in dl
-  assert(length(dl.inputs) == length(inputInfo))
-
-  # Create an expression to access one element of this input array with index symbols parfor_index_syms
-  indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
-
-  # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-  unique_node_id = get_unique_num()
-
-  first_input    = inputInfo[1].array
-  num_dim_inputs = getArrayNumDims(first_input, state)
-  loopNests      = Array(PIRLoopNest, num_dim_inputs)
-
-  # Create variables to use for the loop indices.
-  parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-
-  map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
-
-  out_body = Any[]
-  # Create empty arrays to hold pre and post statements.
-  pre_statements  = Any[]
-  post_statements = Any[]
-  # To hold the names of newly created output arrays.
-  new_array_symbols = Symbol[]
-  save_array_lens   = AbstractString[]
-
-  # Make sure each input array is a SymbolNode.
-  # Also, create indexed versions of those symbols for the loop body.
-  for(i = 1:length(inputInfo))
-    push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-  end
-
-  # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
-  # TODO - extract the lower bound of the range into a variable
-
-  # generates loopnests and updates pre_statements
-  loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-  
-  for i in inputInfo
-    append!(pre_statements, i.pre_offsets)
-  end
-
-  # add local vars to state
-  #for (v, d) in dl.locals
-  #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-  #end
-  # Call Domain IR to generate most of the body of the function (except for saving the output)
-  (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
-  gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-  nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
-  state.max_label = max_label
-  out_body = [out_body; nested_body...]
-  dprintln(2,"typeof(out_body) = ",typeof(out_body))
-  assert(isa(out_body,Array))
-  oblen = length(out_body)
-  # the last output of genBody is a tuple of the outputs of the mmap
-  lbexpr::Expr = out_body[oblen] 
-  assert(lbexpr.head == :tuple)
-  assert(length(lbexpr.args) == length(dl.outputs))
-
-  dprintln(2,"out_body is of length ",length(out_body), " ", out_body)
-
-  # To hold the sum of the sizes of the individual output array elements
-  output_element_sizes = 0
-
-  out_body = out_body[1:oblen-1]
-  else_body = Any[]
-  elseLabel = next_label(state)
-  condExprs = Any[]
-  for i = 1:length(inputInfo)
-    if inputInfo[i].rangeconds.head != :noop
-      push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+    # handle range selector
+    inputInfo = InputInfo[]
+    for i = 1 : length(input_arrays)
+        push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
-  end
-  # Create each output array
-  number_output_arrays = length(dl.outputs)
-  for(i = 1:number_output_arrays)
-    new_array_name = string("parallel_ir_new_array_name_", unique_node_id, "_", i)
-    dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
-    # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
-    if num_dim_inputs == 1
-      new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1])), state)
-    elseif num_dim_inputs == 2
-      new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2])), state)
-    elseif num_dim_inputs == 3
-      new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2]), symbol(save_array_lens[3])), state)
-    else
-      throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
+
+    # Verify the number of input arrays matches the number of input types in dl
+    assert(length(dl.inputs) == length(inputInfo))
+
+    # Create an expression to access one element of this input array with index symbols parfor_index_syms
+    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
+
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
+
+    first_input    = inputInfo[1].array
+    num_dim_inputs = getArrayNumDims(first_input, state)
+    loopNests      = Array(PIRLoopNest, num_dim_inputs)
+
+    # Create variables to use for the loop indices.
+    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+
+    map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
+
+    out_body = Any[]
+    # Create empty arrays to hold pre and post statements.
+    pre_statements  = Any[]
+    post_statements = Any[]
+    # To hold the names of newly created output arrays.
+    new_array_symbols = Symbol[]
+    save_array_lens   = AbstractString[]
+
+    # Make sure each input array is a SymbolNode.
+    # Also, create indexed versions of those symbols for the loop body.
+    for(i = 1:length(inputInfo))
+        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
     end
-    # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
-    CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-    # add the statement to create the new output array to the set of statements to execute before the parfor
-    push!(pre_statements,new_ass_expr)
-    nans = symbol(new_array_name)
-    push!(new_array_symbols,nans)
-    nans_sn = SymbolNode(nans, Array{dl.outputs[i], num_dim_inputs})
 
-    tfa = createTempForArray(nans_sn, 1, state)
-    push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-    push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
-if length(condExprs) > 0
-      push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-      push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+    # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
+    # TODO - extract the lower bound of the range into a variable
+
+    # generates loopnests and updates pre_statements
+    loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
+
+    for i in inputInfo
+        append!(pre_statements, i.pre_offsets)
     end
-    # keep the sum of the sizes of the individual output array elements
-    output_element_sizes = output_element_sizes + sizeof(dl.outputs)
-  end
-  dprintln(3,"out_body = ", out_body)
 
-  # add conditional expressions to body if array elements are selected by bit arrays
-  fallthroughLabel = next_label(state)
-  if length(condExprs) > 0
-  out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
-  end
+    # add local vars to state
+    #for (v, d) in dl.locals
+    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+    #end
+    # Call Domain IR to generate most of the body of the function (except for saving the output)
+    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
+    state.max_label = max_label
+    out_body = [out_body; nested_body...]
+    dprintln(2,"typeof(out_body) = ",typeof(out_body))
+    assert(isa(out_body,Array))
+    oblen = length(out_body)
+    # the last output of genBody is a tuple of the outputs of the mmap
+    lbexpr::Expr = out_body[oblen] 
+    assert(lbexpr.head == :tuple)
+    assert(length(lbexpr.args) == length(dl.outputs))
 
-  # Compute which scalars and arrays are ever read or written by the body of the parfor
-  rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    dprintln(2,"out_body is of length ",length(out_body), " ", out_body)
 
-  # Make sure that for mmap that the array indices are all of the simple variety
-  simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-  dprintln(2,rws)
+    # To hold the sum of the sizes of the individual output array elements
+    output_element_sizes = 0
 
-  post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
+    out_body = out_body[1:oblen-1]
+    else_body = Any[]
+    elseLabel = next_label(state)
+    condExprs = Any[]
+    for i = 1:length(inputInfo)
+        if inputInfo[i].rangeconds.head != :noop
+            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+        end
+    end
+    # Create each output array
+    number_output_arrays = length(dl.outputs)
+    for(i = 1:number_output_arrays)
+        new_array_name = string("parallel_ir_new_array_name_", unique_node_id, "_", i)
+        dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
+        # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
+        if num_dim_inputs == 1
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1])), state)
+        elseif num_dim_inputs == 2
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2])), state)
+        elseif num_dim_inputs == 3
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2]), symbol(save_array_lens[3])), state)
+        else
+            throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
+        end
+        # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
+        CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        # add the statement to create the new output array to the set of statements to execute before the parfor
+        push!(pre_statements,new_ass_expr)
+        nans = symbol(new_array_name)
+        push!(new_array_symbols,nans)
+        nans_sn = SymbolNode(nans, Array{dl.outputs[i], num_dim_inputs})
 
-  new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-      out_body,
-      pre_statements,
-      loopNests,
-      PIRReduction[],
-      post_statements,
-      domain_oprs,
-      state.top_level_number,
-      rws,
-      unique_node_id,
-      simply_indexed)
+        tfa = createTempForArray(nans_sn, 1, state)
+        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
+        push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
+        if length(condExprs) > 0
+            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
+            push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
+        end
+        # keep the sum of the sizes of the individual output array elements
+        output_element_sizes = output_element_sizes + sizeof(dl.outputs)
+    end
+    dprintln(3,"out_body = ", out_body)
 
-  dprintln(3,"Lowered parallel IR = ", new_parfor)
-  retarr[1] = new_parfor
-  #[new_parfor]
+    # add conditional expressions to body if array elements are selected by bit arrays
+    fallthroughLabel = next_label(state)
+    if length(condExprs) > 0
+        out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
+    end
+
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+
+    # Make sure that for mmap that the array indices are all of the simple variety
+    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    dprintln(2,rws)
+
+    post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
+
+    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
+    out_body,
+    pre_statements,
+    loopNests,
+    PIRReduction[],
+    post_statements,
+    domain_oprs,
+    state.top_level_number,
+    rws,
+    unique_node_id,
+    simply_indexed)
+
+    dprintln(3,"Lowered parallel IR = ", new_parfor)
+    retarr[1] = new_parfor
+    #[new_parfor]
 end
 
 function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
-  post_statements = SymbolNode[]
-  # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-  if(length(dl.outputs)==1)
-    # If there is only one output then put that output in the post_statements
-    push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-  else
-    all_sn = SymbolNode[]
-    assert(length(dl.outputs) == length(new_array_symbols))
-    for i = 1:length(dl.outputs)
-      push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+    post_statements = SymbolNode[]
+    # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
+    if(length(dl.outputs)==1)
+        # If there is only one output then put that output in the post_statements
+        push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
+    else
+        all_sn = SymbolNode[]
+        assert(length(dl.outputs) == length(new_array_symbols))
+        for i = 1:length(dl.outputs)
+            push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+        end
+        push!(post_statements, all_sn)
     end
-    push!(post_statements, all_sn)
-  end
-  return post_statements
+    return post_statements
 end
 
 
@@ -1610,41 +1610,41 @@ The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
 function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-  # If the node is an assignment node or a loop head node.
-  if isAssignmentNode(x) || isLoopheadNode(x)
-    lhs = x.args[1]
-    assert(isa(lhs, SymAllGen))
-    if isa(lhs, GenSym)
-      push!(state, lhs)
-    else
-      sname = getSName(lhs)
-      red_var_start = "parallel_ir_reduction_output_"
-      red_var_len = length(red_var_start)
-      sstr = string(sname)
-      if length(sstr) >= red_var_len
-        if sstr[1:red_var_len] == red_var_start
-          # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-          return CompilerTools.AstWalker.ASTWALK_RECURSE
+    # If the node is an assignment node or a loop head node.
+    if isAssignmentNode(x) || isLoopheadNode(x)
+        lhs = x.args[1]
+        assert(isa(lhs, SymAllGen))
+        if isa(lhs, GenSym)
+            push!(state, lhs)
+        else
+            sname = getSName(lhs)
+            red_var_start = "parallel_ir_reduction_output_"
+            red_var_len = length(red_var_start)
+            sstr = string(sname)
+            if length(sstr) >= red_var_len
+                if sstr[1:red_var_len] == red_var_start
+                    # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
+                    return CompilerTools.AstWalker.ASTWALK_RECURSE
+                end
+            end
+            push!(state, sname)
         end
-      end
-      push!(state, sname)
     end
-  end
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
 Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
 """
 function getPrivateSet(body :: Array{Any,1})
-  dprintln(3,"getPrivateSet")
-  printBody(3, body)
-  private_set = Set{SymAllGen}()
-  for i = 1:length(body)
-    AstWalk(body[i], getPrivateSetInner, private_set)
-  end
-  dprintln(3,"private_set = ", private_set)
-  return private_set
+    dprintln(3,"getPrivateSet")
+    printBody(3, body)
+    private_set = Set{SymAllGen}()
+    for i = 1:length(body)
+        AstWalk(body[i], getPrivateSetInner, private_set)
+    end
+    dprintln(3,"private_set = ", private_set)
+    return private_set
 end
 
 # ===============================================================================================================================
@@ -1653,162 +1653,162 @@ end
 Convert a compressed LambdaStaticData format into the uncompressed AST format.
 """
 uncompressed_ast(l::LambdaStaticData) =
-  isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 @doc """
 AstWalk callback to count the number of static times that a symbol is assigne within a method.
 """
 function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_number, is_top_level, read)
-  if isAssignmentNode(x) || isLoopheadNode(x)
-    lhs = x.args[1]
-    # GenSyms don't have descriptors so no need to count their assignment.
-    if !hasSymbol(lhs)
-      return CompilerTools.AstWalker.ASTWALK_RECURSE
+    if isAssignmentNode(x) || isLoopheadNode(x)
+        lhs = x.args[1]
+        # GenSyms don't have descriptors so no need to count their assignment.
+        if !hasSymbol(lhs)
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        sname = getSName(lhs)
+        if !haskey(symbol_assigns, sname)
+            symbol_assigns[sname] = 0
+        end
+        symbol_assigns[sname] = symbol_assigns[sname] + 1
     end
-    sname = getSName(lhs)
-    if !haskey(symbol_assigns, sname)
-      symbol_assigns[sname] = 0
-    end
-    symbol_assigns[sname] = symbol_assigns[sname] + 1
-  end
-  return CompilerTools.AstWalker.ASTWALK_RECURSE 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE 
 end
 
 @doc """
 Just call the AST walker for symbol for parallel IR nodes with no state.
 """
 function pir_live_cb_def(x)
-  pir_live_cb(x, nothing)
+    pir_live_cb(x, nothing)
 end
 
 @doc """
 Process a :lambda Expr.
 """
 function from_lambda(lambda :: Expr, depth, state)
-  # :lambda expression
-  assert(lambda.head == :lambda)
-  dprintln(4,"from_lambda starting")
+    # :lambda expression
+    assert(lambda.head == :lambda)
+    dprintln(4,"from_lambda starting")
 
-  # Save the current lambdaInfo away so we can restore it later.
-  save_lambdaInfo  = state.lambdaInfo
-  state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(lambda)
-  body = CompilerTools.LambdaHandling.getBody(lambda)
+    # Save the current lambdaInfo away so we can restore it later.
+    save_lambdaInfo  = state.lambdaInfo
+    state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(lambda)
+    body = CompilerTools.LambdaHandling.getBody(lambda)
 
-  # Process the lambda's body.
-  dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
-  body = get_one(from_expr(body, depth, state, false))
-  dprintln(4,"from_lambda after from_expr")
-  dprintln(3,"After processing lambda body = ", state.lambdaInfo)
-  dprintln(3,"from_lambda: after body = ")
-  printBody(3, body)
+    # Process the lambda's body.
+    dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
+    body = get_one(from_expr(body, depth, state, false))
+    dprintln(4,"from_lambda after from_expr")
+    dprintln(3,"After processing lambda body = ", state.lambdaInfo)
+    dprintln(3,"from_lambda: after body = ")
+    printBody(3, body)
 
-  # Count the number of static assignments per var.
-  symbol_assigns = Dict{Symbol, Int}()
-  AstWalk(body, count_assignments, symbol_assigns)
+    # Count the number of static assignments per var.
+    symbol_assigns = Dict{Symbol, Int}()
+    AstWalk(body, count_assignments, symbol_assigns)
 
-  # After counting static assignments, update the lambdaInfo for those vars
-  # to say whether the var is assigned once or multiple times.
-  CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
+    # After counting static assignments, update the lambdaInfo for those vars
+    # to say whether the var is assigned once or multiple times.
+    CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
 
-  body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
-  # Write the lambdaInfo back to the lambda AST node.
-  lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
-  dprintln(3,"new lambda = ", lambda)
+    # Write the lambdaInfo back to the lambda AST node.
+    lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    dprintln(3,"new lambda = ", lambda)
 
-  state.lambdaInfo = save_lambdaInfo
+    state.lambdaInfo = save_lambdaInfo
 
-  dprintln(4,"from_lambda ending")
-  return lambda
+    dprintln(4,"from_lambda ending")
+    return lambda
 end
 
 @doc """
 Is a node an assignment expression node.
 """
 function isAssignmentNode(node :: Expr)
-  return node.head == :(=)
+    return node.head == :(=)
 end
 
 function isAssignmentNode(node)
-  return false
+    return false
 end
 
 @doc """
 Is a node a loophead expression node (a form of assignment).
 """
 function isLoopheadNode(node :: Expr)
-  return node.head == :loophead
+    return node.head == :loophead
 end
 
 function isLoopheadNode(node)
-  return false
+    return false
 end
 
 @doc """
 Is this a parfor node not part of an assignment statement.
 """
 function isBareParfor(node :: Expr)
-  return node.head == :parfor
+    return node.head == :parfor
 end
 
 function isBareParfor(node)
-  return false
+    return false
 end
 
 @doc """
 Is a node an assignment expression with a parfor node as the right-hand side.
 """
 function isParforAssignmentNode(node)
-  dprintln(4,"isParforAssignmentNode")
-  dprintln(4,node)
+    dprintln(4,"isParforAssignmentNode")
+    dprintln(4,node)
 
-  if isAssignmentNode(node)
-      assert(length(node.args) >= 2)
-      lhs = node.args[1]
-      dprintln(4,lhs)
-      rhs = node.args[2]
-      dprintln(4,rhs)
+    if isAssignmentNode(node)
+        assert(length(node.args) >= 2)
+        lhs = node.args[1]
+        dprintln(4,lhs)
+        rhs = node.args[2]
+        dprintln(4,rhs)
 
-      if(isa(lhs, SymAllGen))
-          if(typeof(rhs) == Expr && rhs.head == :parfor)
-              dprintln(4,"Found a parfor assignment node.")
-              return true
-          else
-              dprintln(4,"rhs is not a parfor")
-          end
-      else
-          dprintln(4,"lhs is not a SymbolNode")
-      end
-  else
-      dprintln(4,"node is not an Expr")
-  end
+        if(isa(lhs, SymAllGen))
+            if(typeof(rhs) == Expr && rhs.head == :parfor)
+                dprintln(4,"Found a parfor assignment node.")
+                return true
+            else
+                dprintln(4,"rhs is not a parfor")
+            end
+        else
+            dprintln(4,"lhs is not a SymbolNode")
+        end
+    else
+        dprintln(4,"node is not an Expr")
+    end
 
-  return false
+    return false
 end
 
 @doc """
 Get the parfor object from either a bare parfor or one part of an assignment.
 """
 function getParforNode(node)
-  if isBareParfor(node)
-    return node.args[1]
-  else
-    return node.args[2].args[1]
-  end
+    if isBareParfor(node)
+        return node.args[1]
+    else
+        return node.args[2].args[1]
+    end
 end
 
 @doc """
 Get the right-hand side of an assignment expression.
 """
 function getRhsFromAssignment(assignment)
-  assignment.args[2]
+    assignment.args[2]
 end
 
 @doc """
 Get the left-hand side of an assignment expression.
 """
 function getLhsFromAssignment(assignment)
-  assignment.args[1]
+    assignment.args[1]
 end
 
 @doc """
@@ -1816,30 +1816,30 @@ Returns true if the domain operation mapped to this parfor has the property that
 is identical to the dimenions of the inputs.
 """
 function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
-  assert(length(node.original_domain_nodes) > 0)
+    assert(length(node.original_domain_nodes) > 0)
 
-  first_domain_node = node.original_domain_nodes[1]
-  first_type = first_domain_node.operation
-  if first_type == :map   ||
-     first_type == :map!  ||
-     first_type == :mmap  ||
-     first_type == :mmap! ||
-     first_type == :reduce
-    dprintln(3,"iteration count of node equals length of inputs")
-    return true
-  else
-    dprintln(3,"iteration count of node does not equal length of inputs")
-    return false
-  end
+    first_domain_node = node.original_domain_nodes[1]
+    first_type = first_domain_node.operation
+    if first_type == :map   ||
+        first_type == :map!  ||
+        first_type == :mmap  ||
+        first_type == :mmap! ||
+        first_type == :reduce
+        dprintln(3,"iteration count of node equals length of inputs")
+        return true
+    else
+        dprintln(3,"iteration count of node does not equal length of inputs")
+        return false
+    end
 end
 
 @doc """
 Returns a Set with all the arrays read by this parfor.
 """
 function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
-  ret = Set(collect(keys(node.rws.readSet.arrays)))
-  dprintln(3,"Input set = ", ret)
-  ret
+    ret = Set(collect(keys(node.rws.readSet.arrays)))
+    dprintln(3,"Input set = ", ret)
+    ret
 end
 
 @doc """
@@ -1849,450 +1849,450 @@ If the assignment expression is augmented with a FusionSentinel then the real ou
 are the 4+ arguments to the expression.
 """
 function getLhsOutputSet(lhs, assignment)
-  ret = Set()
+    ret = Set()
 
-  typ = typeof(lhs)
+    typ = typeof(lhs)
 
-  # Created by fusion.
-  if isFusionAssignment(assignment)
-    # For each real output.
-    for i = 4:length(assignment.args)
-      assert(typeof(assignment.args[i]) == SymbolNode)
-      dprintln(3,"getLhsOutputSet FusionSentinal assignment with symbol ", assignment.args[i].name)
-      # Add to output set.
-      push!(ret,assignment.args[i].name)
-    end
-  else
-    # LHS could be Symbol or SymbolNode.
-    if typ == SymbolNode
-      push!(ret,lhs.name)
-      dprintln(3,"getLhsOutputSet SymbolNode with symbol ", lhs.name)
-    elseif typ == Symbol
-      push!(ret,lhs)
-      dprintln(3,"getLhsOutputSet symbol ", lhs)
+    # Created by fusion.
+    if isFusionAssignment(assignment)
+        # For each real output.
+        for i = 4:length(assignment.args)
+            assert(typeof(assignment.args[i]) == SymbolNode)
+            dprintln(3,"getLhsOutputSet FusionSentinal assignment with symbol ", assignment.args[i].name)
+            # Add to output set.
+            push!(ret,assignment.args[i].name)
+        end
     else
-      dprintln(0,"Unknown LHS type ", typ, " in getLhsOutputSet.")
+        # LHS could be Symbol or SymbolNode.
+        if typ == SymbolNode
+            push!(ret,lhs.name)
+            dprintln(3,"getLhsOutputSet SymbolNode with symbol ", lhs.name)
+        elseif typ == Symbol
+            push!(ret,lhs)
+            dprintln(3,"getLhsOutputSet symbol ", lhs)
+        else
+            dprintln(0,"Unknown LHS type ", typ, " in getLhsOutputSet.")
+        end
     end
-  end
 
-  ret
+    ret
 end
 
 @doc """
 Return an expression which creates a tuple.
 """
 function mk_tuple_expr(tuple_fields, typ)
-  # Tuples are formed with a call to :tuple.
-  TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
+    # Tuples are formed with a call to :tuple.
+    TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
 end
 
 @doc """
 Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
 """
 function nameToSymbolNode(name :: Symbol, sym_to_type)
-  return SymbolNode(name, sym_to_type[name])
+    return SymbolNode(name, sym_to_type[name])
 end
 
 function nameToSymbolNode(name :: GenSym, sym_to_type)
-  return name
+    return name
 end
 
 function nameToSymbolNode(name, sym_to_type)
-  throw(string("Unknown name type ", typeof(name), " passed to nameToSymbolNode."))
+    throw(string("Unknown name type ", typeof(name), " passed to nameToSymbolNode."))
 end
 
 function getAliasMap(loweredAliasMap, sym)
-  if haskey(loweredAliasMap, sym)
-    return loweredAliasMap[sym]
-  else
-    return sym
-  end
+    if haskey(loweredAliasMap, sym)
+        return loweredAliasMap[sym]
+    else
+        return sym
+    end
 end
 
 function create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
-  dprintln(3,"create_merged_output_from_map, output_map = ", output_map, " sym_to_type = ", sym_to_type)
-  # If there are no outputs then return nothing.
-  if length(output_map) == 0
-    return (nothing, [], true, nothing, [])    
-  end
-
-  # If there is only one output then all we need is the symbol to return.
-  if length(output_map) == 1
-    for i in output_map
-      new_lhs = nameToSymbolNode(i[1], sym_to_type)
-      new_rhs = nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type)
-      return (new_lhs, [new_lhs], true, [new_rhs])
+    dprintln(3,"create_merged_output_from_map, output_map = ", output_map, " sym_to_type = ", sym_to_type)
+    # If there are no outputs then return nothing.
+    if length(output_map) == 0
+        return (nothing, [], true, nothing, [])    
     end
-  end
 
-  lhs_order = Union{SymbolNode,GenSym}[]
-  rhs_order = Union{SymbolNode,GenSym}[]
-  for i in output_map
-    push!(lhs_order, nameToSymbolNode(i[1], sym_to_type))
-    push!(rhs_order, nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type))
-  end
-  num_map = length(lhs_order)
+    # If there is only one output then all we need is the symbol to return.
+    if length(output_map) == 1
+        for i in output_map
+            new_lhs = nameToSymbolNode(i[1], sym_to_type)
+            new_rhs = nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type)
+            return (new_lhs, [new_lhs], true, [new_rhs])
+        end
+    end
 
-  # Multiple outputs.
+    lhs_order = Union{SymbolNode,GenSym}[]
+    rhs_order = Union{SymbolNode,GenSym}[]
+    for i in output_map
+        push!(lhs_order, nameToSymbolNode(i[1], sym_to_type))
+        push!(rhs_order, nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type))
+    end
+    num_map = length(lhs_order)
 
-  # First, form the type of the tuple for those multiple outputs.
-  tt = Expr(:tuple)
-  for i = 1:num_map
-    push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.lambdaInfo))
-  end
-  temp_type = eval(tt)
+    # Multiple outputs.
 
-  ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
+    # First, form the type of the tuple for those multiple outputs.
+    tt = Expr(:tuple)
+    for i = 1:num_map
+        push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.lambdaInfo))
+    end
+    temp_type = eval(tt)
+
+    ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
 end
 
 @doc """
 Pull the information from the inner lambda into the outer lambda.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
-  inner_lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(inner_lambda)
-  dprintln(3,"mergeLambdaIntoOuterState")
-  dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
-  dprintln(3,"inner_lambdaInfo = ", inner_lambdaInfo)
-  CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, inner_lambdaInfo)
+    inner_lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(inner_lambda)
+    dprintln(3,"mergeLambdaIntoOuterState")
+    dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
+    dprintln(3,"inner_lambdaInfo = ", inner_lambdaInfo)
+    CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, inner_lambdaInfo)
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
 function createRetTupleType(rets :: Array{Union{SymbolNode, GenSym},1}, unique_id :: Int64, state :: expr_state)
-  # Form the type of the tuple var.
-  tt = Expr(:tuple)
-  tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), rets)
-  temp_type = eval(tt)
+    # Form the type of the tuple var.
+    tt = Expr(:tuple)
+    tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), rets)
+    temp_type = eval(tt)
 
-  new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
-  new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-  dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
-  CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
+    new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
+    new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
+    dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
 
-  new_temp_snode
+    new_temp_snode
 end
 
 # Takes the output of two parfors and merges them while eliminating outputs from
 # the previous parfor that have their only use in the current parfor.
 function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either_parfor :: Array{Symbol,1}, allocs_to_eliminate, unique_id, state, sym_to_typ)
-  dprintln(3,"create_arrays_assigned_to_by_either_parfor arrays_assigned_to_by_either_parfor = ", arrays_assigned_to_by_either_parfor)
-  dprintln(3,"create_arrays_assigned_to_by_either_parfor allocs_to_eliminate = ", allocs_to_eliminate, " typeof(allocs) = ", typeof(allocs_to_eliminate))
+    dprintln(3,"create_arrays_assigned_to_by_either_parfor arrays_assigned_to_by_either_parfor = ", arrays_assigned_to_by_either_parfor)
+    dprintln(3,"create_arrays_assigned_to_by_either_parfor allocs_to_eliminate = ", allocs_to_eliminate, " typeof(allocs) = ", typeof(allocs_to_eliminate))
 
-  # This is those outputs of the prev parfor which don't die during cur parfor.
-  prev_minus_eliminations = Symbol[]
-  for i = 1:length(arrays_assigned_to_by_either_parfor)
-    if !in(arrays_assigned_to_by_either_parfor[i], allocs_to_eliminate)
-      push!(prev_minus_eliminations, arrays_assigned_to_by_either_parfor[i])
+    # This is those outputs of the prev parfor which don't die during cur parfor.
+    prev_minus_eliminations = Symbol[]
+    for i = 1:length(arrays_assigned_to_by_either_parfor)
+        if !in(arrays_assigned_to_by_either_parfor[i], allocs_to_eliminate)
+            push!(prev_minus_eliminations, arrays_assigned_to_by_either_parfor[i])
+        end
     end
-  end
-  dprintln(3,"create_arrays_assigned_to_by_either_parfor: outputs from previous parfor that continue to live = ", prev_minus_eliminations)
+    dprintln(3,"create_arrays_assigned_to_by_either_parfor: outputs from previous parfor that continue to live = ", prev_minus_eliminations)
 
-  # Create an array of SymbolNode for real values to assign into.
-  all_array = map(x -> SymbolNode(x,sym_to_typ[x]), prev_minus_eliminations)
-  dprintln(3,"create_arrays_assigned_to_by_either_parfor: all_array = ", all_array, " typeof(all_array) = ", typeof(all_array))
+    # Create an array of SymbolNode for real values to assign into.
+    all_array = map(x -> SymbolNode(x,sym_to_typ[x]), prev_minus_eliminations)
+    dprintln(3,"create_arrays_assigned_to_by_either_parfor: all_array = ", all_array, " typeof(all_array) = ", typeof(all_array))
 
-  # If there is only one such value then the left side is just a simple SymbolNode.
-  if length(all_array) == 1
-    return (all_array[1], all_array, true)
-  end
+    # If there is only one such value then the left side is just a simple SymbolNode.
+    if length(all_array) == 1
+        return (all_array[1], all_array, true)
+    end
 
-  # Create a new var to hold multi-output tuple.
-  (createRetTupleType(all_array, unique_id, state), all_array, false)
+    # Create a new var to hold multi-output tuple.
+    (createRetTupleType(all_array, unique_id, state), all_array, false)
 end
 
 function getAllAliases(input :: Set{SymGen}, aliases :: Dict{SymGen, SymGen})
-  dprintln(3,"getAllAliases input = ", input, " aliases = ", aliases)
-  out = Set()
+    dprintln(3,"getAllAliases input = ", input, " aliases = ", aliases)
+    out = Set()
 
-  for i in input
-    dprintln(3, "input = ", i)
-    push!(out, i)
-    cur = i
-    while haskey(aliases, cur)
-      cur = aliases[cur]
-      dprintln(3, "cur = ", cur)
-      push!(out, cur)
+    for i in input
+        dprintln(3, "input = ", i)
+        push!(out, i)
+        cur = i
+        while haskey(aliases, cur)
+            cur = aliases[cur]
+            dprintln(3, "cur = ", cur)
+            push!(out, cur)
+        end
     end
-  end
 
-  dprintln(3,"getAllAliases out = ", out)
-  return out
+    dprintln(3,"getAllAliases out = ", out)
+    return out
 end
 
 function isAllocation(expr :: Expr)
-  return expr.head == :call && 
-         expr.args[1] == TopNode(:ccall) && 
-        (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d))
+    return expr.head == :call && 
+    expr.args[1] == TopNode(:ccall) && 
+    (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d))
 end
 
 function isAllocation(expr)
-  return false
+    return false
 end
 
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
 function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
-  dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
-  dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
-  if x.head == symbol('=')
-    assert(typeof(x.args[1]) == SymbolNode)
-    lhs = x.args[1]
-    rhs = x.args[2]
-    if isAllocation(rhs)
-      dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
-      if !in(lhs.name, all_aliased_outputs)
-        dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
-        return true
-      end
+    dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
+    dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
+    if x.head == symbol('=')
+        assert(typeof(x.args[1]) == SymbolNode)
+        lhs = x.args[1]
+        rhs = x.args[2]
+        if isAllocation(rhs)
+            dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
+            if !in(lhs.name, all_aliased_outputs)
+                dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
+                return true
+            end
+        end
     end
-  end
 
-  return false
+    return false
 end
 
 function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
-  dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
-  return false
+    dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
+    return false
 end
 
 function is_dead_arrayset(x, all_aliased_outputs :: Set)
-  if isArraysetCall(x)
-    array_to_set = x.args[2]
-    if !in(toSymGen(array_to_set), all_aliased_outputs)
-      return true
+    if isArraysetCall(x)
+        array_to_set = x.args[2]
+        if !in(toSymGen(array_to_set), all_aliased_outputs)
+            return true
+        end
     end
-  end
 
-  return false
+    return false
 end
 
 @doc """
 Holds data for modifying arrayset calls.
 """
 type sub_arrayset_data
-  arrays_set_in_cur_body #remove_arrayset
-  output_items_with_aliases
+    arrays_set_in_cur_body #remove_arrayset
+    output_items_with_aliases
 end
 
 @doc """
 Is a node an arrayset node?
 """
 function isArrayset(x)
-  if x == TopNode(:arrayset) || x == TopNode(:unsafe_arrayset)
-    return true
-  end
-  return false
+    if x == TopNode(:arrayset) || x == TopNode(:unsafe_arrayset)
+        return true
+    end
+    return false
 end
 
 @doc """
 Is a node an arrayref node?
 """
 function isArrayref(x)
-  if x == TopNode(:arrayref) || x == TopNode(:unsafe_arrayref)
-    return true
-  end
-  return false
+    if x == TopNode(:arrayref) || x == TopNode(:unsafe_arrayref)
+        return true
+    end
+    return false
 end
 
 @doc """
 Is a node a call to arrayset.
 """
 function isArraysetCall(x :: Expr)
-  return x.head == :call && isArrayset(x.args[1])
+    return x.head == :call && isArrayset(x.args[1])
 end
 
 function isArraysetCall(x)
-  return false
+    return false
 end
 
 @doc """
 Is a node a call to arrayref.
 """
 function isArrayrefCall(x :: Expr)
-  return x.head == :call && isArrayref(x.args[1])
+    return x.head == :call && isArrayref(x.args[1])
 end
 
 function isArrayrefCall(x)
-  return false
+    return false
 end
 
 @doc """
 AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.
 """
 function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
-  use_dbg_level = 3
-  dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
+    use_dbg_level = 3
+    dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
 
-  if typeof(x) == Expr
-    dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
-    if x.head == :call
-      dprintln(use_dbg_level,"sub_arrayset_walk is :call")
-      if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
-        # Here we have a call to arrayset.
-        dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
-        array_name = x.args[2]
-        value      = x.args[3]
-        index      = x.args[4]
-        assert(isa(array_name, SymNodeGen))
-        # If the array being assigned to is in temp_map.
-        if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
-          return nothing
-        elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
-          return nothing
-        else
-          dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
+    if typeof(x) == Expr
+        dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
+        if x.head == :call
+            dprintln(use_dbg_level,"sub_arrayset_walk is :call")
+            if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+                # Here we have a call to arrayset.
+                dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
+                array_name = x.args[2]
+                value      = x.args[3]
+                index      = x.args[4]
+                assert(isa(array_name, SymNodeGen))
+                # If the array being assigned to is in temp_map.
+                if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
+                    return nothing
+                elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
+                    return nothing
+                else
+                    dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
+                end
+            end
         end
-      end
     end
-  end
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
 Modify the body of a parfor.
 temp_map holds a map of array names whose arraysets should be turned into a mapped variable instead of the arrayset. a[i] = b. a=>c. becomes c = b
 map_for_non_eliminated holds arrays for which we need to add a variable to save the value but we can't eiminate the arrayset. a[i] = b. a=>c. becomes c = a[i] = b
-map_drop_arrayset drops the arrayset without replacing with a variable.  This is because a variable was previously added here with a map_for_non_eliminated case.
+    map_drop_arrayset drops the arrayset without replacing with a variable.  This is because a variable was previously added here with a map_for_non_eliminated case.
     a[i] = b. becomes b
 """
 function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases)
-  dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
-  # Walk the AST and call sub_arrayset_walk for each node.
-  return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
+    dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
+    # Walk the AST and call sub_arrayset_walk for each node.
+    return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
 end
 
 @doc """
 Get the variable which holds the length of the first input array to a parfor.
 """
 function getFirstArrayLens(prestatements, num_dims)
-  ret = Any[]
+    ret = Any[]
 
-  # Scan the prestatements and find the assignment nodes.
-  # If it is an assignment from arraysize.
-  for i = 1:length(prestatements)
-    x = prestatements[i]
-    if (typeof(x) == Expr) && (x.head == symbol('='))
-      lhs = x.args[1]
-      rhs = x.args[2]
-      if (typeof(lhs) == SymbolNode) && (typeof(rhs) == Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
-        push!(ret, lhs)
-      end
+    # Scan the prestatements and find the assignment nodes.
+    # If it is an assignment from arraysize.
+    for i = 1:length(prestatements)
+        x = prestatements[i]
+        if (typeof(x) == Expr) && (x.head == symbol('='))
+            lhs = x.args[1]
+            rhs = x.args[2]
+            if (typeof(lhs) == SymbolNode) && (typeof(rhs) == Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
+                push!(ret, lhs)
+            end
+        end
     end
-  end
-  assert(length(ret) == num_dims)
-  ret
+    assert(length(ret) == num_dims)
+    ret
 end
 
 @doc """
 Holds the data for substitute_cur_body AST walk.
 """
 type cur_body_data
-  temp_map  :: Dict{SymGen, SymNodeGen}    # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
-  index_map :: Dict{SymGen, SymGen}        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
-  arrays_set_in_cur_body :: Set{SymGen}    # Used as output.  Collects the arrays set in the current body.
-  replace_array_name_in_arrayset :: Dict{SymGen, SymGen}  # Map from one array to another.  Replace first array with second when used in arrayset context.
-  state :: expr_state
+    temp_map  :: Dict{SymGen, SymNodeGen}    # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
+    index_map :: Dict{SymGen, SymGen}        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
+    arrays_set_in_cur_body :: Set{SymGen}    # Used as output.  Collects the arrays set in the current body.
+    replace_array_name_in_arrayset :: Dict{SymGen, SymGen}  # Map from one array to another.  Replace first array with second when used in arrayset context.
+    state :: expr_state
 end
 
 @doc """
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
 function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-  dbglvl = 3
-  dprintln(dbglvl,"sub_cur_body_walk ", x)
-  xtype = typeof(x)
+    dbglvl = 3
+    dprintln(dbglvl,"sub_cur_body_walk ", x)
+    xtype = typeof(x)
 
-  if xtype == Expr
-    dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
-    if x.head == :call
-      dprintln(dbglvl,"sub_cur_body_walk xtype is call")
-      # Found a call to arrayref.
-      if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
-        dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
-        array_name = x.args[2]
-        index      = x.args[3]
-        assert(isa(array_name, SymNodeGen))
-        lowered_array_name = toSymGen(array_name)
-        assert(isa(lowered_array_name, SymGen))
-        dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
-        # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
-        if haskey(cbd.temp_map, lowered_array_name)
-          dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
-          return cbd.temp_map[lowered_array_name]
+    if xtype == Expr
+        dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
+        if x.head == :call
+            dprintln(dbglvl,"sub_cur_body_walk xtype is call")
+            # Found a call to arrayref.
+            if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
+                dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
+                array_name = x.args[2]
+                index      = x.args[3]
+                assert(isa(array_name, SymNodeGen))
+                lowered_array_name = toSymGen(array_name)
+                assert(isa(lowered_array_name, SymGen))
+                dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
+                # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
+                if haskey(cbd.temp_map, lowered_array_name)
+                    dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
+                    return cbd.temp_map[lowered_array_name]
+                end
+            elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+                array_name = x.args[2]
+                assert(isa(array_name, SymNodeGen))
+                push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
+                if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
+                    new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
+                    x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
+                end
+            end
         end
-      elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
-        array_name = x.args[2]
-        assert(isa(array_name, SymNodeGen))
-        push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
-        if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
-          new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
-          x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
+    elseif xtype == Symbol
+        dprintln(dbglvl,"sub_cur_body_walk xtype is Symbol")
+        if haskey(cbd.index_map, x)
+            # Detected the use of an index variable.  Change it to the first parfor's index variable.
+            dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
+            return cbd.index_map[x]
         end
-      end
+    elseif xtype == SymbolNode
+        dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
+        if haskey(cbd.index_map, x.name)
+            # Detected the use of an index variable.  Change it to the first parfor's index variable.
+            dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
+            x.name = cbd.index_map[x.name]
+            return x
+        end
     end
-  elseif xtype == Symbol
-    dprintln(dbglvl,"sub_cur_body_walk xtype is Symbol")
-    if haskey(cbd.index_map, x)
-      # Detected the use of an index variable.  Change it to the first parfor's index variable.
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
-      return cbd.index_map[x]
-    end
-  elseif xtype == SymbolNode
-    dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
-    if haskey(cbd.index_map, x.name)
-      # Detected the use of an index variable.  Change it to the first parfor's index variable.
-      dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
-      x.name = cbd.index_map[x.name]
-      return x
-    end
-  end
-  dprintln(dbglvl,"sub_cur_body_walk not substituting")
-  
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    dprintln(dbglvl,"sub_cur_body_walk not substituting")
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
 Make changes to the second parfor body in the process of parfor fusion.
 temp_map holds array names for which arrayrefs should be converted to a variable.  a[i].  a=>b. becomes b
-index_map holds maps between index variables.  The second parfor is modified to use the index variable of the first parfor.
-arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
-replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
+    index_map holds maps between index variables.  The second parfor is modified to use the index variable of the first parfor.
+    arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
+    replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
 """
 function substitute_cur_body(x, 
-                             temp_map :: Dict{SymGen, SymNodeGen}, 
-                             index_map :: Dict{SymGen, SymGen}, 
-                             arrays_set_in_cur_body :: Set{SymGen}, 
-                             replace_array_name_in_arrayset :: Dict{SymGen, SymGen},
-                             state :: expr_state)
-  dprintln(3,"substitute_cur_body ", x)
-  dprintln(3,"temp_map = ", temp_map)
-  dprintln(3,"index_map = ", index_map)
-  dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
-  dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
-  # Walk the AST and call sub_cur_body_walk for each node.
-  return DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
+    temp_map :: Dict{SymGen, SymNodeGen}, 
+    index_map :: Dict{SymGen, SymGen}, 
+    arrays_set_in_cur_body :: Set{SymGen}, 
+    replace_array_name_in_arrayset :: Dict{SymGen, SymGen},
+    state :: expr_state)
+    dprintln(3,"substitute_cur_body ", x)
+    dprintln(3,"temp_map = ", temp_map)
+    dprintln(3,"index_map = ", index_map)
+    dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
+    dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
+    # Walk the AST and call sub_cur_body_walk for each node.
+    return DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
 end
 
 @doc """
 Returns true if the input node is an assignment node where the right-hand side is a call to arraysize.
 """
 function is_eliminated_arraylen(x)
-  dprintln(3,"is_eliminated_arraylen ", x)
-  if typeof(x) == Expr
-    dprintln(3,"is_eliminated_arraylen is Expr")
-    if x.head == symbol('=')
-      assert(typeof(x.args[1]) == SymbolNode)
-      rhs = x.args[2]
-      if isa(rhs, Expr) && rhs.head == :call
-        dprintln(3,"is_eliminated_arraylen is :call")
-        if rhs.args[1] == TopNode(:arraysize)
-          dprintln(3,"is_eliminated_arraylen is :arraysize")
-          return true
+    dprintln(3,"is_eliminated_arraylen ", x)
+    if typeof(x) == Expr
+        dprintln(3,"is_eliminated_arraylen is Expr")
+        if x.head == symbol('=')
+            assert(typeof(x.args[1]) == SymbolNode)
+            rhs = x.args[2]
+            if isa(rhs, Expr) && rhs.head == :call
+                dprintln(3,"is_eliminated_arraylen is :call")
+                if rhs.args[1] == TopNode(:arraysize)
+                    dprintln(3,"is_eliminated_arraylen is :arraysize")
+                    return true
+                end
+            end
         end
-      end
     end
-  end
-  return false
+    return false
 end
 
 @doc """
@@ -2301,25 +2301,25 @@ replacement is an array containing the length of the dimensions of the arrays a 
 If we see a call to create an array, replace the length params with those in the common set in "replacement".
 """
 function sub_arraylen_walk(x, replacement, top_level_number, is_top_level, read)
-  dprintln(4,"sub_arraylen_walk ", x)
-  if typeof(x) == Expr
-    if x.head == symbol('=')
-      rhs = x.args[2]
-      if isa(rhs, Expr) && rhs.head == :call
-        if rhs.args[1] == TopNode(:ccall)
-          if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-            rhs.args[7] = replacement[1]
-          elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-            rhs.args[7] = replacement[1]
-            rhs.args[9] = replacement[2]
-          end
+    dprintln(4,"sub_arraylen_walk ", x)
+    if typeof(x) == Expr
+        if x.head == symbol('=')
+            rhs = x.args[2]
+            if isa(rhs, Expr) && rhs.head == :call
+                if rhs.args[1] == TopNode(:ccall)
+                    if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                        rhs.args[7] = replacement[1]
+                    elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                        rhs.args[7] = replacement[1]
+                        rhs.args[9] = replacement[2]
+                    end
+                end
+            end
         end
-      end
     end
-  end
-  dprintln(4,"sub_arraylen_walk not substituting")
+    dprintln(4,"sub_arraylen_walk not substituting")
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
@@ -2327,20 +2327,20 @@ replacement is an array containing the length of the dimensions of the arrays a 
 If we see a call to create an array, replace the length params with those in the common set in "replacement".
 """
 function substitute_arraylen(x, replacement)
-  dprintln(3,"substitute_arraylen ", x, " ", replacement)
-  # Walk the AST and call sub_arraylen_walk for each node.
-  return DomainIR.AstWalk(x, sub_arraylen_walk, replacement)
+    dprintln(3,"substitute_arraylen ", x, " ", replacement)
+    # Walk the AST and call sub_arraylen_walk for each node.
+    return DomainIR.AstWalk(x, sub_arraylen_walk, replacement)
 end
 
 fuse_limit = -1
 @doc """
 Control how many parfor can be fused for testing purposes.
--1 means fuse all possible parfors.
-0  means don't fuse any parfors.
-1+ means fuse the specified number of parfors but then stop fusing beyond that.
+    -1 means fuse all possible parfors.
+    0  means don't fuse any parfors.
+    1+ means fuse the specified number of parfors but then stop fusing beyond that.
 """
 function PIRSetFuseLimit(x)
-  global fuse_limit = x
+    global fuse_limit = x
 end
 
 rearrange_passes = 2
@@ -2348,18 +2348,18 @@ rearrange_passes = 2
 Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.
 """
 function PIRNumSimplify(x)
-  global rearrange_passes = x
+    global rearrange_passes = x
 end
 
 @doc """
 Add to the map of symbol names to types.
 """
 function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
-  if typ == Any
-    dprintln(0, "rememberTypeForSym: sym = ", sym, " typ = ", typ)
-  end
-  assert(typ != Any)
-  sym_to_type[sym] = typ
+    if typ == Any
+        dprintln(0, "rememberTypeForSym: sym = ", sym, " typ = ", typ)
+    end
+    assert(typ != Any)
+    sym_to_type[sym] = typ
 end
 
 @doc """
@@ -2370,69 +2370,69 @@ end
 
 @doc """
 Check if an assignement is a fusion assignment.
-In regular assignments, there are only two args, the left and right hand sides.
-In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.
+    In regular assignments, there are only two args, the left and right hand sides.
+    In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.
 """
 function isFusionAssignment(x :: Expr)
-  if x.head != symbol('=')
-    return false
-  elseif length(x.args) <= 2
-    return false
-  else
-    assert(typeof(x.args[3]) == FusionSentinel)
-    return true
-  end
+    if x.head != symbol('=')
+        return false
+    elseif length(x.args) <= 2
+        return false
+    else
+        assert(typeof(x.args[3]) == FusionSentinel)
+        return true
+    end
 end
 
 @doc """
 Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
-We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable
-usage is present.
+    We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable
+        usage is present.
 """
 function isSymbolsUsed(vars, top_level_numbers :: Array{Int,1}, state)
-  dprintln(3,"isSymbolsUsed: vars = ", vars, " typeof(vars) = ", typeof(vars), " top_level_numbers = ", top_level_numbers)
-  bl = state.block_lives
+    dprintln(3,"isSymbolsUsed: vars = ", vars, " typeof(vars) = ", typeof(vars), " top_level_numbers = ", top_level_numbers)
+    bl = state.block_lives
 
-  for i in top_level_numbers
-    tls = CompilerTools.LivenessAnalysis.find_top_number(i, bl)
-    assert(tls != nothing)
+    for i in top_level_numbers
+        tls = CompilerTools.LivenessAnalysis.find_top_number(i, bl)
+        assert(tls != nothing)
 
-    for v in vars
-      if in(v, tls.def)
-        dprintln(3, "isSymbolsUsed: ", v, " defined in statement ", i)
-        return true
-      elseif in(v, tls.use)
-        dprintln(3, "isSymbolsUsed: ", v, " used in statement ", i)
-        return true
-      end
+        for v in vars
+            if in(v, tls.def)
+                dprintln(3, "isSymbolsUsed: ", v, " defined in statement ", i)
+                return true
+            elseif in(v, tls.use)
+                dprintln(3, "isSymbolsUsed: ", v, " used in statement ", i)
+                return true
+            end
+        end
     end
-  end
 
-  dprintln(3, "isSymbolsUsed: ", vars, " not used in statements ", top_level_numbers)
-  return false
+    dprintln(3, "isSymbolsUsed: ", vars, " not used in statements ", top_level_numbers)
+    return false
 end
 
 @doc """
 Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".
 """
 function getParforCorrelation(parfor, state)
-  if length(parfor.preParFor) == 0
-    return nothing
-  end
-  # FIXME: is this reliable?? -- PaulLiu
-  for i in 1:length(parfor.preParFor)
-    first_stmt = parfor.preParFor[i]
-    if (typeof(first_stmt) == Expr) && (first_stmt.head == symbol('='))
-      rhs = first_stmt.args[2]
-      if (typeof(rhs) == Expr) && (rhs.head == :call)
-        if (rhs.args[1] == TopNode(:arraysize)) && (isa(rhs.args[2], SymNodeGen))
-          dprintln(3,"Getting parfor array correlation for array = ", rhs.args[2])
-          return getOrAddArrayCorrelation(toSymGen(rhs.args[2]), state) 
-        end
-      end
+    if length(parfor.preParFor) == 0
+        return nothing
     end
-  end
-  return nothing
+    # FIXME: is this reliable?? -- PaulLiu
+    for i in 1:length(parfor.preParFor)
+        first_stmt = parfor.preParFor[i]
+        if (typeof(first_stmt) == Expr) && (first_stmt.head == symbol('='))
+            rhs = first_stmt.args[2]
+            if (typeof(rhs) == Expr) && (rhs.head == :call)
+                if (rhs.args[1] == TopNode(:arraysize)) && (isa(rhs.args[2], SymNodeGen))
+                    dprintln(3,"Getting parfor array correlation for array = ", rhs.args[2])
+                    return getOrAddArrayCorrelation(toSymGen(rhs.args[2]), state) 
+                end
+            end
+        end
+    end
+    return nothing
 end
 
 @doc """
@@ -2446,60 +2446,60 @@ the_parfor is the PIRParForAst type part of the incoming assignment.
 sym_to_type is an out parameter that maps symbols in the output mapping to their types.
 """
 function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, sym_to_type :: Dict{SymGen, DataType}, state :: expr_state)
-  map_lhs_post_array     = Dict{SymGen, SymGen}()
-  map_lhs_post_reduction = Dict{SymGen, SymGen}()
+    map_lhs_post_array     = Dict{SymGen, SymGen}()
+    map_lhs_post_reduction = Dict{SymGen, SymGen}()
 
-  if is_multi
-    last_post = the_parfor.postParFor[end]
-    assert(isa(last_post, Array)) 
-    dprintln(3,"multi postParFor = ", the_parfor.postParFor, " last_post = ", last_post)
+    if is_multi
+        last_post = the_parfor.postParFor[end]
+        assert(isa(last_post, Array)) 
+        dprintln(3,"multi postParFor = ", the_parfor.postParFor, " last_post = ", last_post)
 
-    # In our special AST node format for assignment to make fusion easier, args[3] is a FusionSentinel node
-    # and additional args elements are the real symbol to be assigned to in the left-hand side.
-    for i = 4:length(parfor_assignment.args)
-      corresponding_elem = last_post[i-3]
+        # In our special AST node format for assignment to make fusion easier, args[3] is a FusionSentinel node
+        # and additional args elements are the real symbol to be assigned to in the left-hand side.
+        for i = 4:length(parfor_assignment.args)
+            corresponding_elem = last_post[i-3]
 
-      assert(isa(parfor_assignment.args[i], SymNodeGen))
-      rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
-      rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.lambdaInfo))
-      if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
-        # For fused parfors, the last post statement is a tuple variable.
-        # That tuple variable is declared in the previous statement (end-1).
-        # The statement is an Expr with head == :call and top(:tuple) as the first arg.
-        # So, the first member of the tuple is at offset 2 which corresponds to index 4 of this loop, ergo the "i-2".
-        map_lhs_post_array[toSymGen(parfor_assignment.args[i])]     = toSymGen(corresponding_elem)
-      else
-        map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(corresponding_elem)
-      end
-    end
-  else
-    # There is no mapping if this isn't actually an assignment statement but really a bare parfor.
-    if !isBareParfor(parfor_assignment)
-      lhs_pa = getLhsFromAssignment(parfor_assignment)
-      ast_lhs_pa_typ = typeof(lhs_pa)
-      lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.lambdaInfo)
-      if isa(lhs_pa, SymNodeGen)
-        ppftyp = typeof(the_parfor.postParFor[end]) 
-        assert(isa(the_parfor.postParFor[end], SymNodeGen))
-        rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
-        rhs = the_parfor.postParFor[end]
-        rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.lambdaInfo))
-
-        if isArrayType(lhs_pa_typ)
-          map_lhs_post_array[toSymGen(lhs_pa)]     = toSymGen(the_parfor.postParFor[end])
-        else
-          map_lhs_post_reduction[toSymGen(lhs_pa)] = toSymGen(the_parfor.postParFor[end])
+            assert(isa(parfor_assignment.args[i], SymNodeGen))
+            rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
+            rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.lambdaInfo))
+            if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
+                # For fused parfors, the last post statement is a tuple variable.
+                # That tuple variable is declared in the previous statement (end-1).
+                # The statement is an Expr with head == :call and top(:tuple) as the first arg.
+                # So, the first member of the tuple is at offset 2 which corresponds to index 4 of this loop, ergo the "i-2".
+                map_lhs_post_array[toSymGen(parfor_assignment.args[i])]     = toSymGen(corresponding_elem)
+            else
+                map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(corresponding_elem)
+            end
         end
-      elseif typeof(lhs_pa) == Symbol
-        throw(string("lhs_pa as a symbol no longer supported"))
-      else
-        dprintln(3,"typeof(lhs_pa) = ", typeof(lhs_pa))
-        assert(false)
-      end
-    end
-  end
+    else
+        # There is no mapping if this isn't actually an assignment statement but really a bare parfor.
+        if !isBareParfor(parfor_assignment)
+            lhs_pa = getLhsFromAssignment(parfor_assignment)
+            ast_lhs_pa_typ = typeof(lhs_pa)
+            lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.lambdaInfo)
+            if isa(lhs_pa, SymNodeGen)
+                ppftyp = typeof(the_parfor.postParFor[end]) 
+                assert(isa(the_parfor.postParFor[end], SymNodeGen))
+                rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
+                rhs = the_parfor.postParFor[end]
+                rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.lambdaInfo))
 
-  map_lhs_post_array, map_lhs_post_reduction
+                if isArrayType(lhs_pa_typ)
+                    map_lhs_post_array[toSymGen(lhs_pa)]     = toSymGen(the_parfor.postParFor[end])
+                else
+                    map_lhs_post_reduction[toSymGen(lhs_pa)] = toSymGen(the_parfor.postParFor[end])
+                end
+            elseif typeof(lhs_pa) == Symbol
+                throw(string("lhs_pa as a symbol no longer supported"))
+            else
+                dprintln(3,"typeof(lhs_pa) = ", typeof(lhs_pa))
+                assert(false)
+            end
+        end
+    end
+
+    map_lhs_post_array, map_lhs_post_reduction
 end
 
 @doc """
@@ -2507,10 +2507,10 @@ Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a S
 in the dictionary replace it with the corresponding value from the dict.
 """
 function fullyLowerAlias(dict :: Dict{SymGen, SymGen}, input :: SymGen)
-  while haskey(dict, input)
-    input = dict[input]
-  end
-  input
+    while haskey(dict, input)
+        input = dict[input]
+    end
+    input
 end
 
 @doc """
@@ -2518,13 +2518,13 @@ Take a single-step alias map, e.g., a=>b, b=>c, and create a lowered dictionary,
 maps each array to the transitively lowered array.
 """
 function createLoweredAliasMap(dict1)
-  ret = Dict{SymGen, SymGen}()
+    ret = Dict{SymGen, SymGen}()
 
-  for i in dict1
-    ret[i[1]] = fullyLowerAlias(dict1, i[2])
-  end
+    for i in dict1
+        ret[i[1]] = fullyLowerAlias(dict1, i[2])
+    end
 
-  ret
+    ret
 end
 
 run_as_tasks = 0
@@ -2532,7 +2532,7 @@ run_as_tasks = 0
 Debugging feature to specify the number of tasks to create and to stop thereafter.
 """
 function PIRRunAsTasks(x)
-  global run_as_tasks = x
+    global run_as_tasks = x
 end
 
 @doc """
@@ -2540,9 +2540,9 @@ Returns a single element of an array if there is only one or the array otherwise
 """
 function oneIfOnly(x)
     if isa(x,Array) && length(x) == 1
-      return x[1]
+        return x[1]
     else
-      return x
+        return x
     end
 end
 
@@ -2550,381 +2550,381 @@ end
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """
 function fuse(body, body_index, cur, state)
-  global fuse_limit
-  prev = body[body_index]
+    global fuse_limit
+    prev = body[body_index]
 
-  # Handle the debugging case where we want to limit the amount of parfor fusion to a certain number.
-  if fuse_limit == 0
-    return false
-  end
-  if fuse_limit > 0
-    global fuse_limit = fuse_limit - 1
-  end
-
-  dprintln(2, "Testing if fusion is possible.")
-  prev_parfor = getParforNode(prev)
-  cur_parfor  = getParforNode(cur)
-
-  sym_to_type   = Dict{SymGen, DataType}()
-
-  dprintln(2, "prev = ", prev)
-  dprintln(2, "cur = ", cur)
-  dprintln(2, "prev.typ = ", prev.typ)
-  dprintln(2, "cur.typ = ", cur.typ)
-
-  prev_assignment = isAssignmentNode(prev)
-  cur_assignment  = isAssignmentNode(cur)
-
-  cur_input_set = getInputSet(cur_parfor)
-  dprintln(2, "cur_input_set = ", cur_input_set)
-  first_in = first(cur_input_set)
-  out_correlation = getParforCorrelation(prev_parfor, state)
-  if out_correlation == nothing
-    return false
-  end
-  in_correlation  = state.array_length_correlation[first_in]
-  if in_correlation == nothing
-    return false
-  end
-  dprintln(3,"first_in = ", first_in)
-  dprintln(3,"Fusion correlations ", out_correlation, " ", in_correlation)
-
-  is_prev_multi = isFusionAssignment(prev)
-  is_cur_multi  = isFusionAssignment(cur)
-
-  prev_num_dims = length(prev_parfor.loopNests)
-  cur_num_dims  = length(cur_parfor.loopNests)
-
-  map_prev_lhs_post, map_prev_lhs_reduction = createMapLhsToParfor(prev, prev_parfor, is_prev_multi, sym_to_type, state)
-  map_prev_lhs_all = merge(map_prev_lhs_post, map_prev_lhs_reduction)
-  map_cur_lhs_post,  map_cur_lhs_reduction  = createMapLhsToParfor(cur,  cur_parfor,  is_cur_multi,  sym_to_type, state)
-  map_cur_lhs_all  = merge(map_cur_lhs_post, map_cur_lhs_reduction)
-  prev_output_arrays = collect(values(map_prev_lhs_post))
-  prev_output_reduce = collect(values(map_prev_lhs_reduction))
-  cur_output_arrays  = collect(values(map_cur_lhs_post))
-  cur_output_reduce  = collect(values(map_cur_lhs_reduction))
-
-  merge!(prev_parfor.array_aliases, map_prev_lhs_post)
-  assert(length(cur_parfor.array_aliases) == 0)
-
-  loweredAliasMap = createLoweredAliasMap(prev_parfor.array_aliases)
-
-  dprintln(3, "map_prev_lhs_post = ", map_prev_lhs_post)
-  dprintln(3, "map_prev_lhs_reduction = ", map_prev_lhs_reduction)
-  dprintln(3, "map_cur_lhs_post = ", map_cur_lhs_post)
-  dprintln(3, "map_cur_lhs_reduction = ", map_cur_lhs_reduction)
-  dprintln(3, "sym_to_type = ", sym_to_type)
-  reduction_var_used = isSymbolsUsed(map_prev_lhs_reduction, cur_parfor.top_level_number, state)
-  dprintln(3, "reduction_var_used = ", reduction_var_used)
-  prev_iei = iterations_equals_inputs(prev_parfor)
-  cur_iei  = iterations_equals_inputs(cur_parfor)
-  dprintln(3, "iterations_equals_inputs prev and cur = ", prev_iei, " ", cur_iei)
-  dprintln(3, "loweredAliasMap = ", loweredAliasMap)
-
-  if prev_iei &&
-     cur_iei  &&
-     out_correlation == in_correlation &&
-    !reduction_var_used &&
-     prev_parfor.simply_indexed &&
-     cur_parfor.simply_indexed   
-    assert(prev_num_dims == cur_num_dims)
-
-    dprintln(3, "Fusion will happen here.")
-
-    # Get the top-level statement for the previous parfor.
-    prev_stmt_live_first = CompilerTools.LivenessAnalysis.find_top_number(prev_parfor.top_level_number[1], state.block_lives)
-    assert(prev_stmt_live_first != nothing)
-    dprintln(2,"Prev parfor first = ", prev_stmt_live_first)
-    prev_stmt_live_last = CompilerTools.LivenessAnalysis.find_top_number(prev_parfor.top_level_number[end], state.block_lives)
-    assert(prev_stmt_live_last != nothing)
-    dprintln(2,"Prev parfor last = ", prev_stmt_live_last)
-
-    # Get the top-level statement for the current parfor.
-    assert(length(cur_parfor.top_level_number) == 1)
-    cur_stmt_live  = CompilerTools.LivenessAnalysis.find_top_number(cur_parfor.top_level_number[1],  state.block_lives)
-    assert(cur_stmt_live != nothing)
-    dprintln(2,"Cur parfor = ", cur_stmt_live)
-
-    # Get the variables live after the previous parfor.
-    live_in_prev = prev_stmt_live_first.live_in
-    dprintln(2,"live_in_prev = ", live_in_prev)
-
-    # Get the variables live after the previous parfor.
-    live_out_prev = prev_stmt_live_last.live_out
-    dprintln(2,"live_out_prev = ", live_out_prev)
-
-    # Get the live variables into the current parfor.
-    live_in_cur   = cur_stmt_live.live_in
-    dprintln(2,"live_in_cur = ", live_in_cur)
-
-    # Get the variables live after the current parfor.
-    live_out_cur  = cur_stmt_live.live_out
-    dprintln(2,"live_out_cur = ", live_out_cur)
-
-    new_in_prev = setdiff(live_out_prev, live_in_prev)
-    new_in_cur  = setdiff(live_out_cur,  live_in_cur)
-    dprintln(3,"new_in_prev = ", new_in_prev)
-    dprintln(3,"new_in_cur = ", new_in_cur)
-
-    # The things that come in live to cur but leave it dead.
-    not_used_after_cur = setdiff(live_out_prev, live_out_cur)
-    dprintln(2,"not_used_after_cur = ", not_used_after_cur)
-
-    live_out_prev_aliases = getAllAliases(live_out_prev, prev_parfor.array_aliases)
-    live_out_cur_aliases  = getAllAliases(live_out_cur, prev_parfor.array_aliases)
-    dprintln(2, "live_out_prev_aliases = ", live_out_prev_aliases)
-    dprintln(2, "live_out_cur_aliases  = ", live_out_cur_aliases)
-    not_used_after_cur_with_aliases = setdiff(live_out_prev_aliases, live_out_cur_aliases)
-    dprintln(2,"not_used_after_cur_with_aliases = ", not_used_after_cur_with_aliases)
-
-    unique_id = prev_parfor.unique_id
-
-    # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
-    # that don't die during the current parfor.
-    output_map = Dict{SymGen, SymGen}()
-    for i in map_prev_lhs_all
-      if !in(i[1], not_used_after_cur)
-        output_map[i[1]] = i[2]
-      end
+    # Handle the debugging case where we want to limit the amount of parfor fusion to a certain number.
+    if fuse_limit == 0
+        return false
     end
-    for i in map_cur_lhs_all
-      output_map[i[1]] = i[2]
+    if fuse_limit > 0
+        global fuse_limit = fuse_limit - 1
     end
 
-    new_aliases = Dict{SymGen, SymGen}()
-    for i in map_prev_lhs_post
-      if !in(i[1], not_used_after_cur)
-        new_aliases[i[1]] = i[2]
-      end
+    dprintln(2, "Testing if fusion is possible.")
+    prev_parfor = getParforNode(prev)
+    cur_parfor  = getParforNode(cur)
+
+    sym_to_type   = Dict{SymGen, DataType}()
+
+    dprintln(2, "prev = ", prev)
+    dprintln(2, "cur = ", cur)
+    dprintln(2, "prev.typ = ", prev.typ)
+    dprintln(2, "cur.typ = ", cur.typ)
+
+    prev_assignment = isAssignmentNode(prev)
+    cur_assignment  = isAssignmentNode(cur)
+
+    cur_input_set = getInputSet(cur_parfor)
+    dprintln(2, "cur_input_set = ", cur_input_set)
+    first_in = first(cur_input_set)
+    out_correlation = getParforCorrelation(prev_parfor, state)
+    if out_correlation == nothing
+        return false
     end
-
-    outputs = collect(values(output_map))
-    # return code 2 if there is no output in the fused parfor
-    # this means the parfor is dead and should be removed
-    if length(outputs)==0
-	    return 2;
+    in_correlation  = state.array_length_correlation[first_in]
+    if in_correlation == nothing
+        return false
     end
+    dprintln(3,"first_in = ", first_in)
+    dprintln(3,"Fusion correlations ", out_correlation, " ", in_correlation)
 
-    dprintln(3,"output_map = ", output_map)
-    dprintln(3,"new_aliases = ", new_aliases)
+    is_prev_multi = isFusionAssignment(prev)
+    is_cur_multi  = isFusionAssignment(cur)
 
-    first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+    prev_num_dims = length(prev_parfor.loopNests)
+    cur_num_dims  = length(cur_parfor.loopNests)
 
-    # Merge each part of the two parfor nodes.
+    map_prev_lhs_post, map_prev_lhs_reduction = createMapLhsToParfor(prev, prev_parfor, is_prev_multi, sym_to_type, state)
+    map_prev_lhs_all = merge(map_prev_lhs_post, map_prev_lhs_reduction)
+    map_cur_lhs_post,  map_cur_lhs_reduction  = createMapLhsToParfor(cur,  cur_parfor,  is_cur_multi,  sym_to_type, state)
+    map_cur_lhs_all  = merge(map_cur_lhs_post, map_cur_lhs_reduction)
+    prev_output_arrays = collect(values(map_prev_lhs_post))
+    prev_output_reduce = collect(values(map_prev_lhs_reduction))
+    cur_output_arrays  = collect(values(map_cur_lhs_post))
+    cur_output_reduce  = collect(values(map_cur_lhs_reduction))
 
-    # loopNests - nothing needs to be done to the loopNests
-    # But we use them to establish a mapping between corresponding indices in the two parfors.
-    # Then, we use that map to convert indices in the second parfor to the corresponding ones in the first parfor.
-    index_map = Dict{SymGen, SymGen}()
-    assert(length(prev_parfor.loopNests) == length(cur_parfor.loopNests))
-    for i = 1:length(prev_parfor.loopNests)
-        index_map[cur_parfor.loopNests[i].indexVariable.name] = prev_parfor.loopNests[i].indexVariable.name
-    end
+    merge!(prev_parfor.array_aliases, map_prev_lhs_post)
+    assert(length(cur_parfor.array_aliases) == 0)
 
-    dprintln(3,"array_aliases before merge ", prev_parfor.array_aliases)
-    for i in map_cur_lhs_post
-      from = i[1]
-      to   = i[2]
-      prev_parfor.array_aliases[from] = to
-    end
-    dprintln(3,"array_aliases after merge ", prev_parfor.array_aliases)
+    loweredAliasMap = createLoweredAliasMap(prev_parfor.array_aliases)
 
-    # postParFor - can merge everything but the last entry in the postParFor's.
-    # The last entries themselves need to be merged extending the tuple if the prev parfor's output stays live and
-    # just keeping the cur parfor output if the prev parfor output dies.
-    (new_lhs, all_rets, single, output_items) = create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
-    dprintln(3,"new_lhs = ", new_lhs)
-    dprintln(3,"all_rets = ", all_rets)
-    dprintln(3,"single = ", single)
-    dprintln(3,"output_items = ", output_items)
-    output_items_set = live_out_cur
-    output_items_with_aliases = getAllAliases(output_items_set, prev_parfor.array_aliases)
+    dprintln(3, "map_prev_lhs_post = ", map_prev_lhs_post)
+    dprintln(3, "map_prev_lhs_reduction = ", map_prev_lhs_reduction)
+    dprintln(3, "map_cur_lhs_post = ", map_cur_lhs_post)
+    dprintln(3, "map_cur_lhs_reduction = ", map_cur_lhs_reduction)
+    dprintln(3, "sym_to_type = ", sym_to_type)
+    reduction_var_used = isSymbolsUsed(map_prev_lhs_reduction, cur_parfor.top_level_number, state)
+    dprintln(3, "reduction_var_used = ", reduction_var_used)
+    prev_iei = iterations_equals_inputs(prev_parfor)
+    cur_iei  = iterations_equals_inputs(cur_parfor)
+    dprintln(3, "iterations_equals_inputs prev and cur = ", prev_iei, " ", cur_iei)
+    dprintln(3, "loweredAliasMap = ", loweredAliasMap)
 
-    dprintln(3,"output_items_set = ", output_items_set)
-    dprintln(3,"output_items_with_aliases = ", output_items_with_aliases)
+    if prev_iei &&
+        cur_iei  &&
+        out_correlation == in_correlation &&
+        !reduction_var_used &&
+        prev_parfor.simply_indexed &&
+        cur_parfor.simply_indexed   
+        assert(prev_num_dims == cur_num_dims)
 
-    # Create a dictionary of arrays to the last variable containing the array's value at the current index space.
-    save_body = prev_parfor.body
-    arrayset_dict = Dict{SymGen, SymNodeGen}()
-    for i = 1:length(save_body)
-      x = save_body[i]
-      if isArraysetCall(x)
-        # Here we have a call to arrayset.
-        array_name = x.args[2]
-        value      = x.args[3]
-        assert(isa(array_name, SymNodeGen))
-        assert(isa(value, SymNodeGen))
-        arrayset_dict[toSymGen(array_name)] = value
-      elseif typeof(x) == Expr && x.head == :(=)
-        lhs = x.args[1]
-        rhs = x.args[2]
-        assert(isa(lhs, SymNodeGen))
-        if isArrayrefCall(rhs)
-          array_name = rhs.args[2]
-          assert(isa(array_name, SymNodeGen))
-          arrayset_dict[toSymGen(array_name)] = lhs
+        dprintln(3, "Fusion will happen here.")
+
+        # Get the top-level statement for the previous parfor.
+        prev_stmt_live_first = CompilerTools.LivenessAnalysis.find_top_number(prev_parfor.top_level_number[1], state.block_lives)
+        assert(prev_stmt_live_first != nothing)
+        dprintln(2,"Prev parfor first = ", prev_stmt_live_first)
+        prev_stmt_live_last = CompilerTools.LivenessAnalysis.find_top_number(prev_parfor.top_level_number[end], state.block_lives)
+        assert(prev_stmt_live_last != nothing)
+        dprintln(2,"Prev parfor last = ", prev_stmt_live_last)
+
+        # Get the top-level statement for the current parfor.
+        assert(length(cur_parfor.top_level_number) == 1)
+        cur_stmt_live  = CompilerTools.LivenessAnalysis.find_top_number(cur_parfor.top_level_number[1],  state.block_lives)
+        assert(cur_stmt_live != nothing)
+        dprintln(2,"Cur parfor = ", cur_stmt_live)
+
+        # Get the variables live after the previous parfor.
+        live_in_prev = prev_stmt_live_first.live_in
+        dprintln(2,"live_in_prev = ", live_in_prev)
+
+        # Get the variables live after the previous parfor.
+        live_out_prev = prev_stmt_live_last.live_out
+        dprintln(2,"live_out_prev = ", live_out_prev)
+
+        # Get the live variables into the current parfor.
+        live_in_cur   = cur_stmt_live.live_in
+        dprintln(2,"live_in_cur = ", live_in_cur)
+
+        # Get the variables live after the current parfor.
+        live_out_cur  = cur_stmt_live.live_out
+        dprintln(2,"live_out_cur = ", live_out_cur)
+
+        new_in_prev = setdiff(live_out_prev, live_in_prev)
+        new_in_cur  = setdiff(live_out_cur,  live_in_cur)
+        dprintln(3,"new_in_prev = ", new_in_prev)
+        dprintln(3,"new_in_cur = ", new_in_cur)
+
+        # The things that come in live to cur but leave it dead.
+        not_used_after_cur = setdiff(live_out_prev, live_out_cur)
+        dprintln(2,"not_used_after_cur = ", not_used_after_cur)
+
+        live_out_prev_aliases = getAllAliases(live_out_prev, prev_parfor.array_aliases)
+        live_out_cur_aliases  = getAllAliases(live_out_cur, prev_parfor.array_aliases)
+        dprintln(2, "live_out_prev_aliases = ", live_out_prev_aliases)
+        dprintln(2, "live_out_cur_aliases  = ", live_out_cur_aliases)
+        not_used_after_cur_with_aliases = setdiff(live_out_prev_aliases, live_out_cur_aliases)
+        dprintln(2,"not_used_after_cur_with_aliases = ", not_used_after_cur_with_aliases)
+
+        unique_id = prev_parfor.unique_id
+
+        # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
+        # that don't die during the current parfor.
+        output_map = Dict{SymGen, SymGen}()
+        for i in map_prev_lhs_all
+            if !in(i[1], not_used_after_cur)
+                output_map[i[1]] = i[2]
+            end
         end
-      end
-    end
-    dprintln(3,"arrayset_dict = ", arrayset_dict)
-
-    # Extend the arrayset_dict to include the lhs of the prev parfor.
-    for i in map_prev_lhs_post
-      lhs_sym = i[1]
-      rhs_sym = i[2]
-      arrayset_dict[lhs_sym] = arrayset_dict[rhs_sym]
-    end
-    dprintln(3,"arrayset_dict = ", arrayset_dict)
-
-    # body - Append cur body to prev body but replace arrayset's in prev with a temp variable
-    # and replace arrayref's in cur with the same temp.
-    arrays_set_in_cur_body = Set{SymGen}()
-    # Convert the cur_parfor body.
-    new_cur_body = map(x -> substitute_cur_body(x, arrayset_dict, index_map, arrays_set_in_cur_body, loweredAliasMap, state), cur_parfor.body)
-    arrays_set_in_cur_body_with_aliases = getAllAliases(arrays_set_in_cur_body, prev_parfor.array_aliases)
-    dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
-    dprintln(3,"arrays_set_in_cur_body_with_aliases = ", arrays_set_in_cur_body_with_aliases)
-    combined = union(arrays_set_in_cur_body_with_aliases, not_used_after_cur_with_aliases)
-    dprintln(2,"combined = ", combined)
-
-    prev_parfor.body = Any[]
-    for i = 1:length(save_body)
-        new_body_line = substitute_arrayset(save_body[i], combined, output_items_with_aliases)
-        dprintln(3,"new_body_line = ", new_body_line)
-        if new_body_line != nothing
-            push!(prev_parfor.body, new_body_line)
+        for i in map_cur_lhs_all
+            output_map[i[1]] = i[2]
         end
-    end
-    append!(prev_parfor.body, new_cur_body)
-    dprintln(2,"New body = ")
-    printBody(2, prev_parfor.body)
 
-    # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
-    # prevParFor where the array is in allocs_to_eliminate.
-    prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
-                              map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
-    dprintln(2,"New preParFor = ", prev_parfor.preParFor)
-
-    # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
-    dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)
-    filter!( x -> !is_dead_arrayset(x, output_items_with_aliases), prev_parfor.body)
-    dprintln(4,"prev_parfor.body after_ removing dead arrayset: ", prev_parfor.body)
-
-    # reductions - a simple append with the caveat that you can't fuse parfor where the first has a reduction that the second one uses
-    # need to check this caveat above.
-    append!(prev_parfor.reductions, cur_parfor.reductions)
-    dprintln(2,"New reductions = ", prev_parfor.reductions)
-
-    prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-1]; cur_parfor.postParFor[1:end-1]]
-    push!(prev_parfor.postParFor, oneIfOnly(output_items))
-    dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
-
-    # original_domain_nodes - simple append
-    append!(prev_parfor.original_domain_nodes, cur_parfor.original_domain_nodes)
-    dprintln(2,"New domain nodes = ", prev_parfor.original_domain_nodes)
-
-    # top_level_number - what to do here? is this right?
-    push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
-
-    # rws
-    prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_live_cb, state.lambdaInfo)
-
-    dprintln(3,"New lhs = ", new_lhs)
-    if prev_assignment
-      # The prev parfor was of the form "var = parfor(...)".
-      if new_lhs != nothing
-        dprintln(2,"prev was assignment and is staying an assignment")
-        # The new lhs is not empty and so this is the normal case where "prev" stays an assignment expression and we update types here and if necessary FusionSentinel.
-        prev.args[1] = new_lhs
-        prev.typ = getType(new_lhs, state.lambdaInfo)
-        prev.args[2].typ = prev.typ
-        # Strip off a previous FusionSentinel() if it exists in the expression.
-        prev.args = prev.args[1:2]
-        if !single
-          push!(prev.args, FusionSentinel())
-          append!(prev.args, all_rets)
-          dprintln(3,"New multiple ret prev args is ", prev.args)
+        new_aliases = Dict{SymGen, SymGen}()
+        for i in map_prev_lhs_post
+            if !in(i[1], not_used_after_cur)
+                new_aliases[i[1]] = i[2]
+            end
         end
-      else
-        dprintln(2,"prev was assignment and is becoming bare")
-        # The new lhs is empty and so we need to transform "prev" into an assignment expression.
-        body[body_index] = TypedExpr(nothing, :parfor, prev_parfor)
-      end
+
+        outputs = collect(values(output_map))
+        # return code 2 if there is no output in the fused parfor
+        # this means the parfor is dead and should be removed
+        if length(outputs)==0
+            return 2;
+        end
+
+        dprintln(3,"output_map = ", output_map)
+        dprintln(3,"new_aliases = ", new_aliases)
+
+        first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+
+        # Merge each part of the two parfor nodes.
+
+        # loopNests - nothing needs to be done to the loopNests
+        # But we use them to establish a mapping between corresponding indices in the two parfors.
+        # Then, we use that map to convert indices in the second parfor to the corresponding ones in the first parfor.
+        index_map = Dict{SymGen, SymGen}()
+        assert(length(prev_parfor.loopNests) == length(cur_parfor.loopNests))
+        for i = 1:length(prev_parfor.loopNests)
+            index_map[cur_parfor.loopNests[i].indexVariable.name] = prev_parfor.loopNests[i].indexVariable.name
+        end
+
+        dprintln(3,"array_aliases before merge ", prev_parfor.array_aliases)
+        for i in map_cur_lhs_post
+            from = i[1]
+            to   = i[2]
+            prev_parfor.array_aliases[from] = to
+        end
+        dprintln(3,"array_aliases after merge ", prev_parfor.array_aliases)
+
+        # postParFor - can merge everything but the last entry in the postParFor's.
+        # The last entries themselves need to be merged extending the tuple if the prev parfor's output stays live and
+        # just keeping the cur parfor output if the prev parfor output dies.
+        (new_lhs, all_rets, single, output_items) = create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
+        dprintln(3,"new_lhs = ", new_lhs)
+        dprintln(3,"all_rets = ", all_rets)
+        dprintln(3,"single = ", single)
+        dprintln(3,"output_items = ", output_items)
+        output_items_set = live_out_cur
+        output_items_with_aliases = getAllAliases(output_items_set, prev_parfor.array_aliases)
+
+        dprintln(3,"output_items_set = ", output_items_set)
+        dprintln(3,"output_items_with_aliases = ", output_items_with_aliases)
+
+        # Create a dictionary of arrays to the last variable containing the array's value at the current index space.
+        save_body = prev_parfor.body
+        arrayset_dict = Dict{SymGen, SymNodeGen}()
+        for i = 1:length(save_body)
+            x = save_body[i]
+            if isArraysetCall(x)
+                # Here we have a call to arrayset.
+                array_name = x.args[2]
+                value      = x.args[3]
+                assert(isa(array_name, SymNodeGen))
+                assert(isa(value, SymNodeGen))
+                arrayset_dict[toSymGen(array_name)] = value
+            elseif typeof(x) == Expr && x.head == :(=)
+                lhs = x.args[1]
+                rhs = x.args[2]
+                assert(isa(lhs, SymNodeGen))
+                if isArrayrefCall(rhs)
+                    array_name = rhs.args[2]
+                    assert(isa(array_name, SymNodeGen))
+                    arrayset_dict[toSymGen(array_name)] = lhs
+                end
+            end
+        end
+        dprintln(3,"arrayset_dict = ", arrayset_dict)
+
+        # Extend the arrayset_dict to include the lhs of the prev parfor.
+        for i in map_prev_lhs_post
+            lhs_sym = i[1]
+            rhs_sym = i[2]
+            arrayset_dict[lhs_sym] = arrayset_dict[rhs_sym]
+        end
+        dprintln(3,"arrayset_dict = ", arrayset_dict)
+
+        # body - Append cur body to prev body but replace arrayset's in prev with a temp variable
+        # and replace arrayref's in cur with the same temp.
+        arrays_set_in_cur_body = Set{SymGen}()
+        # Convert the cur_parfor body.
+        new_cur_body = map(x -> substitute_cur_body(x, arrayset_dict, index_map, arrays_set_in_cur_body, loweredAliasMap, state), cur_parfor.body)
+        arrays_set_in_cur_body_with_aliases = getAllAliases(arrays_set_in_cur_body, prev_parfor.array_aliases)
+        dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
+        dprintln(3,"arrays_set_in_cur_body_with_aliases = ", arrays_set_in_cur_body_with_aliases)
+        combined = union(arrays_set_in_cur_body_with_aliases, not_used_after_cur_with_aliases)
+        dprintln(2,"combined = ", combined)
+
+        prev_parfor.body = Any[]
+        for i = 1:length(save_body)
+            new_body_line = substitute_arrayset(save_body[i], combined, output_items_with_aliases)
+            dprintln(3,"new_body_line = ", new_body_line)
+            if new_body_line != nothing
+                push!(prev_parfor.body, new_body_line)
+            end
+        end
+        append!(prev_parfor.body, new_cur_body)
+        dprintln(2,"New body = ")
+        printBody(2, prev_parfor.body)
+
+        # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
+        # prevParFor where the array is in allocs_to_eliminate.
+        prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
+        map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
+        dprintln(2,"New preParFor = ", prev_parfor.preParFor)
+
+        # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
+        dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)
+        filter!( x -> !is_dead_arrayset(x, output_items_with_aliases), prev_parfor.body)
+        dprintln(4,"prev_parfor.body after_ removing dead arrayset: ", prev_parfor.body)
+
+        # reductions - a simple append with the caveat that you can't fuse parfor where the first has a reduction that the second one uses
+        # need to check this caveat above.
+        append!(prev_parfor.reductions, cur_parfor.reductions)
+        dprintln(2,"New reductions = ", prev_parfor.reductions)
+
+        prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-1]; cur_parfor.postParFor[1:end-1]]
+        push!(prev_parfor.postParFor, oneIfOnly(output_items))
+        dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
+
+        # original_domain_nodes - simple append
+        append!(prev_parfor.original_domain_nodes, cur_parfor.original_domain_nodes)
+        dprintln(2,"New domain nodes = ", prev_parfor.original_domain_nodes)
+
+        # top_level_number - what to do here? is this right?
+        push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
+
+        # rws
+        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_live_cb, state.lambdaInfo)
+
+        dprintln(3,"New lhs = ", new_lhs)
+        if prev_assignment
+            # The prev parfor was of the form "var = parfor(...)".
+            if new_lhs != nothing
+                dprintln(2,"prev was assignment and is staying an assignment")
+                # The new lhs is not empty and so this is the normal case where "prev" stays an assignment expression and we update types here and if necessary FusionSentinel.
+                prev.args[1] = new_lhs
+                prev.typ = getType(new_lhs, state.lambdaInfo)
+                prev.args[2].typ = prev.typ
+                # Strip off a previous FusionSentinel() if it exists in the expression.
+                prev.args = prev.args[1:2]
+                if !single
+                    push!(prev.args, FusionSentinel())
+                    append!(prev.args, all_rets)
+                    dprintln(3,"New multiple ret prev args is ", prev.args)
+                end
+            else
+                dprintln(2,"prev was assignment and is becoming bare")
+                # The new lhs is empty and so we need to transform "prev" into an assignment expression.
+                body[body_index] = TypedExpr(nothing, :parfor, prev_parfor)
+            end
+        else
+            # The prev parfor was a bare-parfor (not in the context of an assignment).
+            if new_lhs != nothing
+                dprintln(2,"prev was bare and is becoming an assignment")
+                # The new lhs is not empty so the fused parfor will not be bare and "prev" needs to become an assignment expression.
+                body[body_index] = mk_assignment_expr(new_lhs, prev, state)
+                prev = body[body_index]
+                prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.lambdaInfo)
+                if !single
+                    push!(prev.args, FusionSentinel())
+                    append!(prev.args, all_rets)
+                    dprintln(3,"New multiple ret prev args is ", prev.args)
+                end
+            else
+                dprintln(2,"prev was bare and is staying bare")
+            end
+        end
+
+        dprintln(2,"New parfor = ", prev_parfor)
+
+        #throw(string("not finished"))
+
+        return 1
     else
-      # The prev parfor was a bare-parfor (not in the context of an assignment).
-      if new_lhs != nothing
-        dprintln(2,"prev was bare and is becoming an assignment")
-        # The new lhs is not empty so the fused parfor will not be bare and "prev" needs to become an assignment expression.
-        body[body_index] = mk_assignment_expr(new_lhs, prev, state)
-        prev = body[body_index]
-        prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.lambdaInfo)
-        if !single
-          push!(prev.args, FusionSentinel())
-          append!(prev.args, all_rets)
-          dprintln(3,"New multiple ret prev args is ", prev.args)
-        end
-      else
-        dprintln(2,"prev was bare and is staying bare")
-      end
+        dprintln(3, "Fusion could not happen here.")
     end
 
-    dprintln(2,"New parfor = ", prev_parfor)
+    return 0
 
-    #throw(string("not finished"))
-
-    return 1
-  else
-    dprintln(3, "Fusion could not happen here.")
-  end
-
-  return 0
-
-  false
+    false
 end
 
 @doc """
 Returns true if the incoming AST node can be interpreted as a Symbol.
 """
 function hasSymbol(ssn :: Symbol)
-  return true
+    return true
 end
 
 function hasSymbol(ssn :: SymbolNode)
-  return true
+    return true
 end
 
 function hasSymbol(ssn :: Expr)
-  return ssn.head == :(::)
+    return ssn.head == :(::)
 end
 
 function hasSymbol(ssn)
-  return false
+    return false
 end
 
 @doc """
 Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.
 """
 function getSName(ssn :: Symbol)
-  return ssn
+    return ssn
 end
 
 function getSName(ssn :: SymbolNode)
-  return ssn.name
+    return ssn.name
 end
 
 function getSName(ssn :: Expr)
-  assert(ssn.head == :(::))
-  return ssn.args[1]
+    assert(ssn.head == :(::))
+    return ssn.args[1]
 end
 
 function getSName(ssn)
-  stype = typeof(ssn)
+    stype = typeof(ssn)
 
-  dprintln(0, "getSName ssn = ", ssn, " stype = ", stype)
-  if stype == Expr
-    dprintln(0, "ssn.head = ", ssn.head)
-  end
-  throw(string("getSName called with something of type ", stype))
+    dprintln(0, "getSName ssn = ", ssn, " stype = ", stype)
+    if stype == Expr
+        dprintln(0, "ssn.head = ", ssn.head)
+    end
+    throw(string("getSName called with something of type ", stype))
 end
 
 #@doc """
@@ -2941,79 +2941,79 @@ Process an array of expressions.
 Differentiate between top-level arrays of statements and arrays of expression that may occur elsewhere than the :body Expr.
 """
 function from_exprs(ast::Array{Any,1}, depth, state)
-  # sequence of expressions
-  # ast = [ expr, ... ]
-  # Is this the first node in the AST with an array of expressions, i.e., is it the top-level?
-  top_level = (state.top_level_number == 0)
-  if top_level
-    return top_level_from_exprs(ast, depth, state)
-  else
-    return intermediate_from_exprs(ast, depth, state)
-  end
+    # sequence of expressions
+    # ast = [ expr, ... ]
+    # Is this the first node in the AST with an array of expressions, i.e., is it the top-level?
+    top_level = (state.top_level_number == 0)
+    if top_level
+        return top_level_from_exprs(ast, depth, state)
+    else
+        return intermediate_from_exprs(ast, depth, state)
+    end
 end
 
 @doc """
 Process an array of expressions that aren't from a :body Expr.
 """
 function intermediate_from_exprs(ast::Array{Any,1}, depth, state)
-  # sequence of expressions
-  # ast = [ expr, ... ]
-  len  = length(ast)
-  res = Any[]
+    # sequence of expressions
+    # ast = [ expr, ... ]
+    len  = length(ast)
+    res = Any[]
 
-  # For each expression in the array, process that expression recursively.
-  for i = 1:len
-    dprintln(2,"Processing ast #",i," depth=",depth)
+    # For each expression in the array, process that expression recursively.
+    for i = 1:len
+        dprintln(2,"Processing ast #",i," depth=",depth)
 
-    # Convert the current expression.
-    new_exprs = from_expr(ast[i], depth, state, false)
-    assert(isa(new_exprs,Array))
+        # Convert the current expression.
+        new_exprs = from_expr(ast[i], depth, state, false)
+        assert(isa(new_exprs,Array))
 
-    append!(res, new_exprs)  # Take the result of the recursive processing and add it to the result.
-  end
+        append!(res, new_exprs)  # Take the result of the recursive processing and add it to the result.
+    end
 
-  return res 
+    return res 
 end
 
 @doc """
 Find the basic block before the entry to a loop.
 """
 function getNonBlock(head_preds, back_edge)
-  assert(length(head_preds) == 2)
+    assert(length(head_preds) == 2)
 
-  # Scan the predecessors of the head of the loop and the non-back edge must be the block prior to the loop.
-  for i in head_preds
-    if i.label != back_edge
-      return i
+    # Scan the predecessors of the head of the loop and the non-back edge must be the block prior to the loop.
+    for i in head_preds
+        if i.label != back_edge
+            return i
+        end
     end
-  end
 
-  throw(string("All entries in head preds list were back edges."))
+    throw(string("All entries in head preds list were back edges."))
 end
 
 @doc """
 Store information about a section of a body that will be translated into a task.
 """
 type ReplacedRegion
-  start_index
-  end_index
-  bb
-  tasks
+    start_index
+    end_index
+    bb
+    tasks
 end
 
 @doc """
 Structure for storing information about task formation.
 """
 type TaskInfo
-  task_func       :: Function                  # The Julia task function that we generated for a task.
-  function_sym
-  join_func       :: AbstractString            # The name of the C join function that we constructed and forced into the C file.
-  input_symbols   :: Array{SymbolNode,1}       # Variables that are need as input to the task.
-  modified_inputs :: Array{SymbolNode,1} 
-  io_symbols      :: Array{SymbolNode,1}
-  reduction_vars  :: Array{SymbolNode,1}
-  code
-  loopNests       :: Array{PIRLoopNest,1}      # holds information about the loop nests
+    task_func       :: Function                  # The Julia task function that we generated for a task.
+    function_sym
+    join_func       :: AbstractString            # The name of the C join function that we constructed and forced into the C file.
+    input_symbols   :: Array{SymbolNode,1}       # Variables that are need as input to the task.
+    modified_inputs :: Array{SymbolNode,1} 
+    io_symbols      :: Array{SymbolNode,1}
+    reduction_vars  :: Array{SymbolNode,1}
+    code
+    loopNests       :: Array{PIRLoopNest,1}      # holds information about the loop nests
 end
 
 @doc """
@@ -3025,12 +3025,12 @@ upper_bounds contains the upper bound of the iteration space in each dimension.
 lower_bounds and upper_bounds can be expressions.
 """
 type pir_range
-  dim :: Int
-  lower_bounds :: Array{Any,1}
-  upper_bounds :: Array{Any,1}
-  function pir_range()
-    new(0, Any[], Any[])
-  end
+    dim :: Int
+    lower_bounds :: Array{Any,1}
+    upper_bounds :: Array{Any,1}
+    function pir_range()
+        new(0, Any[], Any[])
+    end
 end
 
 @doc """
@@ -3039,21 +3039,21 @@ Therefore the arrays are typed as Int64.
 Up to 3 dimensional iteration space constructors are supported to make it easier to do code generation later.
 """
 type pir_range_actual
-  dim :: Int
-  lower_bounds :: Array{Int64, 1}
-  upper_bounds :: Array{Int64, 1}
-  function pir_range_actual()
-    new(0, Int64[], Int64[])
-  end
-  function pir_range_actual(l1, u1)
-    new(1, Int64[l1], Int64[u1])
-  end
-  function pir_range_actual(l1, u1, l2, u2)
-    new(2, Int64[l1; l2], Int64[u1; u2])
-  end
-  function pir_range_actual(l1, u1, l2, u2, l3, u3)
-    new(3, Int64[l1; l2; l3], Int64[u1; u2; u3])
-  end
+    dim :: Int
+    lower_bounds :: Array{Int64, 1}
+    upper_bounds :: Array{Int64, 1}
+    function pir_range_actual()
+        new(0, Int64[], Int64[])
+    end
+    function pir_range_actual(l1, u1)
+        new(1, Int64[l1], Int64[u1])
+    end
+    function pir_range_actual(l1, u1, l2, u2)
+        new(2, Int64[l1; l2], Int64[u1; u2])
+    end
+    function pir_range_actual(l1, u1, l2, u2, l3, u3)
+        new(3, Int64[l1; l2; l3], Int64[u1; u2; u3])
+    end
 end
 
 ARG_OPT_IN = 1
@@ -3063,11 +3063,11 @@ ARG_OPT_INOUT = 3
 ARG_OPT_ACCUMULATOR = 5
 
 type pir_aad_dim
-  len
-  a1
-  a2
-  l_b
-  u_b
+    len
+    a1
+    a2
+    l_b
+    u_b
 end
 
 @doc """
@@ -3076,12 +3076,12 @@ row_major is true if the array is stored in row major format.
 dim_info describes which portion of the array is accessed for a given point in the iteration space.
 """
 type pir_array_access_desc
-  dim_info :: Array{pir_aad_dim, 1}
-  row_major :: Bool
+    dim_info :: Array{pir_aad_dim, 1}
+    row_major :: Bool
 
-  function pir_array_access_desc()
-    new(pir_aad_dim[],false)
-  end
+    function pir_array_access_desc()
+        new(pir_aad_dim[],false)
+    end
 end
 
 @doc """
@@ -3089,9 +3089,9 @@ Create an array access descriptor for "array".
 Presumes that for point "i" in the iteration space that only index "i" is accessed.
 """
 function create1D_array_access_desc(array :: SymbolNode)
-  ret = pir_array_access_desc()
-  push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
-  ret
+    ret = pir_array_access_desc()
+    push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
+    ret
 end
 
 @doc """
@@ -3099,56 +3099,56 @@ Create an array access descriptor for "array".
 Presumes that for points "(i,j)" in the iteration space that only indices "(i,j)" is accessed.
 """
 function create2D_array_access_desc(array :: SymbolNode)
-  ret = pir_array_access_desc()
-  push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
-  push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 2), 1, 0, 0, 0 ))
-  ret
+    ret = pir_array_access_desc()
+    push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
+    push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 2), 1, 0, 0, 0 ))
+    ret
 end
 
 @doc """
 Create an array access descriptor for "array".
 """
 function create_array_access_desc(array :: SymbolNode)
-  if array.typ.parameters[2] == 1
-    return create1D_array_access_desc(array)
-  elseif array.typ.parameters[2] == 2
-    return create2D_array_access_desc(array)
-  else
-    throw(string("Greater than 2D arrays not supported in create_array_access_desc."))
-  end
+    if array.typ.parameters[2] == 1
+        return create1D_array_access_desc(array)
+    elseif array.typ.parameters[2] == 2
+        return create2D_array_access_desc(array)
+    else
+        throw(string("Greater than 2D arrays not supported in create_array_access_desc."))
+    end
 end
 
 @doc """
 A Julia representation of the argument metadata that will be passed to the runtime.
 """
 type pir_arg_metadata
-  value   :: SymbolNode
-  options :: Int
-  access  # nothing OR pir_array_access_desc
+    value   :: SymbolNode
+    options :: Int
+    access  # nothing OR pir_array_access_desc
 
-  function pir_arg_metadata()
-    new(nothing, 0, 0, nothing)
-  end
+    function pir_arg_metadata()
+        new(nothing, 0, 0, nothing)
+    end
 
-  function pir_arg_metadata(v, o)
-    new(v, o, nothing)
-  end
+    function pir_arg_metadata(v, o)
+        new(v, o, nothing)
+    end
 
-  function pir_arg_metadata(v, o, a)
-    new(v, o, a)
-  end
+    function pir_arg_metadata(v, o, a)
+        new(v, o, a)
+    end
 end
 
 @doc """
 A Julia representation of the grain size that will be passed to the runtime.
 """
 type pir_grain_size
-  dim   :: Int
-  sizes :: Array{Int,1}
+    dim   :: Int
+    sizes :: Array{Int,1}
 
-  function pir_grain_size()
-    new(0, Int[])
-  end
+    function pir_grain_size()
+        new(0, Int[])
+    end
 end
 
 TASK_FINISH = 1 << 16           # 0x10000
@@ -3162,17 +3162,17 @@ TASK_STATIC_SCHEDULER = 1 << 11 # 0x00800
 A data type containing the information that cgen uses to generate a call to pert_insert_divisible_task.
 """
 type InsertTaskNode
-  ranges :: pir_range
-  args   :: Array{pir_arg_metadata,1}
-  task_func :: Any
-  join_func :: AbstractString  # empty string for no join function
-  task_options :: Int
-  host_grain_size :: pir_grain_size
-  phi_grain_size :: pir_grain_size
+    ranges :: pir_range
+    args   :: Array{pir_arg_metadata,1}
+    task_func :: Any
+    join_func :: AbstractString  # empty string for no join function
+    task_options :: Int
+    host_grain_size :: pir_grain_size
+    phi_grain_size :: pir_grain_size
 
-  function InsertTaskNode()
-    new(pir_range(), pir_arg_metadata[], nothing, string(""), 0, pir_grain_size(), pir_grain_size())
-  end
+    function InsertTaskNode()
+        new(pir_range(), pir_arg_metadata[], nothing, string(""), 0, pir_grain_size(), pir_grain_size())
+    end
 end
 
 @doc """
@@ -3180,31 +3180,31 @@ If run_as_tasks is positive then convert this parfor to a task and decrement the
 original number run_as_tasks if the number of tasks created.
 """
 function run_as_task_decrement()
-  if run_as_tasks == 0
-    return false
-  end
-  if run_as_tasks == -1
+    if run_as_tasks == 0
+        return false
+    end
+    if run_as_tasks == -1
+        return true
+    end
+    global run_as_tasks = run_as_tasks - 1
     return true
-  end
-  global run_as_tasks = run_as_tasks - 1
-  return true
 end
 
 @doc """
 Return true if run_as_task_decrement would return true but don't update the run_as_tasks count.
 """
 function run_as_task()
-  if run_as_tasks == 0
-    return false
-  end
-  return true
+    if run_as_tasks == 0
+        return false
+    end
+    return true
 end
 
 put_loops_in_task_graph = false
 
 limit_task = -1
 function PIRLimitTask(x)
-  global limit_task = x
+    global limit_task = x
 end
 
 # These two functions are just to maintain the interface with the old PSE system for the moment.
@@ -3215,27 +3215,27 @@ end
 
 pir_stop = 0
 function PIRStop(x)
-  global pir_stop = x
+    global pir_stop = x
 end
 
 polyhedral = 0
 function PIRPolyhedral(x)
-  global polyhedral = x
+    global polyhedral = x
 end
 
 num_threads_mode = 0
 function PIRNumThreadsMode(x)
-  global num_threads_mode = x
+    global num_threads_mode = x
 end
 
 stencil_tasks = 1
 function PIRStencilTasks(x)
-  global stencil_tasks = x
+    global stencil_tasks = x
 end
 
 reduce_tasks = 0 
 function PIRReduceTasks(x)
-  global reduce_tasks = x
+    global reduce_tasks = x
 end
 
 @doc """
@@ -3243,33 +3243,33 @@ Returns true if the "node" is a parfor and the task limit hasn't been exceeded.
 Also controls whether stencils or reduction can become tasks.
 """
 function taskableParfor(node)
-  dprintln(3,"taskableParfor for: ", node)
-  if limit_task == 0
-    dprintln(3,"task limit exceeded so won't convert parfor to task")
-    return false
-  end
-  if isParforAssignmentNode(node) || isBareParfor(node)
-    dprintln(3,"Found parfor node, stencil: ", stencil_tasks, " reductions: ", reduce_tasks)
-    the_parfor = getParforNode(node)
-
-    for i = 1:length(the_parfor.original_domain_nodes)
-      if (the_parfor.original_domain_nodes[i].operation == :stencil! && stencil_tasks == 0) ||
-         (the_parfor.original_domain_nodes[i].operation == :reduce && reduce_tasks == 0)
+    dprintln(3,"taskableParfor for: ", node)
+    if limit_task == 0
+        dprintln(3,"task limit exceeded so won't convert parfor to task")
         return false
-      end
     end
-    if limit_task > 0
-      global limit_task = limit_task - 1
+    if isParforAssignmentNode(node) || isBareParfor(node)
+        dprintln(3,"Found parfor node, stencil: ", stencil_tasks, " reductions: ", reduce_tasks)
+        the_parfor = getParforNode(node)
+
+        for i = 1:length(the_parfor.original_domain_nodes)
+            if (the_parfor.original_domain_nodes[i].operation == :stencil! && stencil_tasks == 0) ||
+                (the_parfor.original_domain_nodes[i].operation == :reduce && reduce_tasks == 0)
+                return false
+            end
+        end
+        if limit_task > 0
+            global limit_task = limit_task - 1
+        end
+        return true
     end
-    return true
-  end
-  false
+    false
 end
 
 type eic_state
-  non_calls      :: Float64    # estimated instruction count for non-calls
-  fully_analyzed :: Bool
-  lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Void}
+    non_calls      :: Float64    # estimated instruction count for non-calls
+    fully_analyzed :: Bool
+    lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Void}
 end
 
 ASSIGNMENT_COST = 1.0
@@ -3313,289 +3313,289 @@ end
 Generate an instruction count estimate for a call instruction.
 """
 function call_instruction_count(args, state :: eic_state, debug_level)
-  func  = args[1]
-  fargs = args[2:end]
+    func  = args[1]
+    fargs = args[2:end]
 
-  dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
-  sig_expr = Expr(:tuple)
-  sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.lambdaInfo), fargs)
-  signature = eval(sig_expr)
-  fs = (func, signature)
+    dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
+    sig_expr = Expr(:tuple)
+    sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.lambdaInfo), fargs)
+    signature = eval(sig_expr)
+    fs = (func, signature)
 
-  # If we've previously cached an instruction count estimate then use it.
-  if haskey(call_costs, fs)
-    res = call_costs[fs]
-    if res == nothing
-      dprintln(debug_level, "Didn't process call to function ", func, " ", signature, " ", args)
-      state.fully_analyzed = false
-      return nothing
+    # If we've previously cached an instruction count estimate then use it.
+    if haskey(call_costs, fs)
+        res = call_costs[fs]
+        if res == nothing
+            dprintln(debug_level, "Didn't process call to function ", func, " ", signature, " ", args)
+            state.fully_analyzed = false
+            return nothing
+        end
+        # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
+        if typeof(res) == InProgress
+            dprintln(debug_level, "Got recursive call to function ", func, " ", signature, " ", args)
+            state.fully_analyzed = false
+            return nothing
+        end
+    else
+        # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
+        call_costs[fs] = InProgress()
+        # If not then try to generate an instruction count estimated.
+        res = generate_instr_count(func, signature)
+        call_costs[fs] = res
+        if res == nothing
+            # If we couldn't do it then set fully_analyzed to false.
+            dprintln(debug_level, "Didn't process call to function ", func, " ", signature, " ", args)
+            state.fully_analyzed = false
+            return nothing
+        end
     end
-    # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
-    if typeof(res) == InProgress
-      dprintln(debug_level, "Got recursive call to function ", func, " ", signature, " ", args)
-      state.fully_analyzed = false
-      return nothing
-    end
-  else
-    # See the comment on the InProgress type above for how this prevents infinite recursive analysis.
-    call_costs[fs] = InProgress()
-    # If not then try to generate an instruction count estimated.
-    res = generate_instr_count(func, signature)
-    call_costs[fs] = res
-    if res == nothing
-      # If we couldn't do it then set fully_analyzed to false.
-      dprintln(debug_level, "Didn't process call to function ", func, " ", signature, " ", args)
-      state.fully_analyzed = false
-      return nothing
-    end
-  end
 
-  assert(typeof(res) == Float64)
-  state.non_calls = state.non_calls + res
-  return nothing
+    assert(typeof(res) == Float64)
+    state.non_calls = state.non_calls + res
+    return nothing
 end
 
 @doc """
 Try to figure out the instruction count for a given call.
 """
 function generate_instr_count(function_name, signature)
-  # Estimate instructions for some well-known functions.
-  if function_name == TopNode(:arrayset) || function_name == TopNode(:arrayref)
-    call_costs[(function_name, signature)] = 4.0
-    return call_costs[(function_name, signature)]
-  elseif function_name == TopNode(:unsafe_arrayset) || function_name == TopNode(:unsafe_arrayref)
-    call_costs[(function_name, signature)] = 2.0
-    return call_costs[(function_name, signature)]
-  elseif function_name == TopNode(:safe_arrayref)
-    call_costs[(function_name, signature)] = 6.0
-    return call_costs[(function_name, signature)]
-  elseif function_name == TopNode(:box)
-    call_costs[(function_name, signature)] = 20.0
-    return call_costs[(function_name, signature)]
-  elseif function_name == TopNode(:lt_float) || 
-         function_name == TopNode(:le_float) ||
-         function_name == TopNode(:not_int)
-    call_costs[(function_name, signature)] = 1.0
-    return call_costs[(function_name, signature)]
-  end
+    # Estimate instructions for some well-known functions.
+    if function_name == TopNode(:arrayset) || function_name == TopNode(:arrayref)
+        call_costs[(function_name, signature)] = 4.0
+        return call_costs[(function_name, signature)]
+    elseif function_name == TopNode(:unsafe_arrayset) || function_name == TopNode(:unsafe_arrayref)
+        call_costs[(function_name, signature)] = 2.0
+        return call_costs[(function_name, signature)]
+    elseif function_name == TopNode(:safe_arrayref)
+        call_costs[(function_name, signature)] = 6.0
+        return call_costs[(function_name, signature)]
+    elseif function_name == TopNode(:box)
+        call_costs[(function_name, signature)] = 20.0
+        return call_costs[(function_name, signature)]
+    elseif function_name == TopNode(:lt_float) || 
+        function_name == TopNode(:le_float) ||
+        function_name == TopNode(:not_int)
+        call_costs[(function_name, signature)] = 1.0
+        return call_costs[(function_name, signature)]
+    end
 
-  ftyp = typeof(function_name)
+    ftyp = typeof(function_name)
 
-  if ftyp != Function
-    dprintln(3,"generate_instr_count: instead of Function, got ", ftyp, " ", function_name)
-  end
+    if ftyp != Function
+        dprintln(3,"generate_instr_count: instead of Function, got ", ftyp, " ", function_name)
+    end
 
-  if ftyp == Expr
-    dprintln(3,"eval'ing Expr to Function")
-    function_name = eval(function_name)
-  elseif ftyp == GlobalRef
-    #dprintln(3,"Calling getfield")
-    function_name = eval(function_name)
-    #function_name = getfield(function_name.mod, function_name.name)
-  elseif ftyp == IntrinsicFunction
-    dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
-    call_costs[(function_name, signature)] = nothing
+    if ftyp == Expr
+        dprintln(3,"eval'ing Expr to Function")
+        function_name = eval(function_name)
+    elseif ftyp == GlobalRef
+        #dprintln(3,"Calling getfield")
+        function_name = eval(function_name)
+        #function_name = getfield(function_name.mod, function_name.name)
+    elseif ftyp == IntrinsicFunction
+        dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
+        call_costs[(function_name, signature)] = nothing
+        return call_costs[(function_name, signature)]
+    end
+
+    if typeof(function_name) != Function || !isgeneric(function_name)
+        dprintln(3, "generate_instr_count: function_name is not a Function = ", function_name)
+        call_costs[(function_name, signature)] = nothing
+        return call_costs[(function_name, signature)]
+    end
+
+    m = methods(function_name, signature)
+    if length(m) < 1
+        return nothing
+        #    error("Method for ", function_name, " with signature ", signature, " is not found")
+    end
+
+    ct = ParallelAccelerator.Driver.code_typed(function_name, signature)      # get information about code for the given function and signature
+
+    dprintln(2,"generate_instr_count ", function_name, " ", signature)
+    state = eic_state(0, true, nothing)
+    # Try to estimate the instruction count for the other function.
+    AstWalk(ct[1], estimateInstrCount, state)
+    dprintln(2,"instruction count estimate for parfor = ", state)
+    # If so then cache the result.
+    if state.fully_analyzed
+        call_costs[(function_name, signature)] = state.non_calls
+    else
+        call_costs[(function_name, signature)] = nothing
+    end
     return call_costs[(function_name, signature)]
-  end
-
-  if typeof(function_name) != Function || !isgeneric(function_name)
-    dprintln(3, "generate_instr_count: function_name is not a Function = ", function_name)
-    call_costs[(function_name, signature)] = nothing
-    return call_costs[(function_name, signature)]
-  end
-
-  m = methods(function_name, signature)
-  if length(m) < 1
-    return nothing
-#    error("Method for ", function_name, " with signature ", signature, " is not found")
-  end
-
-  ct = ParallelAccelerator.Driver.code_typed(function_name, signature)      # get information about code for the given function and signature
-
-  dprintln(2,"generate_instr_count ", function_name, " ", signature)
-  state = eic_state(0, true, nothing)
-  # Try to estimate the instruction count for the other function.
-  AstWalk(ct[1], estimateInstrCount, state)
-  dprintln(2,"instruction count estimate for parfor = ", state)
-  # If so then cache the result.
-  if state.fully_analyzed
-    call_costs[(function_name, signature)] = state.non_calls
-  else
-    call_costs[(function_name, signature)] = nothing
-  end
-  return call_costs[(function_name, signature)]
 end
 
 @doc """
 AstWalk callback for estimating the instruction count.
 """
 function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_level, read)
-  debug_level = 2
+    debug_level = 2
 
-  asttyp = typeof(ast)
-  if asttyp == Expr
-    if is_top_level
-      dprint(debug_level,"instruction count estimator: Expr ")
-    end
-    head = ast.head
-    args = ast.args
-    typ  = ast.typ
-    if is_top_level
-      dprintln(debug_level,head, " ", args)
-    end
-    if head == :lambda
-      state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-    elseif head == :body
-      # skip
-    elseif head == :block
-      # skip
-    elseif head == :(.)
-#        args = from_exprs(args, depth+1, callback, cbdata, top_level_number, read)
-    elseif head == :(=)
-      state.non_calls = state.non_calls + ASSIGNMENT_COST
-    elseif head == :(::)
-      # skip
-    elseif head == :return
-      state.non_calls = state.non_calls + RETURN_COST
-    elseif head == :call
-      call_instruction_count(args, state, debug_level)
-    elseif head == :call1
-      dprintln(debug_level,head, " not handled in instruction counter")
-#        args = from_call(args, depth, callback, cbdata, top_level_number, read)
-        # TODO?: tuple
-    elseif head == :line
-      # skip
-    elseif head == :copy
-      dprintln(debug_level,head, " not handled in instruction counter")
-      # turn array copy back to plain Julia call
-#        head = :call
-#        args = vcat(:copy, args)
-    elseif head == :copyast
-#        dprintln(2,"copyast type")
-      # skip
-    elseif head == :gotoifnot
-#        dprintln(debug_level,head, " not handled in instruction counter")
-#        assert(length(args) == 2)
-#        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-#      state.fully_analyzed = false
-      state.non_calls = state.non_calls + 1
-    elseif head == :new
-        dprintln(debug_level,head, " not handled in instruction counter")
-#        args = from_exprs(args,depth, callback, cbdata, top_level_number, read)
-    elseif head == :arraysize
-        dprintln(debug_level,head, " not handled in instruction counter")
-#        assert(length(args) == 2)
-#        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-#        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
-    elseif head == :alloc
-        dprintln(debug_level,head, " not handled in instruction counter")
-#        assert(length(args) == 2)
-#        args[2] = from_exprs(args[2], depth, callback, cbdata, top_level_number, read)
-    elseif head == :boundscheck
-        dprintln(debug_level,head, " not handled in instruction counter")
-        # skip
-    elseif head == :type_goto
-        dprintln(debug_level,head, " not handled in instruction counter")
-#        assert(length(args) == 2)
-#        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-#        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
-      state.fully_analyzed = false
-    elseif head == :enter
-        dprintln(debug_level,head, " not handled in instruction counter")
-        # skip
-      state.fully_analyzed = false
-    elseif head == :leave
-        dprintln(debug_level,head, " not handled in instruction counter")
-        # skip
-      state.fully_analyzed = false
-    elseif head == :the_exception
-        # skip
-      state.fully_analyzed = false
-    elseif head == :&
-        # skip
+    asttyp = typeof(ast)
+    if asttyp == Expr
+        if is_top_level
+            dprint(debug_level,"instruction count estimator: Expr ")
+        end
+        head = ast.head
+        args = ast.args
+        typ  = ast.typ
+        if is_top_level
+            dprintln(debug_level,head, " ", args)
+        end
+        if head == :lambda
+            state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+        elseif head == :body
+            # skip
+        elseif head == :block
+            # skip
+        elseif head == :(.)
+            #        args = from_exprs(args, depth+1, callback, cbdata, top_level_number, read)
+        elseif head == :(=)
+            state.non_calls = state.non_calls + ASSIGNMENT_COST
+        elseif head == :(::)
+            # skip
+        elseif head == :return
+            state.non_calls = state.non_calls + RETURN_COST
+        elseif head == :call
+            call_instruction_count(args, state, debug_level)
+        elseif head == :call1
+            dprintln(debug_level,head, " not handled in instruction counter")
+            #        args = from_call(args, depth, callback, cbdata, top_level_number, read)
+            # TODO?: tuple
+        elseif head == :line
+            # skip
+        elseif head == :copy
+            dprintln(debug_level,head, " not handled in instruction counter")
+            # turn array copy back to plain Julia call
+            #        head = :call
+            #        args = vcat(:copy, args)
+        elseif head == :copyast
+            #        dprintln(2,"copyast type")
+            # skip
+        elseif head == :gotoifnot
+            #        dprintln(debug_level,head, " not handled in instruction counter")
+            #        assert(length(args) == 2)
+            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
+            #      state.fully_analyzed = false
+            state.non_calls = state.non_calls + 1
+        elseif head == :new
+            dprintln(debug_level,head, " not handled in instruction counter")
+            #        args = from_exprs(args,depth, callback, cbdata, top_level_number, read)
+        elseif head == :arraysize
+            dprintln(debug_level,head, " not handled in instruction counter")
+            #        assert(length(args) == 2)
+            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
+            #        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
+        elseif head == :alloc
+            dprintln(debug_level,head, " not handled in instruction counter")
+            #        assert(length(args) == 2)
+            #        args[2] = from_exprs(args[2], depth, callback, cbdata, top_level_number, read)
+        elseif head == :boundscheck
+            dprintln(debug_level,head, " not handled in instruction counter")
+            # skip
+        elseif head == :type_goto
+            dprintln(debug_level,head, " not handled in instruction counter")
+            #        assert(length(args) == 2)
+            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
+            #        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
+            state.fully_analyzed = false
+        elseif head == :enter
+            dprintln(debug_level,head, " not handled in instruction counter")
+            # skip
+            state.fully_analyzed = false
+        elseif head == :leave
+            dprintln(debug_level,head, " not handled in instruction counter")
+            # skip
+            state.fully_analyzed = false
+        elseif head == :the_exception
+            # skip
+            state.fully_analyzed = false
+        elseif head == :&
+            # skip
+        else
+            dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
+        end
+    elseif asttyp == Symbol
+        #skip
+    elseif asttyp == SymbolNode # name, typ
+        #skip
+    elseif asttyp == TopNode    # name
+        #skip
+    elseif asttyp == GlobalRef
+        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #    mod = ast.mod
+        #    name = ast.name
+        #    typ = typeof(mod)
+        state.non_calls = state.non_calls + 1
+    elseif asttyp == QuoteNode
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #    value = ast.value
+        #TODO: fields: value
+    elseif asttyp == LineNumberNode
+        #skip
+    elseif asttyp == LabelNode
+        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
+    elseif asttyp == GotoNode
+        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
+        #state.fully_analyzed = false
+        state.non_calls = state.non_calls + 1
+    elseif asttyp == DataType
+        #skip
+    elseif asttyp == ()
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
+    elseif asttyp == ASCIIString
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
+    elseif asttyp == NewvarNode
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
+    elseif asttyp == Void
+        #skip
+        #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
+    elseif isbits(asttyp)
+        #skip
+    elseif isa(ast,Tuple)
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #    new_tt = Expr(:tuple)
+        #    for i = 1:length(ast)
+        #      push!(new_tt.args, get_one(from_expr(ast[i], depth, callback, cbdata, top_level_number, false, read)))
+        #    end
+        #    new_tt.typ = asttyp
+        #    ast = eval(new_tt)
+    elseif asttyp == Module
+        #skip
+    elseif asttyp == NewvarNode
+        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
+        #skip
     else
-        dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
+        dprintln(1,"instruction count estimator: unknown AST (", typeof(ast), ",", ast, ")")
     end
-  elseif asttyp == Symbol
-    #skip
-  elseif asttyp == SymbolNode # name, typ
-    #skip
-  elseif asttyp == TopNode    # name
-    #skip
-  elseif asttyp == GlobalRef
-    #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-#    mod = ast.mod
-#    name = ast.name
-#    typ = typeof(mod)
-    state.non_calls = state.non_calls + 1
-  elseif asttyp == QuoteNode
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-#    value = ast.value
-    #TODO: fields: value
-  elseif asttyp == LineNumberNode
-    #skip
-  elseif asttyp == LabelNode
-    #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-  elseif asttyp == GotoNode
-    #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-    #state.fully_analyzed = false
-    state.non_calls = state.non_calls + 1
-  elseif asttyp == DataType
-    #skip
-  elseif asttyp == ()
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-  elseif asttyp == ASCIIString
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-  elseif asttyp == NewvarNode
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-  elseif asttyp == Void
-    #skip
-  #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
-  elseif isbits(asttyp)
-    #skip
-  elseif isa(ast,Tuple)
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-#    new_tt = Expr(:tuple)
-#    for i = 1:length(ast)
-#      push!(new_tt.args, get_one(from_expr(ast[i], depth, callback, cbdata, top_level_number, false, read)))
-#    end
-#    new_tt.typ = asttyp
-#    ast = eval(new_tt)
-  elseif asttyp == Module
-    #skip
-  elseif asttyp == NewvarNode
-    dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-    #skip
-  else
-    dprintln(1,"instruction count estimator: unknown AST (", typeof(ast), ",", ast, ")")
-  end
 
-  return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 @doc """
 Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.
 """
 function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state :: expr_state)
-  if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
-    dprintln(2,"instruction count estimate for parfor = ", the_parfor)
-    new_state = eic_state(0, true, state.lambdaInfo)
-    for i = 1:length(the_parfor.body)
-      AstWalk(the_parfor.body[i], estimateInstrCount, new_state)
+    if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
+        dprintln(2,"instruction count estimate for parfor = ", the_parfor)
+        new_state = eic_state(0, true, state.lambdaInfo)
+        for i = 1:length(the_parfor.body)
+            AstWalk(the_parfor.body[i], estimateInstrCount, new_state)
+        end
+        # If fully_analyzed is true then there's nothing that couldn't be analyzed so store the instruction count estimate in the parfor.
+        if new_state.fully_analyzed
+            the_parfor.instruction_count_expr = new_state.non_calls
+        else
+            the_parfor.instruction_count_expr = nothing
+        end
+        dprintln(2,"instruction count estimate for parfor = ", the_parfor.instruction_count_expr)
     end
-    # If fully_analyzed is true then there's nothing that couldn't be analyzed so store the instruction count estimate in the parfor.
-    if new_state.fully_analyzed
-      the_parfor.instruction_count_expr = new_state.non_calls
-    else
-      the_parfor.instruction_count_expr = nothing
-    end
-    dprintln(2,"instruction count estimate for parfor = ", the_parfor.instruction_count_expr)
-  end
 end
 
 @doc """
@@ -3614,596 +3614,596 @@ task_graph_mode = ONE_AT_A_TIME
 Control how blocks of code are made into tasks.
 """
 function PIRTaskGraphMode(x)
-  global task_graph_mode = x
+    global task_graph_mode = x
 end
 
 # TOP_LEVEL
 # sequence of expressions
 # ast = [ expr, ... ]
 function top_level_from_exprs(ast::Array{Any,1}, depth, state)
-  len  = length(ast)
-  body = Any[]
-  pre_next_parfor = Any[]
-  fuse_number = 1
+    len  = length(ast)
+    body = Any[]
+    pre_next_parfor = Any[]
+    fuse_number = 1
 
-  main_proc_start = time_ns()
+    main_proc_start = time_ns()
 
-  # Process the top-level expressions of a function and do fusion and useless assignment elimination.
-  for i = 1:len
-    # Record the top-level statement number in the processing state.
-    state.top_level_number = i
-    dprintln(2,"Processing top-level ast #",i," depth=",depth)
+    # Process the top-level expressions of a function and do fusion and useless assignment elimination.
+    for i = 1:len
+        # Record the top-level statement number in the processing state.
+        state.top_level_number = i
+        dprintln(2,"Processing top-level ast #",i," depth=",depth)
 
-    # Convert the current expression.
-    new_exprs = from_expr(ast[i], depth, state, true)
-    assert(isa(new_exprs,Array))
-    # If conversion of current statement resulted in anything.
-    if length(new_exprs) != 0
-      # If this isn't the first statement processed that created something.
-      if length(body) != 0
-        last_node = body[end]
-        dprintln(3, "Should fuse?")
-        dprintln(3, "new = ", new_exprs[1])
-        dprintln(3, "last = ", last_node)
+        # Convert the current expression.
+        new_exprs = from_expr(ast[i], depth, state, true)
+        assert(isa(new_exprs,Array))
+        # If conversion of current statement resulted in anything.
+        if length(new_exprs) != 0
+            # If this isn't the first statement processed that created something.
+            if length(body) != 0
+                last_node = body[end]
+                dprintln(3, "Should fuse?")
+                dprintln(3, "new = ", new_exprs[1])
+                dprintln(3, "last = ", last_node)
 
-        # See if the previous expression is a parfor.
-        is_last_parfor = isParforAssignmentNode(last_node)    || isBareParfor(last_node)
-        # See if the new expression is a parfor.
-        is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
-        dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
+                # See if the previous expression is a parfor.
+                is_last_parfor = isParforAssignmentNode(last_node)    || isBareParfor(last_node)
+                # See if the new expression is a parfor.
+                is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
+                dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
 
-        if is_last_parfor && !is_new_parfor
-          simple = false
-          for j = 1:length(new_exprs)
-            e = new_exprs[j]
-            if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (e.args[2].args[1] == TopNode(:box))
-              dprintln(3, "box operation detected")
-              simple = true
+                if is_last_parfor && !is_new_parfor
+                    simple = false
+                    for j = 1:length(new_exprs)
+                        e = new_exprs[j]
+                        if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (e.args[2].args[1] == TopNode(:box))
+                            dprintln(3, "box operation detected")
+                            simple = true
+                        else
+                            simple = false
+                            break
+                        end
+                    end
+                    if simple
+                        dprintln(3, "insert into pre_next_parfor")
+                        append!(pre_next_parfor, new_exprs)
+                        continue
+                    end
+                end
+
+                # If both are parfors then try to fuse them.
+                if is_new_parfor && is_last_parfor
+                    dprintln(3,"Starting fusion ", fuse_number)
+                    new_exprs[1]
+                    fuse_number = fuse_number + 1
+                    if length(pre_next_parfor) > 0
+                        dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
+                        new_parfor = getParforNode(new_exprs[1])
+                        new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
+                    end
+                    fuse_ret = fuse(body, length(body), new_exprs[1], state)
+                    if fuse_ret>0
+                        # 2 means combination of old and new parfors has no output and both are dead
+                        if fuse_ret==2
+                            # remove last parfor and don't add anything new
+                            pop!(body)
+                        end
+                        pre_next_parfor = Any[]
+                        # If fused then the new node is consumed and no new node is added to the body.
+                        continue
+                    end
+                end
+
+                new_exprs = [ pre_next_parfor; new_exprs ]
+                pre_next_parfor = Any[]
+                # Do this transformation:  a = ...; b = a; becomes b = ...
+                # Eliminate the variable a if it is never used again.
+                for expr in new_exprs
+                    if false && isAssignmentNode(last_node) &&
+                        isAssignmentNode(expr)
+                        # Detected two assignments in a row.
+                        new_lhs  = expr.args[1]    # The left-hand side of the second assignment.
+                        new_rhs  = expr.args[2]    # The right-hand side of the second assignment.
+                        nrhstype = typeof(new_rhs)         # The type of the right-hand side of the second assignment.
+                        # Find the liveness information for the second assignment.
+                        new_stmt_lives = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+                        # Get the live out information for the second assignment.
+                        new_stmt_live_out = new_stmt_lives.live_out
+                        dprintln(3,"Found two assignments in a row.")
+                        dprintln(3,"new_lhs  = ", new_lhs)
+                        dprintln(3,"new_rhs  = ", new_rhs)
+                        dprintln(3,"nrhstype = ", nrhstype)
+                        dprintln(3,"lives = ", new_stmt_lives)
+                        dprintln(3,"lives.out = ", new_stmt_lives.live_out)
+
+                        # If the right-hand side is a simple symbol and that symbol isn't used after this statement.
+                        if nrhstype == SymbolNode && !in(getSName(new_rhs), new_stmt_live_out)
+                            # How we remove a depends on where a is...whether embedded in a fusion assignment or by itself.
+                            if isFusionAssignment(last_node)
+                                dprintln(3,"Last node is a fusion assignment.")
+                                removed_assignment = false
+                                # The left-hand side of the previous assignment is a Fusion assignment node.
+                                # So, look at the real output names stored in that node.
+                                for i = 4:length(last_node.args)
+                                    assert(typeof(last_node.args[i]) == SymbolNode)
+                                    dprintln(3,"Testing against ", last_node.args[i])
+                                    if getSName(last_node.args[i]) == getSName(new_rhs)
+                                        dprintln(3,"Removing an unnecessary assignment statement in a fusion extended assignment.")
+                                        # Found the variable to replace in the real output list so replace it.
+                                        CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, last_node.args[i].name)
+                                        last_node.args[i].name = getSName(new_lhs)
+                                        removed_assignment = true
+                                        break
+                                    end
+                                end
+                                if removed_assignment
+                                    # If we found an item to remove then update the parfor nodes top-level list to encompass this assignment.
+                                    # This is really a fusion of an assignment statement into a parfor.
+                                    last_parfor = getParforNode(last_node)
+                                    push!(last_parfor.top_level_number, state.top_level_number)
+                                    continue
+                                end
+                            else
+                                # Left-hand side of previous assignment was simple.
+                                prev_lhs = last_node.args[1]
+                                dprintln(3,"prev_lhs = ", prev_lhs)
+
+                                # If the names match...
+                                if getSName(prev_lhs) == getSName(new_rhs)
+                                    dprintln(3,"Removing an unnecessary assignment statement.")
+                                    # ...replace with the left-hand side of the second assignment.
+                                    last_node.args[1] = new_lhs
+                                    CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, getSName(prev_lhs))
+                                    continue
+                                end
+                            end
+                        end
+                    end
+                    push!(body, expr)
+                    last_node = expr
+                end
             else
-              simple = false
-              break
+                append!(body, new_exprs)
             end
-          end
-          if simple
-            dprintln(3, "insert into pre_next_parfor")
-            append!(pre_next_parfor, new_exprs)
-            continue
-          end
         end
+    end
 
-        # If both are parfors then try to fuse them.
-        if is_new_parfor && is_last_parfor
-          dprintln(3,"Starting fusion ", fuse_number)
-          new_exprs[1]
-          fuse_number = fuse_number + 1
-          if length(pre_next_parfor) > 0
-            dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
-            new_parfor = getParforNode(new_exprs[1])
-            new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
-          end
-     	  fuse_ret = fuse(body, length(body), new_exprs[1], state)
-	      if fuse_ret>0
-		    # 2 means combination of old and new parfors has no output and both are dead
-  		    if fuse_ret==2
-			  # remove last parfor and don't add anything new
-			  pop!(body)
-		    end
-            pre_next_parfor = Any[]
-            # If fused then the new node is consumed and no new node is added to the body.
-            continue
-          end
-        end
+    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
 
-        new_exprs = [ pre_next_parfor; new_exprs ]
-        pre_next_parfor = Any[]
-        # Do this transformation:  a = ...; b = a; becomes b = ...
-        # Eliminate the variable a if it is never used again.
-        for expr in new_exprs
-          if false && isAssignmentNode(last_node) &&
-             isAssignmentNode(expr)
-            # Detected two assignments in a row.
-            new_lhs  = expr.args[1]    # The left-hand side of the second assignment.
-            new_rhs  = expr.args[2]    # The right-hand side of the second assignment.
-            nrhstype = typeof(new_rhs)         # The type of the right-hand side of the second assignment.
-            # Find the liveness information for the second assignment.
-            new_stmt_lives = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
-            # Get the live out information for the second assignment.
-            new_stmt_live_out = new_stmt_lives.live_out
-            dprintln(3,"Found two assignments in a row.")
-            dprintln(3,"new_lhs  = ", new_lhs)
-            dprintln(3,"new_rhs  = ", new_rhs)
-            dprintln(3,"nrhstype = ", nrhstype)
-            dprintln(3,"lives = ", new_stmt_lives)
-            dprintln(3,"lives.out = ", new_stmt_lives.live_out)
+    dprintln(3,"Body after first pass before task graph creation.")
+    for j = 1:length(body)
+        dprintln(3, body[j])
+    end
 
-            # If the right-hand side is a simple symbol and that symbol isn't used after this statement.
-            if nrhstype == SymbolNode && !in(getSName(new_rhs), new_stmt_live_out)
-              # How we remove a depends on where a is...whether embedded in a fusion assignment or by itself.
-              if isFusionAssignment(last_node)
-                dprintln(3,"Last node is a fusion assignment.")
-                removed_assignment = false
-                # The left-hand side of the previous assignment is a Fusion assignment node.
-                # So, look at the real output names stored in that node.
-                for i = 4:length(last_node.args)
-                  assert(typeof(last_node.args[i]) == SymbolNode)
-                  dprintln(3,"Testing against ", last_node.args[i])
-                  if getSName(last_node.args[i]) == getSName(new_rhs)
-                    dprintln(3,"Removing an unnecessary assignment statement in a fusion extended assignment.")
-                    # Found the variable to replace in the real output list so replace it.
-                    CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, last_node.args[i].name)
-                    last_node.args[i].name = getSName(new_lhs)
-                    removed_assignment = true
-                    break
-                  end
+    expanded_body = Any[]
+
+    # TASK GRAPH
+
+    if polyhedral != 0
+        # Anand: you can insert code here.
+    end
+
+    rr = ReplacedRegion[]
+
+    expand_start = time_ns()
+
+    # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
+    for i = 1:length(body)
+        if isParforAssignmentNode(body[i])
+            parfor_assignment = body[i]
+            dprintln(3,"Expanding a parfor assignment node")
+
+            the_parfor = getParforNode(parfor_assignment)
+            lhs = getLhsFromAssignment(parfor_assignment)
+            rhs = getRhsFromAssignment(parfor_assignment)
+
+            # Add all the pre-parfor statements to the expanded body.
+            append!(expanded_body, the_parfor.preParFor)
+            the_parfor.preParFor = Any[]
+
+            # Add just the parfor to the expanded body.  The post-parfor part removed below.
+            assert(typeof(rhs) == Expr)
+            rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
+            push!(expanded_body, rhs)
+
+            # All the post parfor part to the expanded body.
+            # The regular part of the post parfor is just added.
+            # The part that indicates the return values creates individual assignment statements for each thing returned.
+            if isFusionAssignment(parfor_assignment)
+                append!(expanded_body, the_parfor.postParFor[1:end-1])
+                for j = 4:length(parfor_assignment.args)
+                    push!(expanded_body, mk_assignment_expr(parfor_assignment.args[j], the_parfor.postParFor[end][j-3], state))
                 end
-                if removed_assignment
-                  # If we found an item to remove then update the parfor nodes top-level list to encompass this assignment.
-                  # This is really a fusion of an assignment statement into a parfor.
-                  last_parfor = getParforNode(last_node)
-                  push!(last_parfor.top_level_number, state.top_level_number)
-                  continue
-                end
-              else
-                # Left-hand side of previous assignment was simple.
-                prev_lhs = last_node.args[1]
-                dprintln(3,"prev_lhs = ", prev_lhs)
-
-                # If the names match...
-                if getSName(prev_lhs) == getSName(new_rhs)
-                  dprintln(3,"Removing an unnecessary assignment statement.")
-                  # ...replace with the left-hand side of the second assignment.
-                  last_node.args[1] = new_lhs
-                  CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, getSName(prev_lhs))
-                  continue
-                end
-              end
+            else
+                append!(expanded_body, the_parfor.postParFor[1:end-1])
+                push!(expanded_body, mk_assignment_expr(lhs, the_parfor.postParFor[end], state))
             end
-          end
-          push!(body, expr)
-          last_node = expr
+            the_parfor.postParFor = Any[]
+            push!(the_parfor.postParFor, 0)
+            createInstructionCountEstimate(the_parfor, state)
+        elseif isBareParfor(body[i])
+            rhs = body[i]
+            the_parfor = rhs.args[1]
+
+            # Add all the pre-parfor statements to the expanded body.
+            append!(expanded_body, the_parfor.preParFor)
+            the_parfor.preParFor = Any[]
+
+            # Add just the parfor to the expanded body.  The post-parfor part removed below.
+            assert(typeof(rhs) == Expr)
+            rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
+            push!(expanded_body, rhs)
+
+            the_parfor.postParFor = Any[]
+            push!(the_parfor.postParFor, 0)
+            createInstructionCountEstimate(the_parfor, state)
+        else
+            push!(expanded_body, body[i])
         end
-      else
-        append!(body, new_exprs)
-      end
     end
-  end
 
-  dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+    dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
 
-  dprintln(3,"Body after first pass before task graph creation.")
-  for j = 1:length(body)
-    dprintln(3, body[j])
-  end
+    body = expanded_body
 
-  expanded_body = Any[]
-
-  # TASK GRAPH
-
-  if polyhedral != 0
-    # Anand: you can insert code here.
-  end
-
-  rr = ReplacedRegion[]
-
-  expand_start = time_ns()
-
-  # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
-  for i = 1:length(body)
-    if isParforAssignmentNode(body[i])
-      parfor_assignment = body[i]
-      dprintln(3,"Expanding a parfor assignment node")
-
-      the_parfor = getParforNode(parfor_assignment)
-      lhs = getLhsFromAssignment(parfor_assignment)
-      rhs = getRhsFromAssignment(parfor_assignment)
-
-      # Add all the pre-parfor statements to the expanded body.
-      append!(expanded_body, the_parfor.preParFor)
-      the_parfor.preParFor = Any[]
-
-      # Add just the parfor to the expanded body.  The post-parfor part removed below.
-      assert(typeof(rhs) == Expr)
-      rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
-      push!(expanded_body, rhs)
-
-      # All the post parfor part to the expanded body.
-      # The regular part of the post parfor is just added.
-      # The part that indicates the return values creates individual assignment statements for each thing returned.
-      if isFusionAssignment(parfor_assignment)
-        append!(expanded_body, the_parfor.postParFor[1:end-1])
-        for j = 4:length(parfor_assignment.args)
-          push!(expanded_body, mk_assignment_expr(parfor_assignment.args[j], the_parfor.postParFor[end][j-3], state))
-        end
-      else
-        append!(expanded_body, the_parfor.postParFor[1:end-1])
-        push!(expanded_body, mk_assignment_expr(lhs, the_parfor.postParFor[end], state))
-      end
-      the_parfor.postParFor = Any[]
-      push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor, state)
-    elseif isBareParfor(body[i])
-      rhs = body[i]
-      the_parfor = rhs.args[1]
-
-      # Add all the pre-parfor statements to the expanded body.
-      append!(expanded_body, the_parfor.preParFor)
-      the_parfor.preParFor = Any[]
-
-      # Add just the parfor to the expanded body.  The post-parfor part removed below.
-      assert(typeof(rhs) == Expr)
-      rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
-      push!(expanded_body, rhs)
-
-      the_parfor.postParFor = Any[]
-      push!(the_parfor.postParFor, 0)
-      createInstructionCountEstimate(the_parfor, state)
-    else
-      push!(expanded_body, body[i])
+    dprintln(3,"expanded_body = ")
+    for j = 1:length(body)
+        dprintln(3, body[j])
     end
-  end
 
-  dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
-
-  body = expanded_body
-
-  dprintln(3,"expanded_body = ")
-  for j = 1:length(body)
-    dprintln(3, body[j])
-  end
-
-  fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-  dprintln(3,"fake_body = ", fake_body)
-  new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-  dprintln(1,"Starting loop analysis.")
-  loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-  dprintln(1,"Finished loop analysis.")
-
-  if hoist_allocation == 1
-    body = hoistAllocation(body, new_lives, loop_info, state)
     fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+    dprintln(3,"fake_body = ", fake_body)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-    dprintln(1,"Starting loop analysis again.")
+    dprintln(1,"Starting loop analysis.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
     dprintln(1,"Finished loop analysis.")
-  end
 
-  dprintln(3,"new_lives = ", new_lives)
-  dprintln(3,"loop_info = ", loop_info)
-
-  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
-    task_start = time_ns()
-
-    # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
-    # AliasAnalysis.analyze_lambda_body(fake_body, state.param, state.meta2_typed, new_lives)
-
-    # Create a mapping between the minimized basic block numbers and indices in body that are in those correponding basic blocks.
-    map_reduced_bb_num_to_body = Dict{Int,Array{Int,1}}()
-    for i = 1:length(body)
-      # Get the basic block number for the first top level number associated with this entry in body.
-      bb_num = CompilerTools.LivenessAnalysis.find_bb_for_statement(i, new_lives)
-      if bb_num == nothing
-          if typeof(body[i]) != LabelNode
-              dprintln(0,"statement that couldn't be found in liveness analysis ", body[i])
-              throw(string("find_bb_for_statement should not fail for non-LabelNodes"))
-          end
-          continue
-      end
-      # If not previously in the map then initialize it with the current body index.  Otherwise, add the current body index
-      # as also mapping to its containing basic block.
-      if !haskey(map_reduced_bb_num_to_body, bb_num)
-          map_reduced_bb_num_to_body[bb_num] = [i]
-      else
-          map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num], i]
-      end
+    if hoist_allocation == 1
+        body = hoistAllocation(body, new_lives, loop_info, state)
+        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+        dprintln(1,"Starting loop analysis again.")
+        loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
+        dprintln(1,"Finished loop analysis.")
     end
 
-    dprintln(3,"map_reduced_bb_num_to_body = ", map_reduced_bb_num_to_body)
+    dprintln(3,"new_lives = ", new_lives)
+    dprintln(3,"loop_info = ", loop_info)
 
-    bbs_in_task_graph_loops = Set()
-    bbs = new_lives.basic_blocks
-    #tgsections = TaskGraphSection[]
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
+        task_start = time_ns()
 
-    if put_loops_in_task_graph
-      # For each loop that loop analysis identified.
-      for one_loop in loop_info.loops
-        # If the loop is "simple", i.e., has no just a body and a back-edge and no conditionals or nested loops.
-        if length(one_loop.members) == 2
-          # This is sort of sanity checking because the way Julia creates loops, these conditions should probably always hold.
-          head_bb = bbs[one_loop.head]
-          back_bb = bbs[one_loop.back_edge]
+        # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
+        # AliasAnalysis.analyze_lambda_body(fake_body, state.param, state.meta2_typed, new_lives)
 
-          if length(head_bb.preds) == 2 &&
-             length(head_bb.succs) == 1 &&
-             length(back_bb.preds) == 1 &&
-             length(back_bb.succs) == 2
-            before_head = getNonBlock(head_bb.preds, one_loop.back_edge)
-            assert(typeof(before_head) == CompilerTools.LivenessAnalysis.BasicBlock)
-            dprintln(3,"head_bb.preds = ", head_bb.preds, " one_loop.back_edge = ", one_loop.back_edge, " before_head = ", before_head)
-            # assert(length(before_head) == 1)
-            after_back  = getNonBlock(back_bb.succs, one_loop.head)
-            assert(typeof(after_back) == CompilerTools.LivenessAnalysis.BasicBlock)
-            #assert(length(after_back) == 1)
-
-            head_indices = map_reduced_bb_num_to_body[one_loop.head]
-            head_first_parfor = nothing
-            for j = 1:length(head_indices)
-              if isParforAssignmentNode(body[head_indices[j]]) || isBareParfor(body[head_indices[j]])
-                head_first_parfor = j
-                break
-              end
-            end
-
-            back_indices = map_reduced_bb_num_to_body[one_loop.back_edge]
-            back_first_parfor = nothing
-            for j = 1:length(back_indices)
-              if isParforAssignmentNode(body[back_indices[j]]) || isBareParfor(body[back_indices[j]])
-                back_first_parfor = j
-                break
-              end
-            end
-
-            if head_first_parfor != nothing || back_first_parfor != nothing
-              new_bbs_for_set = Set(one_loop.head, one_loop.back_edge, before_head.label, after_back.label)
-              assert(length(intersect(bbs_in_task_graph_loops, new_bbs_for_set)) == 0)
-              bbs_in_task_graph_loops = union(bbs_in_task_graph_loops, new_bbs_for_set)
-
-              before_indices = map_reduced_bb_num_to_body[before_head.label]
-              before_first_parfor = nothing
-              for j = 1:length(before_indices)
-                if isParforAssignmentNode(body[before_indices[j]]) || isBareParfor(body[body_indices[j]])
-                  before_first_parfor = j
-                  break
+        # Create a mapping between the minimized basic block numbers and indices in body that are in those correponding basic blocks.
+        map_reduced_bb_num_to_body = Dict{Int,Array{Int,1}}()
+        for i = 1:length(body)
+            # Get the basic block number for the first top level number associated with this entry in body.
+            bb_num = CompilerTools.LivenessAnalysis.find_bb_for_statement(i, new_lives)
+            if bb_num == nothing
+                if typeof(body[i]) != LabelNode
+                    dprintln(0,"statement that couldn't be found in liveness analysis ", body[i])
+                    throw(string("find_bb_for_statement should not fail for non-LabelNodes"))
                 end
-              end
-
-              after_indices = map_reduced_bb_num_to_body[after_back.label]
-              after_first_parfor = nothing
-              for j = 1:length(after_indices)
-                if isParforAssignmentNode(body[after_indices[j]]) || isBareParfor(body[after_indices[j]])
-                  after_first_parfor = j
-                  break
-                end
-              end
-
-    #          bb_live_info = new_lives.basic_blocks[bb_num]
-    #          push!(replaced_regions, (first_parfor, last_parfor, makeTasks(first_parfor, last_parfor, body, bb_live_info)))
-
+                continue
             end
-          else
-            dprintln(1,"Found a loop with 2 members but unexpected head or back_edge structure.")
-            dprintln(1,"head = ", head_bb)
-            dprintln(1,"back_edge = ", back_bb)
-          end
-        end
-      end
-    end
-
-    for i in map_reduced_bb_num_to_body
-      bb_num = i[1]
-      body_indices = i[2]
-      bb_live_info = new_lives.basic_blocks[new_lives.cfg.basic_blocks[bb_num]]
-
-      if !in(bb_num, bbs_in_task_graph_loops)
-        if task_graph_mode == SEQUENTIAL_TASKS
-          # Find the first parfor in the block.
-          first_parfor = nothing
-          for j = 1:length(body_indices)
-            if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
-              first_parfor = body_indices[j]
-              break
-            end
-          end
-
-          # If we found a parfor in the block.
-          if first_parfor != nothing
-            # Find the last parfor in the block...it might be the same as the first.
-            last_parfor = nothing
-            for j = length(body_indices):-1:1
-              if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
-                last_parfor = body_indices[j]
-                break
-              end
-            end
-            assert(last_parfor != nothing)
-
-            # Remember this section of code as something to transform into task graph format.
-            #push!(tgsections, TaskGraphSection(first_parfor, last_parfor, body[first_parfor:last_parfor]))
-            #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-            push!(rr, ReplacedRegion(first_parfor, last_parfor, bb_num, makeTasks(first_parfor, last_parfor, body, bb_live_info, state, task_graph_mode)))
-          end
-        elseif task_graph_mode == ONE_AT_A_TIME
-          for j = 1:length(body_indices)
-            if taskableParfor(body[body_indices[j]])
-              # Remember this section of code as something to transform into task graph format.
-              cur_start = cur_end = body_indices[j]
-              #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-              #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-              push!(rr, ReplacedRegion(body_indices[j], body_indices[j], bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-            end
-          end
-        elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
-          cur_start = nothing
-          cur_end   = nothing
-          stmts_in_batch = Int64[]
-
-          for j = 1:length(body_indices)
-            if taskableParfor(body[body_indices[j]])
-              if cur_start == nothing
-                cur_start = cur_end = body_indices[j]
-              else
-                cur_end = body_indices[j]
-              end 
-              push!(stmts_in_batch, body_indices[j])
+            # If not previously in the map then initialize it with the current body index.  Otherwise, add the current body index
+            # as also mapping to its containing basic block.
+            if !haskey(map_reduced_bb_num_to_body, bb_num)
+                map_reduced_bb_num_to_body[bb_num] = [i]
             else
-              if cur_start != nothing
-                dprintln(3,"Non-taskable parfor ", stmts_in_batch, " ", body[body_indices[j]])
-                in_vars, out, locals = io_of_stmts_in_batch = getIO(stmts_in_batch, bb_live_info.statements)
-                dprintln(3,"in_vars = ", in_vars)
-                dprintln(3,"out_vars = ", out)
-                dprintln(3,"local_vars = ", locals)
+                map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num], i]
+            end
+        end
 
-                cur_in_vars, cur_out, cur_locals = io_of_stmts_in_batch = getIO([body_indices[j]], bb_live_info.statements)
-                dprintln(3,"cur_in_vars = ", cur_in_vars)
-                dprintln(3,"cur_out_vars = ", cur_out)
-                dprintln(3,"cur_local_vars = ", cur_locals)
+        dprintln(3,"map_reduced_bb_num_to_body = ", map_reduced_bb_num_to_body)
 
-                if isempty(intersect(out, cur_in_vars))
-                  dprintln(3,"Sequential statement doesn't conflict with batch.")
-                  push!(stmts_in_batch, body_indices[j])
-                  cur_end = body_indices[j]
+        bbs_in_task_graph_loops = Set()
+        bbs = new_lives.basic_blocks
+        #tgsections = TaskGraphSection[]
+
+        if put_loops_in_task_graph
+            # For each loop that loop analysis identified.
+            for one_loop in loop_info.loops
+                # If the loop is "simple", i.e., has no just a body and a back-edge and no conditionals or nested loops.
+                if length(one_loop.members) == 2
+                    # This is sort of sanity checking because the way Julia creates loops, these conditions should probably always hold.
+                    head_bb = bbs[one_loop.head]
+                    back_bb = bbs[one_loop.back_edge]
+
+                    if length(head_bb.preds) == 2 &&
+                        length(head_bb.succs) == 1 &&
+                        length(back_bb.preds) == 1 &&
+                        length(back_bb.succs) == 2
+                        before_head = getNonBlock(head_bb.preds, one_loop.back_edge)
+                        assert(typeof(before_head) == CompilerTools.LivenessAnalysis.BasicBlock)
+                        dprintln(3,"head_bb.preds = ", head_bb.preds, " one_loop.back_edge = ", one_loop.back_edge, " before_head = ", before_head)
+                        # assert(length(before_head) == 1)
+                        after_back  = getNonBlock(back_bb.succs, one_loop.head)
+                        assert(typeof(after_back) == CompilerTools.LivenessAnalysis.BasicBlock)
+                        #assert(length(after_back) == 1)
+
+                        head_indices = map_reduced_bb_num_to_body[one_loop.head]
+                        head_first_parfor = nothing
+                        for j = 1:length(head_indices)
+                            if isParforAssignmentNode(body[head_indices[j]]) || isBareParfor(body[head_indices[j]])
+                                head_first_parfor = j
+                                break
+                            end
+                        end
+
+                        back_indices = map_reduced_bb_num_to_body[one_loop.back_edge]
+                        back_first_parfor = nothing
+                        for j = 1:length(back_indices)
+                            if isParforAssignmentNode(body[back_indices[j]]) || isBareParfor(body[back_indices[j]])
+                                back_first_parfor = j
+                                break
+                            end
+                        end
+
+                        if head_first_parfor != nothing || back_first_parfor != nothing
+                            new_bbs_for_set = Set(one_loop.head, one_loop.back_edge, before_head.label, after_back.label)
+                            assert(length(intersect(bbs_in_task_graph_loops, new_bbs_for_set)) == 0)
+                            bbs_in_task_graph_loops = union(bbs_in_task_graph_loops, new_bbs_for_set)
+
+                            before_indices = map_reduced_bb_num_to_body[before_head.label]
+                            before_first_parfor = nothing
+                            for j = 1:length(before_indices)
+                                if isParforAssignmentNode(body[before_indices[j]]) || isBareParfor(body[body_indices[j]])
+                                    before_first_parfor = j
+                                    break
+                                end
+                            end
+
+                            after_indices = map_reduced_bb_num_to_body[after_back.label]
+                            after_first_parfor = nothing
+                            for j = 1:length(after_indices)
+                                if isParforAssignmentNode(body[after_indices[j]]) || isBareParfor(body[after_indices[j]])
+                                    after_first_parfor = j
+                                    break
+                                end
+                            end
+
+                            #          bb_live_info = new_lives.basic_blocks[bb_num]
+                            #          push!(replaced_regions, (first_parfor, last_parfor, makeTasks(first_parfor, last_parfor, body, bb_live_info)))
+
+                        end
+                    else
+                        dprintln(1,"Found a loop with 2 members but unexpected head or back_edge structure.")
+                        dprintln(1,"head = ", head_bb)
+                        dprintln(1,"back_edge = ", back_bb)
+                    end
+                end
+            end
+        end
+
+        for i in map_reduced_bb_num_to_body
+            bb_num = i[1]
+            body_indices = i[2]
+            bb_live_info = new_lives.basic_blocks[new_lives.cfg.basic_blocks[bb_num]]
+
+            if !in(bb_num, bbs_in_task_graph_loops)
+                if task_graph_mode == SEQUENTIAL_TASKS
+                    # Find the first parfor in the block.
+                    first_parfor = nothing
+                    for j = 1:length(body_indices)
+                        if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
+                            first_parfor = body_indices[j]
+                            break
+                        end
+                    end
+
+                    # If we found a parfor in the block.
+                    if first_parfor != nothing
+                        # Find the last parfor in the block...it might be the same as the first.
+                        last_parfor = nothing
+                        for j = length(body_indices):-1:1
+                            if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
+                                last_parfor = body_indices[j]
+                                break
+                            end
+                        end
+                        assert(last_parfor != nothing)
+
+                        # Remember this section of code as something to transform into task graph format.
+                        #push!(tgsections, TaskGraphSection(first_parfor, last_parfor, body[first_parfor:last_parfor]))
+                        #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+
+                        push!(rr, ReplacedRegion(first_parfor, last_parfor, bb_num, makeTasks(first_parfor, last_parfor, body, bb_live_info, state, task_graph_mode)))
+                    end
+                elseif task_graph_mode == ONE_AT_A_TIME
+                    for j = 1:length(body_indices)
+                        if taskableParfor(body[body_indices[j]])
+                            # Remember this section of code as something to transform into task graph format.
+                            cur_start = cur_end = body_indices[j]
+                            #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
+                            #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+
+                            push!(rr, ReplacedRegion(body_indices[j], body_indices[j], bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
+                        end
+                    end
+                elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
+                    cur_start = nothing
+                    cur_end   = nothing
+                    stmts_in_batch = Int64[]
+
+                    for j = 1:length(body_indices)
+                        if taskableParfor(body[body_indices[j]])
+                            if cur_start == nothing
+                                cur_start = cur_end = body_indices[j]
+                            else
+                                cur_end = body_indices[j]
+                            end 
+                            push!(stmts_in_batch, body_indices[j])
+                        else
+                            if cur_start != nothing
+                                dprintln(3,"Non-taskable parfor ", stmts_in_batch, " ", body[body_indices[j]])
+                                in_vars, out, locals = io_of_stmts_in_batch = getIO(stmts_in_batch, bb_live_info.statements)
+                                dprintln(3,"in_vars = ", in_vars)
+                                dprintln(3,"out_vars = ", out)
+                                dprintln(3,"local_vars = ", locals)
+
+                                cur_in_vars, cur_out, cur_locals = io_of_stmts_in_batch = getIO([body_indices[j]], bb_live_info.statements)
+                                dprintln(3,"cur_in_vars = ", cur_in_vars)
+                                dprintln(3,"cur_out_vars = ", cur_out)
+                                dprintln(3,"cur_local_vars = ", cur_locals)
+
+                                if isempty(intersect(out, cur_in_vars))
+                                    dprintln(3,"Sequential statement doesn't conflict with batch.")
+                                    push!(stmts_in_batch, body_indices[j])
+                                    cur_end = body_indices[j]
+                                else
+                                    # Remember this section of code (excluding current statement) as something to transform into task graph format.
+                                    #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
+                                    #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+
+                                    push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
+
+                                    cur_start = cur_end = nothing
+                                    stmts_in_batch = Int64[]
+                                end
+                            end
+                        end
+                    end
+
+                    if cur_start != nothing
+                        # Remember this section of code as something to transform into task graph format.
+                        #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
+                        #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+
+                        push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
+                    end
                 else
-                  # Remember this section of code (excluding current statement) as something to transform into task graph format.
-                  #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                  #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-  
-                  push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-                
-                  cur_start = cur_end = nothing
-                  stmts_in_batch = Int64[]
+                    throw(string("Unknown Parallel IR task graph formation mode."))
                 end
-              end
             end
-          end
-
-          if cur_start != nothing
-            # Remember this section of code as something to transform into task graph format.
-            #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-            #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-            push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-          end
-        else
-          throw(string("Unknown Parallel IR task graph formation mode."))
         end
-      end
-    end
 
-    dprintln(3,"Regions prior to sorting.")
-    dprintln(3,rr)
-    # We replace regions in reverse order of index so that we don't mess up indices that we need to replace later.
-    sort!(rr, by=x -> x.end_index, rev=true)
-    dprintln(3,"Regions after sorting.")
-    dprintln(3,rr)
+        dprintln(3,"Regions prior to sorting.")
+        dprintln(3,rr)
+        # We replace regions in reverse order of index so that we don't mess up indices that we need to replace later.
+        sort!(rr, by=x -> x.end_index, rev=true)
+        dprintln(3,"Regions after sorting.")
+        dprintln(3,rr)
 
-    printBody(3,body)
+        printBody(3,body)
 
-    dprintln(2, "replaced_regions")
-    for i = 1:length(rr)
-      dprintln(2, rr[i])
+        dprintln(2, "replaced_regions")
+        for i = 1:length(rr)
+            dprintln(2, rr[i])
 
-      if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-        # new body starts with the pre-task graph portion
-        new_body = body[1:rr[i].start_index-1]
-        copy_back = Any[]
+            if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+                # new body starts with the pre-task graph portion
+                new_body = body[1:rr[i].start_index-1]
+                copy_back = Any[]
 
-        # then adds calls for each task
-        for j = 1:length(rr[i].tasks)
-          cur_task = rr[i].tasks[j]
-          dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
-          if typeof(cur_task) == TaskInfo
-            range_var = string(cur_task.task_func,"_range_var")
-            range_sym = symbol(range_var)
+                # then adds calls for each task
+                for j = 1:length(rr[i].tasks)
+                    cur_task = rr[i].tasks[j]
+                    dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
+                    if typeof(cur_task) == TaskInfo
+                        range_var = string(cur_task.task_func,"_range_var")
+                        range_sym = symbol(range_var)
 
-            dprintln(3,"Inserting call to jl_threading_run ", range_sym)
-            dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+                        dprintln(3,"Inserting call to jl_threading_run ", range_sym)
+                        dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
-            in_len  = length(cur_task.input_symbols)
-            mod_len = length(cur_task.modified_inputs)
-            io_len  = length(cur_task.io_symbols)
-            red_len = length(cur_task.reduction_vars)
-            dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
+                        in_len  = length(cur_task.input_symbols)
+                        mod_len = length(cur_task.modified_inputs)
+                        io_len  = length(cur_task.io_symbols)
+                        red_len = length(cur_task.reduction_vars)
+                        dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
 
-            dims = length(cur_task.loopNests)
-            if dims > 0
-              dprintln(3,"dims > 0")
-              assert(dims <= 3)
-              #whole_iteration_range = pir_range_actual()
-              #whole_iteration_range.dim = dims
-              cstr_params = Any[]
-              for l = 1:dims
-                # Note that loopNest is outer-dimension first
-                # Should this still be outer-dimension first?  FIX FIX FIX
-                push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
-                push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
-                #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
-                #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
-              end
-              dprintln(3, "cstr_params = ", cstr_params)
-              cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-              whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
-              dprintln(3,"whole_range_expr = ", whole_range_expr)
-              push!(new_body, whole_range_expr) 
+                        dims = length(cur_task.loopNests)
+                        if dims > 0
+                            dprintln(3,"dims > 0")
+                            assert(dims <= 3)
+                            #whole_iteration_range = pir_range_actual()
+                            #whole_iteration_range.dim = dims
+                            cstr_params = Any[]
+                            for l = 1:dims
+                                # Note that loopNest is outer-dimension first
+                                # Should this still be outer-dimension first?  FIX FIX FIX
+                                push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
+                                push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
+                                #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
+                                #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
+                            end
+                            dprintln(3, "cstr_params = ", cstr_params)
+                            cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
+                            whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
+                            dprintln(3,"whole_range_expr = ", whole_range_expr)
+                            push!(new_body, whole_range_expr) 
 
-#    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
+                            #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
 
-              real_args_build = Any[]
-              args_type = Expr(:tuple)
+                            real_args_build = Any[]
+                            args_type = Expr(:tuple)
 
-              # Fill in the arg metadata.
-              for l = 1:in_len
-                push!(real_args_build, cur_task.input_symbols[l].name)
-                push!(args_type.args,  cur_task.input_symbols[l].typ)
-              end
-              for l = 1:mod_len
-                push!(real_args_build, cur_task.modified_inputs[l].name)
-                push!(args_type.args,  cur_task.modified_inputs[l].typ)
-              end
-              for l = 1:io_len
-                push!(real_args_build, cur_task.io_symbols[l].name)
-                push!(args_type.args,  cur_task.io_symbols[l].typ)
-              end
-              for l = 1:red_len
-                push!(real_args_build, cur_task.reduction_vars[l].name)
-                push!(args_type.args,  cur_task.reduction_vars[l].typ)
-              end
+                            # Fill in the arg metadata.
+                            for l = 1:in_len
+                                push!(real_args_build, cur_task.input_symbols[l].name)
+                                push!(args_type.args,  cur_task.input_symbols[l].typ)
+                            end
+                            for l = 1:mod_len
+                                push!(real_args_build, cur_task.modified_inputs[l].name)
+                                push!(args_type.args,  cur_task.modified_inputs[l].typ)
+                            end
+                            for l = 1:io_len
+                                push!(real_args_build, cur_task.io_symbols[l].name)
+                                push!(args_type.args,  cur_task.io_symbols[l].typ)
+                            end
+                            for l = 1:red_len
+                                push!(real_args_build, cur_task.reduction_vars[l].name)
+                                push!(args_type.args,  cur_task.reduction_vars[l].typ)
+                            end
 
-              dprintln(3,"task_func = ", cur_task.task_func)
-              #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
-              dprintln(3,"real_args_build = ", real_args_build)
-              
-              tup_var = string(cur_task.task_func,"_tup_var")
-              tup_sym = symbol(tup_var)
+                            dprintln(3,"task_func = ", cur_task.task_func)
+                            #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
+                            dprintln(3,"real_args_build = ", real_args_build)
 
-              if false
-                real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
-                call_tup = (Function,pir_range_actual,Any)
-                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_tuple_expr), state))
-              else
-                call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
-                call_tup = eval(call_tup_expr)
-                dprintln(3, "call_tup = ", call_tup)
-                #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-              end
+                            tup_var = string(cur_task.task_func,"_tup_var")
+                            tup_sym = symbol(tup_var)
 
-              if false
-                insert_task_expr = TypedExpr(Any,
-                                           :call,
-                                           cur_task.task_func,
-                                           SymbolNode(range_sym, pir_range_actual),
-                                           real_args_build...)
-              else
-                # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
-                svec_args = mk_svec_expr(Any, Any)
-                insert_task_expr = TypedExpr(Any, 
-                                           :call, 
-                                           TopNode(:ccall), 
-                                           QuoteNode(:jl_threading_run), 
-                                           GlobalRef(Main,:Void), 
-                                           svec_args,
-                                           mk_parallelir_ref(:isf), 0, 
-                                           tup_sym, 0)
-              end
-              push!(new_body, insert_task_expr)
-            else
-              throw(string("insert sequential task not implemented yet"))
-            end
-          else
-            push!(new_body, cur_task)
-          end
-        end
+                            if false
+                                real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
+                                call_tup = (Function,pir_range_actual,Any)
+                                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_tuple_expr), state))
+                            else
+                                call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
+                                call_tup = eval(call_tup_expr)
+                                dprintln(3, "call_tup = ", call_tup)
+                                #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+                            end
+
+                            if false
+                                insert_task_expr = TypedExpr(Any,
+                                :call,
+                                cur_task.task_func,
+                                SymbolNode(range_sym, pir_range_actual),
+                                real_args_build...)
+                            else
+                                # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
+                                svec_args = mk_svec_expr(Any, Any)
+                                insert_task_expr = TypedExpr(Any, 
+                                :call, 
+                                TopNode(:ccall), 
+                                QuoteNode(:jl_threading_run), 
+                                GlobalRef(Main,:Void), 
+                                svec_args,
+                                mk_parallelir_ref(:isf), 0, 
+                                tup_sym, 0)
+                            end
+                            push!(new_body, insert_task_expr)
+                        else
+                            throw(string("insert sequential task not implemented yet"))
+                        end
+                    else
+                        push!(new_body, cur_task)
+                    end
+                end
 
         # Insert call to wait on the scheduler to complete all tasks.
         #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
