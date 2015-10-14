@@ -28,31 +28,31 @@ function set_debug_level(x)
 end
 
 if ENABLE_DEBUG==true
-  # A debug print routine.
-  function dprint(level, msgs :: ANY ...)
-    if(DEBUG_LVL >= level)
-      print(msgs...)
+    # A debug print routine.
+    function dprint(level, msgs :: ANY ...)
+        if(DEBUG_LVL >= level)
+            print(msgs...)
+        end
     end
-  end
 
-  # A debug print routine.
-  function dprintln(level, msgs :: ANY ...)
-    if(DEBUG_LVL >= level)
-      println(msgs...)
+    # A debug print routine.
+    function dprintln(level, msgs :: ANY ...)
+        if(DEBUG_LVL >= level)
+            println(msgs...)
+        end
     end
-  end
 else
 
-  function dprintln(args...)
-  end
+    function dprintln(args...)
+    end
 
-  function dprint(args...)
-  end
+    function dprint(args...)
+    end
 
 end
 
 function ns_to_sec(x)
-  x / 1000000000.0
+    x / 1000000000.0
 end
 
 
@@ -106,11 +106,11 @@ Holds a dictionary from an array symbol to an integer corresponding to an equiva
 All array symbol in the same equivalence class are known to have the same shape.
 """
 type EquivalenceClasses
-  data :: Dict{Symbol,Int64}
+    data :: Dict{Symbol,Int64}
 
-  function EquivalenceClasses()
-    new(Dict{Symbol,Int64}())
-  end
+    function EquivalenceClasses()
+        new(Dict{Symbol,Int64}())
+    end
 end
 
 @doc """
@@ -121,18 +121,18 @@ Go through the equivalence class dictionary and for any symbol belonging to the 
 equivalence class, change it to now belong to the merge_to equivalence class.
 """
 function EquivalenceClassesMerge(ec :: EquivalenceClasses, merge_to :: Symbol, merge_from :: Symbol)
-  to_int   = EquivalenceClassesAdd(ec, merge_to)
-  from_int = EquivalenceClassesAdd(ec, merge_from)
+    to_int   = EquivalenceClassesAdd(ec, merge_to)
+    from_int = EquivalenceClassesAdd(ec, merge_from)
 
-  # For each array in the dictionary.
-  for i in ec.data
-    # If it is in the "merge_from" class...
-    if i[2] == merge_from
-      # ...move it to the "merge_to" class.
-      ec.data[i[1]] = merge_to
+    # For each array in the dictionary.
+    for i in ec.data
+        # If it is in the "merge_from" class...
+        if i[2] == merge_from
+            # ...move it to the "merge_to" class.
+            ec.data[i[1]] = merge_to
+        end
     end
-  end
-  nothing
+    nothing
 end
 
 @doc """
@@ -140,22 +140,22 @@ Add a symbol as part of a new equivalence class if the symbol wasn't already in 
 Return the equivalence class for the symbol.
 """
 function EquivalenceClassesAdd(ec :: EquivalenceClasses, sym :: Symbol)
-  # If the symbol isn't already in an equivalence class.
-  if !haskey(ec.data, sym)
-    # Find the maximum equivalence class "m".
-    a = collect(values(ec.data))
-    m = length(a) == 0 ? 0 : maximum(a)
-    # Create a new equivalence class with this symbol with class "m+1"
-    ec.data[sym] = m + 1
-  end
-  ec.data[sym]
+    # If the symbol isn't already in an equivalence class.
+    if !haskey(ec.data, sym)
+        # Find the maximum equivalence class "m".
+        a = collect(values(ec.data))
+        m = length(a) == 0 ? 0 : maximum(a)
+        # Create a new equivalence class with this symbol with class "m+1"
+        ec.data[sym] = m + 1
+    end
+    ec.data[sym]
 end
 
 @doc """
 Clear an equivalence class.
 """
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
-  empty!(ec.data)
+    empty!(ec.data)
 end
 
 @doc """
@@ -185,12 +185,12 @@ type PIRParForAst
     simply_indexed :: Bool
 
     function PIRParForAst(b, pre, nests, red, post, orig, t, unique, si)
-      r = CompilerTools.ReadWriteSet.from_exprs(b)
-      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+        r = CompilerTools.ReadWriteSet.from_exprs(b)
+        new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 
     function PIRParForAst(b, pre, nests, red, post, orig, t, r, unique, si)
-      new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+        new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 end
 
@@ -229,24 +229,24 @@ end
 State passed around while converting an AST from domain to parallel IR.
 """
 type expr_state
-  block_lives :: CompilerTools.LivenessAnalysis.BlockLiveness    # holds the output of liveness analysis at the block and top-level statement level
-  top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
-  # Arrays created from each other are known to have the same size. Store such correlations here.
-  # If two arrays have the same dictionary value, they are equal in size.
-  array_length_correlation :: Dict{SymGen,Int}
-  symbol_array_correlation :: Dict{Array{SymGen,1},Int}
-  lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
-  max_label :: Int # holds the max number of all LabelNodes
+    block_lives :: CompilerTools.LivenessAnalysis.BlockLiveness    # holds the output of liveness analysis at the block and top-level statement level
+    top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
+    # Arrays created from each other are known to have the same size. Store such correlations here.
+    # If two arrays have the same dictionary value, they are equal in size.
+    array_length_correlation :: Dict{SymGen,Int}
+    symbol_array_correlation :: Dict{Array{SymGen,1},Int}
+    lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
+    max_label :: Int # holds the max number of all LabelNodes
 
-  # Initialize the state for parallel IR translation.
-  function expr_state(bl, max_label, input_arrays)
-    init_corr = Dict{SymGen,Int}()
-    # For each input array, insert into the correlations table with a different value.
-    for i = 1:length(input_arrays)
-      init_corr[input_arrays[i]] = i
+    # Initialize the state for parallel IR translation.
+    function expr_state(bl, max_label, input_arrays)
+        init_corr = Dict{SymGen,Int}()
+        # For each input array, insert into the correlations table with a different value.
+        for i = 1:length(input_arrays)
+            init_corr[input_arrays[i]] = i
+        end
+        new(bl, 0, init_corr, Dict{Array{SymGen,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
     end
-    new(bl, 0, init_corr, Dict{Array{SymGen,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
-  end
 end
 
 include("parallel-ir-stencil.jl")
@@ -264,7 +264,7 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         for i = 1:length(pnode.preParFor)
             println(io,"    ", pnode.preParFor[i])
             if DEBUG_LVL >= 4
-              dump(pnode.preParFor[i])
+                dump(pnode.preParFor[i])
             end
         end
     end
@@ -273,14 +273,14 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         println(io,"    ", pnode.body[i])
     end
     if DEBUG_LVL >= 4
-      dump(pnode.body)
+        dump(pnode.body)
     end
     if length(pnode.loopNests) > 0
         println(io,"Loop Nests: ")
         for i = 1:length(pnode.loopNests)
             println(io,"    ", pnode.loopNests[i])
             if DEBUG_LVL >= 4
-              dump(pnode.loopNests[i])
+                dump(pnode.loopNests[i])
             end
         end
     end
@@ -295,7 +295,7 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         for i = 1:length(pnode.postParFor)
             println(io,"    ", pnode.postParFor[i])
             if DEBUG_LVL >= 4
-              dump(pnode.postParFor[i])
+                dump(pnode.postParFor[i])
             end
         end
     end
@@ -358,38 +358,38 @@ end
 Holds the information from one Domain IR :range Expr.
 """
 type RangeData
-  start
-  skip
-  last
+    start
+    skip
+    last
 
-  function RangeData(s, sk, l)
-    new(s, sk, l)
-  end
+    function RangeData(s, sk, l)
+        new(s, sk, l)
+    end
 end
 
 @doc """
 Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
-  array                                # The name of the array.
-  select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
-  range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
-  range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
-  elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
-  pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
-  rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
+    array                                # The name of the array.
+    select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
+    range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
+    range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
+    elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
+    pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
+    rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
-  function InputInfo()
-    new(nothing, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
-  end
+    function InputInfo()
+        new(nothing, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
+    end
 end
 
 @doc """
 Compute size of a range.
 """
 function rangeSize(start, skip, last)
-  # TODO: do something with skip!
-  return last - start + 1
+    # TODO: do something with skip!
+    return last - start + 1
 end
 
 @doc """
@@ -448,22 +448,22 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 "elem_type", an array type of "atype" and a "length".
 """
 function mk_alloc_array_1d_expr(elem_type, atype, length)
-  dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
-  ret_type = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
-  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
-  #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
+    dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
+    ret_type = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
+    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
+    #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
 
-  if typeof(length) == SymbolNode
-    length_expr = length
-  elseif typeof(length) == Symbol
-    length_expr = SymbolNode(length,Int)
-  elseif typeof(length) == Int64
-    length_expr = length
-  else
-    throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
-  end
+    if typeof(length) == SymbolNode
+        length_expr = length
+    elseif typeof(length) == Symbol
+        length_expr = SymbolNode(length,Int)
+    elseif typeof(length) == Int64
+        length_expr = length
+    else
+        throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
+    end
 
-  TypedExpr(
+    TypedExpr(
        atype,
        :call,
        TopNode(:ccall),
@@ -482,12 +482,12 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2".
 """
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
-  dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
-  ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
-  new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
-  #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
+    dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
+    ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
+    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+    #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
 
-  TypedExpr(
+    TypedExpr(
        atype,
        :call,
        TopNode(:ccall),
