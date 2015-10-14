@@ -11,11 +11,14 @@ function example(x)
 end
 
 function test1()
-    ParallelAccelerator.accelerate(AbsTest.example, (Array{Float64,2},))
+    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Array{Float64,2},))
+    A = ones(10, 10)
+    return example_acc(A)
 end
 
 function test2()
     ParallelAccelerator.accelerate(AbsTest.example, (Int,))
+    return example_acc(3)
 end
 
 end

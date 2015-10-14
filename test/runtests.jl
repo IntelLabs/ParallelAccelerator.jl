@@ -1,15 +1,13 @@
 using ParallelAccelerator
 using Base.Test
 
+include("abs.jl")
+using AbsTest
 
-@test Example1.main() == 10000
+### Working tests.
+
+@test AbsTest.test1() == ones(10, 10)
 
 ### Tests that illustrate known bugs.
 
-include("abs.jl")
-using AbsTest
-# KeyError: Union{} not found
-@test_throws KeyError AbsTest.test1()
-
-# ErrorException("failed process: Process(`icc [...]
-@test_throws ErrorException AbsTest.test2()
+@test_throws ErrorException AbsTest.test2() == 3
