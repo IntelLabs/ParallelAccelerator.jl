@@ -250,30 +250,46 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   local out::Expr
   ast = code_typed(func, signature)[1]
   global alreadyOptimized 
-  if !haskey(alreadyOptimized, (func, signature))
-    # place holder to prevent recursive accelerate
-    alreadyOptimized[(func, signature)] = ast 
-    dir_ast::Expr = toDomainIR(func_ref, ast, signature)
-    pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
-    alreadyOptimized[(func, signature)] = pir_ast
-    out = pir_ast
-  else
-    out = ast
-  end
 
-  #if use_extract_static_call_graph != 0
-  #  callgraph = extractStaticCallGraph(func, signature)
-  #  if DEBUG_LVL >= 3
-  #    println("Callgraph:")
-  #    println(callgraph)
-  #    #throw(string("stop after cb"))
-  #  end
-  #end
+  try
+    if !haskey(alreadyOptimized, (func, signature))
+      # place holder to prevent recursive accelerate
+      alreadyOptimized[(func, signature)] = ast 
+      dir_ast::Expr = toDomainIR(func_ref, ast, signature)
+      pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
+      alreadyOptimized[(func, signature)] = pir_ast
+      out = pir_ast
+    else
+      out = ast
+    end
 
-  if level & TOPLEVEL > 0
-    return toCGen(func_ref, out, signature)
-  else
-    return nothing
+    #if use_extract_static_call_graph != 0
+    #  callgraph = extractStaticCallGraph(func, signature)
+    #  if DEBUG_LVL >= 3
+    #    println("Callgraph:")
+    #    println(callgraph)
+    #    #throw(string("stop after cb"))
+    #  end
+    #end
+
+    if level & TOPLEVEL > 0
+      return toCGen(func_ref, out, signature)
+    else
+      return nothing
+    end
+  catch texp
+    if !ParallelAccelerator.RELEASE_MODE
+      rethrow(texp)
+    end
+
+    if isa(texp, ParallelAccelerator.UnsupportedFeature)
+      println("ParallelAccelerator.accelerate cannot accelerate function ", func, " because the following unsupported feature was used.")
+      println(texp.text)
+    else
+      println("ParallelAccelerator.accelerate cannot accelerate function ", func, " due to an unhandled exception of type ", typeof(texp), " whose value is ", texp)
+    end
+
+    return func
   end
 end
 
