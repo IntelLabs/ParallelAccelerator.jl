@@ -1451,6 +1451,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
     return expr
 end
 
+function translate_call(state, env, typ, head, oldfun, oldargs, fun::ANY, args)
+    dprintln(3,"unrecognized fun type ",fun, " args ", args)
+    oldargs = normalize_args(state, env, oldargs)
+    expr = mk_expr(typ, head, oldfun, oldargs...)
+end
 
 function from_return(state, env, expr)
     local env_ = nextEnv(env)
