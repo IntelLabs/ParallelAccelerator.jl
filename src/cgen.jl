@@ -1381,9 +1381,6 @@ function from_goto(exp, labelId)
     s
 end
 =#
-function from_getfieldnode(ast)
-    throw("Unexpected node: " * string(ast))
-end
 
 function from_globalref(ast)
     mod = ast.mod
@@ -1712,6 +1709,47 @@ function from_expr(ast::Expr)
     s
 end
 
+
+function from_expr(ast::Symbol)
+    s = from_symbol(ast)
+end
+
+function from_expr(ast::SymbolNode)
+    s = from_symbolnode(ast)
+end
+
+function from_expr(ast::LineNumberNode)
+    s = from_linenumbernode(ast)
+end
+
+function from_expr(ast::LabelNode)
+    s = from_labelnode(ast)
+end
+
+function from_expr(ast::GotoNode)
+    s = from_gotonode(ast)
+end
+
+function from_expr(ast::TopNode)
+    s = from_topnode(ast)
+end
+
+function from_expr(ast::QuoteNode)
+    s = from_quotenode(ast)
+end
+
+function from_expr(ast::NewvarNode)
+    s = from_newvarnode(ast)
+end
+
+function from_expr(ast::GlobalRef)
+    s = from_globalref(ast)
+end
+
+function from_expr(ast::GenSym)
+    s = "GenSym" * string(ast.id)
+end
+
 function from_expr(ast::Any)
     dprintln(3,"Compiling expression: ", ast)
     s = ""
@@ -1727,30 +1765,6 @@ function from_expr(ast::Any)
         end
     elseif isPrimitiveJuliaType(ast)
         s *= "(" * toCtype(ast) * ")"
-    elseif asttyp == Expr
-        s *= from_expr(ast)
-    elseif asttyp == Symbol
-        s *= from_symbol(ast)
-    elseif asttyp == SymbolNode
-        s *= from_symbolnode(ast)
-    elseif asttyp == LineNumberNode
-        s *= from_linenumbernode(ast)
-    elseif asttyp == LabelNode
-        s *= from_labelnode(ast)
-    elseif asttyp == GotoNode
-        s *= from_gotonode(ast)
-    elseif asttyp == TopNode
-        s *= from_topnode(ast)
-    elseif asttyp == QuoteNode
-        s *= from_quotenode(ast)
-    elseif isdefined(:NewvarNode) && asttyp == NewvarNode
-        s *= from_newvarnode(ast)
-    elseif isdefined(:GetfieldNode) && asttyp == GetfieldNode
-        s *= from_getfieldnode(ast)
-    elseif isdefined(:GlobalRef) && asttyp == GlobalRef
-        s *= from_globalref(ast)
-    elseif asttyp == GenSym
-        s *= "GenSym" * string(ast.id)
     else
         #s *= dispatch(lstate.adp, ast, ast)
         dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
