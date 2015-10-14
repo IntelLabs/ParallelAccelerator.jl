@@ -296,7 +296,11 @@ function translateStencil(krn, args::Array, esc)
     steps = args[1]
     borderSty = args[2]
   elseif length(args) == 1
-    steps = args[1]
+    if isa(args[1], Expr) && args[1].head == :quote
+      borderSty = args[1]
+    else
+      steps = args[1]
+    end
   end
   # check border style
   if isa(borderSty, Expr)
