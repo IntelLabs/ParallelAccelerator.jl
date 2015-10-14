@@ -1068,24 +1068,36 @@ function isPendingCompilation(list, tgt)
     return false
 end
 
-function resolveCallTarget(args::Array{Any, 1})
-    dprintln(3,"Trying to resolve target with args: ", args)
+function resolveCallTarget(ast::Array{Any, 1})
+    dprintln(3,"Trying to resolve target with args: ", ast)
+    @assert length(args)>=2 "function call AST length error"
+    return resolveCallTarget(ast[1], ast[2:end])
+end
+
+#case 0:
+function resolveCallTarget(f::Symbol, args::Array{Any, 1})
     M = ""
     t = ""
     s = ""
-    #case 0:
-    f = args[1]
-    if isa(f, Symbol) && isInlineable(f, args[2:end])
-        return M, string(f), from_inlineable(f, args[2:end])
-    elseif isa(f, Symbol) && is(f, :call)
+    if isInlineable(f, args)
+        return M, string(f), from_inlineable(f, args)
+    elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
-        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[3:end])
-        if isa(args[2], DataType)
+        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[2:end])
+        if isa(args[1], DataType)
             t = "{" * arglist * "}"
         else
-            t = from_expr(args[2]) * "(" * arglist * ")"
+            t = from_expr(args[1]) * "(" * arglist * ")"
         end
-    elseif isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
+    end
+    return M, s, t
+end
+
+function resolveCallTarget(f::Expr, args::Array{Any, 1})
+    M = ""
+    t = ""
+    s = ""
+    if is(f.head,:call) || is(f.head,:call1) # :call1 is gone in v0.4
         if length(f.args) == 3 && isa(f.args[1], TopNode) && is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
             s = f.args[3].value
             if isa(f.args[2],Module)
@@ -1093,8 +1105,18 @@ function resolveCallTarget(args::Array{Any, 1})
             end
         end
         dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
+    return M, s, t
+end
+    
+function resolveCallTarget(args::Array{Any, 1})
+    dprintln(3,"Trying to resolve target with args: ", args)
+    M = ""
+    t = ""
+    s = ""
+    #case 0:
+    f = args[1]
     #case 1:
-    elseif isa(args[1], TopNode) && is(args[1].name, :getfield) && isa(args[3], QuoteNode)
+    if isa(args[1], TopNode) && is(args[1].name, :getfield) && isa(args[3], QuoteNode)
         dprintln(3,"Case 1: args[3] is ", args[3])
         s = args[3].value
         if isa(args[2], Module)
