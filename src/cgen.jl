@@ -387,6 +387,7 @@ function from_lambda(ast, args)
         v = vars[k] # v is a VarDef
         lstate.symboltable[k] = v.typ
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
+        @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -395,6 +396,7 @@ function from_lambda(ast, args)
     for k in 1:length(gensyms)
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
+        @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
