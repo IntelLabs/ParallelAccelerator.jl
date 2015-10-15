@@ -26,7 +26,7 @@ const unary_operators = Symbol[
     :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
     :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh, 
-    :sum, :prod, :abs, :pointer]
+    :sum, :prod, :abs, :erf, :pointer]
 
 for f in unary_operators
     @eval begin
