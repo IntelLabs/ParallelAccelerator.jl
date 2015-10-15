@@ -922,8 +922,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         if length(args) == 2
             return translate_call_checkbounds(state,env_,args) 
         end
-    elseif is(fun, :sitofp)
-        typ = args[1]
+    elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
+        typ = isa(args[1], Type) ? args[1] : eval(args[1]) 
     elseif is(fun, :getindex) || is(fun, :setindex!) 
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
     elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
