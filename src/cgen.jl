@@ -1197,6 +1197,10 @@ function pattern_match_call_math(fun::TopNode, input::SymbolNode)
     return s
 end
 
+function pattern_match_call_math(fun::GlobalRef, input)
+    return pattern_match_call_math(TopNode(fun.name), input)
+end
+
 function pattern_match_call_math(fun::ANY, input::ANY)
     return ""
 end
