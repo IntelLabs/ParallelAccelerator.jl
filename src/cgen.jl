@@ -2088,6 +2088,15 @@ function insert(func::Function, name, typs)
     end
 end
 
+function insert(func::IntrinsicFunction, name, typs)
+    global lstate
+    #ast = code_typed(func, typs; optimize=true)
+    ast = ParallelAccelerator.Driver.code_typed(func, typs)
+    if !has(lstate.compiledfunctions, name)
+        push!(lstate.worklist, (ast, name, typs))
+    end
+end
+
 # Translate function nodes in breadth-first order
 function from_worklist()
     s = ""
