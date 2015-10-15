@@ -1,5 +1,5 @@
 module AbsTest
-using ParallelAccelerator
+importall ParallelAccelerator
 
 ParallelAccelerator.DomainIR.set_debug_level(4)
 ParallelAccelerator.ParallelIR.set_debug_level(4)
@@ -17,7 +17,12 @@ function test1()
 end
 
 function test2()
-    ParallelAccelerator.accelerate(AbsTest.example, (Int,))
+    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
+    return example_acc(-3)
+end
+
+function test3()
+    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
     return example_acc(3)
 end
 
