@@ -1216,7 +1216,7 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     local i
     for i = 2:nargs
         oprTyp = typeOfOpr(state, args[i])
-        if isarray(oprTyp)
+        if isarray(oprTyp) || isbitarray(oprTyp)
             push!(bufs, args[i])
             push!(bufstyp, oprTyp)
         else
