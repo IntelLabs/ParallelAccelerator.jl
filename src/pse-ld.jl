@@ -146,7 +146,8 @@ end
 
 
 function __init__()
-  libpath = string(getPackageRoot(), "src/intel-runtime/lib/libintel-runtime.so")
+  #=
+    libpath = string(getPackageRoot(), "src/intel-runtime/lib/libintel-runtime.so")
   @eval begin
 
     function divisible(obj)
@@ -281,6 +282,7 @@ function __init__()
         matrix_layout, side, trans, direct, storev, m, n, k, v, ldv, t, ldt, c, ldc )
     end
   end
+  =#
 end
 
 end
