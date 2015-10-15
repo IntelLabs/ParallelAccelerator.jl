@@ -268,7 +268,7 @@ nextEnv(env::IREnv)=IREnv(env.cur_module, env.debugLevel, env.debugIndent + 1)
 
 # This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
 DEBUG_LVL=0
-const ENABLE_DEBUG = false
+const ENABLE_DEBUG = true
 
 function set_debug_level(x)
     global DEBUG_LVL = x
@@ -832,18 +832,22 @@ function inline_select(env, state, arr)
         if !isa(def, Void)  
             if isa(def, Expr) && is(def.head, :call) 
                 assert(length(def.args) >= 2)
-                if is(def.args[1], :getindex)
-                    arr = def.args[2]
+                if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
+                    target_arr = def.args[2]
                     range_extra = def.args[3:end]
                 elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
                     error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
-                else
-                    error("DomainIR does not handle range selection ", def)
                 end
-                dprintln(env, "inline-select: arr = ", arr, " range = ", range_extra)
+                dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
                 if length(range_extra) > 0
-                    ranges = mk_ranges([rangeToMask(state, r) for r in range_extra]...)
-                    arr = mk_select(arr, ranges)
+                    # if all ranges are int, then it is not a selection
+                    if any(Bool[ismask(typeOfOpr(state, r)) for r in range_extra])
+                      ranges = mk_ranges([rangeToMask(state, r) for r in range_extra]...)
+                      dprintln(env, "inline-select: converted to ranges = ", ranges)
+                      arr = mk_select(target_arr, ranges)
+                    else
+                      dprintln(env, "inline-select: skipped")
+                    end
                 end
             end
         end
