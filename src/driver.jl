@@ -158,10 +158,10 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       run_where = 0
   elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
       run_where = 1
-  elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.TASK_MODE
-      pert_init(package_root, false)
+#  elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.TASK_MODE
+#      pert_init(package_root, false)
   else
-      assert(0)
+      throw("PSE mode error")
   end
   
   num_rets = length(ret_typs)

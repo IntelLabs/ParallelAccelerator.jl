@@ -4560,9 +4560,9 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
         end
     end
 
-    if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
+    #if ParallelAccelerator.getPseMode() != ParallelAccelerator.THREADS_MODE
         # If each task doesn't wait to finish then add a call to pert_wait_all_task to wait for the batch to finish.
-        if !task_finish
+     #   if !task_finish
             #julia_root      = ParallelAccelerator.getJuliaRoot()
             #runtime_libpath = string(julia_root, "/intel-runtime/lib/libintel-runtime.so")
             #runtime_libpath = ParallelAccelerator.runtime_libpath
@@ -4570,19 +4570,19 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
             #call_wait = Expr(:ccall, Expr(:tuple, QuoteNode(:pert_wait_all_task), runtime_libpath), :Void, Expr(:tuple))
             #push!(task_list, call_wait) 
 
-            call_wait = TypedExpr(Void, 
-            :call, 
-            TopNode(:ccall), 
-            Expr(:call1, TopNode(:tuple), QuoteNode(:pert_wait_all_task), runtime_libpath), 
-            :Void, 
-            Expr(:call1, TopNode(:tuple)))
-            push!(task_list, call_wait)
+      #      call_wait = TypedExpr(Void, 
+      #      :call, 
+      #      TopNode(:ccall), 
+      #      Expr(:call1, TopNode(:tuple), QuoteNode(:pert_wait_all_task), runtime_libpath), 
+      #      :Void, 
+      #      Expr(:call1, TopNode(:tuple)))
+      #      push!(task_list, call_wait)
 
             #    call_wait = quote ccall((:pert_wait_all_task, $runtime_libpath), Void, ()) end
             #    assert(typeof(call_wait) == Expr && call_wait.head == :block)
             #    append!(task_list, call_wait.args) 
-        end
-    end
+       # end
+    #end
 
     task_list
 end

@@ -278,9 +278,7 @@ function from_includes()
         "#include <math.h>\n",
         "#include <stdio.h>\n",
         "#include <iostream>\n",
-        "#include \"$packageroot/deps/include/pse-runtime.h\"\n",
         "#include \"$packageroot/deps/include/j2c-array.h\"\n",
-        "#include \"$packageroot/deps/include/j2c-array-pert.h\"\n",
         "#include \"$packageroot/deps/include/pse-types.h\"\n")
     )
   return s

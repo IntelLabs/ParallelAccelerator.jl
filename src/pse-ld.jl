@@ -120,8 +120,9 @@ end
 function decompose(ast)
   package_root   = ParallelAccelerator.getPackageRoot()
 
+  # TODO: fix pert interface
   # LD mode, pert_init with double buffer
-  Pert.pert_init(package_root, true)
+  # Pert.pert_init(package_root, true)
   if isa(ast, LambdaStaticData)
       ast = uncompressed_ast(ast)
   end
