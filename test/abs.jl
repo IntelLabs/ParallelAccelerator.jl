@@ -17,7 +17,12 @@ function test1()
 end
 
 function test2()
-    ParallelAccelerator.accelerate(AbsTest.example, (Int,))
+    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
+    return example_acc(-3)
+end
+
+function test3()
+    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
     return example_acc(3)
 end
 
