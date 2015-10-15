@@ -80,7 +80,7 @@ end
 Translate all comprehension in an AST into equivalent code that uses cartesianarray call.
 """
 macro comprehend(ast)
-  AstWalker.AstWalk(ast, process_node, nothing)
+  CompilerTools.AstWalker.AstWalk(ast, process_node, nothing)
   Core.eval(current_module(), ast)
 end
 
