@@ -23,10 +23,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-#using CompilerTools
-#using CompilerTools.LambdaHandling
-#using CompilerTools.LivenessAnalysis
-
 type KernelStat
   dimension :: Int             # number of dimensions of the stencil
   shapeMax  :: Array{Int,1}    # max extent of the stencil for each dimension

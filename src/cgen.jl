@@ -29,47 +29,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #
 
 module cgen
+
+import CompilerTools.DebugMsg
+DebugMsg.init()
+
 import ..ParallelIR
 import CompilerTools
-export setvectorizationlevel, generate, from_root, writec, compile, link, set_debug_level, set_include_blas
+export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 
 # uncomment this line for using Debug.jl
 #using Debug
-
-# This controls the debug print level.
-DEBUG_LVL=0
-const ENABLE_DEBUG = true
-
-function set_debug_level(x)
-    global DEBUG_LVL = x
-end
-
-if ENABLE_DEBUG==true
-  # A debug print routine.
-  function dprint(level,msgs...)
-    if(DEBUG_LVL >= level)
-      print(msgs...)
-    end
-  end
-
-  # A debug print routine.
-  function dprintln(level,msgs...)
-    if(DEBUG_LVL >= level)
-      println(msgs...)
-    end
-  end
-else
-
-  function dprintln(args...)
-  end
-
-  function dprint(args...)
-  end
-
-end
-
-
 
 #=
 type ASTDispatcher

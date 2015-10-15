@@ -25,6 +25,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module CallGraph
 
+import CompilerTools.DebugMsg
+DebugMsg.init()
+
 import Base.show
 using CompilerTools.LambdaHandling
 using CompilerTools.LivenessAnalysis

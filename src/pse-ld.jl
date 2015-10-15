@@ -25,35 +25,15 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module LD
 
+import CompilerTools.DebugMsg
+DebugMsg.init()
+
 import Base.LinAlg: BlasInt
 
 #require("intel-pse.jl")
 #importall ParallelAccelerator
 import ..getPackageRoot
 import ..Pert
-
-# This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
-DEBUG_LVL=0
-
-eval(x) = Core.eval(LD, x)
-
-function set_debug_level(x)
-    global DEBUG_LVL = x
-end
-
-# A debug print routine.
-function dprint(level,msgs...)
-    if(DEBUG_LVL >= level)
-        print(msgs...)
-    end 
-end
-
-# A debug print routine.
-function dprintln(level,msgs...)
-    if(DEBUG_LVL >= level)
-        println(msgs...)
-    end 
-end
 
 type LDState
   defs  :: Array{Any, 1} # (Symbol, Type, Flag)

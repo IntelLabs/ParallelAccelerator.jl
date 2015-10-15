@@ -27,9 +27,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module ParallelAccelerator
 
+import CompilerTools.DebugMsg
+DebugMsg.init()
 
-importall CompilerTools
-importall CompilerTools.OptFramework
+using CompilerTools
+using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
@@ -49,8 +51,6 @@ const OFFLOAD1_MODE = 2
 const OFFLOAD2_MODE = 3
 const TASK_MODE = 4
 const THREADS_MODE = 5
-
-const RELEASE_MODE = false
 
 @doc """
 Return internal mode number by looking up environment variable "INTEL_PSE_MODE".
@@ -117,34 +117,6 @@ This should be the root of the package.
 """
 function getPackageRoot()
   joinpath(dirname(@__FILE__), "..")
-end
-
-# This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
-DEBUG_LVL=0
-
-@doc """
-Set the verbose of debugging print messages from this module.
-"""
-function set_debug_level(x)
-    global DEBUG_LVL = x
-end
-
-@doc """
-Print a debug message if specified debug level is greater than or equal to this particular message's level.
-"""
-function dprint(level, msgs...)
-    if(DEBUG_LVL >= level)
-        print(msgs...)
-    end
-end
-
-@doc """
-Print a debug message if specified debug level is greater than or equal to this particular message's level.
-"""
-function dprintln(level, msgs...)
-    if(DEBUG_LVL >= level)
-        println(msgs...)
-    end
 end
 
 type UnsupportedFeature <: Exception

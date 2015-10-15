@@ -25,6 +25,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DomainIR
 
+import CompilerTools.DebugMsg
+DebugMsg.init()
+
 import CompilerTools.AstWalker
 using CompilerTools
 using CompilerTools.LivenessAnalysis
@@ -152,7 +155,7 @@ function type_expr(typ, expr)
     return expr
 end
 
-export DomainLambda, KernelStat, set_debug_level, AstWalk, arraySwap, lambdaSwapArg, isarray
+export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isarray
 
 # A representation for anonymous lambda used in domainIR.
 #   inputs:  types of input tuple
@@ -291,50 +294,12 @@ end
 newEnv(m)=IREnv(m,2,0)
 nextEnv(env::IREnv)=IREnv(env.cur_module, env.debugLevel, env.debugIndent + 1)
 
-# This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
-DEBUG_LVL=0
-const ENABLE_DEBUG = true
-
-function set_debug_level(x)
-    global DEBUG_LVL = x
+@inline function dprint(env::IREnv,msgs...)
+  dprint(env.debugLevel, repeat(" ", env.debugIndent*2), msgs...)
 end
 
-if ENABLE_DEBUG==true
-
-    # A debug print routine.
-    function dprint(level,msgs...)
-        if(DEBUG_LVL >= level)
-            print(msgs...)
-        end
-    end
-
-    # A debug print routine.
-    function dprintln(level,msgs...)
-        if(DEBUG_LVL >= level)
-            println(msgs...)
-        end
-    end
-
-    function dprint(env::IREnv,msgs...)
-        if(DEBUG_LVL >= env.debugLevel)
-            print(repeat(" ", env.debugIndent*2), msgs...)
-        end
-    end
-
-    function dprintln(env::IREnv,msgs...)
-        if(DEBUG_LVL >= env.debugLevel)
-            println(repeat(" ", env.debugIndent*2), msgs...)
-        end
-    end
-
-else
-
-    function dprintln(args...)
-    end
-
-    function dprint(args...)
-    end
-
+@inline function dprintln(env::IREnv,msgs...)
+  dprintln(env.debugLevel, repeat(" ", env.debugIndent*2), msgs...)
 end
 
 mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs]

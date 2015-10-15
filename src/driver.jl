@@ -311,7 +311,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
       return nothing
     end
   catch texp
-    if !ParallelAccelerator.RELEASE_MODE
+    if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
       rethrow(texp)
     end
 

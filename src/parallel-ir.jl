@@ -26,6 +26,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module ParallelIR
 export num_threads_mode
 
+import CompilerTools.DebugMsg
+DebugMsg.init()
+
 using CompilerTools
 using CompilerTools.LambdaHandling
 using ..DomainIR
@@ -43,38 +46,6 @@ import CompilerTools.Loops
 
 # uncomment this line when using Debug.jl
 #using Debug
-
-# This controls the debug print level.  0 prints nothing.  At the moment, 2 prints everything.
-DEBUG_LVL=0
-const ENABLE_DEBUG = true
-
-function set_debug_level(x)
-    global DEBUG_LVL = x
-end
-
-if ENABLE_DEBUG==true
-    # A debug print routine.
-    function dprint(level, msgs :: ANY ...)
-        if(DEBUG_LVL >= level)
-            print(msgs...)
-        end
-    end
-
-    # A debug print routine.
-    function dprintln(level, msgs :: ANY ...)
-        if(DEBUG_LVL >= level)
-            println(msgs...)
-        end
-    end
-else
-
-    function dprintln(args...)
-    end
-
-    function dprint(args...)
-    end
-
-end
 
 function ns_to_sec(x)
     x / 1000000000.0
@@ -335,7 +306,7 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
     end
 end
 
-export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, set_debug_level, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRTaskGraphMode, PIRPolyhedral
+export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRTaskGraphMode, PIRPolyhedral
 
 @doc """
 Given an array of outputs in "outs", form a return expression.
