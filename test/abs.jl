@@ -1,5 +1,5 @@
 module AbsTest
-using ParallelAccelerator
+importall ParallelAccelerator
 
 ParallelAccelerator.DomainIR.set_debug_level(4)
 ParallelAccelerator.ParallelIR.set_debug_level(4)
