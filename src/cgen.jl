@@ -388,6 +388,7 @@ function from_lambda(ast, args)
         lstate.symboltable[k] = v.typ
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
+        @assert !(v.typ<:Complex) "CGen: Complex numbers are not supported yet"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -397,6 +398,7 @@ function from_lambda(ast, args)
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
         @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
+        @assert !(gensyms[k]<:Complex) "CGen: Complex numbers are not supported yet"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
