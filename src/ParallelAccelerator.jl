@@ -201,17 +201,7 @@ function __init__()
 
     dev_mode_key = "PROSPECT_DEV_MODE"
     if haskey(ENV, dev_mode_key)
-      dev_mode = ENV[dev_mode_key]
-      try
-        dmint = parse(Int, dev_mode)
-        if dmint != 0
-          PROSPECT_DEV_MODE = true
-        else
-          PROSPECT_DEV_MODE = false
-        end
-      catch
-        println("PROSPECT_DEV_MODE environment variable is not an integer.  PROSPECT_DEV_MODE will remain ", PROSPECT_DEV_MODE)
-      end
+      PROSPECT_DEV_MODE = true
     end
 end
 
