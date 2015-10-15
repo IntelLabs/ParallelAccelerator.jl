@@ -9,15 +9,13 @@ function translate_call(node::Expr)
   if isa(opr, Symbol) && in(opr, operators)
     node.args[1] = GlobalRef(API, opr)
   end
-  return node
 end
 
 function process_node(node, state, top_level_number, is_top_level, read)
   if isa(node, Expr) && node.head == :call
     translate_call(node)
-  else
-    CompilerTools.AstWalker.ASTWALK_RECURSE
   end 
+  CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 end
