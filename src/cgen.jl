@@ -1009,7 +1009,13 @@ function from_inlineable(f, args)
     dprintln(3,"Checking if ", f, " can be inlined")
     dprintln(3,"Args are: ", args)
     if has(_operators, string(f))
-        return "(" * from_expr(args[1]) * string(f) * from_expr(args[2]) * ")"
+        if length(args) == 1
+          return "(" * string(f) * from_expr(args[1]) * ")"
+        elseif length(args) == 2
+          return "(" * from_expr(args[1]) * string(f) * from_expr(args[2]) * ")"
+        else
+          error("Expect 1 or 2 arguments to ", f, " but got ", args)
+        end
     elseif has(_builtins, string(f))
         return from_builtins(f, args)
     elseif has(_Intrinsics, string(f))
