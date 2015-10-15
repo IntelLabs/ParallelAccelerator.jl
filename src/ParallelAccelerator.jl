@@ -53,11 +53,11 @@ const TASK_MODE = 4
 const THREADS_MODE = 5
 
 @doc """
-Return internal mode number by looking up environment variable "INTEL_PSE_MODE".
+Return internal mode number by looking up environment variable "PROSPECT_MODE".
 """
 function getPseMode()
-  if haskey(ENV,"INTEL_PSE_MODE")
-     mode = ENV["INTEL_PSE_MODE"]
+  if haskey(ENV,"PROSPECT_MODE")
+     mode = ENV["PROSPECT_MODE"]
   else
      mode = "host"
   end
@@ -74,7 +74,7 @@ function getPseMode()
   elseif mode == "threads"
     THREADS_MODE
   else
-    error(string("Unknown INTEL_PSE_MODE = ", mode))
+    error(string("Unknown PROSPECT_MODE = ", mode))
   end
 end
 
@@ -84,13 +84,13 @@ const PHI_TASK_MODE = 2
 const DYNAMIC_TASK_MODE = 3
 
 @doc """
-Return internal mode number by looking up environment variable "INTEL_TASK_MODE".
+Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".
 If not specified, it defaults to NO_TASK_MODE, or DYNAMIC_TASK_MODE when 
 getPseMode() is TASK_MODE.
 """
 function getTaskMode()
-  if haskey(ENV,"INTEL_TASK_MODE")
-     mode = ENV["INTEL_TASK_MODE"]
+  if haskey(ENV,"PROSPECT_TASK_MODE")
+     mode = ENV["PROSPECT_TASK_MODE"]
   else
     if getPseMode() == TASK_MODE
       mode = "dynamic"
@@ -107,7 +107,7 @@ function getTaskMode()
   elseif mode == "dynamic"
     DYNAMIC_TASK_MODE
   else
-    error(string("Unknown INTEL_TASK_MODE = ", mode))
+    error(string("Unknown PROSPECT_TASK_MODE = ", mode))
   end
 end
 
