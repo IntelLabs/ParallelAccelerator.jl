@@ -25,13 +25,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray, runStencilMacro
+export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray, runStencilMacro, captureOperators
 
 using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray, ..StencilAPI
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray, ..API
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -92,10 +92,20 @@ end
 alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
 
 @doc """
-Pass for comprehension to cartesianarray translation.
+A pass that translates supported operators and function calls to
+those defined in ParallelAccelerator.API.
+"""
+function captureOperators(func, ast, sig)
+  AstWalk(ast, API.Capture.process_node, nothing)
+  return ast
+end
+
+@doc """
+Pass that translates runStencil call in the same way as a macro would do.
+This is only used when PROSPECT_MODE is off.
 """
 function runStencilMacro(func, ast, sig)
-  AstWalk(ast, StencilAPI.process_node, nothing)
+  AstWalk(ast, API.Stencil.process_node, nothing)
   return ast
 end
 

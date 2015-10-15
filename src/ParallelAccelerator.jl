@@ -127,7 +127,6 @@ end
 _accelerate(function_name, signature) = accelerate(function_name, signature, 0)
 
 include("api.jl")
-include("stencil-api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
 include("j2c-array.jl")
@@ -137,9 +136,7 @@ include("callgraph.jl")
 include("comprehension.jl")
 include("driver.jl")
 
-importall .API
-importall .StencilAPI
-importall .Driver
+using .Driver
 
 @doc """
 Called when the package is loaded to do initialization.
@@ -158,6 +155,7 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
+    addOptPass(captureOperators, PASS_MACRO)
     if getPseMode() == OFF_MODE
       addOptPass(runStencilMacro, PASS_MACRO)
       #addOptPass(cleanupAPI, PASS_MACRO)
@@ -172,6 +170,10 @@ function __init__()
     end
 end
 
+import .API.runStencil
+import .API.cartesianarray
+import .API.parallel_for
+import CompilerTools.@acc
 export CompilerTools
 export accelerate, @acc, runStencil, cartesianarray, parallel_for
 

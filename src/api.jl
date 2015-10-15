@@ -132,13 +132,18 @@ function parallel_for(loopvar, range, body)
   throw("Not Implemented")
 end
 
-const operators = vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex])
+const operators = Set(vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex]))
 
 for opr in operators
   @eval export $opr
 end
 
-export cartesianarray, parallel_for
+include("api-capture.jl")
+include("api-stencil.jl")
+
+import .Stencil.runStencil
+
+export cartesianarray, parallel_for, runStencil
 
 end
 

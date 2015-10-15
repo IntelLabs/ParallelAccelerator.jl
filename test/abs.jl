@@ -31,7 +31,7 @@ ParallelAccelerator.ParallelIR.set_debug_level(4)
 ParallelAccelerator.cgen.set_debug_level(4)
 ParallelAccelerator.set_debug_level(4)
 
-function example(x)
+@acc function example(x)
     abs(x)
 end
 
