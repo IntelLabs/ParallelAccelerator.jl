@@ -155,18 +155,15 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
-    addOptPass(captureOperators, PASS_MACRO)
     if getPseMode() == OFF_MODE
       addOptPass(runStencilMacro, PASS_MACRO)
       #addOptPass(cleanupAPI, PASS_MACRO)
     else
+      addOptPass(captureOperators, PASS_MACRO)
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
       addOptPass(toCGen, PASS_TYPED)
-      for opr in API.operators
-        @eval export $opr
-      end
     end
 end
 
