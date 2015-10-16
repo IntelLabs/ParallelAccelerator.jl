@@ -328,6 +328,8 @@ reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
 ignoreSym = Symbol[:box]
 ignoreSet = Set{Symbol}(ignoreSym)
 
+allocCalls = Set{Symbol}([:jl_alloc_array_1d, :jl_alloc_array_2d, :jl_alloc_array_3d, :jl_new_array])
+
 # some part of the code still requires this
 unique_id = 0
 function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
@@ -806,17 +808,27 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
     fun = fun.name
     if is(fun, :ccall)
         callee = lookupConstDefForArg(state, args[1])
-        if isa(callee, QuoteNode) && (is(callee.value, :jl_alloc_array_1d) || is(callee.value, :jl_alloc_array_2d) || is(callee.value, :jl_alloc_array_3d))
+        if isa(callee, QuoteNode) && in(callee.value, allocCalls)
             local realArgs = Any[]
             atype = args[4]
             elemtyp = elmTypOf(atype)
             push!(realArgs, elemtyp)
             for i = 6:2:length(args)
+                if istupletyp(typeOfOpr(state, args[i]))
+                    def = lookupConstDefForArg(state, args[i])
+                    if isa(def, Expr) && is(def.head, :call) && is(def.args[1], TopNode(:tuple))
+                        for j = 1:length(def.args) - 1
+                            push!(realArgs, def.args[j + 1])
+                        end
+                        break
+                    else
+                        return (fun, args)
+                    end
+                end
                 push!(realArgs, args[i])
             end
             fun  = :alloc
             args = realArgs
-        else
         end
     end
     return (fun, args)
