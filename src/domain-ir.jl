@@ -744,6 +744,7 @@ function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
     return out_args[1:j]
 end
 
+# Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     return normalize_callname(state, env, fun.name, args)
 end
@@ -793,27 +794,27 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
     return (fun, args)
 end
 
-# Fix Julia inconsistencies in call before we pattern match
-function normalize_callname(state::IRState, env, fun :: ANY, args)
-
-    if isa(fun, TopNode)
-        fun = fun.name
-        if is(fun, :ccall)
-            callee = lookupConstDefForArg(state, args[1])
-            if isa(callee, QuoteNode) && (is(callee.value, :jl_alloc_array_1d) || is(callee.value, :jl_alloc_array_2d) || is(callee.value, :jl_alloc_array_3d))
-                local realArgs = Any[]
-                atype = args[4]
-                elemtyp = elmTypOf(atype)
-                push!(realArgs, elemtyp)
-                for i = 6:2:length(args)
-                    push!(realArgs, args[i])
-                end
-                fun  = :alloc
-                args = realArgs
-            else
+function normalize_callname(state::IRState, env, fun::TopNode, args)
+    fun = fun.name
+    if is(fun, :ccall)
+        callee = lookupConstDefForArg(state, args[1])
+        if isa(callee, QuoteNode) && (is(callee.value, :jl_alloc_array_1d) || is(callee.value, :jl_alloc_array_2d) || is(callee.value, :jl_alloc_array_3d))
+            local realArgs = Any[]
+            atype = args[4]
+            elemtyp = elmTypOf(atype)
+            push!(realArgs, elemtyp)
+            for i = 6:2:length(args)
+                push!(realArgs, args[i])
             end
+            fun  = :alloc
+            args = realArgs
+        else
         end
     end
+    return (fun, args)
+end
+
+function normalize_callname(state::IRState, env, fun :: ANY, args)
     return (fun, args)
 end
 
