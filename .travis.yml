@@ -28,3 +28,6 @@ script:
  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
  # Temporary: have Travis print generated output for debugging purposes.
  - cat /home/travis/.julia/v0.4/ParallelAccelerator/deps/generated/cgen_output0.cpp
+ # Run benchmarks.
+ - julia examples/black-scholes/black-scholes.jl
+ - julia examples/boltzmann/boltzmann.jl

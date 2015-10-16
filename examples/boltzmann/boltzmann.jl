@@ -125,13 +125,13 @@ function boltzmann(nx::Int, ny::Int)
 end
 
 function main()
-    doc = """boltzmann-prospect-acc.jl
+    doc = """boltzmann.jl
 
 Lattice Boltzmann fluid flow algorithm.
 
 Usage:
-  boltzmann-prospect-acc.jl -h | --help
-  boltzmann-prospect-acc.jl [--image-size-x=<x>] [--image-size-y=<y>]
+  boltzmann.jl -h | --help
+  boltzmann.jl [--image-size-x=<x>] [--image-size-y=<y>]
 
 Options:
   -h --help           Show this screen.

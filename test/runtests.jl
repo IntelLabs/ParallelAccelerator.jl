@@ -35,10 +35,4 @@ using AbsTest
 
 @test AbsTest.test3() == 3
 
-# Include the examples, which will also run them.
-
-include("../examples/black-scholes/black-scholes-prospect-acc.jl")
-
-include("../examples/boltzmann/boltzmann-prospect-acc.jl")
-
 include("aug_assign.jl")

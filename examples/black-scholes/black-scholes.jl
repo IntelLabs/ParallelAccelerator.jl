@@ -64,13 +64,13 @@ function run(iterations)
 end
 
 function main()
-    doc = """black-scholes-prospect-acc.jl
+    doc = """black-scholes.jl
 
 Black-Scholes option pricing model.
 
 Usage:
-  black-scholes-prospect-acc.jl -h | --help
-  black-scholes-prospect-acc.jl [--iterations=<iterations>]
+  black-scholes.jl -h | --help
+  black-scholes.jl [--iterations=<iterations>]
 
 Options:
   -h --help                  Show this screen.
