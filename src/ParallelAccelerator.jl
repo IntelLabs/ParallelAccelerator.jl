@@ -170,7 +170,7 @@ end
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export accelerate, @acc, runStencil, cartesianarray, parallel_for
+export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
 
 end
 

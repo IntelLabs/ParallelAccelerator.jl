@@ -263,10 +263,9 @@ function code_typed(func, signature)
   if haskey(alreadyOptimized, (func, signature))
     Any[ alreadyOptimized[(func, signature)] ]
   else
-    fname = GlobalRef(Base.function_module(func, signature), Base.function_name(func))
-    if haskey(CompilerTools.OptFramework.gOptFrameworkDict, fname)
-      func = eval(CompilerTools.OptFramework.gOptFrameworkDict[fname])
-    end
+    mod = Base.function_module(func, signature)
+    name = Base.function_name(func)
+    func = eval(CompilerTools.OptFramework.findTargetFunc(mod, name))
     Base.code_typed(func, signature)
   end
 end
