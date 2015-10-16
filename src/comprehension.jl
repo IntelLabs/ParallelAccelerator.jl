@@ -28,6 +28,7 @@ module Comprehension
 export @comprehend
 
 import CompilerTools
+import ..API
 
 @doc """
 Translate an ast whose head is :comprehension into equivalent code that uses cartesianarray call.
@@ -53,7 +54,7 @@ function comprehension_to_cartesianarray(ast)
   tmpret = gensym("tmp")
   tmpinits = [ :($idx = 1) for idx in indices ]
   typetest = :(local $tmpret; if 1<0 let $(tmpinits...); $tmpret=$body end end)
-  ast = Expr(:call, GlobalRef(current_module(), :cartesianarray), 
+  ast = Expr(:call, GlobalRef(API, :cartesianarray), 
                 :($args -> let $(headers...); $body end), Expr(:static_typeof, tmpret), :($dims))
   Expr(:block, typetest, ast) 
 end
