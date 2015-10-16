@@ -821,6 +821,7 @@ function inline_select(env, state, arr)
         def = lookupConstDef(state, arr.name)
         if !isa(def, Void)  
             if isa(def, Expr) && is(def.head, :call) 
+                target_arr = arr
                 assert(length(def.args) >= 2)
                 if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
                     target_arr = def.args[2]
