@@ -225,7 +225,7 @@ end
 
 function cleanup_generated_files()
     package_root = getPackageRoot()
-    if DEBUG_LVL == 0
+    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         for file in readdir("$package_root/deps/generated")
             if file in [".gitignore", "config.jl"]
                 # Ignore
