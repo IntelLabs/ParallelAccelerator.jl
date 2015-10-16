@@ -744,11 +744,12 @@ function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
     return out_args[1:j]
 end
 
+function normalize_callname(state::IRState, env, fun::GlobalRef, args)
+    return normalize_callname(state, env, fun.name, args)
+end
+
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun :: ANY, args)
-    if isa(fun, GlobalRef)
-        fun = fun.name
-    end
     if isa(fun, Symbol)
         if is(fun, :broadcast!)
             dst = lookupConstDefForArg(state, args[2])
