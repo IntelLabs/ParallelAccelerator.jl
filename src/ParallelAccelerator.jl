@@ -170,7 +170,6 @@ end
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export CompilerTools
 export accelerate, @acc, runStencil, cartesianarray, parallel_for
 
 end
