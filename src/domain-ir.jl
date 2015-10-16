@@ -748,51 +748,55 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     return normalize_callname(state, env, fun.name, args)
 end
 
+function normalize_callname(state::IRState, env, fun::Symbol, args)
+    if is(fun, :broadcast!)
+        dst = lookupConstDefForArg(state, args[2])
+        if isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], TopNode) &&
+            is(dst.args[1].name, :ccall) && isa(dst.args[2], QuoteNode) &&
+            is(dst.args[2].value, :jl_new_array)
+            # now we are sure destination array is new
+            fun   = args[1]
+            args  = args[3:end]
+            if isa(fun, GlobalRef)
+                fun = fun.name
+            end
+            if isa(fun, Symbol)
+            elseif isa(fun, SymbolNode)
+                fun = lookupConstDef(state, fun.name)
+            else
+                error("DomainIR: cannot handle broadcast! with function ", fun)
+            end
+        elseif isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], DataType) &&
+            is(dst.args[1].name, BitArray.name) 
+            # destination array is a new bitarray
+            fun   = args[1]
+            args  = args[3:end]
+            if isa(fun, Symbol) || isa(fun, GenSym) || isa(fun, SymbolNode)
+                # fun could be a variable 
+                fun = get(state.defs, fun, nothing)
+            end
+            if isa(fun, GlobalRef)
+                func = eval(fun)  # should give back a function
+                assert(isa(func, Function))
+                fun = fun.name
+            end
+            if !isa(fun, Symbol)
+                error("DomainIR: cannot handle broadcast! with function ", fun)
+            end
+        else
+            dprintln(env, "cannot decide :broadcast! destination is temporary ")
+        end
+        if haskey(liftOps, fun) # lift operation to array level
+            fun = liftOps[fun]
+        end
+    end
+    return (fun, args)
+end
+
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun :: ANY, args)
-    if isa(fun, Symbol)
-        if is(fun, :broadcast!)
-            dst = lookupConstDefForArg(state, args[2])
-            if isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], TopNode) &&
-                is(dst.args[1].name, :ccall) && isa(dst.args[2], QuoteNode) &&
-                is(dst.args[2].value, :jl_new_array)
-                # now we are sure destination array is new
-                fun   = args[1]
-                args  = args[3:end]
-                if isa(fun, GlobalRef)
-                    fun = fun.name
-                end
-                if isa(fun, Symbol)
-                elseif isa(fun, SymbolNode)
-                    fun = lookupConstDef(state, fun.name)
-                else
-                    error("DomainIR: cannot handle broadcast! with function ", fun)
-                end
-            elseif isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], DataType) &&
-                is(dst.args[1].name, BitArray.name) 
-                # destination array is a new bitarray
-                fun   = args[1]
-                args  = args[3:end]
-                if isa(fun, Symbol) || isa(fun, GenSym) || isa(fun, SymbolNode)
-                    # fun could be a variable 
-                    fun = get(state.defs, fun, nothing)
-                end
-                if isa(fun, GlobalRef)
-                    func = eval(fun)  # should give back a function
-                    assert(isa(func, Function))
-                    fun = fun.name
-                end
-                if !isa(fun, Symbol)
-                    error("DomainIR: cannot handle broadcast! with function ", fun)
-                end
-            else
-                dprintln(env, "cannot decide :broadcast! destination is temporary ")
-            end
-            if haskey(liftOps, fun) # lift operation to array level
-                fun = liftOps[fun]
-            end
-        end
-    elseif isa(fun, TopNode)
+
+    if isa(fun, TopNode)
         fun = fun.name
         if is(fun, :ccall)
             callee = lookupConstDefForArg(state, args[1])
