@@ -23,22 +23,22 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using ParallelAccelerator
 using Base.Test
+importall ParallelAccelerator
 
-include("abs.jl")
-using AbsTest
+ParallelAccelerator.DomainIR.set_debug_level(4)
+ParallelAccelerator.ParallelIR.set_debug_level(4)
+ParallelAccelerator.cgen.set_debug_level(4)
+ParallelAccelerator.set_debug_level(4)
 
-@test AbsTest.test1() == ones(10, 10)
 
-@test AbsTest.test2() == 3
+@acc function example(x)
+    for i in 1:length(x)
+        x[i] += 2
+    end
+    x
+end
 
-@test AbsTest.test3() == 3
-
-# Include the examples, which will also run them.
-
-include("../examples/black-scholes/black-scholes-prospect-acc.jl")
-
-include("../examples/boltzmann/boltzmann-prospect-acc.jl")
-
-include("aug_assign.jl")
+x = [1 2 3 4]
+@test x + 2 == example(x)
+@test x + 3 != example(x)
