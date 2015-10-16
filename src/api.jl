@@ -77,7 +77,7 @@ end
 
 # Binary operators/functions
 const binary_operators = Symbol[
-    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$]
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$]
 
 for f in binary_operators
     @eval begin
