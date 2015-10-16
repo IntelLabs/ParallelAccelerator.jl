@@ -30,7 +30,7 @@ module ParallelAccelerator
 import CompilerTools.DebugMsg
 DebugMsg.init()
 
-using CompilerTools
+importall CompilerTools
 using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
@@ -136,7 +136,7 @@ include("callgraph.jl")
 include("comprehension.jl")
 include("driver.jl")
 
-using .Driver
+importall .Driver
 
 @doc """
 Called when the package is loaded to do initialization.
@@ -170,7 +170,6 @@ end
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-import CompilerTools.@acc
 export CompilerTools
 export accelerate, @acc, runStencil, cartesianarray, parallel_for
 
