@@ -1066,6 +1066,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 reduce_func = :+
             elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
                 reduce_func = :*
+            elseif op == TopNode(:max) || op == TopNode(:min)
+                reduce_func = op.name
             end
         end
     end

@@ -196,18 +196,19 @@ _Intrinsics = [
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint"
+        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm"
 ]
 
 # math functions
-libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh])
+libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :isnan])
 
 tokenXlate = Dict(
     '*' => "star",
     '/' => "slash",
     '-' => "minus",
     '!' => "bang",
-    '.' => "dot"
+    '.' => "dot",
+    '^' => "hat"
 )
 
 replacedTokens = Set("#")
@@ -270,6 +271,8 @@ function from_includes()
   s *= reduce(*, "", (
         blas_include,
         "#include <stdint.h>\n",
+        "#include <float.h>\n",
+        "#include <limits.h>\n",
         "#include <math.h>\n",
         "#include <stdio.h>\n",
         "#include <iostream>\n",
@@ -600,8 +603,10 @@ function canonicalize(tok)
     s = replace(s, scrubbedTokens, "")
     s = replace(s, r"^[^a-zA-Z]", "_")
     s = replace(s, replacedTokens, "p")
-    s = replace(s, "!", "bang")
     s = replace(s, "∇", "del")
+    for (k,v) in tokenXlate
+       s = replace(s, k, v)
+    end
     s
 end
 
@@ -979,9 +984,9 @@ function from_intrinsic(f :: ANY, args)
         return "round(" * from_expr(args[1]) * ")"
     elseif f == :(===)
         return "(" * from_expr(args[1]) * " == " * from_expr(args[2]) * ")"
-    elseif f == "pow"
+    elseif intr == "pow" || intr == "powi_llvm" 
         return "pow(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
-    elseif f == "powf"
+    elseif intr == "powf" || intr == "powf_llvm"
         return "powf(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
     elseif intr == "nan_dom_err"
         dprintln(3,"nan_dom_err is: ")
@@ -1774,7 +1779,17 @@ function from_expr(ast::Char)
 end
 
 function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
-    s = string(ast)
+    if is(ast, Inf)
+      "DBL_MAX"
+    elseif is(ast, Inf32)
+      "FLT_MAX"
+    elseif is(ast, -Inf)
+      "DBL_MIN"
+    elseif is(ast, -Inf32) 
+      "FLT_MIN"
+    else
+      string(ast)
+    end
 end
 
 

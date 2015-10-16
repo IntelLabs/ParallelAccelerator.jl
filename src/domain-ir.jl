@@ -8,7 +8,7 @@ modification, are permitted provided that the following conditions are met:
   this list of conditions and the following disclaimer.
 - Redistributions in binary form must reproduce the above copyright notice, 
   this list of conditions and the following disclaimer in the documentation 
-  and/or other materials provided with the distribution.
+  and/or other materials provided with the distribution.^, .
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -302,10 +302,11 @@ end
   dprintln(env.debugLevel, repeat(" ", env.debugIndent*2), msgs...)
 end
 
-mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy]
-mapVal = Symbol[:negate, :<=,  :>=,  :<, :(==), :>,  :+,  :-,  :*,  :/,  :+, :-, :*, :/, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy]
+mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :.^, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan]
+mapVal = Symbol[:negate, :<=,  :>=,  :<, :(==), :>,  :+,  :-,  :*,  :/,  :+, :-, :*, :/, :^, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan]
 # * / are not point wise. it becomes point wise only when one argument is scalar.
-pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy])
+pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :.^, :+, :-, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan])
+
 mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
 liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
@@ -317,6 +318,12 @@ floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, 
 :eq_float, :ne_float, :lt_float, :le_float]))
 sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
 :eq_int, :ne_int, :slt_int, :sle_int]))
+
+reduceSym = Symbol[:sum, :prod, :maximum, :minimum]
+reduceVal = Symbol[:+, :*, :min, :max]
+reduceFun = Function[zero, one, typemin, typemax]
+reduceOps = Dict{Symbol,Symbol}(zip(reduceSym,reduceVal))
+reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
 
 ignoreSym = Symbol[:box]
 ignoreSet = Set{Symbol}(ignoreSym)
@@ -352,7 +359,8 @@ function isarray(typ)
 end
 
 function isbitarray(typ)
-    isa(typ, DataType) && is(typ.name, BitArray.name)
+    (isa(typ, DataType) && is(typ.name, BitArray.name)) ||
+    (isarray(typ) && is(eltype(typ), Bool))
 end
 
 function isunitrange(typ)
@@ -938,7 +946,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
             (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
             expr = mk_expr(typ, :call, :getindex, args[2:end]...)
         end
-    elseif is(fun, :sum) || is(fun, :prod)
+    elseif haskey(reduceOps, fun)
         args = normalize_args(state, env_, args)
         if length(args)==1
             return translate_call_reduce(state, env_, typ, fun, args)
@@ -1016,6 +1024,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
     args = normalize_args(state, env, args)
     arr = args[1]
     arrTyp = getType(arr, state.linfo)
+    dprintln(env, "arrTyp = ", arrTyp)
     if isrange(arrTyp) && length(args) == 2
         # shortcut range indexing if we can
         rExpr = lookupConstDefForArg(state, args[1])
@@ -1352,8 +1361,8 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
     arr = args[1]
     # element type is the same as typ
     etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
-    neutral = is(fun, :sum) ? 0 : 1
-    fun = is(fun, :sum) ? :+ : :*
+    neutral = (reduceNeutrals[fun])(etyp)
+    fun = reduceOps[fun]
     typs = Type[ etyp for arg in args] # just use etyp for input element types
     opr, reorder = specializeOp(mapOps[fun], typs)
     # ignore reorder since it is always id function
