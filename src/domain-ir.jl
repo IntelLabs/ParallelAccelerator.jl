@@ -320,7 +320,7 @@ sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_i
 :eq_int, :ne_int, :slt_int, :sle_int]))
 
 reduceSym = Symbol[:sum, :prod, :maximum, :minimum]
-reduceVal = Symbol[:+, :*, :min, :max]
+reduceVal = Symbol[:+, :*, :max, :min]
 reduceFun = Function[zero, one, typemin, typemax]
 reduceOps = Dict{Symbol,Symbol}(zip(reduceSym,reduceVal))
 reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
