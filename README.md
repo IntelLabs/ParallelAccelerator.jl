@@ -30,18 +30,14 @@ For the two `Pkg.clone` commands, you will be prompted for your GitHub
 username and password.
  
 If all of the above succeeded, you should be ready to use
-`ParallelAccelerator`.  We're in the process of documenting how to use
-this package.  For now, a good place to look for examples is the code
-in the
-[ParallelAcceleratorBenchmarks](https://github.com/IntelLabs/ParallelAcceleratorBenchmarks)
-repo.  For example, the `black-scholes/src` directory in that repo
-contains the file `blackscholes-pse.jl`, which you can include at the
-Julia REPL:
+`ParallelAccelerator`.  We're in the process of documenting how to use this
+package.  For now, you can look at a few programs included in the `examples/`
+sub-directoy. You can run them either at commandline or in Julia REPL:
 
 ```
-julia> include("blackscholes-pse.jl")
+julia> include("black-scholes.jl")
 ```
 
-Each directory in `ParallelAcceleratorBenchmarks` has a README with
-some more information about each workload.  Caveat: some of the
-workloads require installing additional Julia packages.
+Each directory in `examples/` has a README with some more information about
+each workload.  Caveat: some of the workloads require installing additional
+Julia packages.
