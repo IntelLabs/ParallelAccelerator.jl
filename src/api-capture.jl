@@ -25,8 +25,15 @@ function process_node(node, state, top_level_number, is_top_level, read)
       end
     elseif head == :(=) && isa(node.args[1], Expr) && node.args[1].head == :ref
       # x[...] = ...
-      node.head = :call
-      node.args = Any[GlobalRef(API, :setindex!), node.args[1].args[1], node.args[2], node.args[1].args[2:end]...]
+      lhs = node.args[1].args[1]
+      idx = node.args[1].args[2:end]
+      rhs = node.args[2]
+      tmpvar = gensym()
+      node.head = :block
+      node.args = Any[
+           Expr(:(=), tmpvar, rhs),
+           Expr(:call, GlobalRef(API, :setindex!), lhs, tmpvar, idx...),
+           tmpvar]
     elseif node.head == :ref
       node.head = :call
       node.args = Any[GlobalRef(API, :getindex), node.args...]
