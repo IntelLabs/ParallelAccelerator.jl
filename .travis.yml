@@ -17,10 +17,6 @@ matrix:
     - julia: nightly
     - os: osx
 
-notifications:
-  email: false
-
-# uncomment the following lines to override the default test script
 script:
  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
  - julia --check-bounds=yes -e 'Pkg.clone("https://psl-travis-user:6mnZDX4Hf04Kcn1S2gog@github.com/IntelLabs/CompilerTools.jl.git")' # Pull in CompilerTools dependency
@@ -28,3 +24,6 @@ script:
  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator"; coverage=true)'
  # Temporary: have Travis print generated output for debugging purposes.
  - cat /home/travis/.julia/v0.4/ParallelAccelerator/deps/generated/cgen_output0.cpp
+ # Run benchmarks.
+ - julia examples/black-scholes/black-scholes.jl
+ - julia examples/boltzmann/boltzmann.jl

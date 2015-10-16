@@ -35,23 +35,30 @@ function computeF(density::Float64,
                   u_squ::Float64,
                   t::Float64,
                   u::Float64,
-                  v::Float64) 
+                  v::Float64)
     t * density * (1 + u / c_squ + 0.5 * (v / c_squ) * (v / c_squ) - u_squ / (2 * c_squ))
 end
 
 @acc function boltzmann_kernel(nx, ny, numactivenodes, F, G, ON, UX, X1)
-    avu=1.; prevavu=1.; ts=0; 
+    avu = 1.
+    prevavu = 1.
+    ts = 0
     while (ts<4000 && 1e-10<abs((prevavu-avu)/avu)) || ts<100
         ux_sum = 0.
-        runStencil(F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8], F[9], 
+        runStencil(F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8], F[9],
                    G[1], G[2], G[3], G[4], G[5], G[6], G[7], G[8], G[9], ON, UX, X1,
                    1, :oob_wraparound) do F1, F2, F3, F4, F5, F6, F7, F8, F9, G1, G2, G3, G4, G5, G6, G7, G8, G9, ON, UX, X1
-                       deltaU=1e-7; t1=4/9; t2=1/9; t3=1/36; c_squ=1/3; omega=1.0; 
+                       deltaU = 1e-7
+                       t1 = 4/9
+                       t2 = 1/9
+                       t3 = 1/36
+                       c_squ = 1/3
+                       omega = 1.0
                        f4 = F4[1, -1]
                        f3 = F3[0,-1]
                        f2 = F2[-1,-1]
                        f5 = F5[1,0]
-                       f1 = F1[-1,0] 
+                       f1 = F1[-1,0]
                        f6 = F6[1,1]
                        f7 = F7[0,1]
                        f8 = F8[-1,1]
@@ -60,7 +67,7 @@ end
                        ux = (f1 + f2 + f8 - f4 - f5 - f6) / density
                        uy = (f2 + f3 + f4 - f6 - f7 - f8) / density
                        if X1[0,0] == 1
-                           ux = ux + deltaU 
+                           ux = ux + deltaU
                        end 
                        if ON[0,0] == 1
                            ux = 0.
@@ -104,34 +111,40 @@ end
                        G9[0,0] = omega * feq9 + (1. - omega) * f9
                        return
                    end
-        X = G; G = F; F = X
-        prevavu=avu
-        avu=sum(UX) / numactivenodes
-        ts=ts+1
+        X = G
+        G = F
+        F = X
+        prevavu = avu
+        avu = sum(UX) / numactivenodes
+        ts = ts+1
     end
     return F
 end
 
 function boltzmann(nx::Int, ny::Int)
-    density=1.0
+    density = 1.0
     F  = [ fill!(zeros( nx, ny), density/9) for i = 1:9 ]
     G  = deepcopy(F)
     X1 = [ x == 1 ? 1 : 0 for x = 1:nx, y = 1:ny ]
     UX = zeros(nx, ny)
     ON = zeros(Int, nx, ny)
     ON[rand(nx,ny) .> 0.7] = 1
-    avu=1; prevavu=1; ts=0.; deltaU=1e-7; numactivenodes=sum(1 .- ON);
+    avu = 1
+    prevavu = 1
+    ts = 0.
+    deltaU = 1e-7
+    numactivenodes = sum(1 .- ON)
     boltzmann_kernel(nx, ny, numactivenodes, F, G, ON, UX, X1)
 end
 
 function main()
-    doc = """boltzmann-prospect-acc.jl
+    doc = """boltzmann.jl
 
 Lattice Boltzmann fluid flow algorithm.
 
 Usage:
-  boltzmann-prospect-acc.jl -h | --help
-  boltzmann-prospect-acc.jl [--image-size-x=<x>] [--image-size-y=<y>]
+  boltzmann.jl -h | --help
+  boltzmann.jl [--image-size-x=<x>] [--image-size-y=<y>]
 
 Options:
   -h --help           Show this screen.
