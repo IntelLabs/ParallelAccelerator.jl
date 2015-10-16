@@ -36,3 +36,11 @@ using AbsTest
 @test AbsTest.test3() == 3
 
 include("aug_assign.jl")
+
+# Examples.  We're not including them all here, because it would take
+# too long, but just including black-scholes and opt-flow seems like a
+# good compromise that exercises much of ParallelAccelerator.
+
+include("../examples/black-scholes/black-scholes.jl")
+# Uncomment me when opt-flow has been added.
+#include("../examples/opt-flow/opt-flow.jl")
