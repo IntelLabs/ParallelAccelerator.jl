@@ -25,3 +25,4 @@ script:
  # Run examples.
  - julia examples/black-scholes/black-scholes.jl
  - julia examples/gaussian-blur/gaussian-blur.jl
+ - julia examples/harris/harris.jl
