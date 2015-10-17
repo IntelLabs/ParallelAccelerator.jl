@@ -74,8 +74,8 @@ Usage:
   harris.jl [--img-file=<img-file>]
 
 Options:
-  -h --help                  Show this screen.
-  --img-file=<img-file>      Specify a path to an input (grayscale) image file; defaults to 'examples/harris/sample.jpg'.
+  -h --help              Show this screen.
+  --img-file=<img-file>  Specify a path to an input (grayscale) image file; defaults to 'examples/harris/sample.jpg'.
 """
     arguments = docopt(doc)
 
