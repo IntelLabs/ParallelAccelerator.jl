@@ -6,6 +6,10 @@ os:
   - linux
   - osx
 
+matrix:
+  allow_failures:
+    - os: osx
+
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
     sudo add-apt-repository ppa:staticfloat/juliareleases -y
