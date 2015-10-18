@@ -7,7 +7,7 @@ before_install:
   - sudo add-apt-repository ppa:staticfloat/juliareleases -y
   - sudo apt-get update -q
   - sudo apt-get install gcc-4.8 -y
-  - sudo apt-get install julia
+  - sudo apt-get install julia -y
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
