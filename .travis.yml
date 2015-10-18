@@ -2,11 +2,19 @@
 sudo: required
 dist: trusty
 
-# Because there's no Julia by default on the Travis Trusty beta, we have to install it.
+os:
+  - linux
+  - osx
+
 before_install:
-  - sudo add-apt-repository ppa:staticfloat/juliareleases -y
-  - sudo apt-get update -q
-  - sudo apt-get install julia -y
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+    sudo add-apt-repository ppa:staticfloat/juliareleases -y
+    && sudo apt-get update -q
+    && sudo apt-get install julia -y; fi
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+    brew update
+    && brew tap staticfloat/julia
+    && brew install julia; fi
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
