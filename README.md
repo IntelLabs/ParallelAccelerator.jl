@@ -12,7 +12,11 @@ Performance Scripting project at Intel Labs.
     Then check that you can run Julia and get to a `julia>` prompt.
     You will know you're running the correct version if when you run
     it, you see `Version 0.4.0`.
-  * You will need a C++ compiler: either `gcc` or `icpc`.
+  * You will need a C/C++ compiler: either `gcc`/`g++` or
+    `icc`/`icpc`.  We recommend GCC 4.8.4 or later and ICC 15.0.3 or
+    later.  At package build time, ParallelAccelerator will check to
+    see if you have ICC installed.  If so, ParallelAccelerator will
+    use it.  Otherwise, it will use GCC.
 
 ## Installation
 
