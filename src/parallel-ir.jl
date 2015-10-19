@@ -2645,7 +2645,8 @@ function fuse(body, body_index, cur, state)
 
         # Get the variables live after the previous parfor.
         live_in_prev = prev_stmt_live_first.live_in
-        dprintln(2,"live_in_prev = ", live_in_prev)
+        def_prev     = prev_stmt_live_first.def
+        dprintln(2,"live_in_prev = ", live_in_prev, " def_prev = ", def_prev)
 
         # Get the variables live after the previous parfor.
         live_out_prev = prev_stmt_live_last.live_out
@@ -2653,16 +2654,20 @@ function fuse(body, body_index, cur, state)
 
         # Get the live variables into the current parfor.
         live_in_cur   = cur_stmt_live.live_in
-        dprintln(2,"live_in_cur = ", live_in_cur)
+        def_cur       = cur_stmt_live.def
+        dprintln(2,"live_in_cur = ", live_in_cur, " def_cur = ", def_cur)
 
         # Get the variables live after the current parfor.
         live_out_cur  = cur_stmt_live.live_out
         dprintln(2,"live_out_cur = ", live_out_cur)
 
+        surviving_def = intersect(union(def_prev, def_cur), live_out_cur)
+
         new_in_prev = setdiff(live_out_prev, live_in_prev)
         new_in_cur  = setdiff(live_out_cur,  live_in_cur)
         dprintln(3,"new_in_prev = ", new_in_prev)
         dprintln(3,"new_in_cur = ", new_in_cur)
+        dprintln(3,"surviving_def = ", surviving_def)
 
         # The things that come in live to cur but leave it dead.
         not_used_after_cur = setdiff(live_out_prev, live_out_cur)
@@ -2696,15 +2701,15 @@ function fuse(body, body_index, cur, state)
             end
         end
 
-        outputs = collect(values(output_map))
-        # return code 2 if there is no output in the fused parfor
-        # this means the parfor is dead and should be removed
-        if length(outputs)==0
-            return 2;
-        end
-
         dprintln(3,"output_map = ", output_map)
         dprintln(3,"new_aliases = ", new_aliases)
+
+        # return code 2 if there is no output in the fused parfor
+        # this means the parfor is dead and should be removed
+        if length(surviving_def)==0
+            dprintln(1,"No output for the fused parfor so the parfor is dead and is being removed.")
+            return 2;
+        end
 
         first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
 
