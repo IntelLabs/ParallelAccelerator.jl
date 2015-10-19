@@ -1068,12 +1068,16 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 reduce_func = :*
             elseif op == TopNode(:max) || op == TopNode(:min)
                 reduce_func = op.name
+            elseif op == TopNode(:|) 
+                reduce_func = :||
+            elseif op == TopNode(:&) 
+                reduce_func = :&&
             end
         end
     end
 
     if reduce_func == nothing
-        throw(string("Parallel IR only supports + and * reductions right now."))
+        throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
     end
 
     #  makeLhsPrivate(out_body, state)

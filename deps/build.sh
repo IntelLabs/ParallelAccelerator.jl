@@ -26,6 +26,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #!/bin/sh
 
 CONF_FILE="generated/config.jl"
+MKL_LIB=""
+OPENBLAS_LIB=""
 
 if [ -e "$CONF_FILE" ]
 then
@@ -47,6 +49,31 @@ else
     echo "You must have icpc or gcc installed to use ParallelAccelerator.";
     exit 1;
 fi
+
+syslibs=`echo "$LD_LIBRARY_PATH:$DYLD_LIBRARY_PATH"`
+arr_libs=(${syslibs//:/ })
+
+for lib in "${arr_libs[@]}"
+do
+    if echo "$lib" | grep -q "/mkl/"; then
+        MKL_LIB=$lib
+    fi
+    if echo "$lib" | grep -q "OpenBLAS"; then
+        OPENBLAS_LIB=$lib
+    fi
+done
+
+if [ -z "$MKL_LIB" ]; then
+    echo "MKL not detected (optional)"
+fi
+
+if [ -z "$OPENBLAS_LIB" ]; then
+    echo "OpenBlas not detected (optional)"
+fi
+
+echo "mkl_lib = \"$MKL_LIB\"" >> "$CONF_FILE"
+echo "openblas_lib = \"$OPENBLAS_LIB\"" >> "$CONF_FILE"
+
 
 echo "Using $CC to build ParallelAccelerator array runtime.";
 $CC -fPIC -shared -o libj2carray.so.1.0 j2c-array.cpp

@@ -140,6 +140,8 @@ lstate = nothing
 backend_compiler = USE_ICC
 use_bcpp = 0
 package_root = getPackageRoot()
+mkl_lib = ""
+openblas_lib = ""
 #config file overrides backend_compiler variable
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
@@ -209,7 +211,9 @@ tokenXlate = Dict(
     '-' => "minus",
     '!' => "bang",
     '.' => "dot",
-    '^' => "hat"
+    '^' => "hat",
+    '|' => "bar",
+    '&' => "amp"
 )
 
 replacedTokens = Set("#")
@@ -257,11 +261,11 @@ end
 function from_includes()
     packageroot = getPackageRoot()
     blas_include = ""
-    if include_blas != false
+    if include_blas == true 
         libblas = Base.libblas_name
-        if contains(libblas, "mkl")
+        if mkl_lib!=""
             blas_include = "#include <mkl.h>\n"
-        else
+        elseif openblas_lib!=""
             blas_include = "#include <cblas.h>\n"
         end
     end
@@ -2020,6 +2024,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     returnType = bod.typ
     typ = returnType
 
+    if contains(string(ast),"gemm_wrapper!")
+        set_include_blas(true)
+    end
+
     # Translate the body
     bod = from_expr(ast)
 
@@ -2252,13 +2260,20 @@ function getLinkCommand(outfile_name, lib)
   packageroot = getPackageRoot()
 
   Opts = ""
+  linkLibs = ""
+  if include_blas==true
+      if mkl_lib!=""
+          linkLibs*="-lmkl_rt"
+      elseif openblas_lib!=""
+          linkLibs*="-lopenblas"
+      end
+  end
   if backend_compiler == USE_ICC
     Opts *= (USE_OMP==1 ? "-qopenmp" : "")
-    # linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o -L/opt/intel/lib/intel64 -lmkl_rt -lm`
-    linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o -lm`
+    linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
     Opts *= (USE_OMP==1 ? "-fopenmp" : "")
-    linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
+    linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand

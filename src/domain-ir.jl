@@ -310,7 +310,7 @@ pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, 
 mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
 liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
-topOpsTypeFix = Set{Symbol}([:neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t])
+topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t])
 
 opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
 opsSymSet = Set{Symbol}(opsSym)
@@ -319,9 +319,9 @@ floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, 
 sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
 :eq_int, :ne_int, :slt_int, :sle_int]))
 
-reduceSym = Symbol[:sum, :prod, :maximum, :minimum]
-reduceVal = Symbol[:+, :*, :max, :min]
-reduceFun = Function[zero, one, typemin, typemax]
+reduceSym = Symbol[:sum, :prod, :maximum, :minimum, :any, :all]
+reduceVal = Symbol[:+, :*, :max, :min, :|, :&]
+reduceFun = Function[zero, one, typemin, typemax, x->false, x->true]
 reduceOps = Dict{Symbol,Symbol}(zip(reduceSym,reduceVal))
 reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
 
@@ -1025,6 +1025,8 @@ function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
                 #        elseif is(typ1, Float64) typ1 = Int64
             else throw(string("unknown target type for fpsiround: ", typ1, " args[1] = ", args[1]))
             end
+        elseif searchindex(string(fun), "_int") > 0
+            typ1 = Int
         end
     end
     dprintln(env,"fix type ", typ, " => ", typ1)
@@ -1376,14 +1378,14 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
     neutral = (reduceNeutrals[fun])(etyp)
     fun = reduceOps[fun]
     typs = Type[ etyp for arg in args] # just use etyp for input element types
-    opr, reorder = specializeOp(mapOps[fun], typs)
+    opr, reorder = specializeOp(fun, typs)
     # ignore reorder since it is always id function
     f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
     domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
     expr = mk_reduce(convert(etyp, neutral), arr, domF)
-    expr.typ = typ
+    expr.typ = etyp
     return expr
 end
 
@@ -1573,6 +1575,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
             is(args[1].args[1], GlobalRef(Base, :slt_int)) && args[1].args[2] == 1 && args[1].args[3] == 0
             dprintln(env, "Match gotoifnot shortcut!")
             return GotoNode(args[2])
+        else # translate arguments
+          ast.args = normalize_args(state, env, args)
         end
         # ?
     elseif is(head, :meta)
