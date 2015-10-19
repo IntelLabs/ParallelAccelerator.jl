@@ -2020,6 +2020,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     returnType = bod.typ
     typ = returnType
 
+    if contains(string(ast),"gemm_wrapper!")
+        set_include_blas(true)
+    end
+
     # Translate the body
     bod = from_expr(ast)
 
