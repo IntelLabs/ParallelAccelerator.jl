@@ -153,13 +153,20 @@ programs that meet such constraints.
 ## Advanced Usage
 
 As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
-Julia programs that are safe to parallelize. It also tries to be non-invasive, 
-which means a user function or program should continue to work as expected
-even when only a part of it is accelerated. It is still important to know what
-exactly are accelerated and what are not, however, and we encourage user to
-write program using high-level array operations that are amenable to domain
-specific analysis and optimizations, rather than writing explicit for-loops 
-with unrestricted mutations or unknown side-effects. 
+Julia programs that are safe to parallelize. It also tries to be non-invasive,
+which means a user function or program should continue to work as expected even
+when only a part of it is accelerated. It is still important to know what
+exactly are accelerated and what are not, however, and as a general guideline,
+we encourage users to write program using high-level array operations rather
+than writing explicit for-loops with unrestricted mutations or unknown
+side-effects, so that they are amenable to domain specific analysis and
+optimization provided by ParallelAccelerator.
+
+To help user verify program correctness, the optimizations of ParallelAccelerator
+can be turned off by setting environment variable `PROSPECT_MODE=none` before
+running the julia program. Doing so will still trigger certain useful macro 
+translations (such as `runStencil`, see below), but no optimizations or
+Julia-to-C translation will take place.
 
 
 ### Array Operations
@@ -167,8 +174,8 @@ with unrestricted mutations or unknown side-effects.
 Array operations that work uniformly on each elements and produce an output
 array of equal size are called `point-wise` operations (and for binary
 operations in Julia, they usually come with a `.` as a prefix to the operator).
-They are translated into an internal `map` operation by ParallelAccelerator.
-The following are recognized by `@acc` as `map` operation:
+They are translated into an internal *map* operation by ParallelAccelerator.
+The following are recognized by `@acc` as *map* operation:
 
 * Unary functions: 
 ```
@@ -184,12 +191,12 @@ abs, copy, erf:
 .>>, .^, div, mod, rem, &, |, $
 ```
 
-Array assignment are also being recognized and converted into `in-place map`
-operation.  Expressions like `a = a .+ b` will be turned into an `in-place map`
+Array assignment are also being recognized and converted into *in-place map*
+operation.  Expressions like `a = a .+ b` will be turned into an *in-place map*
 that takes two inputs arrays, `a` and `b`, and updates `a` in-place. 
 
 Array operations that computes a single result by repeating an associative
-and commutative operator among all input array elements is called `reduce`.
+and commutative operator among all input array elements is called *reduce*.
 The follow are recognized by `@acc` as `reduce` operations: 
 
 ```
@@ -197,10 +204,12 @@ minimum, maximum, sum, prod,
 ```
 
 We also support range operations to a limited extent. So things like `a[r] =
-b[r]` where `r` is either a `BitArray` or `UnitRange` like `1:s` are internally
-converted into *inplace map* operations. However, such support is consider
+b[r]` where `r` is either a `BitArray` or `UnitRange` (e.g., `1:s`) are
+internally converted parallel operations when the ranges can be inferred
+statically to be *compatible*. However, such support is still consider
 experimental, and occasionally ParallelAccelerator will complain about not
-being able to optimize them.
+being able to optimize them. We are working on improving this aspect
+to provide more coverage and better error messages.
 
 ### Parallel Comprehension 
 
@@ -214,22 +223,27 @@ A = Type[ f (x1, x2, ...) for x1 in r1, x2 in r2, ... ]
 ```
 becomes
 ```
-cartesianmap((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
+cartesianarray((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
              Type,
              (length(r1), length(r2), ...))
 ```
 
 This `cartesianarray` function is also exported by `ParallelAccelerator` and
-can be directly used by the user. So the above two forms are equivalent 
-in semantics, they both produce a N-dimentional (`N` being the number of `r`s,
-and currently only up-to-3 dimensions are supported) array whose element is 
-`Type`.
+can be directly used by the user. Both the above two forms are acceptible
+programs, and equivalent in semantics, they both produce a N-dimentional array
+whose element is of `Type`, where `N` is the number of `x`s and `r`s, and
+currently only up-to-3 dimensions are supported.
 
-
-It should be noted, however, not all comprehensions are safe to parallelize,
-for example, if the function `f` above reads and writes to an environment
+It should be noted, however, not all comprehensions are safe to parallelize.
+For example, if the function `f` above reads and writes to an environment
 variable, then making it run in parallel would produce non-deterministic
 result. So please avoid using `@acc` should such situations arise.
+
+Another difference between parallel comprehension and the afore-mentioned *map*
+operations is that array indexing in the body of a parallel comprehension
+remain explicit, and therefore they must still go through necessary
+boundschecking to ensure safety, while in all *map* operations such
+boundschecking are skipped.
 
 ### Stencil
 
@@ -284,6 +298,12 @@ non-determinism. Since `runStencil` do not impose a fixed buffer rotation
 order, all arrays that need to be relatively indexed can be specified as
 input buffers (just don't rotate them), and there can be mulitple
 output buffers too.
+
+ParallelAccelerator provides a basic implementation of `runStencil` that runs
+without `@acc`, whose purpose is mostly for correctness checking.  When `@acc`
+is being used, ParallelAccelerator supplies a macro implementation of
+`runStencil` even when acceleration mode is turned off (through the
+environment variable `PROSPECT_MODE=none`).
 
 ### Faster compilation via userimg.jl
 
