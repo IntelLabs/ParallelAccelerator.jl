@@ -29,22 +29,59 @@ Pkg.build("ParallelAccelerator")                                      # Build th
 Pkg.test("CompilerTools")                                             # Run CompilerTools tests.
 Pkg.test("ParallelAccelerator")                                       # Run ParallelAccelerator tests.
 ```
-
-For the two `Pkg.clone` commands, you will be prompted for your GitHub
-username and password.
  
 If all of the above succeeded, you should be ready to use
-ParallelAccelerator.  We're in the process of documenting how to use this
-package.  For now, you can look at a few programs included in the `examples/`
-sub-directoy. You can run them either at commandline or in Julia REPL:
+ParallelAccelerator.
+
+## Examples
+
+The `examples/` subdirectory has a few example programs demonstrating
+how to use ParallelAccelerator. You can run them at the command line.
+For instance:
+
+``` .bash
+$ julia examples/laplace-3d/laplace-3d.jl
+Run laplace-3d with size 300x300x300 for 100 iterations.
+SELFPRIMED 18.663935711
+SELFTIMED 1.527286803
+checksum: 0.49989778
+```
+
+The `SELFTIMED` line in the printed output shows the running time,
+while the `SELFPRIMED` line shows the time it takes to compile the
+accelerated code and run it with a small "warm-up" input.
+
+Pass the `--help` option to see usage information for each example:
+
+``` .bash
+$ julia examples/laplace-3d/laplace-3d.jl -- --help
+laplace-3d.jl
+
+Laplace 6-point 3D stencil.
+
+Usage:
+  laplace-3d.jl -h | --help
+  laplace-3d.jl [--size=<size>] [--iterations=<iterations>]
+
+Options:
+  -h --help                  Show this screen.
+  --size=<size>              Specify a 3d array size (<size> x <size> x <size>); defaults to 300.
+  --iterations=<iterations>  Specify a number of iterations; defaults to 100.
+```
+
+You can also run the examples at the `julia>` prompt:
 
 ```
-julia> include("black-scholes.jl")
+julia> include("examples/laplace-3d/laplace-3d.jl")
+Run laplace-3d with size 300x300x300 for 100 iterations.
+SELFPRIMED 18.612651534
+SELFTIMED 1.355707121
+checksum: 0.49989778
 ```
 
-Each directory in `examples/` has a README with some more information about
-each workload.  Caveat: some of the workloads require installing additional
-Julia packages.
+Some of the examples require additional Julia packages.  The top-level
+`REQUIRE` file in this repository lists all registered packages that
+examples depend on.
 
 ## Basic Usage
 
