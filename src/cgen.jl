@@ -211,7 +211,9 @@ tokenXlate = Dict(
     '-' => "minus",
     '!' => "bang",
     '.' => "dot",
-    '^' => "hat"
+    '^' => "hat",
+    '|' => "bar",
+    '&' => "amp"
 )
 
 replacedTokens = Set("#")
