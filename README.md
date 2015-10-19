@@ -121,7 +121,7 @@ definitions.
 
 ParallelAccelerator is essentially a domain-specific compiler written in Julia
 that discovers and exploits the implicit parallelism in source programs that
-use parallel programming patterns such as *map, reduction, comprehension, and
+use parallel programming patterns such as *map, reduce, comprehension, and
 stencil*. For example, Julia array operators such as `.+, .-, .*, ./` are
 translated by ParallelAccelerator internally into a *map* operation over all
 elements of input arrays.  For the most part, these patterns are already
@@ -169,13 +169,14 @@ translations (such as `runStencil`, see below), but no optimizations or
 Julia-to-C translation will take place.
 
 
-### Array Operations
+### Map and Reduce
 
-Array operations that work uniformly on each elements and produce an output
-array of equal size are called `point-wise` operations (and for binary
-operations in Julia, they usually come with a `.` as a prefix to the operator).
-They are translated into an internal *map* operation by ParallelAccelerator.
-The following are recognized by `@acc` as *map* operation:
+Array operations that work uniformly on each element of input arrays and
+produce an output array of equal size are called `point-wise` operations (and
+for binary operations in Julia, they usually come with a `.` prefix in the
+operator name).  They are translated internally into *map* operations by
+ParallelAccelerator. The following are recognized by `@acc` as *map*
+operations:
 
 * Unary functions: 
 ```
@@ -191,16 +192,16 @@ abs, copy, erf:
 .>>, .^, div, mod, rem, &, |, $
 ```
 
-Array assignment are also being recognized and converted into *in-place map*
+Array assignments are also recognized and converted into *in-place map*
 operation.  Expressions like `a = a .+ b` will be turned into an *in-place map*
 that takes two inputs arrays, `a` and `b`, and updates `a` in-place. 
 
 Array operations that computes a single result by repeating an associative
 and commutative operator among all input array elements is called *reduce*.
-The follow are recognized by `@acc` as `reduce` operations: 
+The following are recognized by `@acc` as `reduce` operations: 
 
 ```
-minimum, maximum, sum, prod, 
+minimum, maximum, sum, prod, any, all
 ```
 
 We also support range operations to a limited extent. So things like `a[r] =
@@ -240,10 +241,10 @@ variable, then making it run in parallel would produce non-deterministic
 result. So please avoid using `@acc` should such situations arise.
 
 Another difference between parallel comprehension and the afore-mentioned *map*
-operations is that array indexing in the body of a parallel comprehension
-remain explicit, and therefore they must still go through necessary
-boundschecking to ensure safety, while in all *map* operations such
-boundschecking are skipped.
+operation is that array indexing operations in the body of a parallel
+comprehension remain explicit, and therefore they must still go through
+necessary bounds-checking to ensure safety, while in all *map* operations such
+bounds-checking are skipped.
 
 ### Stencil
 
