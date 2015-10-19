@@ -31,6 +31,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module cgen
 
 import CompilerTools.DebugMsg
+import CompilerTools.LambdaHandling.SymAllGen
 DebugMsg.init()
 
 import ..ParallelIR
