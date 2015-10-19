@@ -702,6 +702,13 @@ function from_arraysize(args)
     s
 end
 
+function from_arraysize(arr, dim::Int)
+    s = from_expr(arr)
+    s *= ".ARRAYSIZE(" * from_expr(dim) * ")"
+    s
+end
+
+
 function from_ccall(args)
     dprintln(3,"ccall args:")
     dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
@@ -1214,10 +1221,46 @@ function pattern_match_call_math(fun::ANY, input::ANY)
     return ""
 end
 
+function getSymType(a::Union{Symbol,GenSym})
+    return lstate.symboltable[a]
+end
+
+function getSymType(a::SymbolNode)
+    return lstate.symboltable[a.name]
+end
+
 function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Char, A::SymAllGen, B::SymAllGen)
-    if fun.mod!=Base.LinAlg || fun.name!=gemm_wrapper!
+    if fun.mod!=Base.LinAlg || fun.name!=:gemm_wrapper!
         return ""
     end
+    cblas_fun = ""
+    typ = getSymType(A)
+    if getSymType(B)!=typ || getSymType(C)!=typ
+        return ""
+    end
+    if typ==Array{Float32,2}
+        cblas_fun = "cblas_sgemm"
+    elseif typ==Array{Float64,2}
+        cblas_fun = "cblas_dgemm"
+    else
+        return ""
+    end
+    m = (tA == 'N') ? from_arraysize(A,1) : from_arraysize(A,2) 
+    k = (tB == 'N') ? from_arraysize(A,2) : from_arraysize(A,1) 
+    n = (tB == 'N') ? from_arraysize(B,2) : from_arraysize(B,1)
+
+    lda = from_arraysize(A,1)
+    ldb = from_arraysize(B,1)
+    ldc = m
+
+    CblasNoTrans = 111 
+    CblasTrans = 112 
+    _tA = tA == 'N' ? CblasNoTrans : CblasTrans
+    _tB = tB == 'N' ? CblasNoTrans : CblasTrans
+    CblasColMajor = 102
+    return "$(from_expr(C)); $(cblas_fun)((CBLAS_LAYOUT)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
+         $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
+
 end
 
 function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY)
@@ -1781,11 +1824,11 @@ end
 
 function from_expr(ast::Type)
     s = ""
-    if isPrimitiveJuliaType(ast)
-        s = "(" * toCtype(ast) * ")"
-    else
-        throw("Unknown julia type")
-    end
+#    if isPrimitiveJuliaType(ast)
+#        s = "(" * toCtype(ast) * ")"
+#    else
+#        throw("Unknown julia type")
+#    end
     s
 end
 
@@ -2168,7 +2211,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
         push!(Opts, "-qopenmp")
     end
     # Generate dyn_lib
-    compileCommand = `icc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icpc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
@@ -2211,7 +2254,8 @@ function getLinkCommand(outfile_name, lib)
   Opts = ""
   if backend_compiler == USE_ICC
     Opts *= (USE_OMP==1 ? "-qopenmp" : "")
-    linkCommand = `icc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
+    # linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o -L/opt/intel/lib/intel64 -lmkl_rt -lm`
+    linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o -lm`
   elseif backend_compiler == USE_GCC
     Opts *= (USE_OMP==1 ? "-fopenmp" : "")
     linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o`
