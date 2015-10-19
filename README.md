@@ -120,52 +120,170 @@ definitions.
 ## How It Works
 
 ParallelAccelerator is essentially a domain-specific compiler written in Julia
-that discovers and exploits the implicit parallelism in source programs that 
+that discovers and exploits the implicit parallelism in source programs that
 use parallel programming patterns such as *map, reduction, comprehension, and
-stencil*. For example, Julia array operators such as `.+, .-, .*, ./` are 
+stencil*. For example, Julia array operators such as `.+, .-, .*, ./` are
 translated by ParallelAccelerator internally into a *map* operation over all
-elements of input arrays.  For the most part, these patterns are already 
-present in standard Julia, so programmers can use ParallelAccelerator to 
-run the same Julia program without (significantly) modifying its source code. 
+elements of input arrays.  For the most part, these patterns are already
+present in standard Julia, so programmers can use ParallelAccelerator to run
+the same Julia program without (significantly) modifying its source code. 
 
 The `@acc` macro provided by ParallelAccelerator first intercepts Julia
-functions at macro level, and performs a set of substitutions to capture the
-set of implicitly parallel operations that we are targeting, and point them to
-those supplied in the `ParallelAccelerator.API` module. It then creates a proxy
-function that when called with concrete arguments (and their types) will try to
-compile the original function to an optimized form. So the first time
-calling an accelerated function would incur some compilation time, but all
-subsequent calls to the same function will not.
+functions at macro level, and substitute the set of implicitly parallel
+operations that we are targeting, and point them to those supplied in the
+`ParallelAccelerator.API` module. It then creates a proxy function that when
+called with concrete arguments (and known types) will try to compile the
+original function to an optimized form. So the first time calling an
+accelerated function would incur some compilation time, but all subsequent
+calls to the same function will not.
 
 ParallelAccelerator performs aggressive optimizations when it is safe to do so.
 For example, it automatically infers equivalence relation among array
 variables, and will fuse adjacent parallel loops into a single loop. Eventually
 all parallel patterns are lowered into explicit parallel `for` loops internally
-represented as part of Julia's typed AST. 
+represented at the level of Julia's typed AST. 
 
-Finally, these parallel loops are then translated into a C program with OpenMP
-pragmas, and ParallelAccelerator will use an external C/C++ compiler to compile
-it into binary form before loading it back into Julia as a dynamic library for
-execution. The translation to C currently imposes certain constraints (see
-details below), and as a consequence we can only run user programs that meet such
-constraints. 
+Finally, functions with parallel for loops are translated into a C program with
+OpenMP pragmas, and ParallelAccelerator will use an external C/C++ compiler to
+compile it into binary form before loading it back into Julia as a dynamic
+library for execution. This step of translating Julia to C currently imposes
+certain constraints (see details below), and therefore we can only run user
+programs that meet such constraints. 
 
 ## Advanced Usage
 
 As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
 Julia programs that are safe to parallelize. It also tries to be non-invasive, 
-which means a user function or program should continue with as expected
+which means a user function or program should continue to work as expected
 even when only a part of it is accelerated. It is still important to know what
 exactly are accelerated and what are not, however, and we encourage user to
 write program using high-level array operations that are amenable to domain
-specific analysis and optimizations, rather than explicit for-loops with
-unrestricted mutations or unknown side-effects. 
+specific analysis and optimizations, rather than writing explicit for-loops 
+with unrestricted mutations or unknown side-effects. 
+
 
 ### Array Operations
 
-### Stencil
+Array operations that work uniformly on each elements and produce an output
+array of equal size are called `point-wise` operations (and for binary
+operations in Julia, they usually come with a `.` as a prefix to the operator).
+They are translated into an internal `map` operation by ParallelAccelerator.
+The following are recognized by `@acc` as `map` operation:
+
+* Unary functions: 
+```
+-, +, acos, acosh, angle, asin, asinh, atan, atanh, cbrt,
+cis, cos, cosh, exp10, exp2, exp, expm1, lgamma,
+log10, log1p, log2, log, sin, sinh, sqrt, tan, tanh, 
+abs, copy, erf:
+```
+
+* Binary functions:
+```
+-, +, .+, .-, .*, ./, .\, .%, .>, .<, .<=, .>=, .==, .<<, 
+.>>, .^, div, mod, rem, &, |, $
+```
+
+Array assignment are also being recognized and converted into `in-place map`
+operation.  Expressions like `a = a .+ b` will be turned into an `in-place map`
+that takes two inputs arrays, `a` and `b`, and updates `a` in-place. 
+
+Array operations that computes a single result by repeating an associative
+and commutative operator among all input array elements is called `reduce`.
+The follow are recognized by `@acc` as `reduce` operations: 
+
+```
+minimum, maximum, sum, prod, 
+```
+
+We also support range operations to a limited extent. So things like `a[r] =
+b[r]` where `r` is either a `BitArray` or `UnitRange` like `1:s` are internally
+converted into *inplace map* operations. However, such support is consider
+experimental, and occasionally ParallelAccelerator will complain about not
+being able to optimize them.
 
 ### Parallel Comprehension 
+
+Array comprehensions in Julia are in general also parallelizable, because 
+unlike general loops, their iteration variables have no inter-dependencies. 
+So the `@acc` macro will turn them into an internal form that we call
+`cartesianarray`:
+
+```
+A = Type[ f (x1, x2, ...) for x1 in r1, x2 in r2, ... ]
+```
+becomes
+```
+cartesianmap((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
+             Type,
+             (length(r1), length(r2), ...))
+```
+
+This `cartesianarray` function is also exported by `ParallelAccelerator` and
+can be directly used by the user. So the above two forms are equivalent 
+in semantics, they both produce a N-dimentional (`N` being the number of `r`s,
+and currently only up-to-3 dimensions are supported) array whose element is 
+`Type`.
+
+
+It should be noted, however, not all comprehensions are safe to parallelize,
+for example, if the function `f` above reads and writes to an environment
+variable, then making it run in parallel would produce non-deterministic
+result. So please avoid using `@acc` should such situations arise.
+
+### Stencil
+
+Commonly found in image processing and scientific computing, a stencil
+computation is one that computes new values for all elements of an array based
+on the current values of their neighboring elements. Since Julia's base library
+does not provide such an API, so ParallelAccelerator exports a general
+`runStencil` interface to help with stencil programming:
+
+```
+runStencil(kernel :: Function, buffer1, buffer2, ..., 
+           iteration :: Int, boundaryHandling :: Symbol)
+```
+
+As an example, the following (taken from Gausian Blur example) computes a
+5x5 stencil computation (note the use of Julia's `do` syntax that lets
+user write a lambda function):
+
+```
+runStencil(buf, img, iterations, :oob_skip) do b, a
+       b[0,0] =
+            (a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
+             a[-2,-1] * 0.0133 + a[-1,-1] * 0.0596 + a[0,-1] * 0.0983 + a[1,-1] * 0.0596 + a[2,-1] * 0.0133 +
+             a[-2, 0] * 0.0219 + a[-1, 0] * 0.0983 + a[0, 0] * 0.1621 + a[1, 0] * 0.0983 + a[2, 0] * 0.0219 +
+             a[-2, 1] * 0.0133 + a[-1, 1] * 0.0596 + a[0, 1] * 0.0983 + a[1, 1] * 0.0596 + a[2, 1] * 0.0133 +
+             a[-2, 2] * 0.003  + a[-1, 2] * 0.0133 + a[0, 2] * 0.0219 + a[1, 2] * 0.0133 + a[2, 2] * 0.0030)
+       return a, b
+    end
+```
+
+It take two input arrays, `buf` and `img`, and performs an iterative stencil
+loop (ISL) of given `iterations`. The stencil kernel is specified by a lambda
+function that takes two arrays `a` and `b` (that corresponds to `buf` and
+`img`), and computes the value of the output buffer using relative indices
+as if a cursor is traversing all array elements, where `[0,0]` represents
+the current cursor position. The `return` statement in this lambda reverses
+the position of `a` and `b` to specify a buffer rotation that should happen
+in-between the stencil iterations. The use of `runStencil` will assume
+all input and output buffers are of the same dimension and size.
+
+Stencil boundary handling can be specified as one of the following symbols:
+
+* `:oob_skip`. Writing to output is skipped when input indexing is out-of-bound.
+* `:oob_wraparound`. Input indexing is `wrapped-around` at the image boundary, so they are always safe.
+* `:oob_dst_zero`. Writing 0 to output buffer when any of the input indexing is out-of-bound.
+* `:oob_src_zero`. Assume 0 is being returned from an input read when indexing is out-of-bound.
+
+Just like parallel comprehension, accessing environment variables are allowed
+in a stencil body. However, accessing array values in the environment is
+not supported, and reading/writing the same environment variable will cause
+non-determinism. Since `runStencil` do not impose a fixed buffer rotation
+order, all arrays that need to be relatively indexed can be specified as
+input buffers (just don't rotate them), and there can be mulitple
+output buffers too.
 
 ### Faster compilation via userimg.jl
 
@@ -200,7 +318,16 @@ minor issue.
 
 ## Limitations 
 
-...what is known not to work... etc.
+ParallelAccelerator relies heavily on full type information being avaiable
+in Julia's typed AST in order to work properly. Although we do not require
+user functions to be explicitly typed, it is in general a good practice to
+ensure the function to accelerate at least passes Julia's type inference
+without leaving any `Any` type or `Union` type dangling. The use of Julia-to-C
+translation also mandates this requirement, and will give error messages
+on not being able to handle `Any` type. So we encourage users to use Julia's
+`code_typed(f, (...type signature...))` (after removing `@acc`) to double 
+check the AST of a function when ParallelAccelerator` fails to optimize it.
+
 
 ## Comments, Suggestions, and Bug Reports
 
