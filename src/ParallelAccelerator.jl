@@ -120,7 +120,62 @@ function getPackageRoot()
 end
 
 type UnsupportedFeature <: Exception
-    text :: AbstractString
+  text :: AbstractString
+end
+
+@doc """
+Call this function if you want to embed binary-code of ParallelAccelerator into your Julia build to speed-up @acc compilation time.
+It will attempt to add a userimg.jl file to your Julia distribution and then re-build Julia.
+"""
+function embed(julia_root)
+  # See if the specified julia_root path exists.
+  if !ispath(julia_root)
+    println("The specified path to the Julia source code, ", julia_root, ", was not valid.")
+    return nothing
+  end
+
+  # Do a check to see if this is likely to be a Julia distribution by looking for a base directory.
+  base_dir = string(julia_root, "/base")
+  if !ispath(base_dir)
+    println("The specified path to the Julia source code, ", julia_root, ", does not seem to be a Julia source distribution; base dir not found.")
+    return nothing
+  end
+
+  # The contents of the userimg.jl file.
+  userimg_contents = string("Base.reinit_stdio()\ninclude(\"", @__FILE__, "\")\ntmp_f(A,B)=begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end\nParallelAccelerator.accelerate(tmp_f,(Array{Float64,1},Array{Float64,1},))\n")
+
+  userimg_file = string(base_dir, "/userimg.jl")
+  # If there is already a userimg.jl file then just report the need for a manual merge.
+  if isfile(userimg_file)
+    println("The Julia source tree already seems to have a userimg.jl file.")
+    println("A file ParallelAccelerator_userimg.jl has been created in ", base_dir, ".")
+    println("Please manually merge this file with userimg.jl and then re-compile Julia.")
+
+    outfile = string(base_dir, "/ParallelAccelerator_userimg.jl")
+    f = open(outfile, "w")
+    println(f, userimg_contents)
+    close(f)
+  else
+    # There is no existing userimg.jl file so create one with the userimg_contents.
+    f = open(userimg_file, "w")
+    println(f, userimg_contents)
+    close(f)
+
+    curwd = pwd()    # Get the current directory so we can switch back to that later.
+    cd(julia_root)   # Switch the the root of the julia distribution where we can run make.
+    run(`make`)      # Re-build Julia.
+    cd(curwd)        # Go back to the initial working directory.
+  end
+
+  return nothing
+end
+
+@doc """
+This version of embed tries to use JULIA_HOME to find the root of the source distribution.
+It then calls the version above specifying the path.
+"""
+function embed()
+  embed(joinpath(JULIA_HOME, "..", ".."))
 end
 
 # a hack to make accelerate function and DomainIR mutually recursive.
