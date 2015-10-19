@@ -81,6 +81,7 @@ Options:
         tic()
         blur(img, 0)    
         println("SELFPRIMED ", toq())
+
         tic()
         img = blur(img, iterations)    
         println("SELFTIMED ", toq())

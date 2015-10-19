@@ -31,6 +31,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module cgen
 
 import CompilerTools.DebugMsg
+import CompilerTools.LambdaHandling.SymAllGen
 DebugMsg.init()
 
 import ..ParallelIR
@@ -1213,11 +1214,25 @@ function pattern_match_call_math(fun::ANY, input::ANY)
     return ""
 end
 
+function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Char, A::SymAllGen, B::SymAllGen)
+    if fun.mod!=Base.LinAlg || fun.name!=gemm_wrapper!
+        return ""
+    end
+end
+
+function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY)
+    return ""
+end
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
     if(length(ast)==2)
         s = pattern_match_call_math(ast[1],ast[2])
+    end
+    # gemm calls have 6 args
+    if(length(ast)==6)
+        s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6])
     end
     return s
 end
