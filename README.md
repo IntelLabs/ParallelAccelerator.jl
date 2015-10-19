@@ -63,12 +63,53 @@ julia> f([1,2,3,4,5])
  30
 ```
 
-You can also use `@acc begin ... end`, and put more than one functions in the block
-to have all of them accelerated. The `@acc` macro only works for top-level definitions.
+You can also use `@acc begin ... end`, and put multiple functions in the block
+to have all of them accelerated. The `@acc` macro only works for top-level 
+definitions.
 
 ## How It Works
 
+ParallelAccelerator is essentially a domain-specific compiler written in Julia
+that discovers and exploits the implicit parallelism in source programs that 
+use parallel programming patterns such as *map, reduction, comprehension, and
+stencil*. For example, Julia array operators such as `.+, .-, .*, ./` are 
+translated by ParallelAccelerator internally into a *map* operation over all
+elements of input arrays.  For the most part, these patterns are already 
+present in standard Julia, so programmers can use ParallelAccelerator to 
+run the same Julia program without (significantly) modifying its source code. 
+
+The `@acc` macro provided by ParallelAccelerator first intercepts Julia
+functions at macro level, and performs a set of substitutions to capture the
+set of implicitly parallel operations that we are targeting, and point them to
+those supplied in the `ParallelAccelerator.API` module. It then creates a proxy
+function that when called with concrete arguments (and their types) will try to
+compile the original function to an optimized form. So the first time
+calling an accelerated function would incur some compilation time, but all
+subsequent calls to the same function will not.
+
+ParallelAccelerator performs aggressive optimizations when it is safe to do so.
+For example, it automatically infers equivalence relation among array
+variables, and will fuse adjacent parallel loops into a single loop. Eventually
+all parallel patterns are lowered into explicit parallel `for` loops internally
+represented as part of Julia's typed AST. 
+
+Finally, these parallel loops are then translated into a C program with OpenMP
+pragmas, and ParallelAccelerator will use an external C/C++ compiler to compile
+it into binary form before loading it back into Julia as a dynamic library for
+execution. The translation to C currently imposes certain constraints (see
+details below), and as a consequence we can only run user programs that meet such
+constraints. 
+
 ## Advanced Usage
+
+As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
+Julia programs that are safe to parallelize. It also tries to be non-invasive, 
+which means a user function or program should continue with as expected
+even when only a part of it is accelerated. It is still important to know what
+exactly are accelerated and what are not, however, and we encourage user to
+write program using high-level array operations that are amenable to domain
+specific analysis and optimizations, rather than explicit for-loops with
+unrestricted mutations or unknown side-effects. 
 
 ### Array Operations
 
@@ -111,5 +152,7 @@ minor issue.
 
 ...what is known not to work... etc.
 
-### How to file 
+## Comments, Suggestions, and Bug Reports
+
+
 
