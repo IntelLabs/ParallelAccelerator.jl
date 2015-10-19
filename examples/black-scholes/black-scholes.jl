@@ -74,14 +74,14 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --iterations=<iterations>  Specify a number of iterations; defaults to 100000000.
+  --iterations=<iterations>  Specify a number of iterations; defaults to 10000000.
 """
     arguments = docopt(doc)
 
     if (arguments["--iterations"] != nothing)
         iterations = parse(Int, arguments["--iterations"])
     else
-        iterations = 100000000
+        iterations = 10000000
     end
 
     srand(0)
