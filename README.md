@@ -292,18 +292,19 @@ Stencil boundary handling can be specified as one of the following symbols:
 Just like parallel comprehension, accessing the variables outside is allowed
 in a stencil body. However, accessing outside array values is
 not supported, and reading/writing the same outside variable can cause
-non-determinism. Since `runStencil` does not impose a fixed buffer rotation
-order, all arrays that need to be relatively indexed can be specified as
-input buffers (just don't rotate them in the return sequence), and there 
-can be multiple output buffers too. Finally, the call to `runStencil` does 
-not have any return value, and inputs are rotated for `iteration - 1` times.
+non-determinism. 
+
+All arrays that need to be relatively indexed can be specified as
+input buffers. `runStencil` does not impose any implicit  buffer rotation
+order and the user can choose not to rotate buffers in `return`. There 
+can be multiple output buffers as well. Finally, the call to `runStencil` does 
+not have any return value, and inputs are rotated for `iteration - 1` times if rotation is specified.
 
 ParallelAccelerator exports a naive Julia implementation of `runStencil` that
 runs without using `@acc`. Its purpose is mostly for correctness checking.
 When `@acc` is being used with environment variable `PROSPECT_MODE=none`,
 instead of parallelizing the stencil computation  `@acc` will expand the call
-to `runStencil` to a fast sequential implementation, just like what a macro
-would do.
+to `runStencil` to a fast sequential implementation.
 
 ### Faster compilation via userimg.jl
 
