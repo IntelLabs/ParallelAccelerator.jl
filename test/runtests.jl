@@ -43,3 +43,8 @@ include("aug_assign.jl")
 
 include("../examples/black-scholes/black-scholes.jl")
 include("../examples/opt-flow/opt-flow.jl")
+
+# Delete file left behind by opt-flow.
+dir = dirname(@__FILE__)
+img_file = joinpath(dir, "out.flo")
+rm(img_file)
