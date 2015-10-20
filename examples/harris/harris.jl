@@ -82,7 +82,8 @@ Options:
     if (arguments["--img-file"] != nothing)
         img_file = arguments["--img-file"]
     else
-        img_file = "examples/harris/sample.jpg"
+        dir = dirname(@__FILE__)
+        img_file = joinpath(dir, "sample.jpg")
     end
 
     (fname, ext) = splitext(img_file)

@@ -60,7 +60,8 @@ Options:
     if (arguments["--img-file"] != nothing)
         img_file = arguments["--img-file"]
     else
-        img_file = "examples/gaussian-blur/sample.jpg"
+        dir = dirname(@__FILE__)
+        img_file = joinpath(dir, "sample.jpg")
     end
 
     if (arguments["--iterations"] != nothing)
