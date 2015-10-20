@@ -33,3 +33,4 @@ script:
   - julia examples/harris/harris.jl
   - julia examples/laplace-3d/laplace-3d.jl
   - julia examples/opt-flow/opt-flow.jl
+  - julia examples/quant/quant.jl
