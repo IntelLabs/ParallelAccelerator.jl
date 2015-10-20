@@ -233,15 +233,15 @@ whose element is of `Type`, where `N` is the number of `x`s and `r`s, and
 currently only up-to-3 dimensions are supported.
 
 It should be noted, however, not all comprehensions are safe to parallelize.
-For example, if the function `f` above reads and writes to an environment
-variable, then making it run in parallel would produce non-deterministic
-result. So please avoid using `@acc` should such situations arise.
+For example, if the function `f` above reads and writes to a variable outside of comprehension, 
+then making it run in parallel can produce non-deterministic
+result. Therefore, it is the responsibility of the user to avoid using `@acc` such situations arise.
 
 Another difference between parallel comprehension and the afore-mentioned *map*
 operation is that array indexing operations in the body of a parallel
-comprehension remain explicit, and therefore they must still go through
-necessary bounds-checking to ensure safety, while in all *map* operations such
-bounds-checking are skipped.
+comprehension remain explicit and therefore should go through
+necessary bounds-checking to ensure safety. On the other hand, in all *map* operations such
+bounds-checking is skipped.
 
 ### Stencil
 
@@ -289,9 +289,9 @@ Stencil boundary handling can be specified as one of the following symbols:
 * `:oob_dst_zero`. Writing 0 to output array when any of the input indexing is out-of-bound.
 * `:oob_src_zero`. Assume 0 is returned by a read operation when indexing is out-of-bound.
 
-Just like parallel comprehension, accessing environment variables is allowed
-in a stencil body. However, accessing array values in the environment is
-not supported, and reading/writing the same environment variable will cause
+Just like parallel comprehension, accessing the variables outside is allowed
+in a stencil body. However, accessing outside array values is
+not supported, and reading/writing the same outside variable can cause
 non-determinism. Since `runStencil` does not impose a fixed buffer rotation
 order, all arrays that need to be relatively indexed can be specified as
 input buffers (just don't rotate them in the return sequence), and there 
