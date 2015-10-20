@@ -94,9 +94,10 @@ examples depend on.
 
 ## Basic Usage
 
-To start using ParallelAccelerator in you own program, first import the 
-package by `using ParallelAccelerator`, and then put `@acc` macro before
-the function you want to accelerate. A trivial example is given below:
+To start using ParallelAccelerator in your own program, first import
+the package with `using ParallelAccelerator`, and then put the `@acc`
+macro before the function you want to accelerate. A trivial example is
+given below:
 
 ``` .julia
 julia> using ParallelAccelerator
