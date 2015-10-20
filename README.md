@@ -351,24 +351,24 @@ tries to compile Julia to C, which puts some serious constraints on what
 can be successfully compiled and run:
 
 1. Right now we only support a limited subset of Julia's language features,
-   mostly just basic numbers and dense array types, array and (some) math 
+   mostly just basic numbers and dense array types, (some) math 
    functions, and basic control flow structures. Notably we do not support 
-   String type, and custom data types such as records and unions, currently 
+   String types and custom data types such as records and unions, which currently 
    do not translate well in to C. There is also no support for exceptions, 
-   I/O operations (not even `println`), or arbitrary ccalls.
+   I/O operations (very limited `println`), or arbitrary ccalls.
 
-2. Also, we do not support calling Julia functions from C in the optimization
-   result code. What this implies is that we'll have to transitively convert 
-   every Julia function in the call chain to C, and if any one of them is not 
-   translated properly, the entire thing will fail to compile. 
+2. We do not support calling Julia functions from C in the optimized
+   function. What this implies is that we transitively convert 
+   every Julia function in the call chain to C, and if any of them is not 
+   translated properly, the target function with `@acc` will fail to compile. 
 
-3. We've made a decision to not support Julia's `Any` type in C, mostly to
+3. We do not support Julia's `Any` type in C, mostly to
    defend against erroneous translation. If the AST of a Julia function
-   contains a variable with Any type, our Julia-to-C translator will give up
-   compiling this function. This is indeed more limiting than it sounds, because
+   contains a variable with `Any` type, our Julia-to-C translator will give up
+   compiling the function. This is indeed more limiting than it sounds, because
    Julia does not annotate all expressions in a typed AST with complete type 
-   information, and this is happening for some expressions that calls Julia's 
-   own intrinsics. We are working on support more of them if we can derive 
+   information. For example, this happens for some expressions that call Julia's 
+   own intrinsics. We are working on supporting more of them if we can derive 
    the actual type to be not `Any`, but currently this is still a work-in-progress.
 
 At the moment ParallelAccelerator only supports the Julia-to-C back-end, and we
@@ -380,8 +380,8 @@ Apart from the constraints imposed by Julia-to-C translation, our current
 implementation of ParallelAccelerator also has a number limitations:
 
 1. We rely on name capture to resolve array related functions and operators
-   to our API module, which would prevent them from being inlined by Julia
-   so that they can be translated cleanly. However this is not always possible
+   to our API module. This prevents them from being inlined by Julia
+   which helps our translation. However this is not always possible
    in scenarios where the user cannot put `@acc` to functions that they
    want ParallelAccelerator to optimize. For instance, calling `mean(x)` in 
    Base library is equivalent to calling `sum(x)/length(x)`, where `x` is 
