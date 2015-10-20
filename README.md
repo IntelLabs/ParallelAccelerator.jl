@@ -23,9 +23,9 @@ Performance Scripting project at Intel Labs.
     later and ICC 15.0.3 or later.  At package build time,
     ParallelAccelerator will check to see if you have ICC installed.
     If so, ParallelAccelerator will use it.  Otherwise, it will use
-    GCC.
-  * Platforms we have tested on so far include Ubuntu 14.04 and CentOS
-    6.6 with both GCC and ICC.  We have limited support for OS X.
+    GCC. Clang with GCC frontend (default on Mac OS X) also works.
+  * Platforms we have tested on so far include Ubuntu 14.04, CentOS
+    6.6, and Mac OS X Yosemite with both GCC and ICC.
 
 ## Installation
 
