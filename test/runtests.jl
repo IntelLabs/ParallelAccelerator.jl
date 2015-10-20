@@ -42,5 +42,4 @@ include("aug_assign.jl")
 # good compromise that exercises much of ParallelAccelerator.
 
 include("../examples/black-scholes/black-scholes.jl")
-# Uncomment me when opt-flow has been added.
-#include("../examples/opt-flow/opt-flow.jl")
+include("../examples/opt-flow/opt-flow.jl")
