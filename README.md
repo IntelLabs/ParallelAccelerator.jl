@@ -129,7 +129,7 @@ present in standard Julia, so programmers can use ParallelAccelerator to run
 the same Julia program without (significantly) modifying its source code. 
 
 The `@acc` macro provided by ParallelAccelerator first intercepts Julia
-functions at macro level, and substitute the set of implicitly parallel
+functions at macro level, and substitutes the set of implicitly parallel
 operations that we are targeting, and point them to those supplied in the
 `ParallelAccelerator.API` module. It then creates a proxy function that when
 called with concrete arguments (and known types) will try to compile the
@@ -138,10 +138,12 @@ accelerated function would incur some compilation time, but all subsequent
 calls to the same function will not.
 
 ParallelAccelerator performs aggressive optimizations when it is safe to do so.
-For example, it automatically infers equivalence relation among array
-variables, and will fuse adjacent parallel loops into a single loop. Eventually
-all parallel patterns are lowered into explicit parallel `for` loops internally
-represented at the level of Julia's typed AST. 
+For example, it will automatically infer size equivalence relations among array
+variables, and skip array bounds check whenever it can do so.   Eventually all
+parallel patterns are lowered into explicit parallel `for` loops internally
+represented at the level of Julia's typed AST, and agressive loop fusion will
+try to combine adjacent loops into one and eliminate temporary array objects
+that store intermediate rsults.
 
 Finally, functions with parallel for loops are translated into a C program with
 OpenMP pragmas, and ParallelAccelerator will use an external C/C++ compiler to
