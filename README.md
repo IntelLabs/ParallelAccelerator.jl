@@ -408,10 +408,10 @@ high performance scientific programs. ParallelAccelerator
 is but a first step of bringing reasonable parallel performance to a
 productivity language by utilizing both domain specific and general compiler
 optimization techniques, without the user putting much effort into it. However,
-eventually there will be bottlenecks and not all optimizations work 100% in
+eventually there will be bottlenecks and not all optimizations work in
 favor of each other.  Despite ParallelAccelerator still being a proof-of-concept
-at this stage, we hope to hear from all users, and we welcome contributions. 
-Please feel free to trying it out, fork the project, contact us by emails, or 
+at this stage, we hope to hear from all users and we welcome contributions. 
+Please feel free to try it out, fork the project, contact us by emails, or 
 file bug reports on the issue tracker.
 
 
