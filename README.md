@@ -309,9 +309,13 @@ to `runStencil` to a fast sequential implementation.
 ### Faster compilation via userimg.jl
 
 It is possible to embed a binary/compiled version of the ParallelAccelerator
-compiler and CompilerTools into a Julia executable.  This has the potential to
+compiler and CompilerTools into a Julia executable. This has the potential to
 greatly reduce the time it takes for our compiler to accelerate a given
-program.  To use this feature, start the Julia REPL and do the following:
+program. For this feature, the user needs to have the Julia source code 
+and should be able to rebuild Julia. Hence,
+Julia installations using ready binaries are not suitable for this purpose.
+
+To use this feature, start the Julia REPL and do the following:
 
 ```
 importall ParallelAccelerator
