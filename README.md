@@ -332,7 +332,7 @@ directory to create the embedded Julia version.
 
 If there is already a userimg.jl file in the base directory then a new file is
 created called `ParallelAccelerator_userimg.jl` and it then becomes the user's
-responsibility to merge that with the existing `userimg.jl` and run make if
+responsibility to merge that with the existing `userimg.jl` and run `make` if
 they want this faster compile time.
 
 After the call to embed finishes and you try to exit the Julia REPL, you may
@@ -351,21 +351,21 @@ can be successfully compiled and run:
    functions, and basic control flow structures. Noteably we do not support 
    String type, and custom data types such as records and unions, currently 
    do not translate well in to C. There is also no support for exceptions, 
-   I/O operations (not even `println`!), or arbitrary ccalls.
+   I/O operations (not even `println`), or arbitrary ccalls.
 
 2. Also, we do not support calling Julia functions from C in the optimization
    result code. What this implies is that we'll have to transitively convert 
    every Julia function in the call chain to C, and if any one of them is not 
    translated properly, the entire thing will fail to compile. 
 
-3. We've made a somewhat restricted decision to not support Julia's `Any` 
-   type in C, and if an AST of Julia function contains a variable with Any 
-   type, our Julia-to-C translator will give up compiling this function. This 
-   is indeed more limiting than it sounds, because Julia does not annotate 
-   all expressions in an AST with its actual type, and this is happening
-   for some expressions that calls Julia's own intrinsics. We are working 
-   on support more of them if we can derive the actual type to be not `Any`, 
-   but currently this is still a work-in-progress.
+3. We've made a decision to not support Julia's `Any` type in C, mostly to
+   defend against erroneous translation. If the AST of a Julia function
+   contains a variable with Any type, our Julia-to-C translator will give up
+   compiling this function. This is indeed more limiting than it sounds, because
+   Julia does not annotate all expressions in a typed AST with complete type 
+   information, and this is happening for some expressions that calls Julia's 
+   own intrinsics. We are working on support more of them if we can derive 
+   the actual type to be not `Any`, but currently this is still a work-in-progress.
 
 At the moment ParallelAccelerator only supports the Julia-to-C backend, and we
 are working on alternatives that hopefully can alleviate the above mentioned
