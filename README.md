@@ -375,24 +375,25 @@ can be successfully compiled and run:
    own intrinsics. We are working on supporting more of them if we can derive 
    the actual type to be not `Any`, but this is still a work-in-progress.
 
-At the moment ParallelAccelerator only supports the Julia-to-C back-end, and we
-are working on alternatives that hopefully can alleviate the above mentioned
+At the moment ParallelAccelerator only supports the Julia-to-C back-end. We
+are working on alternatives such as Julia's upcoming threading implementation 
+that hopefully can alleviate the above mentioned
 restrictions without sacrificing much of the speed brought by quality C
 compilers and parallel runtime such as OpenMP.  
 
 Apart from the constraints imposed by Julia-to-C translation, our current 
-implementation of ParallelAccelerator also has a number limitations:
+implementation of ParallelAccelerator has some other limitations:
 
-1. We rely on name capture to resolve array related functions and operators
+1. We currently support a limited subset of Julia functions available in the `Base` library.
+   However, not all Julia functions in the Base library
+   are supported yet and using them may or may not work in ParallelAccelerator.
+   For supported functions, we rely on capturing operator names to resolve array related functions and operators
    to our API module. This prevents them from being inlined by Julia
-   which helps our translation. However this is not always possible
-   in scenarios where the user cannot put `@acc` to functions that they
-   want ParallelAccelerator to optimize. For instance, calling `mean(x)` in 
-   Base library is equivalent to calling `sum(x)/length(x)`, where `x` is 
-   a non-empty array of numbers. However, Julia's typed AST for program
+   which helps our translation. For unsupported functions such as `mean(x)`,
+   Julia's typed AST for the program
    that contains `mean(x)` becomes a lowered call that is basically the
-   the low-level sequential implementation of `sum` function, which are
-   not being handled by ParallelAccelerator. Of course, adding support
+   the low-level sequential implementation which cannot be
+   handled by ParallelAccelerator. Of course, adding support
    for functions like `mean` is not a huge effort, and we are still in 
    the process of expanding the coverage of supported APIs.
 
@@ -402,7 +403,7 @@ implementation of ParallelAccelerator also has a number limitations:
     ensure the function that is being accelerated can pass Julia's type inference
     without leaving any parameters or internal variables with an `Any` type. 
     There is currently no facility to help users understand whether something
-    is being optimized or silently rejected, and it is our hope to provide 
+    is being optimized or silently rejected. We plan to provide 
     better report on what is going on under the hood.
 
 ## Comments, Suggestions, and Bug Reports
@@ -411,11 +412,11 @@ Performance tuning is a hard problem, especially in
 high performance scientific programs. ParallelAccelerator
 is but a first step of bringing reasonable parallel performance to a
 productivity language by utilizing both domain specific and general compiler
-optimization techniques, without the user putting much effort into it. However,
+optimization techniques without much effort from the user. However,
 eventually there will be bottlenecks and not all optimizations work in
-favor of each other.  Despite ParallelAccelerator still being a proof-of-concept
-at this stage, we hope to hear from all users and we welcome contributions. 
-Please feel free to try it out, fork the project, contact us by emails, or 
+favor of each other. ParallelAccelerator is still a proof-of-concept
+at this stage and we hope to hear from all users. We welcome bug reports and code contributions. 
+Please feel free to use our system, fork the project, contact us by email, and
 file bug reports on the issue tracker.
 
 
