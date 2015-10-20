@@ -159,17 +159,18 @@ As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
 Julia programs that are safe to parallelize. It also tries to be non-invasive,
 which means a user function or program should continue to work as expected even
 when only a part of it is accelerated. It is still important to know what
-exactly are accelerated and what are not, however, and as a general guideline,
+parts are accelerated, however. As a general guideline,
 we encourage users to write program using high-level array operations rather
-than writing explicit for-loops with unrestricted mutations or unknown
-side-effects, so that they are amenable to domain specific analysis and
+than writing explicit for-loops which can have unrestricted mutations or unknown
+side-effects. High-level operations are more amenable to analysis and
 optimization provided by ParallelAccelerator.
 
 To help user verify program correctness, the optimizations of ParallelAccelerator
 can be turned off by setting environment variable `PROSPECT_MODE=none` before
 running the julia program. Doing so will still trigger certain useful macro 
 translations (such as `runStencil`, see below), but no optimizations or
-Julia-to-C translation will take place.
+Julia-to-C translation will take place. Users can also use `@noacc`
+at the function call site to use the original version of the function.
 
 
 ### Map and Reduce
