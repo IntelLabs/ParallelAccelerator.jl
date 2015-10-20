@@ -267,6 +267,8 @@ function from_includes()
             blas_include = "#include <mkl.h>\n"
         elseif openblas_lib!=""
             blas_include = "#include <cblas.h>\n"
+        else
+            blas_include = "#include \"$packageroot/deps/include/cgen_mmul.h\"\n"
         end
     end
     s = ""
@@ -1249,6 +1251,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Cha
     else
         return ""
     end
+    s = "$(from_expr(C)); "
     m = (tA == 'N') ? from_arraysize(A,1) : from_arraysize(A,2) 
     k = (tB == 'N') ? from_arraysize(A,2) : from_arraysize(A,1) 
     n = (tB == 'N') ? from_arraysize(B,2) : from_arraysize(B,1)
@@ -1262,9 +1265,18 @@ function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Cha
     _tA = tA == 'N' ? CblasNoTrans : CblasTrans
     _tB = tB == 'N' ? CblasNoTrans : CblasTrans
     CblasColMajor = 102
-    return "$(from_expr(C)); $(cblas_fun)((CBLAS_LAYOUT)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
-         $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
 
+
+    if mkl_lib!="" || openblas_lib!=""
+        s *= "$(cblas_fun)((CBLAS_LAYOUT)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
+        $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
+    else
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        s *= "cgen_$(cblas_fun)($(from_expr(tA!='N')), $(from_expr(tB!='N')), $m,$n,$k, $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, $(from_expr(C)).data, $ldc)"
+    end
+
+    return s
 end
 
 function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY)
