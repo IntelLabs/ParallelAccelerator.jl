@@ -159,25 +159,26 @@ As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
 Julia programs that are safe to parallelize. It also tries to be non-invasive,
 which means a user function or program should continue to work as expected even
 when only a part of it is accelerated. It is still important to know what
-exactly are accelerated and what are not, however, and as a general guideline,
+parts are accelerated, however. As a general guideline,
 we encourage users to write program using high-level array operations rather
-than writing explicit for-loops with unrestricted mutations or unknown
-side-effects, so that they are amenable to domain specific analysis and
+than writing explicit for-loops which can have unrestricted mutations or unknown
+side-effects. High-level operations are more amenable to analysis and
 optimization provided by ParallelAccelerator.
 
 To help user verify program correctness, the optimizations of ParallelAccelerator
 can be turned off by setting environment variable `PROSPECT_MODE=none` before
 running the julia program. Doing so will still trigger certain useful macro 
 translations (such as `runStencil`, see below), but no optimizations or
-Julia-to-C translation will take place.
+Julia-to-C translation will take place. Users can also use `@noacc`
+at the function call site to use the original version of the function.
 
 
 ### Map and Reduce
 
-Array operations that work uniformly on each element of input arrays and
-produce an output array of equal size are called `point-wise` operations (and
-for binary operations in Julia, they usually come with a `.` prefix in the
-operator name).  They are translated internally into *map* operations by
+Array operations that work uniformly on all elements of input arrays and
+produce an output array of equal size are called `point-wise` operations.
+`Point-wise` binary operations in Julia usually have a `.` prefix in the
+operator name. These operations are translated internally into data-parallel *map* operations by
 ParallelAccelerator. The following are recognized by `@acc` as *map*
 operations:
 
@@ -189,23 +190,23 @@ sin, sinh, sqrt, tan, tanh, abs, copy, erf`
 .>>, .^, div, mod, rem, &, |, $`
 
 Array assignments are also recognized and converted into *in-place map*
-operation.  Expressions like `a = a .+ b` will be turned into an *in-place map*
+operations.  Expressions like `a = a .+ b` will be turned into an *in-place map*
 that takes two inputs arrays, `a` and `b`, and updates `a` in-place. 
 
-Array operations that computes a single result by repeating an associative
-and commutative operator among all input array elements is called *reduce*.
+Array operations that compute a single result by repeating an associative
+and commutative operator on all input array elements are called *reduce* operations.
 The following are recognized by `@acc` as `reduce` operations: 
 
 ```
 minimum, maximum, sum, prod, any, all
 ```
 
-We also support range operations to a limited extent. So things like `a[r] =
-b[r]` where `r` is either a `BitArray` or `UnitRange` (e.g., `1:s`) are
-internally converted parallel operations when the ranges can be inferred
-statically to be *compatible*. However, such support is still consider
+We also support range operations to a limited extent. For example, `a[r] =
+b[r]` where `r` is either a `BitArray` or `UnitRange` (e.g., `1:s`) is
+internally converted to parallel operations when the ranges can be inferred
+statically to be *compatible*. However, such support is still
 experimental, and occasionally ParallelAccelerator will complain about not
-being able to optimize them. We are working on improving this aspect
+being able to optimize them. We are working on improving this feature
 to provide more coverage and better error messages.
 
 ### Parallel Comprehension 

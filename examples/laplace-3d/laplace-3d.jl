@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-importall ParallelAccelerator
+using ParallelAccelerator
 using DocOpt
 
 @acc function compute(src::Array{Float32,3}, dst::Array{Float32,3}, N)
