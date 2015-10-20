@@ -52,7 +52,7 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --img-file=<img-file>      Specify a path to an input image file; defaults to 'examples/gaussian-blur/sample.jpg'.
+  --img-file=<img-file>      Specify a path to an input image file; defaults to 'examples/example.jpg'.
   --iterations=<iterations>  Specify a number of iterations; defaults to 100.
 """
     arguments = docopt(doc)
@@ -61,7 +61,7 @@ Options:
         img_file = arguments["--img-file"]
     else
         dir = dirname(@__FILE__)
-        img_file = joinpath(dir, "sample.jpg")
+        img_file = joinpath(dir, "..", "example.jpg")
     end
 
     if (arguments["--iterations"] != nothing)

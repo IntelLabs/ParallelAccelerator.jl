@@ -75,7 +75,7 @@ Usage:
 
 Options:
   -h --help              Show this screen.
-  --img-file=<img-file>  Specify a path to an input (grayscale) image file; defaults to 'examples/harris/sample.jpg'.
+  --img-file=<img-file>  Specify a path to an input (grayscale) image file; defaults to 'examples/example.jpg'.
 """
     arguments = docopt(doc)
 
@@ -83,7 +83,7 @@ Options:
         img_file = arguments["--img-file"]
     else
         dir = dirname(@__FILE__)
-        img_file = joinpath(dir, "sample.jpg")
+        img_file = joinpath(dir, "..", "example.jpg")
     end
 
     (fname, ext) = splitext(img_file)
