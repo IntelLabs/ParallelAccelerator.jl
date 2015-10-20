@@ -332,19 +332,18 @@ the following version of embed.
 ParallelAccelerator.embed("<your/path/to/the/root/of/the/julia/distribution>")
 ```
 
-This `embed` function takes a path and is expected to point to the root
-directory of a Julia source distribution.  embed performs some simple checks to
+This `embed` function takes a path which is expected to point to the root
+directory of a Julia source distribution.  `embed` performs some simple checks to
 try to verify this fact.  Then, embed will try to create a file
 `base/userimg.jl` that will tell the Julia build how to embed the compiled
-version into the Julia executable.  Then, embed runs make in the Julia root
+version into the Julia executable.  Finally, `embed` runs `make` in the Julia root
 directory to create the embedded Julia version.
 
-If there is already a userimg.jl file in the base directory then a new file is
+If there is already a `userimg.jl` file in the base directory then a new file is
 created called `ParallelAccelerator_userimg.jl` and it then becomes the user's
-responsibility to merge that with the existing `userimg.jl` and run `make` if
-they want this faster compile time.
+responsibility to merge that with the existing `userimg.jl` and run `make`.
 
-After the call to embed finishes and you try to exit the Julia REPL, you may
+After the call to `embed` finishes, when trying to exit the Julia REPL, you may
 receive an exception like: ErrorException(`"ccall: could not find function
 git_libgit2_shutdown in library libgit2"`).  This error does not effect the
 embedding process but we are working towards a solution to this minor issue.
@@ -352,19 +351,19 @@ embedding process but we are working towards a solution to this minor issue.
 ## Limitations 
 
 One of the most notable limitation is that ParallelAccelerator currently
-tries to compile Julia to C, which puts some serious constraints on what
+tries to compile Julia to C, which puts some constraints on what
 can be successfully compiled and run:
 
-1. Right now we only support a limited subset of Julia's language features,
-   mostly just basic numbers and dense array types, (some) math 
-   functions, and basic control flow structures. Notably we do not support 
-   String types and custom data types such as records and unions, which currently 
-   do not translate well in to C. There is also no support for exceptions, 
-   I/O operations (very limited `println`), or arbitrary ccalls.
+1. We only support a limited subset of Julia language features currently.
+   This includes basic numbers and dense array types, a subset of math 
+   functions, and basic control flow structures. Notably, we do not support 
+   String types and custom data types such as records and unions, since their 
+   translation to C is difficult. There is also no support for exceptions, 
+   I/O operations (only very limited `println`), and arbitrary ccalls.
 
 2. We do not support calling Julia functions from C in the optimized
    function. What this implies is that we transitively convert 
-   every Julia function in the call chain to C, and if any of them is not 
+   every Julia function in the call chain to C. If any of them is not 
    translated properly, the target function with `@acc` will fail to compile. 
 
 3. We do not support Julia's `Any` type in C, mostly to
@@ -374,7 +373,7 @@ can be successfully compiled and run:
    Julia does not annotate all expressions in a typed AST with complete type 
    information. For example, this happens for some expressions that call Julia's 
    own intrinsics. We are working on supporting more of them if we can derive 
-   the actual type to be not `Any`, but currently this is still a work-in-progress.
+   the actual type to be not `Any`, but this is still a work-in-progress.
 
 At the moment ParallelAccelerator only supports the Julia-to-C back-end, and we
 are working on alternatives that hopefully can alleviate the above mentioned
