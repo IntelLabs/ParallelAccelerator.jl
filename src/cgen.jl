@@ -2271,21 +2271,25 @@ function getLinkCommand(outfile_name, lib)
 
   packageroot = getPackageRoot()
 
-  Opts = ""
-  linkLibs = ""
+  Opts = []
+  linkLibs = []
   if include_blas==true
       if mkl_lib!=""
-          linkLibs*="-lmkl_rt"
+          push!(linkLibs,"-lmkl_rt")
       elseif openblas_lib!=""
-          linkLibs*="-lopenblas"
+          push!(linkLibs,"-lopenblas")
       end
   end
   if backend_compiler == USE_ICC
-    Opts *= (USE_OMP==1 ? "-qopenmp" : "")
-    linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
+      if USE_OMP==1
+          push!(Opts,"-qopenmp")
+      end
+      linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
-    Opts *= (USE_OMP==1 ? "-fopenmp" : "")
-    linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
+      if USE_OMP==1
+          push!(Opts,"-fopenmp")
+      end
+      linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand
