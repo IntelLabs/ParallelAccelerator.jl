@@ -119,31 +119,32 @@ definitions.
 
 ## How It Works
 
-ParallelAccelerator is essentially a domain-specific compiler written in Julia
-that discovers and exploits the implicit parallelism in source programs that
+ParallelAccelerator is essentially a domain-specific compiler written in Julia.
+It performs additional analysis and optimization on top of the Julia compiler.
+ParallelAccelerator discovers and exploits the implicit parallelism in source programs that
 use parallel programming patterns such as *map, reduce, comprehension, and
 stencil*. For example, Julia array operators such as `.+, .-, .*, ./` are
-translated by ParallelAccelerator internally into a *map* operation over all
+translated by ParallelAccelerator internally into data-parallel  *map* operations over all
 elements of input arrays.  For the most part, these patterns are already
 present in standard Julia, so programmers can use ParallelAccelerator to run
-the same Julia program without (significantly) modifying its source code. 
+the same Julia program without (significantly) modifying the source code. 
 
 The `@acc` macro provided by ParallelAccelerator first intercepts Julia
-functions at macro level, and substitutes the set of implicitly parallel
-operations that we are targeting, and point them to those supplied in the
+functions at macro level and substitutes the set of implicitly parallel
+operations that we are targeting. `@acc` points them to those supplied in the
 `ParallelAccelerator.API` module. It then creates a proxy function that when
 called with concrete arguments (and known types) will try to compile the
-original function to an optimized form. So the first time calling an
-accelerated function would incur some compilation time, but all subsequent
-calls to the same function will not.
+original function to an optimized form. Therefore, there is some compilation
+time the first time an accelerated function is called. The subsequent
+calls to the same function will not have compilation time overhead.
 
-ParallelAccelerator performs aggressive optimizations when it is safe to do so.
+ParallelAccelerator performs aggressive optimizations when they are safe depending on the program structure.
 For example, it will automatically infer size equivalence relations among array
-variables, and skip array bounds check whenever it can do so.   Eventually all
-parallel patterns are lowered into explicit parallel `for` loops internally
-represented at the level of Julia's typed AST, and agressive loop fusion will
+variables and skip array bounds check whenever it can safely do so.   Eventually all
+parallel patterns are lowered into explicit parallel `for` loops which are internally
+represented at the level of Julia's typed AST. Agressive loop fusion will
 try to combine adjacent loops into one and eliminate temporary array objects
-that store intermediate rsults.
+that store intermediate results.
 
 Finally, functions with parallel for loops are translated into a C program with
 OpenMP pragmas, and ParallelAccelerator will use an external C/C++ compiler to
