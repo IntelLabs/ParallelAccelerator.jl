@@ -177,7 +177,7 @@ at the function call site to use the original version of the function.
 
 Array operations that work uniformly on all elements of input arrays and
 produce an output array of equal size are called `point-wise` operations.
-For binary operations in Julia, they usually have a `.` prefix in the
+`Point-wise` binary operations in Julia usually have a `.` prefix in the
 operator name. These operations are translated internally into data-parallel *map* operations by
 ParallelAccelerator. The following are recognized by `@acc` as *map*
 operations:
