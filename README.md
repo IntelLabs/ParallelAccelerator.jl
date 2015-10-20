@@ -23,7 +23,7 @@ Performance Scripting project at Intel Labs.
     later and ICC 15.0.3 or later.  At package build time,
     ParallelAccelerator will check to see if you have ICC installed.
     If so, ParallelAccelerator will use it.  Otherwise, it will use
-    GCC. Clang with GCC frontend (default on Mac OS X) also works.
+    GCC. Clang with GCC front-end (default on Mac OS X) also works.
   * Platforms we have tested on so far include Ubuntu 14.04, CentOS
     6.6, and Mac OS X Yosemite with both GCC and ICC.
 
@@ -142,7 +142,7 @@ ParallelAccelerator performs aggressive optimizations when they are safe dependi
 For example, it will automatically infer size equivalence relations among array
 variables and skip array bounds check whenever it can safely do so.   Eventually all
 parallel patterns are lowered into explicit parallel `for` loops which are internally
-represented at the level of Julia's typed AST. Agressive loop fusion will
+represented at the level of Julia's typed AST. Aggressive loop fusion will
 try to combine adjacent loops into one and eliminate temporary array objects
 that store intermediate results.
 
@@ -227,8 +227,8 @@ cartesianarray((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
 ```
 
 This `cartesianarray` function is also exported by `ParallelAccelerator` and
-can be directly used by the user. Both the above two forms are acceptible
-programs, and equivalent in semantics, they both produce a N-dimentional array
+can be directly used by the user. Both the above two forms are acceptable
+programs, and equivalent in semantics, they both produce a N-dimensional array
 whose element is of `Type`, where `N` is the number of `x`s and `r`s, and
 currently only up-to-3 dimensions are supported.
 
@@ -256,7 +256,7 @@ runStencil(kernel :: Function, buffer1, buffer2, ...,
            iteration :: Int, boundaryHandling :: Symbol)
 ```
 
-As an example, the following (taken from Gausian Blur example) computes a
+As an example, the following (taken from Gaussian Blur example) computes a
 5x5 stencil computation (note the use of Julia's `do` syntax that lets
 user write a lambda function):
 
@@ -295,7 +295,7 @@ not supported, and reading/writing the same environment variable will cause
 non-determinism. Since `runStencil` does not impose a fixed buffer rotation
 order, all arrays that need to be relatively indexed can be specified as
 input buffers (just don't rotate them in the return sequence), and there 
-can be mulitple output buffers too. Finally, the call to `runStencil` does 
+can be multiple output buffers too. Finally, the call to `runStencil` does 
 not have any return value, and inputs are rotated for `iteration - 1` times.
 
 ParallelAccelerator exports a naive Julia implementation of `runStencil` that
@@ -352,7 +352,7 @@ can be successfully compiled and run:
 
 1. Right now we only support a limited subset of Julia's language features,
    mostly just basic numbers and dense array types, array and (some) math 
-   functions, and basic control flow structures. Noteably we do not support 
+   functions, and basic control flow structures. Notably we do not support 
    String type, and custom data types such as records and unions, currently 
    do not translate well in to C. There is also no support for exceptions, 
    I/O operations (not even `println`), or arbitrary ccalls.
@@ -371,12 +371,12 @@ can be successfully compiled and run:
    own intrinsics. We are working on support more of them if we can derive 
    the actual type to be not `Any`, but currently this is still a work-in-progress.
 
-At the moment ParallelAccelerator only supports the Julia-to-C backend, and we
+At the moment ParallelAccelerator only supports the Julia-to-C back-end, and we
 are working on alternatives that hopefully can alleviate the above mentioned
-restrictions without sacrificing much of the speed brough by quality C
+restrictions without sacrificing much of the speed brought by quality C
 compilers and parallel runtime such as OpenMP.  
 
-Apart from the contraints imposed by Julia-to-C translation, our current 
+Apart from the constraints imposed by Julia-to-C translation, our current 
 implementation of ParallelAccelerator also has a number limitations:
 
 1. We rely on name capture to resolve array related functions and operators
@@ -392,7 +392,7 @@ implementation of ParallelAccelerator also has a number limitations:
    for functions like `mean` is not a huge effort, and we are still in 
    the process of expanding the coverage of supported APIs.
 
-2.  ParallelAccelerator relies heavily on full type information being avaiable
+2.  ParallelAccelerator relies heavily on full type information being available
     in Julia's typed AST in order to work properly. Although we do not require
     user functions to be explicitly typed, it is in general a good practice to
     ensure the function that is being accelerated can pass Julia's type inference
