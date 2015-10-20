@@ -245,10 +245,10 @@ bounds-checking are skipped.
 
 ### Stencil
 
-Commonly found in image processing and scientific computing, a stencil
+Stencils are commonly found in scientific computing and image processing. A stencil
 computation is one that computes new values for all elements of an array based
 on the current values of their neighboring elements. Since Julia's base library
-does not provide such an API, so ParallelAccelerator exports a general
+does not provide such an API, ParallelAccelerator exports a general
 `runStencil` interface to help with stencil programming:
 
 ```
@@ -274,9 +274,9 @@ runStencil(buf, img, iterations, :oob_skip) do b, a
 
 It take two input arrays, `buf` and `img`, and performs an iterative stencil
 loop (ISL) of given `iterations`. The stencil kernel is specified by a lambda
-function that takes two arrays `a` and `b` (that corresponds to `buf` and
+function that takes two arrays `a` and `b` (that correspond to `buf` and
 `img`), and computes the value of the output buffer using relative indices
-as if a cursor is traversing all array elements, where `[0,0]` represents
+as if a cursor is traversing all array elements. `[0,0]` represents
 the current cursor position. The `return` statement in this lambda reverses
 the position of `a` and `b` to specify a buffer rotation that should happen
 in-between the stencil iterations. The use of `runStencil` will assume
@@ -289,7 +289,7 @@ Stencil boundary handling can be specified as one of the following symbols:
 * `:oob_dst_zero`. Writing 0 to output array when any of the input indexing is out-of-bound.
 * `:oob_src_zero`. Assume 0 is returned by a read operation when indexing is out-of-bound.
 
-Just like parallel comprehension, accessing environment variables are allowed
+Just like parallel comprehension, accessing environment variables is allowed
 in a stencil body. However, accessing array values in the environment is
 not supported, and reading/writing the same environment variable will cause
 non-determinism. Since `runStencil` does not impose a fixed buffer rotation
@@ -299,7 +299,7 @@ can be mulitple output buffers too. Finally, the call to `runStencil` does
 not have any return value, and inputs are rotated for `iteration - 1` times.
 
 ParallelAccelerator exports a naive Julia implementation of `runStencil` that
-runs without using `@acc`, whose purpose is mostly for correctness checking.
+runs without using `@acc`. Its purpose is mostly for correctness checking.
 When `@acc` is being used with environment variable `PROSPECT_MODE=none`,
 instead of parallelizing the stencil computation  `@acc` will expand the call
 to `runStencil` to a fast sequential implementation, just like what a macro
@@ -373,7 +373,7 @@ can be successfully compiled and run:
 
 At the moment ParallelAccelerator only supports the Julia-to-C backend, and we
 are working on alternatives that hopefully can alleviate the above mentioned
-restrictions without sacreficing much of the speed brough by quality C
+restrictions without sacrificing much of the speed brough by quality C
 compilers and parallel runtime such as OpenMP.  
 
 Apart from the contraints imposed by Julia-to-C translation, our current 
@@ -382,14 +382,14 @@ implementation of ParallelAccelerator also has a number limitations:
 1. We rely on name capture to resolve array related functions and operators
    to our API module, which would prevent them from being inlined by Julia
    so that they can be translated cleanly. However this is not always possible
-   in scenarios where the uesr cannot put `@acc` to functions that they
+   in scenarios where the user cannot put `@acc` to functions that they
    want ParallelAccelerator to optimize. For instance, calling `mean(x)` in 
    Base library is equivalent to calling `sum(x)/length(x)`, where `x` is 
    a non-empty array of numbers. However, Julia's typed AST for program
    that contains `mean(x)` becomes a lowered call that is basically the
    the low-level sequential implementation of `sum` function, which are
    not being handled by ParallelAccelerator. Of course, adding support
-   for functions iike `mean` is not a huge effort, and we are still in 
+   for functions like `mean` is not a huge effort, and we are still in 
    the process of expanding the coverage of supported APIs.
 
 2.  ParallelAccelerator relies heavily on full type information being avaiable
@@ -403,8 +403,8 @@ implementation of ParallelAccelerator also has a number limitations:
 
 ## Comments, Suggestions, and Bug Reports
 
-Performance tuning is a hard problem, especially in the field that is
-traditionally known as high performance computation (HPC). ParallelAccelerator
+Performance tuning is a hard problem, especially in 
+high performance scientific programs. ParallelAccelerator
 is but a first step of bringing reasonable parallel performance to a
 productivity language by utilizing both domain specific and general compiler
 optimization techniques, without the user putting much effort into it. However,
