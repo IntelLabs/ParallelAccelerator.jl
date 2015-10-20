@@ -1372,8 +1372,14 @@ function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
     for i = 1:n_loops
         loopvar = loopvars[i]
         range = ranges[i]
+        range_name = symbol("parallel_ir_range_len_$(loopvar)_$(unique_node_id)_range")
+        # FIXME: We should infer the range type
+        range_type = UnitRange{Int64}
+        range_expr = mk_assignment_expr(SymbolNode(range_name, range_type), range)
+        CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        push!(pre_statements, range_expr)
         save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
-        loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($(range))), state)
+        loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($range_name)), state)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,loop_len)
         CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
