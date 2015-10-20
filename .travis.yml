@@ -23,7 +23,7 @@ before_install:
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
   # Pull in and build CompilerTools dependency.
-  - julia -e 'Pkg.clone("https://psl-travis-user:6mnZDX4Hf04Kcn1S2gog@github.com/IntelLabs/CompilerTools.jl.git")'
+  - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
   # Build and test ParallelAccelerator.
   - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator")'
