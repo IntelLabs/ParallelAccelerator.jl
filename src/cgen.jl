@@ -2224,7 +2224,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
   otherArgs = []
 
-  Opts = ["-O3", "-std=c++11", "-stdlib=libc++"]
+  Opts = ["-O3"]
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
@@ -2236,6 +2236,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
     end
+    push!(Opts, "-std=c++11")
     compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
@@ -2271,7 +2272,7 @@ function getLinkCommand(outfile_name, lib)
 
   packageroot = getPackageRoot()
 
-  Opts = ["-std=c++11", "-stdlib=libc++"]
+  Opts = []
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
@@ -2289,6 +2290,7 @@ function getLinkCommand(outfile_name, lib)
       if USE_OMP==1
           push!(Opts,"-fopenmp")
       end
+      push!(Opts, "-std=c++11")
       linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
   end
 
