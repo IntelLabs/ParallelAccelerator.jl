@@ -996,6 +996,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
 
     if isa(expr, Void)
         if !is(fun, :ccall)
+            if is(fun, :box) && isa(oldargs[2], Expr) # fix the type of arg[2] to be arg[1]
+              oldargs[2].typ = typ
+            end
             oldargs = normalize_args(state, env_, oldargs)
         end
         expr = mk_expr(typ, head, oldfun, oldargs...)
