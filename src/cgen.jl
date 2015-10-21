@@ -2224,7 +2224,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
   otherArgs = []
 
-  Opts = ["-O3"]
+  Opts = ["-O3", "-std=c++11", "-stdlib=libc++"]
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
@@ -2271,7 +2271,7 @@ function getLinkCommand(outfile_name, lib)
 
   packageroot = getPackageRoot()
 
-  Opts = []
+  Opts = ["-std=c++11", "-stdlib=libc++"]
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
