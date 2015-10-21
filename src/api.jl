@@ -81,7 +81,8 @@ end
 
 # Binary operators/functions
 const binary_map_operators = Symbol[
-    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, :div, :mod, :rem, :&, :|, :$]
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, 
+    :div, :mod, :rem, :&, :|, :$, :min, :max]
 
 const binary_operators = binary_map_operators
 
