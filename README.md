@@ -189,7 +189,7 @@ cis, cos, cosh, exp10, exp2, exp, expm1, lgamma, log10, log1p, log2, log,
 sin, sinh, sqrt, tan, tanh, abs, copy, erf`
 
 * Binary functions: `-, +, .+, .-, .*, ./, .\, .%, .>, .<, .<=, .>=, .==, .<<,
-.>>, .^, div, mod, rem, &, |, $`
+.>>, .^, div, mod, rem, &, |, $, min, max`
 
 Array assignments are also recognized and converted into *in-place map*
 operations.  Expressions like `a = a .+ b` will be turned into an *in-place map*
