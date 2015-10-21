@@ -193,7 +193,7 @@ _Intrinsics = [
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
-        "le_float", "ne_float",
+        "le_float", "ne_float", "eq_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
         "nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
@@ -968,6 +968,8 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
     elseif intr == "lt_float"
         return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
+    elseif intr == "eq_float"
+        return "($(from_expr(args[1]))) == ($(from_expr(args[2])))"
     elseif intr == "ne_float"
         return "($(from_expr(args[1]))) != ($(from_expr(args[2])))"
     elseif intr == "le_float"
@@ -1941,6 +1943,11 @@ function from_formalargs(params, vararglist, unaliased=false)
                 * (isArrayType(vtyp) ? " $ql " : " ")
                 * canonicalize(params[p].args[1]) * string(i)
                 * (i < length(varargtyp.types) ? ", " : ""))
+            end
+            if !isPrimitiveJuliaType(varargtyp) && !isArrayOfPrimitiveJuliaType(varargtyp)
+                if !haskey(lstate.globalUDTs, varargtyp)
+                    lstate.globalUDTs[varargtyp] = 1
+                end
             end
         else
             throw("Could not translate formal argument: " * string(params[p]))
