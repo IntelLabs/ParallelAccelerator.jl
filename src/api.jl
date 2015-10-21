@@ -47,11 +47,15 @@ function getindex(A, args...)
 end
 
 # Unary operators/functions
-const unary_operators = Symbol[
+const unary_map_operators = Symbol[
     :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
     :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh, 
-    :sum, :prod, :abs, :copy, :erf, :pointer, :minimum, :maximum, :any, :all]
+    :abs, :erf, :isnan]
+
+const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
+
+const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy, :pointer])
 
 for f in unary_operators
     @eval begin
@@ -64,7 +68,7 @@ for f in unary_operators
     end
 end
 
-for f in unary_operators
+for f in unary_map_operators
     @eval begin
         @noinline function ($f){T<:Number}(A::T)
             (Base.$f)(A)
@@ -76,8 +80,10 @@ for f in unary_operators
 end
 
 # Binary operators/functions
-const binary_operators = Symbol[
+const binary_map_operators = Symbol[
     :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, :div, :mod, :rem, :&, :|, :$]
+
+const binary_operators = binary_map_operators
 
 for f in binary_operators
     @eval begin

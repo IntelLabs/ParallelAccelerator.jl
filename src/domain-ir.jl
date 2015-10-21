@@ -302,33 +302,38 @@ end
   dprintln(env.debugLevel, repeat(" ", env.debugIndent*2), msgs...)
 end
 
-mapSym = Symbol[:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :+, :-, :*, :/, :.^, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan]
-mapVal = Symbol[:negate, :<=,  :>=,  :<, :(==), :>,  :+,  :-,  :*,  :/,  :+, :-, :*, :/, :^, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan]
+import ..API
+
+const mapSym = vcat(Symbol[:negate], API.unary_map_operators, API.binary_map_operators)
+
+const mapVal = Symbol[ begin s = string(x); startswith(s, '.') ? symbol(s[2:end]) : x end for x in mapSym]
+
 # * / are not point wise. it becomes point wise only when one argument is scalar.
-pointWiseOps = Set{Symbol}([:negate, :.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./, :.^, :+, :-, :sin, :erf, :log10, :exp, :sqrt, :min, :max, :abs, :copy, :isnan])
+const pointWiseOps = setdiff(Set{Symbol}(mapSym), Set{Symbol}([:*, :/]))
 
-mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
+const mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
-liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
-topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
+const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
 
-opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
-opsSymSet = Set{Symbol}(opsSym)
-floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float,
+const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
+
+const opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
+const opsSymSet = Set{Symbol}(opsSym)
+const floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float,
 :eq_float, :ne_float, :lt_float, :le_float]))
-sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
+const sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
 :eq_int, :ne_int, :slt_int, :sle_int]))
 
-reduceSym = Symbol[:sum, :prod, :maximum, :minimum, :any, :all]
-reduceVal = Symbol[:+, :*, :max, :min, :|, :&]
-reduceFun = Function[zero, one, typemin, typemax, x->false, x->true]
-reduceOps = Dict{Symbol,Symbol}(zip(reduceSym,reduceVal))
-reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
+const reduceSym = Symbol[:sum, :prod, :maximum, :minimum, :any, :all]
+const reduceVal = Symbol[:+, :*, :max, :min, :|, :&]
+const reduceFun = Function[zero, one, typemin, typemax, x->false, x->true]
+const reduceOps = Dict{Symbol,Symbol}(zip(reduceSym,reduceVal))
+const reduceNeutrals = Dict{Symbol,Function}(zip(reduceSym,reduceFun))
 
-ignoreSym = Symbol[:box]
-ignoreSet = Set{Symbol}(ignoreSym)
+const ignoreSym = Symbol[:box]
+const ignoreSet = Set{Symbol}(ignoreSym)
 
-allocCalls = Set{Symbol}([:jl_alloc_array_1d, :jl_alloc_array_2d, :jl_alloc_array_3d, :jl_new_array])
+const allocCalls = Set{Symbol}([:jl_alloc_array_1d, :jl_alloc_array_2d, :jl_alloc_array_3d, :jl_new_array])
 
 # some part of the code still requires this
 unique_id = 0
