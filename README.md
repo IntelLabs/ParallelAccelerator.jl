@@ -16,6 +16,7 @@ Performance Scripting project at Intel Labs.
         sudo apt-get install julia -y` should work.
       * On OS X with Homebrew, `brew update && brew tap
         staticfloat/julia && brew install julia` should work.
+
     Check that you can run Julia and get to a `julia>` prompt.  You
     will know you're running the correct version if when you run it,
     you see `Version 0.4.0`.
