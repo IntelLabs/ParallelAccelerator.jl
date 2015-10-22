@@ -1439,7 +1439,7 @@ end
 @doc """
 The main routine that converts a mmap AST node to a parfor AST node.
 """
-function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_oprs, state, retarr) 
+function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_oprs, state)
 
     len_input_arrays = length(input_arrays)
     dprintln(2,"Number of input arrays: ", len_input_arrays)
@@ -1589,8 +1589,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
     simply_indexed)
 
     dprintln(3,"Lowered parallel IR = ", new_parfor)
-    retarr[1] = new_parfor
-    #[new_parfor]
+    [new_parfor]
 end
 
 function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
@@ -7049,9 +7048,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         end
         # first arg is input arrays, second arg is DomainLambda
         domain_oprs = [DomainOperation(:mmap, args)]
-        retarr = Any[nothing]
-        mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state, retarr)
-        args = retarr
+        args = mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state)
         dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
     elseif head == :mmap!
         head = :parfor

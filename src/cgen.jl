@@ -272,21 +272,21 @@ function from_includes()
         end
     end
     s = ""
-  if USE_OMP==1
+    if USE_OMP==1
         s *= "#include <omp.h>\n"
-  end
-  s *= reduce(*, "", (
-        blas_include,
-        "#include <stdint.h>\n",
-        "#include <float.h>\n",
-        "#include <limits.h>\n",
-        "#include <math.h>\n",
-        "#include <stdio.h>\n",
-        "#include <iostream>\n",
-        "#include \"$packageroot/deps/include/j2c-array.h\"\n",
-        "#include \"$packageroot/deps/include/pse-types.h\"\n")
+    end
+    s *= reduce(*, "", (
+    blas_include,
+    "#include <stdint.h>\n",
+    "#include <float.h>\n",
+    "#include <limits.h>\n",
+    "#include <math.h>\n",
+    "#include <stdio.h>\n",
+    "#include <iostream>\n",
+    "#include \"$packageroot/deps/include/j2c-array.h\"\n",
+    "#include \"$packageroot/deps/include/pse-types.h\"\n")
     )
-  return s
+    return s
 end
 
 # Iterate over all the user defined types (UDTs) in a function
@@ -2210,6 +2210,9 @@ import Base.write
 function writec(s, outfile_name=nothing; with_headers=false)
     if outfile_name == nothing
         outfile_name = generate_new_file_name()
+    end
+    if !isdir(generated_file_dir)
+        global generated_file_dir = mktempdir()
     end
     if with_headers
         s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
