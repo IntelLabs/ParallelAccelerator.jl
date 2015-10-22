@@ -226,9 +226,6 @@ else
     generated_file_dir = mktempdir()
 end
 
-function __init__()
-end
-
 file_counter = -1
 
 #### End of globals ####
