@@ -226,6 +226,9 @@ else
     generated_file_dir = mktempdir()
 end
 
+function __init__()
+end
+
 file_counter = -1
 
 #### End of globals ####
@@ -2210,6 +2213,9 @@ import Base.write
 function writec(s, outfile_name=nothing; with_headers=false)
     if outfile_name == nothing
         outfile_name = generate_new_file_name()
+    end
+    if !isdir(generated_file_dir)
+        global generated_file_dir = mktempdir()
     end
     if with_headers
         s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
