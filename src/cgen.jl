@@ -219,6 +219,13 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
+if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+    package_root = getPackageRoot()
+    generated_file_dir = "$package_root/deps/generated"
+else
+    generated_file_dir = mktempdir()
+end
+
 file_counter = -1
 
 #### End of globals ####
@@ -230,15 +237,8 @@ function generate_new_file_name()
 end
 
 function cleanup_generated_files()
-    package_root = getPackageRoot()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
-        for file in readdir("$package_root/deps/generated")
-            if file in [".gitignore", "config.jl"]
-                # Ignore
-                continue
-            end
-            rm("$package_root/deps/generated/$file")
-        end
+        rm(generated_file_dir; recursive=true)
     end
 end
 
@@ -2214,8 +2214,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     if with_headers
         s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
     end
-    packageroot = getPackageRoot()
-    cgenOutput = "$packageroot/deps/generated/$(outfile_name).cpp"
+    cgenOutput = "$generated_file_dir/$outfile_name.cpp"
     cf = open(cgenOutput, "w")
     write(cf, s)
     dprintln(3,"Done committing cgen code")
@@ -2254,10 +2253,10 @@ function compile(outfile_name)
   global use_bcpp
   packageroot = getPackageRoot()
 
-  cgenOutput = "$packageroot/deps/generated/$outfile_name.cpp"
+  cgenOutput = "$generated_file_dir/$outfile_name.cpp"
 
   if use_bcpp == 1
-    cgenOutputTmp = "$packageroot/deps/generated/$(outfile_name)_tmp.cpp"
+    cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
     run(`cp $cgenOutput $cgenOutputTmp`)
     # make cpp code readable
     beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
@@ -2267,7 +2266,7 @@ function compile(outfile_name)
     run(beautifyCommand)
   end
 
-  full_outfile_name = `$packageroot/deps/generated/$outfile_name.o`
+  full_outfile_name = `$generated_file_dir/$outfile_name.o`
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
   dprintln(1,compileCommand)
   run(compileCommand)
@@ -2276,8 +2275,6 @@ end
 function getLinkCommand(outfile_name, lib)
   # return an error if this is not overwritten with a valid compiler
   linkCommand = `echo "invalid backend linker"`
-
-  packageroot = getPackageRoot()
 
   Opts = []
   linkLibs = []
@@ -2292,13 +2289,13 @@ function getLinkCommand(outfile_name, lib)
       if USE_OMP==1
           push!(Opts,"-qopenmp")
       end
-      linkCommand = `icpc -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
+      linkCommand = `icpc -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
       if USE_OMP==1
           push!(Opts,"-fopenmp")
       end
       push!(Opts, "-std=c++11")
-      linkCommand = `g++ -g -shared $Opts -o $lib $packageroot/deps/generated/$outfile_name.o $linkLibs -lm`
+      linkCommand = `g++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand
@@ -2306,8 +2303,7 @@ end
 
 
 function link(outfile_name)
-  packageroot = getPackageRoot()
-  lib = "$packageroot/deps/generated/lib$outfile_name.so.1.0"
+  lib = "$generated_file_dir/lib$outfile_name.so.1.0"
   linkCommand = getLinkCommand(outfile_name, lib)
   dprintln(1,linkCommand)
   run(linkCommand)
