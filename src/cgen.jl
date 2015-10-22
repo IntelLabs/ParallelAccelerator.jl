@@ -272,21 +272,21 @@ function from_includes()
         end
     end
     s = ""
-  if USE_OMP==1
+    if USE_OMP==1
         s *= "#include <omp.h>\n"
-  end
-  s *= reduce(*, "", (
-        blas_include,
-        "#include <stdint.h>\n",
-        "#include <float.h>\n",
-        "#include <limits.h>\n",
-        "#include <math.h>\n",
-        "#include <stdio.h>\n",
-        "#include <iostream>\n",
-        "#include \"$packageroot/deps/include/j2c-array.h\"\n",
-        "#include \"$packageroot/deps/include/pse-types.h\"\n")
+    end
+    s *= reduce(*, "", (
+    blas_include,
+    "#include <stdint.h>\n",
+    "#include <float.h>\n",
+    "#include <limits.h>\n",
+    "#include <math.h>\n",
+    "#include <stdio.h>\n",
+    "#include <iostream>\n",
+    "#include \"$packageroot/deps/include/j2c-array.h\"\n",
+    "#include \"$packageroot/deps/include/pse-types.h\"\n")
     )
-  return s
+    return s
 end
 
 # Iterate over all the user defined types (UDTs) in a function
