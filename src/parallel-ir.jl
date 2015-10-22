@@ -3713,69 +3713,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
                 new_exprs = [ pre_next_parfor; new_exprs ]
                 pre_next_parfor = Any[]
-                # Do this transformation:  a = ...; b = a; becomes b = ...
-                # Eliminate the variable a if it is never used again.
                 for expr in new_exprs
-                    if false && isAssignmentNode(last_node) &&
-                        isAssignmentNode(expr)
-                        # Detected two assignments in a row.
-                        new_lhs  = expr.args[1]    # The left-hand side of the second assignment.
-                        new_rhs  = expr.args[2]    # The right-hand side of the second assignment.
-                        nrhstype = typeof(new_rhs)         # The type of the right-hand side of the second assignment.
-                        # Find the liveness information for the second assignment.
-                        new_stmt_lives = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
-                        # Get the live out information for the second assignment.
-                        new_stmt_live_out = new_stmt_lives.live_out
-                        dprintln(3,"Found two assignments in a row.")
-                        dprintln(3,"new_lhs  = ", new_lhs)
-                        dprintln(3,"new_rhs  = ", new_rhs)
-                        dprintln(3,"nrhstype = ", nrhstype)
-                        dprintln(3,"lives = ", new_stmt_lives)
-                        dprintln(3,"lives.out = ", new_stmt_lives.live_out)
-
-                        # If the right-hand side is a simple symbol and that symbol isn't used after this statement.
-                        if nrhstype == SymbolNode && !in(getSName(new_rhs), new_stmt_live_out)
-                            # How we remove a depends on where a is...whether embedded in a fusion assignment or by itself.
-                            if isFusionAssignment(last_node)
-                                dprintln(3,"Last node is a fusion assignment.")
-                                removed_assignment = false
-                                # The left-hand side of the previous assignment is a Fusion assignment node.
-                                # So, look at the real output names stored in that node.
-                                for i = 4:length(last_node.args)
-                                    assert(typeof(last_node.args[i]) == SymbolNode)
-                                    dprintln(3,"Testing against ", last_node.args[i])
-                                    if getSName(last_node.args[i]) == getSName(new_rhs)
-                                        dprintln(3,"Removing an unnecessary assignment statement in a fusion extended assignment.")
-                                        # Found the variable to replace in the real output list so replace it.
-                                        CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, last_node.args[i].name)
-                                        last_node.args[i].name = getSName(new_lhs)
-                                        removed_assignment = true
-                                        break
-                                    end
-                                end
-                                if removed_assignment
-                                    # If we found an item to remove then update the parfor nodes top-level list to encompass this assignment.
-                                    # This is really a fusion of an assignment statement into a parfor.
-                                    last_parfor = getParforNode(last_node)
-                                    push!(last_parfor.top_level_number, state.top_level_number)
-                                    continue
-                                end
-                            else
-                                # Left-hand side of previous assignment was simple.
-                                prev_lhs = last_node.args[1]
-                                dprintln(3,"prev_lhs = ", prev_lhs)
-
-                                # If the names match...
-                                if getSName(prev_lhs) == getSName(new_rhs)
-                                    dprintln(3,"Removing an unnecessary assignment statement.")
-                                    # ...replace with the left-hand side of the second assignment.
-                                    last_node.args[1] = new_lhs
-                                    CompilerTools.LambdaHandling.removeLocalVar(state.lambdaInfo, getSName(prev_lhs))
-                                    continue
-                                end
-                            end
-                        end
-                    end
                     push!(body, expr)
                     last_node = expr
                 end
@@ -5316,7 +5254,7 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node :: Union{Symbol, SymbolNode, LambdaStaticData, Number})
+function hasNoSideEffects(node :: Union{Symbol, SymbolNode, GenSym, LambdaStaticData, Number})
     return true
 end
 
@@ -5732,6 +5670,10 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+type DictInfo
+    live_info
+    expr
+end
 
 @doc """
 State for the remove_no_deps and insert_no_deps_beginning phases.
@@ -5740,10 +5682,10 @@ type RemoveNoDepsState
     lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
     top_level_no_deps :: Array{Any,1}
     hoistable_scalars :: Set{SymGen}
-    dict_sym          :: Dict{SymGen, Any}
+    dict_sym          :: Dict{SymGen, DictInfo}
 
     function RemoveNoDepsState(l, hs)
-        new(l, Any[], hs, Dict{SymGen, Any}())
+        new(l, Any[], hs, Dict{SymGen, DictInfo}())
     end
 end
 
@@ -5776,7 +5718,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
 
         if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
             # Empty the state at the end or begining of a basic block
-            data.dict_sym = Dict{SymGen,Any}()
+            data.dict_sym = Dict{SymGen,DictInfo}()
         end
 
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
@@ -5824,20 +5766,28 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
                             if !in(rhs_sym, live_info.live_out)
                                 dprintln(3,"remove_no_deps rhs is NOT live out")
                                 if haskey(data.dict_sym, rhs_sym)
-                                    prev_expr = data.dict_sym[rhs_sym]
-                                    prev_expr.args[1] = lhs_sym
-                                    delete!(data.dict_sym, rhs_sym)
-                                    data.dict_sym[lhs_sym] = prev_expr
-                                    dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
-                                    dprintln(3,"New expr = ", prev_expr)
-                                    return CompilerTools.AstWalker.ASTWALK_REMOVE
+                                    di = data.dict_sym[rhs_sym]
+                                    di_live = di.live_info
+                                    prev_expr = di.expr
+
+                                    if !in(lhs_sym, di_live.live_out)
+                                        prev_expr.args[1] = lhs_sym
+                                        delete!(data.dict_sym, rhs_sym)
+                                        data.dict_sym[lhs_sym] = DictInfo(di_live, prev_expr)
+                                        dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
+                                        dprintln(3,"New expr = ", prev_expr)
+                                        return CompilerTools.AstWalker.ASTWALK_REMOVE
+                                    else
+                                        delete!(data.dict_sym, rhs_sym)
+                                        dprintln(3,"Lhs is live but rhs is not.  However, lhs is read between def of rhs and current statement so not substituting.")
+                                    end
                                 end
                             else
                                 dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
                                 delete!(data.dict_sym, rhs_sym)
                             end
                         else
-                            data.dict_sym[lhs_sym] = node
+                            data.dict_sym[lhs_sym] = DictInfo(live_info, node)
                             dprintln(3,"Remembering assignment for symbol ", lhs_sym, " ", rhs)
                         end
                     end
