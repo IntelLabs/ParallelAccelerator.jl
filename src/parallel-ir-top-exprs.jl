@@ -87,37 +87,11 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
     
 end
 
-
-# TOP_LEVEL
-# sequence of expressions
-# ast = [ expr, ... ]
-function top_level_from_exprs(ast::Array{Any,1}, depth, state)
-
-    
-    main_proc_start = time_ns()
-    
-    body = top_level_mk_body(ast, depth, state)
-
-    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
-
-    dprintln(3,"Body after first pass before task graph creation.")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
+# Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
+function top_level_expand_pre(body, state)
 
     expanded_body = Any[]
-
-    # TASK GRAPH
-
-    if polyhedral != 0
-        # Anand: you can insert code here.
-    end
-
-    rr = ReplacedRegion[]
-
-    expand_start = time_ns()
-
-    # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
+    
     for i = 1:length(body)
         if isParforAssignmentNode(body[i])
             parfor_assignment = body[i]
@@ -171,10 +145,41 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             push!(expanded_body, body[i])
         end
     end
+    return expanded_body
+end
+
+# TOP_LEVEL
+# sequence of expressions
+# ast = [ expr, ... ]
+function top_level_from_exprs(ast::Array{Any,1}, depth, state)
+
+    
+    main_proc_start = time_ns()
+    
+    body = top_level_mk_body(ast, depth, state)
+
+    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+
+    dprintln(3,"Body after first pass before task graph creation.")
+    for j = 1:length(body)
+        dprintln(3, body[j])
+    end
+
+
+    # TASK GRAPH
+
+    if polyhedral != 0
+        # Anand: you can insert code here.
+    end
+
+    rr = ReplacedRegion[]
+
+    expand_start = time_ns()
+
+    body = top_level_expand_pre(body, state)
 
     dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
 
-    body = expanded_body
 
     dprintln(3,"expanded_body = ")
     for j = 1:length(body)
