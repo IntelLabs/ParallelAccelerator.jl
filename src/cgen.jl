@@ -539,28 +539,44 @@ function from_assignment(args::Array)
     lhsO * " = " * rhsO
 end
 
-function parseArrayType(arrayType)
+function parseArrayType(arrayType::Type)
     return eltype(arrayType), ndims(arrayType)
 end
 
-function isPrimitiveJuliaType(t)
+function isPrimitiveJuliaType(t::Type)
     haskey(lstate.jtypes, t)
 end
 
-function isArrayOfPrimitiveJuliaType(t)
+function isPrimitiveJuliaType(t::ANY)
+    return false
+end
+
+function isArrayOfPrimitiveJuliaType(t::Type)
   if isArrayType(t) && isPrimitiveJuliaType(eltype(t))
     return true
   end
   return false
 end
 
-
-function isArrayType(typ)
-    isa(typ, DataType) && ((typ.name == Array.name) || (typ.name == BitArray.name))
+function isArrayOfPrimitiveJuliaType(t::ANY)
+    return false
 end
 
-function isPtrType(typ)
-    isa(typ, DataType) && typ.name == Ptr.name
+
+function isArrayType(typ::DataType)
+    (typ.name == Array.name) || (typ.name == BitArray.name)
+end
+
+function isArrayType(typ::ANY)
+    return false
+end
+
+function isPtrType(typ::DataType)
+    typ.name == Ptr.name
+end
+
+function isPtrType(typ::ANY)
+    return false
 end
 
 function toCtype(typ::Tuple)
