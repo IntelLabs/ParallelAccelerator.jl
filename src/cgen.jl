@@ -459,17 +459,17 @@ function typeAvailable(a)
     return hasfield(a, :typ)
 end
 
-function isTupleTopNode(arg::TopNode)
-    return arg.name==:tuple
+function checkTopNodeName(arg::TopNode, name::Symbol)
+    return arg.name==name
 end
 
-function isTupleTopNode(arg::ANY)
+function checkTopNodeName(arg::ANY, name::Symbol)
     return false
 end
 
 function from_assignment_fix_tupple(lhs, rhs::Expr)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
-  if rhs.head==:call && isTupleTopNode(rhs.args[1])
+  if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
     dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
     lstate.tupleTable[lhs] = rhs.args[2:end]
   end
@@ -482,7 +482,7 @@ end
 function from_assignment_match_hvcat(lhs, rhs::Expr)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
-    if rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
+    if rhs.head==:call && checkTopNodeName(rhs.args[1],:typed_hvcat)
         dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
         @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
@@ -623,7 +623,7 @@ function toCtype(typ::Tuple)
 end
 
 # Generate a C++ type name for a Julia type
-function toCtype(typ)
+function toCtype(typ::DataType)
     if haskey(lstate.jtypes, typ)
         return lstate.jtypes[typ]
     elseif isArrayType(typ)
