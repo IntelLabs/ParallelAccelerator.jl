@@ -357,20 +357,12 @@ function isinttyp(typ)
     is(typ, UInt64) || is(typ, UInt32) || is(typ, UInt16) || is(typ, UInt8)
 end
 
-function istupletyp(typ::Tuple)
-    return true
+function istupletyp(typ)
+    isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
-function istupletyp(typ::ANY)
-    return false
-end
-
-function isarray(typ::Array)
-    return true
-end
-
-function isarray(typ::ANY)
-    return false
+function isarray(typ)
+    isa(typ, DataType) && is(typ.name, Array.name)
 end
 
 function isbitarray(typ)
