@@ -365,10 +365,9 @@ function from_decl(k)
     return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 end
 
-function isCompositeType(t)
+function isCompositeType(t::Type)
     # TODO: Expand this to real UDTs
-    b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
-    b |= isa(t, DataType) && t.name == Tuple.name
+    b = (t<:Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
     b
 end
 
@@ -564,7 +563,7 @@ end
 
 
 function isArrayType(typ::DataType)
-    (typ.name == Array.name) || (typ.name == BitArray.name)
+    (typ<:Array) || (typ<:BitArray)
 end
 
 function isArrayType(typ::ANY)
@@ -572,7 +571,7 @@ function isArrayType(typ::ANY)
 end
 
 function isPtrType(typ::DataType)
-    typ.name == Ptr.name
+    typ<:Ptr
 end
 
 function isPtrType(typ::ANY)
@@ -633,8 +632,7 @@ function canonicalize(tok)
     s
 end
 
-function parseParametricType(typ)
-    assert(isa(typ, DataType))
+function parseParametricType(typ::DataType)
     return typ.name, typ.parameters
 end
 
@@ -1996,7 +1994,7 @@ end
 
 
 
-function isScalarType(typ)
+function isScalarType(typ::Type)
     !isArrayType(typ) && !isCompositeType(typ)
 end
 
