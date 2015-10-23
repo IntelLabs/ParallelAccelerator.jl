@@ -459,16 +459,31 @@ function typeAvailable(a)
     return hasfield(a, :typ)
 end
 
+function isTupleTopNode(arg::TopNode)
+    return arg.name==:tuple
+end
+
+function isTupleTopNode(arg::ANY)
+    return false
+end
+
+function from_assignment_fix_tupple(lhs, rhs::Expr)
+  # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
+  if rhs.head==:call && isTupleTopNode(rhs.args[1])
+    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
+    lstate.tupleTable[lhs] = rhs.args[2:end]
+  end
+end
+
+function from_assignment_fix_tupple(lhs, rhs::ANY)
+end
+
 function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
     rhs = args[2]
-
-  # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:tuple
-    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
-    lstate.tupleTable[lhs] = rhs.args[2:end]
-  end
+    
+    from_assignment_fix_tupple(lhs, rhs)
 
   # if this is a hvcat call, the array should be allocated and initialized
   if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
