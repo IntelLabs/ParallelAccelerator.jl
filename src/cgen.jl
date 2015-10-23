@@ -303,7 +303,7 @@ function from_decl(k::Tuple)
         s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
     end
     s *= "} Tuple" *
-        (!isempty(k) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", k) : "") * ";\n"
+        (!isempty(k) ? mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", k) : "") * ";\n"
     if haskey(lstate.globalUDTs, k)
         lstate.globalUDTs[k] = 0
     end
@@ -342,7 +342,7 @@ function from_decl(k::DataType)
         for i in 1:length(ptyp)
             s *= toCtype(ptyp[i]) * " " * "f" * string(i-1) * ";\n"
         end
-        s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
+        s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
         return s
     else
         if haskey(lstate.globalUDTs, k)
@@ -619,7 +619,7 @@ function isPtrType(typ::ANY)
 end
 
 function toCtype(typ::Tuple)
-    return "Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", typ)
+    return "Tuple" * mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", typ)
 end
 
 # Generate a C++ type name for a Julia type
@@ -637,7 +637,7 @@ function toCtype(typ::DataType)
         # For parameteric types, for now assume we have equivalent C++
         # implementations
         btyp, ptyps = parseParametricType(typ)
-        return canonicalize(btyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
+        return canonicalize(btyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
     else
         return canonicalize(typ)
     end
@@ -700,7 +700,7 @@ function from_safegetindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".SAFEARRAYELEM("
-    idxs = map((i)->from_expr(i), args[2:end])
+    idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -712,7 +712,7 @@ function from_getindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".ARRAYELEM("
-    idxs = map((i)->from_expr(i), args[2:end])
+    idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -724,7 +724,7 @@ function from_setindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".ARRAYELEM("
-    idxs = map((i)->from_expr(i), args[3:end])
+    idxs = map(from_expr, args[3:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -749,7 +749,7 @@ function from_unsafe_setindex!(args)
 end
 
 function from_tuple(args)
-    "{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}"
+    "{" * mapfoldl(from_expr, (a, b) -> "$a, $b", args) * "}"
 end
 
 function from_arraysize(args)
@@ -802,14 +802,14 @@ function from_ccall(args)
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
     end
-    s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
+    s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
     s *= ")"
     dprintln(3,"from_ccall: ", s)
     s
 end
 
 function from_arrayset(args)
-    idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end])
+    idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
     "$src.ARRAYELEM($idxs) = $val"
@@ -1173,7 +1173,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1})
         return M, string(f), from_inlineable(f, args)
     elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
-        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[2:end])
+        arglist = mapfoldl(from_expr, (a,b)->"$a, $b", args[2:end])
         if isa(args[1], DataType)
             t = "{" * arglist * "}"
         else
@@ -1668,7 +1668,7 @@ function from_parforstart(args)
     dprintln(3,"-----")
     dprintln(3,private_vars)
     dprintln(3,"-----")
-    privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
+    privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
 
 
     lcountexpr = ""
@@ -1735,15 +1735,15 @@ function from_new(args)
     typ = args[1] #type of the object
     if isa(typ, DataType)
         objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
+        ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
         s = ctyp * "{"
-        s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}"
+        s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
     elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
         typ = getfield(typ.args[2], typ.args[3].value)
         objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps))
+        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
         s = ctyp * "{"
-        s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}"
+        s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
     end
     s
 end
@@ -2049,7 +2049,7 @@ end
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp)
   if length(params) > 0
-    params = mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * ", "
+    params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
   else
     params = ""
   end
