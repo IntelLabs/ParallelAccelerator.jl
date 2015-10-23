@@ -846,10 +846,17 @@ function from_getfield(args)
     =#
 end
 
-function from_nfields(args)
-    dprintln(3,"Args are: ", args)
-    dprintln(3,"Args type = ", typeof(args))
-    string(nfields(args[1].typ))
+function from_nfields(arg::Union{Symbol,GenSym})
+    dprintln(3,"Arg is: ", arg)
+    dprintln(3,"Arg type = ", typeof(arg))
+    #string(nfields(args[1].typ))
+    string(nfields(lstate.symboltable[arg]))
+end
+
+function from_nfields(arg::SymbolNode)
+    dprintln(3,"Arg is: ", arg)
+    dprintln(3,"Arg type = ", typeof(arg))
+    string(nfields(arg.typ))
 end
 
 function from_steprange_last(args)
@@ -941,7 +948,7 @@ function from_builtins(f, args)
     elseif tgt == "_unsafe_setindex!"
         return from_unsafe_setindex!(args)
     elseif tgt == "nfields"
-        return from_nfields(args)
+        return from_nfields(args[1])
     elseif tgt == "sizeof"
         return from_sizeof(args)
   elseif tgt =="steprange_last"
