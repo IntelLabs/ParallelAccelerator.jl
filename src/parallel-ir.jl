@@ -6545,35 +6545,39 @@ For each ParallelIR specific node type, form an array of expressions that AliasA
     If we read a symbol it is sufficient to just return that symbol as one of the expressions.
     If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
-function pir_alias_cb(ast, state, cbdata)
+function pir_alias_cb(ast::Expr, state, cbdata)
     dprintln(4,"pir_alias_cb")
-    asttyp = typeof(ast)
-    if asttyp == Expr
-        head = ast.head
-        args = ast.args
-        if head == :parfor
-            dprintln(3,"pir_alias_cb for :parfor")
-            expr_to_process = Any[]
 
-            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-            this_parfor = args[1]
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+        dprintln(3,"pir_alias_cb for :parfor")
+        expr_to_process = Any[]
 
-            AliasAnalysis.increaseNestLevel(state);
-            AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
-            AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
-            ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
-            AliasAnalysis.decreaseNestLevel(state);
+        assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+        this_parfor = args[1]
 
-            return ret[end]
+        AliasAnalysis.increaseNestLevel(state);
+        AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
+        AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
+        ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
+        AliasAnalysis.decreaseNestLevel(state);
 
-        elseif head == :call
-            if args[1] == TopNode(:unsafe_arrayref)
-                return AliasAnalysis.NotArray 
-            elseif args[1] == TopNode(:unsafe_arrayset)
-                return AliasAnalysis.NotArray 
-            end
+        return ret[end]
+
+    elseif head == :call
+        if args[1] == TopNode(:unsafe_arrayref)
+            return AliasAnalysis.NotArray 
+        elseif args[1] == TopNode(:unsafe_arrayset)
+            return AliasAnalysis.NotArray 
         end
     end
+
+    return DomainIR.dir_alias_cb(ast, state, cbdata)
+end
+
+function pir_alias_cb(ast::ANY, state, cbdata)
+    dprintln(4,"pir_alias_cb")
     return DomainIR.dir_alias_cb(ast, state, cbdata)
 end
 
