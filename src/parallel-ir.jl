@@ -329,15 +329,16 @@ end
 Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
-function mk_assignment_expr(lhs, rhs, state :: expr_state)
-    if(isa(lhs, SymAllGen))
-        expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
-    else
-        throw(string("mk_assignment_expr lhs is not of type SymAllGen, is of this type instead: ", typeof(lhs)))
-    end
+function mk_assignment_expr(lhs::SymAllGen, rhs, state :: expr_state)
+    expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)    
     dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
     TypedExpr(expr_typ, symbol('='), lhs, rhs)
 end
+
+function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
+    throw(string("mk_assignment_expr lhs is not of type SymAllGen, is of this type instead: ", typeof(lhs)))
+end
+
 
 function mk_assignment_expr(lhs :: SymbolNode, rhs)
     TypedExpr(lhs.typ, symbol('='), lhs, rhs)
@@ -6189,19 +6190,18 @@ end
 @doc """
 Returns true if input "a" is a tuple and each element of the tuple of isbits type.
 """
-function isbitstuple(a)
-    if isa(a, Tuple)
-        for i in a
-            if !isbits(i)
-                return false
-            end
+function isbitstuple(a::Tuple)
+    for i in a
+        if !isbits(i)
+            return false
         end
-        return true
     end
-    return false
+    return true
 end
 
-
+function isbitstuple(a::Any)
+    return false
+end
 
 function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
     ast = uncompressed_ast(ast)
@@ -6392,8 +6392,7 @@ end
 Take something returned from AstWalk and assert it should be an array but in this
 context that the array should also be of length 1 and then return that single element.
 """
-function get_one(ast)
-    assert(isa(ast,Array))
+function get_one(ast::Array)
     assert(length(ast) == 1)
     ast[1]
 end
