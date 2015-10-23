@@ -102,7 +102,7 @@ Options:
         res = harrisCornerDetect(img)
         selftimed = toq()
         res = map((x,y) -> x > 0.001f0 ? 1.0f0 : (y / 2.0f0), res, img)
-        imwrite(uint8sc(convert(Image, res)), output_fname)
+        imwrite(Images.ufixed8sc(convert(Image, res)), output_fname)
         println("checksum: ", sum(res))
         println("SELFTIMED ", selftimed)
     end
