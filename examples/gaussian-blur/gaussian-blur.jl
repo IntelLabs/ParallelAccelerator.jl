@@ -86,7 +86,7 @@ Options:
         tic()
         img = blur(img, iterations)    
         println("SELFTIMED ", toq())
-        imwrite(uint8sc(convert(Image, img)), output_fname)
+        imwrite(Images.ufixed8sc(convert(Image, img)), output_fname)
     end
     
     gaussian_blur(img_file, out_file, iterations)
