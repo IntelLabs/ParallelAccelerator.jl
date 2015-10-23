@@ -78,7 +78,7 @@ Options:
     println("output file = ", out_file)
 
     function gaussian_blur(input_fname, output_fname, iterations)
-        local img :: Array{Float32, 2} = convert(Array, float32(imread(input_fname)))
+        local img :: Array{Float32, 2} = convert(Array, float32(load(input_fname)))
         tic()
         blur(img, 0)    
         println("SELFPRIMED ", toq())
@@ -86,7 +86,7 @@ Options:
         tic()
         img = blur(img, iterations)    
         println("SELFTIMED ", toq())
-        imwrite(uint8sc(convert(Image, img)), output_fname)
+        save(output_fname, Images.ufixed8sc(convert(Image, img)))
     end
     
     gaussian_blur(img_file, out_file, iterations)
