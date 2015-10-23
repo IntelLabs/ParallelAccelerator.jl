@@ -9,15 +9,15 @@ os:
 matrix:
   allow_failures:
     - os: osx
-    - env: JULIA_PPA = julianightlies
+    - env: JULIA_PPA=julianightlies
 
 env:
-  - JULIA_PPA = juliareleases
-  - JULIA_PPA = julianightlies
+  - JULIA_PPA=juliareleases
+  - JULIA_PPA=julianightlies
 
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-    sudo add-apt-repository ppa:staticfloat/${JULIA_PPA} -y
+    sudo add-apt-repository ppa:staticfloat/$JULIA_PPA -y
     && sudo apt-get update -q
     && sudo apt-get install julia -y; fi
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
