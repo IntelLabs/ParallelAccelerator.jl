@@ -478,6 +478,36 @@ end
 function from_assignment_fix_tupple(lhs, rhs::ANY)
 end
 
+
+function from_assignment_match_hvcat(lhs, rhs::Expr)
+    s = ""
+    # if this is a hvcat call, the array should be allocated and initialized
+    if rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
+        dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
+
+        @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
+        typ = toCtype(eval(rhs.args[2].name))
+
+        arr_info = rhs.args[3]
+        rows = Int64[]
+        if isa(arr_info, Expr) && arr_info.head==:call
+            rows = arrinfo[2:end]
+        else
+            rows = lstate.tupleTable[arr_info]
+        end
+        nr = length(rows)
+        nc = rows[1] # all rows should have the same size
+        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
+        values = rhs.args[4:end]
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
+    end
+    return s
+end
+
+function from_assignment_match_hvcat(lhs, rhs::ANY)
+    return ""
+end
+
 function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
@@ -485,28 +515,11 @@ function from_assignment(args::Array{Any,1})
     
     from_assignment_fix_tupple(lhs, rhs)
 
-  # if this is a hvcat call, the array should be allocated and initialized
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
-    dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
-    s = ""
 
-    @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
-    typ = toCtype(eval(rhs.args[2].name))
-
-    arr_info = rhs.args[3]
-    rows = Int64[]
-    if isa(arr_info, Expr) && arr_info.head==:call
-      rows = arrinfo[2:end]
-    else
-      rows = lstate.tupleTable[arr_info]
+    match_hvcat = from_assignment_match_hvcat(lhs, rhs)
+    if match_hvcat!=""
+        return match_hvcat
     end
-    nr = length(rows)
-    nc = rows[1] # all rows should have the same size
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
-    values = rhs.args[4:end]
-    s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
-    return s
-  end
 
   if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
     dims = rhs.args[2]
