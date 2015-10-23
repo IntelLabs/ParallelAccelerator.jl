@@ -371,11 +371,11 @@ function isCompositeType(t::Type)
     b
 end
 
-function lambdaparams(ast)
+function lambdaparams(ast::Expr)
     CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast).input_params
 end
 
-function from_lambda(ast, args)
+function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     params = linfo.input_params
@@ -459,7 +459,7 @@ function typeAvailable(a)
     return hasfield(a, :typ)
 end
 
-function from_assignment(args::Array)
+function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
     rhs = args[2]
