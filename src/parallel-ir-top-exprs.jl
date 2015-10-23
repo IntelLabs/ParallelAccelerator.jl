@@ -148,66 +148,10 @@ function top_level_expand_pre(body, state)
     return expanded_body
 end
 
-# TOP_LEVEL
-# sequence of expressions
-# ast = [ expr, ... ]
-function top_level_from_exprs(ast::Array{Any,1}, depth, state)
-
-    
-    main_proc_start = time_ns()
-    
-    body = top_level_mk_body(ast, depth, state)
-
-    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
-
-    dprintln(3,"Body after first pass before task graph creation.")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-
-    # TASK GRAPH
-
-    if polyhedral != 0
-        # Anand: you can insert code here.
-    end
-
-    rr = ReplacedRegion[]
-
-    expand_start = time_ns()
-
-    body = top_level_expand_pre(body, state)
-
-    dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
-
-
-    dprintln(3,"expanded_body = ")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    dprintln(3,"fake_body = ", fake_body)
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-    dprintln(1,"Starting loop analysis.")
-    loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-    dprintln(1,"Finished loop analysis.")
-
-    if hoist_allocation == 1
-        body = hoistAllocation(body, new_lives, loop_info, state)
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-        dprintln(1,"Starting loop analysis again.")
-        loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-        dprintln(1,"Finished loop analysis.")
-    end
-
-    dprintln(3,"new_lives = ", new_lives)
-    dprintln(3,"loop_info = ", loop_info)
-
-    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
+function top_level_mk_task_graph(body, state)
         task_start = time_ns()
 
+        rr = ReplacedRegion[]
         # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
         # AliasAnalysis.analyze_lambda_body(fake_body, state.param, state.meta2_typed, new_lives)
 
@@ -722,6 +666,64 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
         #    throw(string("debugging task graph"))
         dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
+end
+
+# TOP_LEVEL
+# sequence of expressions
+# ast = [ expr, ... ]
+function top_level_from_exprs(ast::Array{Any,1}, depth, state)
+
+    
+    main_proc_start = time_ns()
+    
+    body = top_level_mk_body(ast, depth, state)
+
+    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+
+    dprintln(3,"Body after first pass before task graph creation.")
+    for j = 1:length(body)
+        dprintln(3, body[j])
+    end
+
+    # TASK GRAPH
+
+    if polyhedral != 0
+        # Anand: you can insert code here.
+    end
+
+    expand_start = time_ns()
+
+    body = top_level_expand_pre(body, state)
+
+    dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
+
+
+    dprintln(3,"expanded_body = ")
+    for j = 1:length(body)
+        dprintln(3, body[j])
+    end
+
+    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+    dprintln(3,"fake_body = ", fake_body)
+    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+    dprintln(1,"Starting loop analysis.")
+    loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
+    dprintln(1,"Finished loop analysis.")
+
+    if hoist_allocation == 1
+        body = hoistAllocation(body, new_lives, loop_info, state)
+        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+        dprintln(1,"Starting loop analysis again.")
+        loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
+        dprintln(1,"Finished loop analysis.")
+    end
+
+    dprintln(3,"new_lives = ", new_lives)
+    dprintln(3,"loop_info = ", loop_info)
+
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
+        top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
     flatten_start = time_ns()
