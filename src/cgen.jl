@@ -508,11 +508,29 @@ function from_assignment_match_hvcat(lhs, rhs::ANY)
     return ""
 end
 
+function from_assignment_match_cat_t(lhs, rhs::Expr)
+    s = ""
+    if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
+        dims = rhs.args[2]
+        @assert dims==2 "cgen: only 2d cat_t() is supported now"
+        size = length(rhs.args[4:end])
+        typ = toCtype(eval(rhs.args[3].name))
+        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
+        values = rhs.args[4:end]
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
+    end
+    return s
+end
+
+function from_assignment_match_cat_t(lhs, rhs::ANY)
+    return ""
+end
+
 function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
     rhs = args[2]
-    
+
     from_assignment_fix_tupple(lhs, rhs)
 
 
@@ -521,17 +539,11 @@ function from_assignment(args::Array{Any,1})
         return match_hvcat
     end
 
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
-    dims = rhs.args[2]
-    @assert dims==2 "cgen: only 2d cat_t() is supported now"
-    size = length(rhs.args[4:end])
-    typ = toCtype(eval(rhs.args[3].name))
-    s = ""
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
-    values = rhs.args[4:end]
-    s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
-    return s
-  end
+    match_cat_t = from_assignment_match_cat_t(lhs, rhs)
+    if match_cat_t!=""
+        return match_cat_t
+    end
+
 
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
