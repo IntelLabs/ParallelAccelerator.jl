@@ -238,6 +238,30 @@ end
 # ===============================================================================================================================
 
 
+@doc """
+Create a variable to hold the offset of a range offset from the start of the array.
+"""
+function createTempForRangeOffset(ranges :: Array{RangeData,1}, unique_id :: Int64, state :: expr_state)
+    range_array = SymbolNode[]
+
+    for i = 1:length(ranges)
+        range = ranges[i]
+
+        push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
+    end
+
+    return range_array
+end
+
+@doc """
+Create a temporary variable that is parfor private to hold the value of an element of an array.
+"""
+function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymNodeGen,1}, unique_id :: Int64, state :: expr_state)
+    key = toSymGen(array_sn) 
+    temp_type = getArrayElemType(array_sn, state)
+    # Is it okay to just use range[1] here instead of all the ranges?
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+end
 
 @doc """
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
