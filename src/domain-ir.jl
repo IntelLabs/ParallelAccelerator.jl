@@ -387,7 +387,7 @@ function ismask(state, r::SymbolNode)
 end
 
 function ismask(state, r::SymGen)
-    typ = getType(r)
+    typ = getType(r, state.linfo)
     return isrange(typ) || isbitarray(typ)
 end
 
