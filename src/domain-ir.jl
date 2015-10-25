@@ -397,7 +397,7 @@ end
 
 function ismask(state, r::Any)
     typ = typeOfOpr(state, r)
-    return isrange(r.typ) || isbitarray(r.typ)
+    return isrange(typ) || isbitarray(typ)
 end
 
 function remove_typenode(expr)
