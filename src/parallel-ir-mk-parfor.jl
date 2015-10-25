@@ -272,7 +272,7 @@ end
 function get_mmap_input_info(input_array::Expr, state)
     thisInfo = InputInfo()
 
-    if isa(input_array, Expr) && is(input_array.head, :select)
+    if is(input_array.head, :select)
         thisInfo.array = input_array.args[1]
         argtyp = typeof(thisInfo.array)
         dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
