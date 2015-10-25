@@ -269,7 +269,7 @@ function selectToRangeData(select :: Expr)
     return range_array
 end
 
-function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, state)
+function get_mmap_input_info(input_array::Expr, state)
     thisInfo = InputInfo()
 
     if isa(input_array, Expr) && is(input_array.head, :select)
@@ -298,6 +298,16 @@ function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, 
         thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
         thisInfo.pre_offsets = Expr[]
     end
+    return thisInfo
+end
+
+function get_mmap_input_info(input_array::SymAllGen, state)
+    thisInfo = InputInfo()
+    thisInfo.array = input_array
+    thisInfo.range = RangeData[]
+    thisInfo.range_offset = SymbolNode[]
+    thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
+    thisInfo.pre_offsets = Expr[]
     return thisInfo
 end
 
