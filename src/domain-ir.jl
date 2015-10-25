@@ -889,7 +889,7 @@ function inline_select(env, state, arr)
                 if length(range_extra) > 0
                     # if all ranges are int, then it is not a selection
                     if any(Bool[ismask(state,r) for r in range_extra])
-                      ranges = mk_ranges([rangeToMask(state, r) for r in range_extra]...)
+                        ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
                       dprintln(env, "inline-select: converted to ranges = ", ranges)
                       arr = mk_select(target_arr, ranges)
                     else
