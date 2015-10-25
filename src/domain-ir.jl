@@ -382,8 +382,22 @@ function isrange(typ)
     isunitrange(typ) || issteprange(typ)
 end
 
-function ismask(typ)
-    isrange(typ) || isbitarray(typ)
+function ismask(state, r::SymbolNode)
+    return isrange(r.typ) || isbitarray(r.typ)
+end
+
+function ismask(state, r::SymGen)
+    typ = getType(r)
+    return isrange(typ) || isbitarray(typ)
+end
+
+function ismask(state, r::GlobalRef)
+    return r.mod==Main && r.name==:(:)
+end
+
+function ismask(state, r::Any)
+    typ = typeOfOpr(state, r)
+    return isrange(r.typ) || isbitarray(r.typ)
 end
 
 function remove_typenode(expr)
@@ -423,25 +437,37 @@ function from_range(rhs)
     return (start, step, final)
 end
 
-function rangeToMask(state, r)
-    if isa(r, SymbolNode) || isa(r, GenSym)
-        typ = getType(r, state.linfo)
-        if isbitarray(typ)
-            mk_tomask(r)
-        elseif isunitrange(typ)
-            r = lookupConstDefForArg(state, r)
-            (start, step, final) = from_range(r)
-            mk_range(start, step, final)
-        elseif isinttyp(typ) 
-            mk_range(r, convert(typ, 1), r)
-        else
-            error("Unhandled range object: ", r)
-        end
-    elseif isa(r, Int)
-        mk_range(r, r, 1)
+function rangeToMask(state, r::Int, arraysize)
+    return mk_range(r, r, 1)
+end
+
+function rangeToMask(state, r::SymAllGen, arraysize)
+    typ = getType(r, state.linfo)
+    if isbitarray(typ)
+        mk_tomask(r)
+    elseif isunitrange(typ)
+        r = lookupConstDefForArg(state, r)
+        (start, step, final) = from_range(r)
+        mk_range(start, step, final)
+    elseif isinttyp(typ) 
+        mk_range(r, convert(typ, 1), r)
     else
-        error("unhandled range object: ", r)
+        error("Unhandled range object: ", r)
     end
+end
+
+function rangeToMask(state, r::GlobalRef, arraysize)
+    # FIXME: why doesn't this assert work?
+    #@assert (r.mod!=Main || r.name!=symbol(":")) "unhandled GlobalRef range"
+    if r.mod==Main && r.name==symbol(":")
+        return mk_range(1, 1, arraysize)
+    else
+        error("unhandled GlobalRef range object: ", r)
+    end
+end
+
+function rangeToMask(state, r::ANY, arraysize)
+    error("unhandled range object: ", r)
 end
 
 # check if a given function can be considered as a map operation.
@@ -862,7 +888,7 @@ function inline_select(env, state, arr)
                 dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
                 if length(range_extra) > 0
                     # if all ranges are int, then it is not a selection
-                    if any(Bool[ismask(typeOfOpr(state, r)) for r in range_extra])
+                    if any(Bool[ismask(state,r) for r in range_extra])
                       ranges = mk_ranges([rangeToMask(state, r) for r in range_extra]...)
                       dprintln(env, "inline-select: converted to ranges = ", ranges)
                       arr = mk_select(target_arr, ranges)
@@ -1059,13 +1085,13 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
         atyp = typeOfOpr(state, arr)
         expr = nothing
         dprintln(env, "ranges = ", ranges)
-        if any(Bool[ ismask(typeOfOpr(state, range)) for range in ranges])
+        if any(Bool[ ismask(state, range) for range in ranges])
             dprintln(env, "args is ", args)
             dprintln(env, "ranges is ", ranges)
             #newsize = addGenSym(Int, state.linfo)
             #newlhs = addGenSym(typ, state.linfo)
             etyp = elmTypOf(atyp)
-            ranges = mk_ranges([rangeToMask(state, range) for range in ranges]...)
+            ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
             if is(fun, :getindex) 
                 expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
             else
