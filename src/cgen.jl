@@ -224,6 +224,7 @@ if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     generated_file_dir = "$package_root/deps/generated"
 else
     generated_file_dir = mktempdir()
+    ENV["LD_LIBRARY_PATH"] = "$generated_file_dir:$(ENV["LD_LIBRARY_PATH"])"
 end
 
 file_counter = -1
@@ -2081,7 +2082,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 end
 
 # This is the entry point to cgen from the PSE driver
-function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true; offload=false)
+function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     global inEntryPoint
     inEntryPoint = isEntryPoint
     global lstate
@@ -2176,9 +2177,6 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true; of
     end
     push!(lstate.compiledfunctions, functionName)
     c = hdr * forwarddecl * from_worklist() * s * wrapper
-    if offload
-        c = "#pragma offload_attribute(push, target(mic))\n$c\n#pragma offload_attribute(pop)"
-    end
     if isEntryPoint
         resetLambdaState(lstate)
     end
@@ -2277,6 +2275,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     end
     if !isdir(generated_file_dir)
         global generated_file_dir = mktempdir()
+        ENV["LD_LIBRARY_PATH"] = "$generated_file_dir:$(ENV["LD_LIBRARY_PATH"])"
     end
     if with_headers
         s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
@@ -2289,7 +2288,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     return outfile_name
 end
 
-function getCompileCommand(full_outfile_name, cgenOutput)
+function getCompileCommand(full_outfile_name, cgenOutput; offload=false)
   # return an error if this is not overwritten with a valid compiler
   compileCommand = `echo "invalid backend compiler"`
 
@@ -2302,6 +2301,9 @@ function getCompileCommand(full_outfile_name, cgenOutput)
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
         push!(Opts, "-qopenmp")
+    end
+    if offload
+        push!(Opts, "-qoffload-attribute-target=mic")
     end
     # Generate dyn_lib
     compileCommand = `icpc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
@@ -2316,7 +2318,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   return compileCommand
 end
 
-function compile(outfile_name)
+function compile(outfile_name; offload=false)
   global use_bcpp
   packageroot = getPackageRoot()
 
@@ -2334,7 +2336,7 @@ function compile(outfile_name)
   end
 
   full_outfile_name = `$generated_file_dir/$outfile_name.o`
-  compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
+  compileCommand = getCompileCommand(full_outfile_name, cgenOutput; offload=offload)
   dprintln(1,compileCommand)
   run(compileCommand)
 end
@@ -2347,7 +2349,11 @@ function getLinkCommand(outfile_name, lib)
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
-          push!(linkLibs,"-lmkl_rt")
+          if backend_compiler == USE_ICC
+              push!(linkLibs,"-mkl")
+          else
+              push!(linkLibs,"-lmkl_rt")
+          end
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
       end
