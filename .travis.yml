@@ -1,3 +1,5 @@
+language: julia
+
 # Use Ubuntu 14.04 on Travis, which makes it possible to use gcc 4.8.
 sudo: required
 dist: trusty
@@ -6,27 +8,14 @@ os:
   - linux
   - osx
 
+julia:
+  - 0.4
+  - nightly
+
 matrix:
   allow_failures:
     - os: osx
-    - env: JULIA_PPA=julianightlies
-
-env:
-  - JULIA_PPA=juliareleases
-  - JULIA_PPA=julianightlies
-
-before_install:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-    sudo add-apt-repository ppa:staticfloat/$JULIA_PPA -y
-    && sudo apt-get update -q
-    && sudo apt-get install julia -y; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-    brew update
-    && brew tap staticfloat/julia
-    && if [ "$JULIA_PPA" = "julianightlies" ]; then
-    brew install --HEAD julia;
-    else brew install julia; fi;
-    fi
+    - julia: nightly
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
