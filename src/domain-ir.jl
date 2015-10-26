@@ -614,7 +614,7 @@ end
 
 # :lambda expression
 # (:lambda, {param, meta@{localvars, types, freevars}, body})
-function from_lambda(state, env, expr)
+function from_lambda(state, env, expr::Expr)
     local env_ = nextEnv(env)
     local head = expr.head
     local ast  = expr.args
@@ -1534,7 +1534,7 @@ function from_return(state, env, expr)
     return mk_expr(typ, head, args...)
 end
 
-function from_expr(function_name::AbstractString, cur_module :: Module, ast :: ANY)
+function from_expr(function_name::AbstractString, cur_module :: Module, ast :: Expr)
     dprintln(2,"DomainIR translation function = ", function_name, " on:")
     dprintln(2,ast)
     ast = from_expr(emptyState(), newEnv(cur_module), ast)
