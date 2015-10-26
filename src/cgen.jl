@@ -36,7 +36,7 @@ DebugMsg.init()
 
 import ..ParallelIR
 import CompilerTools
-export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
+export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas, toCtype
 import ParallelAccelerator, ..getPackageRoot
 
 # uncomment this line for using Debug.jl
@@ -2081,7 +2081,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
 end
 
 # This is the entry point to cgen from the PSE driver
-function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
+function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true; offload=false)
     global inEntryPoint
     inEntryPoint = isEntryPoint
     global lstate
@@ -2176,6 +2176,9 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     end
     push!(lstate.compiledfunctions, functionName)
     c = hdr * forwarddecl * from_worklist() * s * wrapper
+    if offload
+        c = "#pragma offload_attribute(push, target(mic))\n$c\n#pragma offload_attribute(pop)"
+    end
     if isEntryPoint
         resetLambdaState(lstate)
     end
