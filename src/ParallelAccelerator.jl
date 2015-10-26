@@ -83,6 +83,14 @@ const HOST_TASK_MODE = 1
 const PHI_TASK_MODE = 2
 const DYNAMIC_TASK_MODE = 3
 
+function isDistributedMode()
+    mode = "0"
+    if haskey(ENV,"HPS_DISTRIBUTED_MEMORY")
+        mode = ENV["HPS_DISTRIBUTED_MEMORY"]
+    end
+    return mode=="1"
+end
+
 @doc """
 Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".
 If not specified, it defaults to NO_TASK_MODE, or DYNAMIC_TASK_MODE when 
@@ -184,6 +192,7 @@ _accelerate(function_name, signature) = accelerate(function_name, signature, 0)
 include("api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
+include("distributed-ir.jl")
 include("j2c-array.jl")
 include("cgen.jl")
 include("callgraph.jl")
@@ -217,6 +226,9 @@ function __init__()
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
+      if isDistributedMode()
+          addOptPass(toDistributedIR, PASS_TYPED)
+      end
       addOptPass(toCGen, PASS_TYPED)
     end
 end
