@@ -106,10 +106,18 @@ using CompilerTools.AliasAnalysis
 #    of buffers, in real implementation, it takes the set of index symbol
 #    nodes, as well as stride symbol nodes, in addition to the buffers.
 
+
+function TypedExpr(typ, rest...)
+    res = Expr(rest...)
+    res.typ = typ
+    res
+end
+
 mk_eltype(arr) = Expr(:eltype, arr)
 mk_ndim(arr) = Expr(:ndim, arr)
 mk_length(arr) = Expr(:length, arr)
-mk_arraysize(arr, d) = Expr(:arraysize, arr, d)
+#mk_arraysize(arr, d) = Expr(:arraysize, arr, d)
+mk_arraysize(arr, dim) = TypedExpr(Int64, :call, TopNode(:arraysize), arr, dim)
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)

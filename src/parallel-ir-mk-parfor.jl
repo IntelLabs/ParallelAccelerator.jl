@@ -263,19 +263,30 @@ function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymNodeG
     return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
+function createTempForRangeInfo(array_sn :: SymAllGen, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)
+    key = toSymGen(array_sn) 
+    temp_type = getArrayElemType(array_sn, state)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+end
+
 @doc """
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
-function rangeToRangeData(range :: Expr)
+function rangeToRangeData(range :: Expr, pre_offsets::Array{Expr,1}, arr, range_num::Int, state)
     @assert (range.head == :range) ":range expression expected"
-
-    return RangeData(range.args[1], range.args[2], range.args[3])
+    start = createTempForRangeInfo(arr, 1, range_num, "start", state);
+    step = createTempForRangeInfo(arr, 1, range_num, "step", state);
+    last = createTempForRangeInfo(arr, 1, range_num, "last", state);
+    push!(pre_offsets, mk_assignment_expr(start, range.args[1], state))
+    push!(pre_offsets, mk_assignment_expr(step, range.args[2], state))
+    push!(pre_offsets, mk_assignment_expr(last, range.args[3], state))
+    return RangeData(start, step, last)
 end
 
 @doc """
 Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.
 """
-function selectToRangeData(select :: Expr)
+function selectToRangeData(select :: Expr, pre_offsets::Array{Expr,1}, state)
     assert(select.head == :select)
 
     input_array_ranges = select.args[2] # range object
@@ -284,10 +295,10 @@ function selectToRangeData(select :: Expr)
 
     if input_array_ranges.head == :ranges
         for i = 1:length(input_array_ranges.args)
-            push!(range_array, rangeToRangeData(input_array_ranges.args[i]))
+            push!(range_array, rangeToRangeData(input_array_ranges.args[i], pre_offsets, select.args[1], i, state))
         end
     else
-        push!(range_array, rangeToRangeData(input_array_ranges))
+        push!(range_array, rangeToRangeData(input_array_ranges, pre_offsets, select.args[1], 0 ,state))
     end
 
     return range_array
@@ -310,10 +321,11 @@ function get_mmap_input_info(input_array::Expr, state)
             thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
             thisInfo.pre_offsets = Expr[]
         else
-            thisInfo.range = selectToRangeData(input_array)
+            thisInfo.pre_offsets = Expr[]
+            thisInfo.range = selectToRangeData(input_array, thisInfo.pre_offsets, state)
             thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
             thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-            thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
+            append!(thisInfo.pre_offsets, generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range))
         end
     else
         thisInfo.array = input_array
