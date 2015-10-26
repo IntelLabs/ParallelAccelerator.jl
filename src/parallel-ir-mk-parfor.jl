@@ -325,7 +325,7 @@ function get_mmap_input_info(input_array::Expr, state)
             thisInfo.range = selectToRangeData(input_array, thisInfo.pre_offsets, state)
             thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
             thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-            append!(thisInfo.pre_offsets, generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range))
+            thisInfo.pre_offsets = [thisInfo.pre_offsets; generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)]
         end
     else
         thisInfo.array = input_array
@@ -395,7 +395,6 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
         push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
     end
 
-
     dprintln(3,"dl = ", dl)
     dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
 
@@ -432,7 +431,7 @@ function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_i
     loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
 
     for i in inputInfo
-        append!(pre_statements, i.pre_offsets)
+        pre_statements = [i.pre_offsets; pre_statements]
     end
 
     # add local vars to state
@@ -674,7 +673,7 @@ function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_
     loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
 
     for i in inputInfo
-        append!(pre_statements, i.pre_offsets)
+        pre_statements = [i.pre_offsets; pre_statements]
     end
 
     # add local vars to state
