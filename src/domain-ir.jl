@@ -1087,6 +1087,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
     dprintln(env, "got getindex or setindex!")
     args = normalize_args(state, env, args)
     arr = args[1]
+    println(arr)
     arrTyp = getType(arr, state.linfo)
     dprintln(env, "arrTyp = ", arrTyp)
     if isrange(arrTyp) && length(args) == 2

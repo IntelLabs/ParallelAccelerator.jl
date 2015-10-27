@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module J2CArray
 
-export to_j2c_array, from_j2c_array, j2c_array_delete
+export to_j2c_array, from_j2c_array, j2c_array_delete, j2c_array_from_mic, j2c_array_to_mic
 import ..DomainIR.isarray
 import ..getPackageRoot
 
@@ -40,19 +40,20 @@ end
 function __init__()
   package_root = getPackageRoot()
   dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
+  ENV["LD_LIBRARY_PATH"] = "$dyn_lib:$(ENV["LD_LIBRARY_PATH"])"
 
   @eval begin
     # Create a new j2c array object with element size in bytes and given dimension.
     # It will share the data pointer of the given inp array, and if inp is nothing,
     # the j2c array will allocate fresh memory to hold data.
     # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
-    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
+    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple, run_where::Int)
       # note that C interface mandates Int64 for dimension data
       _dims = Int64[ convert(Int64, x) for x in dims ]
       _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
 
-      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
-            convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
+      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}, Cint),
+            convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims), run_where)
     end
 
     # Array size in the given dimension.
@@ -105,6 +106,18 @@ function __init__()
     function j2c_array_deref(arr::Ptr{Void})
       ccall((:j2c_array_deref,$dyn_lib), Void, (Ptr{Void},), arr)
     end
+
+    function j2c_array_to_mic{T}(run_where::Int, from_arr::Array{T}, mic_arr::Ptr{Void})
+        nbytes = isbits(T) ? sizeof(T) : 0
+        _from_arr = convert(Ptr{Void}, pointer(from_arr))
+        ccall((:j2c_array_to_mic,$dyn_lib), Void, (Cint, Cint, Ptr{Void}, Ptr{Void}, Cint), run_where, nbytes, _from_arr, mic_arr, length(from_arr))
+    end
+
+    function j2c_array_from_mic{T}(run_where::Int, mic_arr::Ptr{Void}, into_arr::Array{T})
+        nbytes = isbits(T) ? sizeof(T) : 0
+        _into_arr = convert(Ptr{Void}, pointer(into_arr))
+        ccall((:j2c_array_from_mic,$dyn_lib), Void, (Cint, Cint, Ptr{Void}, Ptr{Void}, Cint), run_where, nbytes, mic_arr, _into_arr, length(into_arr))
+    end
   end
 end
 
@@ -112,16 +125,16 @@ end
 # Note that Julia array data are not copied but shared by the J2C array
 # The caller needs to make sure these arrays stay alive so long as the
 # returned j2c array is alive.
-function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr{Void}, Array})
+function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr{Void}, Array}, run_where::Int=-1)
   dims = size(inp)
   _isbits = isbits(T)
   nbytes = _isbits ? sizeof(T) : 0
   _inp = _isbits ? inp : nothing
-  arr = j2c_array_new(nbytes, _inp, N, dims)
+  arr = j2c_array_new(nbytes, _inp, N, dims, run_where)
   ptr_array_dict[convert(Ptr{Void}, pointer(inp))] = inp  # establish a mapping between pointer and the original array
   if !(_isbits)
     for i = 1:length(inp)
-      obj = to_j2c_array(inp[i], ptr_array_dict) # obj is a new j2c array
+      obj = to_j2c_array(inp[i], ptr_array_dict, run_where) # obj is a new j2c array
       j2c_array_set(arr, i, obj) # obj is duplicated during this set
       j2c_array_delete(obj)      # safe to delete obj without triggering free
     end
@@ -167,5 +180,4 @@ function from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_di
    j2c_array_delete(inp)
    return arr
 end 
-
 end 

@@ -199,7 +199,7 @@ _Intrinsics = [
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm"
+        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm", "sext_int"
 ]
 
 # math functions
@@ -1074,6 +1074,8 @@ function from_intrinsic(f :: ANY, args)
         #return "assert(" * "isNan(" * from_expr(args[1]) * ") && !isNan(" * from_expr(args[2]) * "))"
         return from_expr(args[1])
     elseif intr in ["checked_trunc_uint", "checked_trunc_sint"]
+        return "$(from_expr(args[1])) $(from_expr(args[2]))"
+    elseif intr == "sext_int"
         return "$(from_expr(args[1])) $(from_expr(args[2]))"
     else
         dprintln(3,"Intrinsic ", intr, " is known but no translation available")
