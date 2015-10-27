@@ -1593,7 +1593,7 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
         typ = getType(args[1], state.linfo)
         return typ  
     else
-        throw(string("from_expr: unknown Expr head :", head))
+        throw(string("ParallelAccelerator.DomainIR.from_expr: unknown Expr head :", head))
     end
     return ast
 end
