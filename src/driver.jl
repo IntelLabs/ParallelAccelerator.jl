@@ -139,10 +139,14 @@ function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
 end
 
 function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
+  # In threads mode, we have already converted back to standard Julia AST so we skip this phase.
+  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+    return code
+  end
+  
   off_time_start = time_ns()
 
-  package_root   = ParallelAccelerator.getPackageRoot()
-
+  package_root = ParallelAccelerator.getPackageRoot()
   function_name_string = ParallelAccelerator.cgen.canonicalize(string(func.name))
 
   outfile_name = cgen.writec(cgen.from_root(code, function_name_string))
