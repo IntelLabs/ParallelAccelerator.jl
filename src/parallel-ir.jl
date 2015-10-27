@@ -34,9 +34,9 @@ using CompilerTools.LambdaHandling
 using ..DomainIR
 using CompilerTools.AliasAnalysis
 import ..ParallelAccelerator
-#if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-#using Base.Threading
-#end
+if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+using Base.Threads
+end
 
 import Base.show
 import CompilerTools.AstWalker
@@ -4134,23 +4134,24 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
                             if false
                                 insert_task_expr = TypedExpr(Any,
-                                :call,
-                                cur_task.task_func,
-                                SymbolNode(range_sym, pir_range_actual),
-                                real_args_build...)
+                                    :call,
+                                    cur_task.task_func,
+                                    SymbolNode(range_sym, pir_range_actual),
+                                    real_args_build...)
                             else
                                 # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
                                 svec_args = mk_svec_expr(Any, Any)
                                 insert_task_expr = TypedExpr(Any, 
-                                :call, 
-                                TopNode(:ccall), 
-                                QuoteNode(:jl_threading_run), 
-                                GlobalRef(Main,:Void), 
-                                svec_args,
-                                mk_parallelir_ref(:isf), 0, 
-                                tup_sym, 0)
+                                    :call, 
+                                    TopNode(:ccall), 
+                                    QuoteNode(:jl_threading_run), 
+                                    GlobalRef(Main,:Void), 
+                                    svec_args,
+                                    mk_parallelir_ref(:isf), 0, 
+                                    tup_sym, 0)
                             end
                             push!(new_body, insert_task_expr)
+#                            push!(new_body, TypedExpr(Any, :call, TopNode(:ccall), QuoteNode(:jl_threading_profile), GlobalRef(Main,:Void), mk_svec_expr()))
                         else
                             throw(string("insert sequential task not implemented yet"))
                         end
@@ -4391,27 +4392,45 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     return body
 end
 
+if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+
+#println_mutex = Mutex()
+
+function test1(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual)
+  println("test1 space = ", full_iteration_space)
+  nothing
+end
+
+function tprintln(args...)
+  for a in args
+    ccall(:puts, Cint, (Cstring,), string(a))
+  end
+end
+
 @doc """
 An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
 """
-function isf(t::Function, 
-    full_iteration_space::ParallelAccelerator.ParallelIR.pir_range_actual,
-    rest...)
-    println("Starting isf.")
-    tid = Base.Threading.threadid()
+function isf(t :: Function, 
+             full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
+             rest...)
+    tid = Base.Threads.threadid()
+#    ta = [typeof(x) for x in rest]
+#    Base.Threads.lock!(println_mutex)
+#    tprintln("Starting isf. tid = ", tid, " space = ", full_iteration_space, " ta = ", ta)
+#    Base.Threads.unlock!(println_mutex)
 
-    # This isn't working so this is debugging code at the moment.
-
-    #    println("isf ", t, " ", full_iteration_space, " ", args)
     if full_iteration_space.dim == 1
         # Compute how many iterations to run.
         num_iters = full_iteration_space.upper_bounds[1] - full_iteration_space.lower_bounds[1] + 1
 
-        println("num_iters = ", num_iters)
+#        Base.Threads.lock!(println_mutex)
+#        tprintln("tid = ", tid, " num_iters = ", num_iters)
+#        Base.Threads.unlock!(println_mutex)
+
         # Handle the case where iterations is less than the core count.
         if num_iters <= nthreads()
-            if true
+            if false
                 if tid == 1
                     #println("ISF tid = ", tid, " t = ", t, " fis = ", full_iteration_space, " args = ", rest...)
                     return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
@@ -4421,8 +4440,8 @@ function isf(t::Function,
                 end
             else
                 if tid <= num_iters
-                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
-                    #return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
+                    #return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
+                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
                 else
                     #return t(pir_range_actual([0],[-1]), rest...)
                     return nothing
@@ -4431,19 +4450,33 @@ function isf(t::Function,
         else
             # one dimensional scheduling
             len, rem = divrem(num_iters, nthreads())
-            ls = len * tid
+            ls = (len * (tid-1)) + 1
             if tid == nthreads()
                 le = full_iteration_space.upper_bounds[1]
             else
-                le = (len * (tid+1)) - 1
+                le = (len * tid)
             end
-            return t(pir_range_actual([ls],[le]), rest...)
+#            Base.Threads.lock!(println_mutex)
+#            tprintln("tid = ", tid, " ls = ", ls, " le = ", le, " func = ", Base.function_name(t))
+#            Base.Threads.unlock!(println_mutex)
+            try 
+              tres = t(ParallelAccelerator.ParallelIR.pir_range_actual(ls,le), rest...)
+#             range_actual = ParallelAccelerator.ParallelIR.pir_range_actual(ls,le)
+#             tres = test1(range_actual)
+            catch something
+             # println("Call to t created exception ", something)
+              ccall(:puts, Cint, (Cstring,), "caught some exception")
+            end 
+#            tprintln("After t call tid = ", tid)
+            return tres
         end
     elseif full_iteration_space.dim == 2
         assert(0)
     else
         assert(0)
     end
+end
+
 end
 
 @doc """
@@ -4654,10 +4687,8 @@ function convertUnsafe(stmt)
     # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
     if state.found
         dprintln(3, "state.found ", state, " ", res)
-        assert(isa(res,Array))
-        assert(length(res) == 1)
-        dprintln(3,"Replaced unsafe: ", res[1])
-        return res[1]
+        dprintln(3,"Replaced unsafe: ", res)
+        return res
     else
         return nothing
     end
@@ -4675,13 +4706,49 @@ function convertUnsafeOrElse(stmt)
     return res
 end
 
+function first_unless(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
+    res = 
+     !(
+       (
+         (!(gs0.start == gs0.stop)) && 
+         (!((0 < gs0.step) == (gs0.start < gs0.stop)))
+       ) || 
+       (pound == (gs0.stop + gs0.step))
+      )
+    dprintln(4,"first_unless res = ", res)
+    return res
+end
+
+function assign_gs4(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
+    pound + gs0.step
+end
+
+function second_unless(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
+    res = 
+     !(
+       !(
+         (
+           (!(gs0.start == gs0.stop)) && 
+           (!((0 < gs0.step) == (gs0.start < gs0.stop)))
+         ) || 
+         (pound == (gs0.stop + gs0.step))
+        )
+      ) 
+    dprintln(4,"second_unless res = ", res)
+    return res
+end
+
+precompile(first_unless, (StepRange{Int64,Int64}, Int64))
+precompile(assign_gs4, (StepRange{Int64,Int64}, Int64))
+precompile(second_unless, (StepRange{Int64,Int64}, Int64))
+
 @doc """
 This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
 One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaInfo)
     dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
     if loop_nest_level > length(the_parfor.loopNests)
         # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
@@ -4704,31 +4771,61 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         # See the following example from the REPL for how Julia structures loop nests into labels and gotos.
         # Our code below generates the same structure for each loop in the parfor.
 
-        # julia> function f1(x,y)
-        #        for i = x:y
-        #        println(i)
-        #        end
-        #        end
-        # f1 (generic function with 1 method)
-        # 
-        # julia> ct = code_typed(f1,(Int64,Int64))
-        # 1-element Array{Any,1}:
-        #  :($(Expr(:lambda, Any[:x,:y], Any[Any[Any[:x,Int64,0],Any[:y,Int64,0],Any[symbol("#s1"),Int64,2],Any[:i,Int64,18],Any[symbol("##xs#6369"),Tuple{Int64},0]],Any[],Any[UnitRange{Int64},Tuple{Int64,Int64},Int64,Int64],Any[]], :(begin  # none, line 2:
-        #         GenSym(0) = $(Expr(:new, UnitRange{Int64}, :(x::Int64), :(((top(getfield))(Base.Intrinsics,:select_value)::I)((Base.sle_int)(x::Int64,y::Int64)::Bool,y::Int64,(Base.box)(Int64,(Base.sub_int)(x::Int64,1))::Int64)::Int64)))
-        #         #s1 = (top(getfield))(GenSym(0),:start)::Int64
-        #         unless (Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool goto 1
-        #         2: 
-        #         GenSym(2) = #s1::Int64
-        #         GenSym(3) = (Base.box)(Base.Int,(Base.add_int)(#s1::Int64,1))::Int64
-        #         i = GenSym(2)
-        #         #s1 = GenSym(3) # line 3:
-        #         (Base.println)(Base.STDOUT,i::Int64)
-        #         3: 
-        #         unless (Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.not_int)(#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,1))::Int64::Bool))::Bool))::Bool goto 2
-        #         1: 
-        #         0: 
-        #         return
-        #     end::Void))))
+        # function f1(x,y,z)
+        #   for i = x:z:y
+        #     println(i)
+        #   end
+        # end
+        
+        #  (Base.not_int)(
+        #     (Base.or_int)(
+        #        (Base.and_int)(
+        #           (Base.not_int)(
+        #              (top(getfield))(GenSym(0),:start)::Int64 === (top(getfield))(GenSym(0),:stop)::Int64::Bool
+        #           ),
+        #           (Base.not_int)(
+        #              (Base.slt_int)(0,(top(getfield))(GenSym(0),:step)::Int64)::Bool === (Base.slt_int)((top(getfield))(GenSym(0),:start)::Int64,(top(getfield))(GenSym(0),:stop)::Int64)::Bool::Bool
+        #           )
+        #        ),
+        #        #s1::Int64 === (Base.add_int)(
+        #                         (top(getfield))(GenSym(0),:stop)::Int64,(top(getfield))(GenSym(0),:step)::Int64
+        #                       )
+        #     )
+        #  )
+
+        #  (Base.not_int)(
+        #     (Base.not_int)(
+        #        (Base.or_int)(
+        #           (Base.and_int)(
+        #              (Base.not_int)(
+        #                 (top(getfield))(GenSym(0),:start)::Int64 === (top(getfield))(GenSym(0),:stop)::Int64::Bool
+        #              ),
+        #              (Base.not_int)(
+        #                 (Base.slt_int)(0,(top(getfield))(GenSym(0),:step)::Int64)::Bool === (Base.slt_int)((top(getfield))(GenSym(0),:start)::Int64,(top(getfield))(GenSym(0),:stop)::Int64)::Bool::Bool
+        #              )
+        #           ),
+        #           #s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,(top(getfield))(GenSym(0),:step)::Int64))::Int64::Bool
+        #        )
+        #     )
+        #  )
+
+        #   :($(Expr(:lambda, Any[:x,:y,:z], Any[Any[Any[:x,Int64,0],Any[:y,Int64,0],Any[:z,Int64,0],Any[symbol("#s1"),Int64,2],Any[:i,Int64,18],Any[symbol("##xs#7035"),Tuple{Int64},0]],Any[],Any[StepRange{Int64,Int64},Tuple{Int64,Int64},Int64,Int64,Int64],Any[]], :(begin  # none, line 2:
+        #          GenSym(2) = (Base.steprange_last)(x::Int64,z::Int64,y::Int64)::Int64
+        #          GenSym(0) = $(Expr(:new, StepRange{Int64,Int64}, :(x::Int64), :(z::Int64), GenSym(2)))
+        #          #s1 = (top(getfield))(GenSym(0),:start)::Int64
+        #          unless (Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.or_int)((Base.box)(Base.Bool,(Base.and_int)((Base.box)(Base.Bool,(Base.not_int)((top(getfield))(GenSym(0),:start)::Int64 === (top(getfield))(GenSym(0),:stop)::Int64::Bool))::Bool,(Base.box)(Base.Bool,(Base.not_int)((Base.slt_int)(0,(top(getfield))(GenSym(0),:step)::Int64)::Bool === (Base.slt_int)((top(getfield))(GenSym(0),:start)::Int64,(top(getfield))(GenSym(0),:stop)::Int64)::Bool::Bool))::Bool))::Bool,#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,(top(getfield))(GenSym(0),:step)::Int64))::Int64::Bool))::Bool))::Bool goto 1
+        #          2: 
+        #          GenSym(3) = #s1::Int64
+        #          GenSym(4) = (Base.box)(Base.Int,(Base.add_int)(#s1::Int64,(top(getfield))(GenSym(0),:step)::Int64))::Int64
+        #          i = GenSym(3)
+        #          #s1 = GenSym(4) # none, line 3:
+        #          (Base.println)(Base.STDOUT,i::Int64)
+        #          3: 
+        #          unless (Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.not_int)((Base.box)(Base.Bool,(Base.or_int)((Base.box)(Base.Bool,(Base.and_int)((Base.box)(Base.Bool,(Base.not_int)((top(getfield))(GenSym(0),:start)::Int64 === (top(getfield))(GenSym(0),:stop)::Int64::Bool))::Bool,(Base.box)(Base.Bool,(Base.not_int)((Base.slt_int)(0,(top(getfield))(GenSym(0),:step)::Int64)::Bool === (Base.slt_int)((top(getfield))(GenSym(0),:start)::Int64,(top(getfield))(GenSym(0),:stop)::Int64)::Bool::Bool))::Bool))::Bool,#s1::Int64 === (Base.box)(Base.Int,(Base.add_int)((top(getfield))(GenSym(0),:stop)::Int64,(top(getfield))(GenSym(0),:step)::Int64))::Int64::Bool))::Bool))::Bool))::Bool goto 2
+        #          1: 
+        #          0: 
+        #          return
+        #      end::Void))))
 
         this_nest = the_parfor.loopNests[loop_nest_level]
 
@@ -4737,35 +4834,69 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         label_after_second_unless  = next_available_label + 2
         label_last                 = next_available_label + 3
 
-        colon_var = string("#recreate_colon_", (loop_nest_level-1) * 3 + 0)
-        colon_sym = symbol(colon_var)
-        start_var = string("#recreate_start_", (loop_nest_level-1) * 3 + 1)
-        start_sym = symbol(start_var)
-        next_var  = string("#recreate_next_",  (loop_nest_level-1) * 3 + 1)
-        next_sym  = symbol(next_var)
+        num_vars = 5
+
+        gensym2_var = string("#recreate_gensym2_", (loop_nest_level-1) * num_vars + 0)
+        gensym2_sym = symbol(gensym2_var)
+        gensym0_var = string("#recreate_gensym0_", (loop_nest_level-1) * num_vars + 1)
+        gensym0_sym = symbol(gensym0_var)
+        pound_s1_var = string("#recreate_pound_s1_", (loop_nest_level-1) * num_vars + 2)
+        pound_s1_sym = symbol(pound_s1_var)
+        gensym3_var = string("#recreate_gensym3_", (loop_nest_level-1) * num_vars + 3)
+        gensym3_sym = symbol(gensym3_var)
+        gensym4_var = string("#recreate_gensym4_", (loop_nest_level-1) * num_vars + 4)
+        gensym4_sym = symbol(gensym4_var)
+        CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaInfo)
 
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-        push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-        push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
-        push!(new_body, LabelNode(label_after_first_unless))
+        if true
+           push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), SymbolNode(gensym2_sym,Int64)), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_second_unless))
+           push!(new_body, LabelNode(label_after_first_unless))
 
-        push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
-        push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
-        push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
+#           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
-        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-        recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state)
+           push!(new_body, mk_assignment_expr(SymbolNode(gensym3_sym,Int64), SymbolNode(pound_s1_sym,Int64), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(gensym4_sym,Int64), Expr(:call, mk_parallelir_ref(:assign_gs4), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), state))
+           push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
 
-        push!(new_body, LabelNode(label_before_second_unless))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
-        push!(new_body, LabelNode(label_after_second_unless))
-        push!(new_body, LabelNode(label_last))
+           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
+
+           push!(new_body, LabelNode(label_before_second_unless))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
+           push!(new_body, LabelNode(label_after_second_unless))
+           push!(new_body, LabelNode(label_last))
+        else
+           # OLD CODE
+           push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
+           push!(new_body, LabelNode(label_after_first_unless))
+
+           push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
+           push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
+           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
+
+           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
+           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
+           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
+
+           push!(new_body, LabelNode(label_before_second_unless))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
+           push!(new_body, LabelNode(label_after_second_unless))
+           push!(new_body, LabelNode(label_last))
+        end
     end
 end
 
@@ -4774,11 +4905,11 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaInfo)
     max_label = getMaxLabel(0, the_parfor.body)
     dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state)
+    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaInfo)
     nothing
 end
 
@@ -4932,6 +5063,11 @@ function parforToTask(parfor_index, bb_statements, body, state)
     newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
     CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
     CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaInfo)
+    # Change all variables in the task function to have ASSIGNED desc.
+    for vd in newLambdaInfo.var_defs
+        var_def = vd[2]
+        var_def.desc = CompilerTools.LambdaHandling.ISASSIGNED
+    end
     newLambdaInfo.gen_sym_typs = gensyms
 
     # Creating the new body for the task function.
@@ -4966,7 +5102,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     # Add the parfor stmt to the task function body.
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-        recreateLoops(task_body.args, the_parfor, state)
+        #push!(task_body.args, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), "in task func"))
+        recreateLoops(task_body.args, the_parfor, state, newLambdaInfo)
     else
         flattenParfor(task_body.args, the_parfor)
     end
@@ -7115,8 +7252,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     elseif head == :type_goto
         # skip
     else
-        #println("from_expr: unknown Expr head :", head)
-        throw(string("from_expr: unknown Expr head :", head))
+        throw(string("ParallelAccelerator.ParallelIR.from_expr: unknown Expr head :", head))
     end
     ast = Expr(head, args...)
     dprintln(3,"New expr type = ", typ, " ast = ", ast)
