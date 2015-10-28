@@ -2,5 +2,3 @@
 *.jl.mem
 *.so*
 *.o
-src/intel-runtime/out.cpp
-src/intel-runtime/tmp.cpp

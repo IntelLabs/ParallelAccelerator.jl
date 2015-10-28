@@ -303,7 +303,7 @@ function from_decl(k::Tuple)
         s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
     end
     s *= "} Tuple" *
-        (!isempty(k) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", k) : "") * ";\n"
+        (!isempty(k) ? mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", k) : "") * ";\n"
     if haskey(lstate.globalUDTs, k)
         lstate.globalUDTs[k] = 0
     end
@@ -342,7 +342,7 @@ function from_decl(k::DataType)
         for i in 1:length(ptyp)
             s *= toCtype(ptyp[i]) * " " * "f" * string(i-1) * ";\n"
         end
-        s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
+        s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
         return s
     else
         if haskey(lstate.globalUDTs, k)
@@ -365,18 +365,17 @@ function from_decl(k)
     return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 end
 
-function isCompositeType(t)
+function isCompositeType(t::Type)
     # TODO: Expand this to real UDTs
-    b = isa(t, Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
-    b |= isa(t, DataType) && t.name == Tuple.name
+    b = (t<:Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
     b
 end
 
-function lambdaparams(ast)
+function lambdaparams(ast::Expr)
     CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast).input_params
 end
 
-function from_lambda(ast, args)
+function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     params = linfo.input_params
@@ -460,51 +459,91 @@ function typeAvailable(a)
     return hasfield(a, :typ)
 end
 
-function from_assignment(args::Array)
+function checkTopNodeName(arg::TopNode, name::Symbol)
+    return arg.name==name
+end
+
+function checkTopNodeName(arg::ANY, name::Symbol)
+    return false
+end
+
+function from_assignment_fix_tupple(lhs, rhs::Expr)
+  # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
+  if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
+    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
+    lstate.tupleTable[lhs] = rhs.args[2:end]
+  end
+end
+
+function from_assignment_fix_tupple(lhs, rhs::ANY)
+end
+
+
+function from_assignment_match_hvcat(lhs, rhs::Expr)
+    s = ""
+    # if this is a hvcat call, the array should be allocated and initialized
+    if rhs.head==:call && checkTopNodeName(rhs.args[1],:typed_hvcat)
+        dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
+
+        @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
+        typ = toCtype(eval(rhs.args[2].name))
+
+        arr_info = rhs.args[3]
+        rows = Int64[]
+        if isa(arr_info, Expr) && arr_info.head==:call
+            rows = arrinfo[2:end]
+        else
+            rows = lstate.tupleTable[arr_info]
+        end
+        nr = length(rows)
+        nc = rows[1] # all rows should have the same size
+        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
+        values = rhs.args[4:end]
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
+    end
+    return s
+end
+
+function from_assignment_match_hvcat(lhs, rhs::ANY)
+    return ""
+end
+
+function from_assignment_match_cat_t(lhs, rhs::Expr)
+    s = ""
+    if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
+        dims = rhs.args[2]
+        @assert dims==2 "cgen: only 2d cat_t() is supported now"
+        size = length(rhs.args[4:end])
+        typ = toCtype(eval(rhs.args[3].name))
+        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
+        values = rhs.args[4:end]
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
+    end
+    return s
+end
+
+function from_assignment_match_cat_t(lhs, rhs::ANY)
+    return ""
+end
+
+function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
     rhs = args[2]
 
-  # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:tuple
-    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
-    lstate.tupleTable[lhs] = rhs.args[2:end]
-  end
+    from_assignment_fix_tupple(lhs, rhs)
 
-  # if this is a hvcat call, the array should be allocated and initialized
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],TopNode) && rhs.args[1].name==:typed_hvcat
-    dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
-    s = ""
 
-    @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
-    typ = toCtype(eval(rhs.args[2].name))
-
-    arr_info = rhs.args[3]
-    rows = Int64[]
-    if isa(arr_info, Expr) && arr_info.head==:call
-      rows = arrinfo[2:end]
-    else
-      rows = lstate.tupleTable[arr_info]
+    match_hvcat = from_assignment_match_hvcat(lhs, rhs)
+    if match_hvcat!=""
+        return match_hvcat
     end
-    nr = length(rows)
-    nc = rows[1] # all rows should have the same size
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
-    values = rhs.args[4:end]
-    s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
-    return s
-  end
 
-  if isa(rhs,Expr) && rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
-    dims = rhs.args[2]
-    @assert dims==2 "cgen: only 2d cat_t() is supported now"
-    size = length(rhs.args[4:end])
-    typ = toCtype(eval(rhs.args[3].name))
-    s = ""
-    s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
-    values = rhs.args[4:end]
-    s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
-    return s
-  end
+    match_cat_t = from_assignment_match_cat_t(lhs, rhs)
+    if match_cat_t!=""
+        return match_cat_t
+    end
+
 
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
@@ -539,36 +578,52 @@ function from_assignment(args::Array)
     lhsO * " = " * rhsO
 end
 
-function parseArrayType(arrayType)
+function parseArrayType(arrayType::Type)
     return eltype(arrayType), ndims(arrayType)
 end
 
-function isPrimitiveJuliaType(t)
+function isPrimitiveJuliaType(t::Type)
     haskey(lstate.jtypes, t)
 end
 
-function isArrayOfPrimitiveJuliaType(t)
+function isPrimitiveJuliaType(t::ANY)
+    return false
+end
+
+function isArrayOfPrimitiveJuliaType(t::Type)
   if isArrayType(t) && isPrimitiveJuliaType(eltype(t))
     return true
   end
   return false
 end
 
-
-function isArrayType(typ)
-    isa(typ, DataType) && ((typ.name == Array.name) || (typ.name == BitArray.name))
+function isArrayOfPrimitiveJuliaType(t::ANY)
+    return false
 end
 
-function isPtrType(typ)
-    isa(typ, DataType) && typ.name == Ptr.name
+
+function isArrayType(typ::DataType)
+    (typ<:Array) || (typ<:BitArray)
+end
+
+function isArrayType(typ::ANY)
+    return false
+end
+
+function isPtrType(typ::DataType)
+    typ<:Ptr
+end
+
+function isPtrType(typ::ANY)
+    return false
 end
 
 function toCtype(typ::Tuple)
-    return "Tuple" * mapfoldl((a) -> canonicalize(a), (a, b) -> "$(a)$(b)", typ)
+    return "Tuple" * mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", typ)
 end
 
 # Generate a C++ type name for a Julia type
-function toCtype(typ)
+function toCtype(typ::DataType)
     if haskey(lstate.jtypes, typ)
         return lstate.jtypes[typ]
     elseif isArrayType(typ)
@@ -582,7 +637,7 @@ function toCtype(typ)
         # For parameteric types, for now assume we have equivalent C++
         # implementations
         btyp, ptyps = parseParametricType(typ)
-        return canonicalize(btyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
+        return canonicalize(btyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
     else
         return canonicalize(typ)
     end
@@ -617,8 +672,7 @@ function canonicalize(tok)
     s
 end
 
-function parseParametricType(typ)
-    assert(isa(typ, DataType))
+function parseParametricType(typ::DataType)
     return typ.name, typ.parameters
 end
 
@@ -646,7 +700,7 @@ function from_safegetindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".SAFEARRAYELEM("
-    idxs = map((i)->from_expr(i), args[2:end])
+    idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -658,7 +712,7 @@ function from_getindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".ARRAYELEM("
-    idxs = map((i)->from_expr(i), args[2:end])
+    idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -670,7 +724,7 @@ function from_setindex(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".ARRAYELEM("
-    idxs = map((i)->from_expr(i), args[3:end])
+    idxs = map(from_expr, args[3:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -695,7 +749,7 @@ function from_unsafe_setindex!(args)
 end
 
 function from_tuple(args)
-    "{" * mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args) * "}"
+    "{" * mapfoldl(from_expr, (a, b) -> "$a, $b", args) * "}"
 end
 
 function from_arraysize(args)
@@ -748,14 +802,14 @@ function from_ccall(args)
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
     end
-    s *= mapfoldl((a)->from_expr(a), (a, b)-> "$a, $b", args[argsStart:2:end])
+    s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
     s *= ")"
     dprintln(3,"from_ccall: ", s)
     s
 end
 
 function from_arrayset(args)
-    idxs = mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[3:end])
+    idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
     "$src.ARRAYELEM($idxs) = $val"
@@ -792,10 +846,17 @@ function from_getfield(args)
     =#
 end
 
-function from_nfields(args)
-    dprintln(3,"Args are: ", args)
-    dprintln(3,"Args type = ", typeof(args))
-    string(nfields(args[1].typ))
+function from_nfields(arg::Union{Symbol,GenSym})
+    dprintln(3,"Arg is: ", arg)
+    dprintln(3,"Arg type = ", typeof(arg))
+    #string(nfields(args[1].typ))
+    string(nfields(lstate.symboltable[arg]))
+end
+
+function from_nfields(arg::SymbolNode)
+    dprintln(3,"Arg is: ", arg)
+    dprintln(3,"Arg type = ", typeof(arg))
+    string(nfields(arg.typ))
 end
 
 function from_steprange_last(args)
@@ -887,7 +948,7 @@ function from_builtins(f, args)
     elseif tgt == "_unsafe_setindex!"
         return from_unsafe_setindex!(args)
     elseif tgt == "nfields"
-        return from_nfields(args)
+        return from_nfields(args[1])
     elseif tgt == "sizeof"
         return from_sizeof(args)
   elseif tgt =="steprange_last"
@@ -1112,7 +1173,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1})
         return M, string(f), from_inlineable(f, args)
     elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
-        arglist = mapfoldl((a)->from_expr(a), (a,b)->"$a, $b", args[2:end])
+        arglist = mapfoldl(from_expr, (a,b)->"$a, $b", args[2:end])
         if isa(args[1], DataType)
             t = "{" * arglist * "}"
         else
@@ -1607,7 +1668,7 @@ function from_parforstart(args)
     dprintln(3,"-----")
     dprintln(3,private_vars)
     dprintln(3,"-----")
-    privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl((a) -> canonicalize(a), (a,b) -> "$a, $b", private_vars) * ")"
+    privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
 
 
     lcountexpr = ""
@@ -1674,15 +1735,15 @@ function from_new(args)
     typ = args[1] #type of the object
     if isa(typ, DataType)
         objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps)
+        ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
         s = ctyp * "{"
-        s *= mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[2:end]) * "}"
+        s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
     elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
         typ = getfield(typ.args[2], typ.args[3].value)
         objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl((a) -> canonicalize(a), (a, b) -> a * b, ptyps))
+        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
         s = ctyp * "{"
-        s *= (isempty(args[4:end]) ? "" : mapfoldl((a) -> from_expr(a), (a, b) -> "$a, $b", args[4:end])) * "}"
+        s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
     end
     s
 end
@@ -1980,7 +2041,7 @@ end
 
 
 
-function isScalarType(typ)
+function isScalarType(typ::Type)
     !isArrayType(typ) && !isCompositeType(typ)
 end
 
@@ -1988,7 +2049,7 @@ end
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp)
   if length(params) > 0
-    params = mapfoldl((a)->canonicalize(a), (a,b) -> "$a, $b", params) * ", "
+    params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
   else
     params = ""
   end

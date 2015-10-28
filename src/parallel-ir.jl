@@ -329,15 +329,16 @@ end
 Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
-function mk_assignment_expr(lhs, rhs, state :: expr_state)
-    if(isa(lhs, SymAllGen))
-        expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
-    else
-        throw(string("mk_assignment_expr lhs is not of type SymAllGen, is of this type instead: ", typeof(lhs)))
-    end
+function mk_assignment_expr(lhs::SymAllGen, rhs, state :: expr_state)
+    expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)    
     dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
     TypedExpr(expr_typ, symbol('='), lhs, rhs)
 end
+
+function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
+    throw(string("mk_assignment_expr lhs is not of type SymAllGen, is of this type instead: ", typeof(lhs)))
+end
+
 
 function mk_assignment_expr(lhs :: SymbolNode, rhs)
     TypedExpr(lhs.typ, symbol('='), lhs, rhs)
@@ -662,30 +663,6 @@ function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: 
     return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
-@doc """
-Create a variable to hold the offset of a range offset from the start of the array.
-"""
-function createTempForRangeOffset(ranges :: Array{RangeData,1}, unique_id :: Int64, state :: expr_state)
-    range_array = SymbolNode[]
-
-    for i = 1:length(ranges)
-        range = ranges[i]
-
-        push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
-    end
-
-    return range_array
-end
-
-@doc """
-Create a temporary variable that is parfor private to hold the value of an element of an array.
-"""
-function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymNodeGen,1}, unique_id :: Int64, state :: expr_state)
-    key = toSymGen(array_sn) 
-    temp_type = getArrayElemType(array_sn, state)
-    # Is it okay to just use range[1] here instead of all the ranges?
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
-end
 
 @doc """
 Takes an existing variable whose name is in "var_name" and adds the descriptor flag ISPRIVATEPARFORLOOP to declare the
@@ -891,726 +868,7 @@ end
 
 # ===============================================================================================================================
 
-@doc """
-The main routine that converts a reduce AST node to a parfor AST node.
-"""
-function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
-    # Make sure we get what we expect from domain IR.
-    # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
-    assert(length(input_args) == 3)
-
-    zero_val = input_args[1]      # The initial value of the reduction variable.
-    input_array = input_args[2]   # The array expression to reduce.
-    input_array_ranges = nothing
-    if isa(input_array, Expr) && is(input_array.head, :select)
-        dprintln(3,"mk_parfor_args_from_reduce. head is :select")
-        input_array_ranges = input_array.args[2] # range object
-        input_array = input_array.args[1]
-        assert(isa(input_array_ranges, Expr)) # TODO: may need to handle SymbolNodes in the future
-        if input_array_ranges.head == :ranges
-            dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is :ranges")
-            input_array_ranges = input_array_ranges.args
-        else
-            dprintln(3,"mk_parfor_args_from_reduce. input_array_ranges.head is NOT :ranges")
-            input_array_ranges = Any[ input_array_ranges ]
-        end
-    end
-    dl = input_args[3]            # Get the DomainLambda from the AST node's args.
-    assert(isa(dl, DomainLambda))
-
-    dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val))
-    dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
-    dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
-
-    # Verify the number of input arrays matches the number of input types in dl
-    assert(length(dl.inputs) == 2)
-
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
-
-    # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
-    num_dim_inputs = getArrayNumDims(input_array, state)
-    loopNests = Array(PIRLoopNest, num_dim_inputs)
-    if is(input_array_ranges, nothing)
-        input_array_ranges = Any[ Expr(:range, 1, 1, mk_arraylen_expr(input_array,i)) for i = 1:num_dim_inputs ]
-    end
-    assert(length(input_array_ranges) == num_dim_inputs)
-    dprintln(3,"input_array_ranges = ", input_array_ranges)
-
-    # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-
-    # Make sure each input array is a SymbolNode
-    # Also, create indexed versions of those symbols for the loop body
-    argtyp = typeof(input_array)
-    dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
-    assert(argtyp <: SymNodeGen)
-
-    reduce_body = Any[]
-    atm = createTempForArray(input_array, 1, state)
-    push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(input_array, parfor_index_syms, true, state), state))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    indexed_array = atm
-    #indexed_array = mk_arrayref1(input_array, parfor_index_syms, true, state)
-
-    # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
-    post_statements = Any[]
-    save_array_lens  = AbstractString[]
-    input_array_rangeconds = Array(Any, num_dim_inputs)
-
-    # Insert a statement to assign the length of the input arrays to a var
-    for i = 1:num_dim_inputs
-        save_array_start = string("parallel_ir_save_array_start_", i, "_", unique_node_id)
-        save_array_step  = string("parallel_ir_save_array_step_", i, "_", unique_node_id)
-        save_array_len   = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-        if isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :range)
-            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), input_array_ranges[i].args[1], state)
-            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), input_array_ranges[i].args[2], state)
-            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), input_array_ranges[i].args[3], state)
-            input_array_rangeconds[i] = nothing
-        elseif isa(input_array_ranges[i], Expr) && is(input_array_ranges[i].head, :tomask)
-            assert(length(input_array_ranges[i].args) == 1)
-            assert(isa(input_array_ranges[i].args[1], SymbolNode) && DomainIR.isbitarray(input_array_ranges[i].args[1].typ))
-            mask_array = input_array_ranges[i].args[1]
-            if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-                mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-            end
-            # TODO: generate dimension check on mask_array
-            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
-            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
-            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(input_array,i), state)
-            input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
-        end 
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,array1_start)
-        push!(pre_statements,array1_step)
-        push!(pre_statements,array1_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_start, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        push!(save_array_lens, save_array_len)
-
-        loopNests[num_dim_inputs - i + 1] =
-        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-        SymbolNode(symbol(save_array_start), Int),
-        SymbolNode(symbol(save_array_len),Int),
-        SymbolNode(symbol(save_array_step), Int))
-    end
-
-    assert(length(dl.outputs) == 1)
-    out_type = dl.outputs[1]
-    dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
-    reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
-    reduction_output_snode = SymbolNode(symbol(reduction_output_name), out_type)
-    dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-    CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.lambdaInfo)
-    push!(post_statements, reduction_output_snode)
-
-    # Call Domain IR to generate most of the body of the function (except for saving the output)
-    dl_inputs = [reduction_output_snode, atm]
-    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
-    state.max_label = max_label
-    assert(isa(temp_body,Array))
-    assert(length(temp_body) == 1)
-    temp_body = temp_body[1]
-    assert(typeof(temp_body) == Expr)
-    assert(temp_body.head == :tuple)
-    assert(length(temp_body.args) == 1)
-    temp_body = temp_body.args[1]
-
-    #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-    out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
-
-    fallthroughLabel = next_label(state)
-    condExprs = Any[]
-    for i = 1:num_dim_inputs
-        if input_array_rangeconds[i] != nothing
-            push!(condExprs, Expr(:gotoifnot, input_array_rangeconds[i], fallthroughLabel))
-        end
-    end
-    if length(condExprs) > 0
-        out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
-    end
-    #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
-    dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
-
-    # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
-
-    # Make sure that for reduce that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-    dprintln(2,rws)
-
-    reduce_func = nothing
-
-    dprintln(3,"type of reduce_body = ", typeof(temp_body))
-    if typeof(temp_body) == Expr
-        dprintln(3,"head of reduce body = ", temp_body.head)
-
-        dprintln(3,"length(reduce_body.args) = ", length(temp_body.args))
-        for k = 1:length(temp_body.args)
-            dprintln(3,"reduce_body.args[", k, "] = ", temp_body.args[k], " type = ", typeof(temp_body.args[k]))
-        end
-        if temp_body.head == :call
-            dprintln(3,"Found a call")
-            if length(temp_body.args) != 3
-                throw(string("Non-binary reduction function used."))
-            end
-            op = temp_body.args[1]
-
-            if op == TopNode(:add_float) || op == TopNode(:add_int)
-                reduce_func = :+
-            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
-                reduce_func = :*
-            elseif op == TopNode(:max) || op == TopNode(:min)
-                reduce_func = op.name
-            elseif op == TopNode(:|) 
-                reduce_func = :||
-            elseif op == TopNode(:&) 
-                reduce_func = :&&
-            end
-        end
-    end
-
-    if reduce_func == nothing
-        throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
-    end
-
-    #  makeLhsPrivate(out_body, state)
-
-    # The parfor node that will go into the AST.
-    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-      out_body,
-      pre_statements,
-      loopNests,
-      [PIRReduction(reduction_output_snode, zero_val, reduce_func)],
-      post_statements,
-      [DomainOperation(:reduce, input_args)],
-      state.top_level_number,
-      rws,
-      unique_node_id,
-      simply_indexed)
-
-      dprintln(3,"Lowered parallel IR = ", new_parfor)
-
-      [new_parfor]
-end
-
-
-# ===============================================================================================================================
-
-@doc """
-Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
-"""
-function rangeToRangeData(range :: Expr)
-    @assert (range.head == :range) ":range expression expected"
-
-    return RangeData(range.args[1], range.args[2], range.args[3])
-end
-
-@doc """
-Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.
-"""
-function selectToRangeData(select :: Expr)
-    assert(select.head == :select)
-
-    input_array_ranges = select.args[2] # range object
-
-    range_array = RangeData[]
-
-    if input_array_ranges.head == :ranges
-        for i = 1:length(input_array_ranges.args)
-            push!(range_array, rangeToRangeData(input_array_ranges.args[i]))
-        end
-    else
-        push!(range_array, rangeToRangeData(input_array_ranges))
-    end
-
-    return range_array
-end
-
-function get_mmap_input_info(input_array::Union{Expr,Symbol,SymbolNode,GenSym}, state)
-    thisInfo = InputInfo()
-
-    if isa(input_array, Expr) && is(input_array.head, :select)
-        thisInfo.array = input_array.args[1]
-        argtyp = typeof(thisInfo.array)
-        dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-        @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
-        select_kind = input_array.args[2].head
-        @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
-        if select_kind == :tomask
-            thisInfo.select_bitarrays = input_array.args[2].args
-            thisInfo.range = RangeData[]
-            thisInfo.range_offset = SymbolNode[]
-            thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-            thisInfo.pre_offsets = Expr[]
-        else
-            thisInfo.range = selectToRangeData(input_array)
-            thisInfo.range_offset = createTempForRangeOffset(thisInfo.range, 1, state)
-            thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-            thisInfo.pre_offsets = generatePreOffsetStatements(thisInfo.range_offset, thisInfo.range)
-        end
-    else
-        thisInfo.array = input_array
-        thisInfo.range = RangeData[]
-        thisInfo.range_offset = SymbolNode[]
-        thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-        thisInfo.pre_offsets = Expr[]
-    end
-    return thisInfo
-end
-
-function gen_bitarray_mask(thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
-    # we only support bitarray selection for 1D arrays
-    if length(thisInfo.select_bitarrays)==1
-        mask_array = thisInfo.select_bitarrays[1] 
-        # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-        #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-        #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-        #      end
-        thisInfo.rangeconds = mk_arrayref1(mask_array, parfor_index_syms, true, state)
-    end
-end
-
-
-function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-    loopNests = Array(PIRLoopNest, num_dim_inputs)
-    # Insert a statement to assign the length of the input arrays to a var
-    for i = 1:num_dim_inputs
-        save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
-        array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,array1_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        push!(save_array_lens, save_array_len)
-        loopNests[num_dim_inputs - i + 1] =
-        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
-    end
-    return loopNests
-end
-
-
-@doc """
-The main routine that converts a mmap! AST node to a parfor AST node.
-"""
-function mk_parfor_args_from_mmap!(input_arrays::Array, dl::DomainLambda, with_indices, domain_oprs, state)
-
-    # First arg is an array of input arrays to the mmap!
-    len_input_arrays = length(input_arrays)
-    dprintln(1,"Number of input arrays: ", len_input_arrays)
-    dprintln(2,"input arrays: ", input_arrays)
-    @assert len_input_arrays>0 "mmap! should have input arrays"
-
-    # handle range selector
-    inputInfo = InputInfo[]
-    for i = 1 : length(input_arrays)
-        push!(inputInfo, get_mmap_input_info(input_arrays[i],state))
-    end
-
-
-    dprintln(3,"dl = ", dl)
-    dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
-
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
-
-    first_input    = inputInfo[1].array
-    num_dim_inputs = getArrayNumDims(first_input, state)
-    # verify the number of input arrays matches the number of input types in dl
-    assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
-
-    # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-
-    map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
-
-    out_body = Any[]
-    # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
-    post_statements = Any[]
-
-    # Make sure each input array is a SymbolNode
-    # Also, create indexed versions of those symbols for the loop body
-    for(i = 1:length(inputInfo))
-        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-    end
-
-    # not used here?
-    save_array_lens = AbstractString[]
-    # generates loopnests and updates pre_statements
-    loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-
-    for i in inputInfo
-        append!(pre_statements, i.pre_offsets)
-    end
-
-    # add local vars to state
-    #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-    #end
-
-    dprintln(3,"indexed_arrays = ", indexed_arrays)
-    dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
-    dprintln(3,"dl_inputs = ", dl_inputs)
-    # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
-    state.max_label = max_label
-    out_body = [out_body; nested_body...]
-    dprintln(2,"typeof(out_body) = ",typeof(out_body))
-    assert(isa(out_body,Array))
-    oblen = length(out_body)
-    # the last output of genBody is a tuple of the outputs of the mmap!
-    lbexpr::Expr = out_body[oblen]
-    assert(lbexpr.head == :tuple)
-    assert(length(lbexpr.args) == length(dl.outputs))
-
-    dprintln(2,"out_body is of length ",length(out_body))
-    printBody(3,out_body)
-
-    else_body = Any[]
-    elseLabel = next_label(state)
-    condExprs = Any[]
-    for i = 1:length(inputInfo)
-        if inputInfo[i].rangeconds.head != :noop
-            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
-        end
-    end
-    out_body = out_body[1:oblen-1]
-    for i = 1:length(dl.outputs)
-        if length(inputInfo[i].range) != 0
-            tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
-        else
-            tfa = createTempForArray(inputInfo[i].array, 2, state)
-        end
-        #tfa = createTempForArray(dl.outputs[i], 2, state)
-        #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
-        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        push!(out_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
-        if length(condExprs) > 0
-            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-            push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
-        end
-        #push!(out_body, mk_arrayset1(dl.outputs[i], parfor_index_syms, tfa, true, state))
-        #push!(out_body, mk_arrayset1(input_arrays[i], parfor_index_syms, tfa, true, state))
-    end
-
-    # add conditional expressions to body if array elements are selected by bit arrays
-    fallthroughLabel = next_label(state)
-    if length(condExprs) > 0
-        out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
-    end
-
-    # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
-
-    # Make sure that for mmap! that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-    dprintln(2,rws)
-
-    post_statements = create_mmap!_post_statements(input_arrays, dl, state)
-
-    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-    out_body,
-    pre_statements,
-    loopNests,
-    PIRReduction[],
-    post_statements,
-    domain_oprs,
-    state.top_level_number,
-    rws,
-    unique_node_id,
-    simply_indexed)
-
-    dprintln(3,"Lowered parallel IR = ", new_parfor)
-
-    [new_parfor]
-end
-
-function create_mmap!_post_statements(input_arrays, dl, state)
-    post_statements = Any[]
-    # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-    #if(len_input_arrays == 1)
-    if length(dl.outputs) == 1
-        # If there is only one output then put that output in the post_statements
-        push!(post_statements, input_arrays[1])
-    else
-        ret_arrays = input_arrays[1:length(dl.outputs)]
-        ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
-        push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
-    end
-    return post_statements
-end
-
-function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
-    @assert length(args[1]) == length(args[2])
-    n_loops = length(args[1])
-    loopvars = args[1]
-    ranges = args[2]
-    dl = args[3]
-    dl_inputs = [SymbolNode(s, Int) for s in loopvars]
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
-    state.max_label = max_label
-    out_body = nested_body
-    # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
-    post_statements = Any[]
-    loopNests = Array(PIRLoopNest, n_loops)
-    unique_node_id = get_unique_num()
-    # Insert a statement to assign the length of the input arrays to a var
-    for i = 1:n_loops
-        loopvar = loopvars[i]
-        range = ranges[i]
-        range_name = symbol("parallel_ir_range_len_$(loopvar)_$(unique_node_id)_range")
-        # FIXME: We should infer the range type
-        range_type = UnitRange{Int64}
-        range_expr = mk_assignment_expr(SymbolNode(range_name, range_type), range)
-        CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        push!(pre_statements, range_expr)
-        save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
-        loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($range_name)), state)
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,loop_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
-    end
-
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-    parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-    out_body,
-    pre_statements,
-    loopNests,
-    PIRReduction[],
-    post_statements,
-    [],
-    state.top_level_number,
-    rws,
-    unique_node_id,
-    simply_indexed)
-    [parfor]
-end
-
-# ===============================================================================================================================
-
-function generatePreOffsetStatements(range_offsets :: Array{SymNodeGen,1}, ranges :: Array{RangeData,1})
-    assert(length(range_offsets) == length(ranges))
-
-    ret = Expr[]
-
-    for i = 1:length(ranges)
-        range = ranges[i]
-        range_offset = range_offsets[i]
-
-        dprintln(3,"range = ", range)
-        dprintln(3,"range_offset = ", range_offset)
-
-        range_expr = mk_assignment_expr(range_offset, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
-        push!(ret, range_expr)
-    end
-
-    return ret
-end
-
-
-# Create variables to use for the parfor loop indices.
-function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-    parfor_index_syms = Array(Symbol,num_dim_inputs)
-    for i = 1:num_dim_inputs
-        parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-        parfor_index_sym = symbol(parfor_index_var)
-        CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
-        parfor_index_syms[i] = parfor_index_sym
-    end
-    return parfor_index_syms
-end
-
-@doc """
-The main routine that converts a mmap AST node to a parfor AST node.
-"""
-function mk_parfor_args_from_mmap(input_arrays::Array, dl::DomainLambda, domain_oprs, state)
-
-    len_input_arrays = length(input_arrays)
-    dprintln(2,"Number of input arrays: ", len_input_arrays)
-    dprintln(2,"input arrays: ", input_arrays)
-    @assert len_input_arrays>0 "mmap should have input arrays"
-
-    # handle range selector
-    inputInfo = InputInfo[]
-    for i = 1 : length(input_arrays)
-        push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
-    end
-
-    # Verify the number of input arrays matches the number of input types in dl
-    assert(length(dl.inputs) == length(inputInfo))
-
-    # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
-
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
-
-    first_input    = inputInfo[1].array
-    num_dim_inputs = getArrayNumDims(first_input, state)
-    loopNests      = Array(PIRLoopNest, num_dim_inputs)
-
-    # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-
-    map(i->(gen_bitarray_mask(inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
-
-    out_body = Any[]
-    # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
-    post_statements = Any[]
-    # To hold the names of newly created output arrays.
-    new_array_symbols = Symbol[]
-    save_array_lens   = AbstractString[]
-
-    # Make sure each input array is a SymbolNode.
-    # Also, create indexed versions of those symbols for the loop body.
-    for(i = 1:length(inputInfo))
-        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-    end
-
-    # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
-    # TODO - extract the lower bound of the range into a variable
-
-    # generates loopnests and updates pre_statements
-    loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
-
-    for i in inputInfo
-        append!(pre_statements, i.pre_offsets)
-    end
-
-    # add local vars to state
-    #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
-    #end
-    # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
-    state.max_label = max_label
-    out_body = [out_body; nested_body...]
-    dprintln(2,"typeof(out_body) = ",typeof(out_body))
-    assert(isa(out_body,Array))
-    oblen = length(out_body)
-    # the last output of genBody is a tuple of the outputs of the mmap
-    lbexpr::Expr = out_body[oblen] 
-    assert(lbexpr.head == :tuple)
-    assert(length(lbexpr.args) == length(dl.outputs))
-
-    dprintln(2,"out_body is of length ",length(out_body), " ", out_body)
-
-    # To hold the sum of the sizes of the individual output array elements
-    output_element_sizes = 0
-
-    out_body = out_body[1:oblen-1]
-    else_body = Any[]
-    elseLabel = next_label(state)
-    condExprs = Any[]
-    for i = 1:length(inputInfo)
-        if inputInfo[i].rangeconds.head != :noop
-            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
-        end
-    end
-    # Create each output array
-    number_output_arrays = length(dl.outputs)
-    for(i = 1:number_output_arrays)
-        new_array_name = string("parallel_ir_new_array_name_", unique_node_id, "_", i)
-        dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
-        # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
-        if num_dim_inputs == 1
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1])), state)
-        elseif num_dim_inputs == 2
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2])), state)
-        elseif num_dim_inputs == 3
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2]), symbol(save_array_lens[3])), state)
-        else
-            throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
-        end
-        # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
-        CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        # add the statement to create the new output array to the set of statements to execute before the parfor
-        push!(pre_statements,new_ass_expr)
-        nans = symbol(new_array_name)
-        push!(new_array_symbols,nans)
-        nans_sn = SymbolNode(nans, Array{dl.outputs[i], num_dim_inputs})
-
-        tfa = createTempForArray(nans_sn, 1, state)
-        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        push!(out_body, mk_arrayset1(nans_sn, parfor_index_syms, tfa, true, state))
-        if length(condExprs) > 0
-            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset), state))
-            push!(else_body, mk_arrayset1(inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset))
-        end
-        # keep the sum of the sizes of the individual output array elements
-        output_element_sizes = output_element_sizes + sizeof(dl.outputs)
-    end
-    dprintln(3,"out_body = ", out_body)
-
-    # add conditional expressions to body if array elements are selected by bit arrays
-    fallthroughLabel = next_label(state)
-    if length(condExprs) > 0
-        out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
-    end
-
-    # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
-
-    # Make sure that for mmap that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
-    dprintln(2,rws)
-
-    post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
-
-    new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-    out_body,
-    pre_statements,
-    loopNests,
-    PIRReduction[],
-    post_statements,
-    domain_oprs,
-    state.top_level_number,
-    rws,
-    unique_node_id,
-    simply_indexed)
-
-    dprintln(3,"Lowered parallel IR = ", new_parfor)
-    [new_parfor]
-end
-
-function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
-    post_statements = SymbolNode[]
-    # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
-    if(length(dl.outputs)==1)
-        # If there is only one output then put that output in the post_statements
-        push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
-    else
-        all_sn = SymbolNode[]
-        assert(length(dl.outputs) == length(new_array_symbols))
-        for i = 1:length(dl.outputs)
-            push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
-        end
-        push!(post_statements, all_sn)
-    end
-    return post_statements
-end
-
-
-# ===============================================================================================================================
+include("parallel-ir-mk-parfor.jl")
 
 @doc """
 The AstWalk callback function for getPrivateSet.
@@ -3633,764 +2891,7 @@ function PIRTaskGraphMode(x)
     global task_graph_mode = x
 end
 
-# TOP_LEVEL
-# sequence of expressions
-# ast = [ expr, ... ]
-function top_level_from_exprs(ast::Array{Any,1}, depth, state)
-    len  = length(ast)
-    body = Any[]
-    pre_next_parfor = Any[]
-    fuse_number = 1
-
-    main_proc_start = time_ns()
-
-    # Process the top-level expressions of a function and do fusion and useless assignment elimination.
-    for i = 1:len
-        # Record the top-level statement number in the processing state.
-        state.top_level_number = i
-        dprintln(2,"Processing top-level ast #",i," depth=",depth)
-
-        # Convert the current expression.
-        new_exprs = from_expr(ast[i], depth, state, true)
-        assert(isa(new_exprs,Array))
-        # If conversion of current statement resulted in anything.
-        if length(new_exprs) != 0
-            # If this isn't the first statement processed that created something.
-            if length(body) != 0
-                last_node = body[end]
-                dprintln(3, "Should fuse?")
-                dprintln(3, "new = ", new_exprs[1])
-                dprintln(3, "last = ", last_node)
-
-                # See if the previous expression is a parfor.
-                is_last_parfor = isParforAssignmentNode(last_node)    || isBareParfor(last_node)
-                # See if the new expression is a parfor.
-                is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
-                dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
-
-                if is_last_parfor && !is_new_parfor
-                    simple = false
-                    for j = 1:length(new_exprs)
-                        e = new_exprs[j]
-                        if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (e.args[2].args[1] == TopNode(:box))
-                            dprintln(3, "box operation detected")
-                            simple = true
-                        else
-                            simple = false
-                            break
-                        end
-                    end
-                    if simple
-                        dprintln(3, "insert into pre_next_parfor")
-                        append!(pre_next_parfor, new_exprs)
-                        continue
-                    end
-                end
-
-                # If both are parfors then try to fuse them.
-                if is_new_parfor && is_last_parfor
-                    dprintln(3,"Starting fusion ", fuse_number)
-                    new_exprs[1]
-                    fuse_number = fuse_number + 1
-                    if length(pre_next_parfor) > 0
-                        dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
-                        new_parfor = getParforNode(new_exprs[1])
-                        new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
-                    end
-                    fuse_ret = fuse(body, length(body), new_exprs[1], state)
-                    if fuse_ret>0
-                        # 2 means combination of old and new parfors has no output and both are dead
-                        if fuse_ret==2
-                            # remove last parfor and don't add anything new
-                            pop!(body)
-                        end
-                        pre_next_parfor = Any[]
-                        # If fused then the new node is consumed and no new node is added to the body.
-                        continue
-                    end
-                end
-
-                new_exprs = [ pre_next_parfor; new_exprs ]
-                pre_next_parfor = Any[]
-                for expr in new_exprs
-                    push!(body, expr)
-                    last_node = expr
-                end
-            else
-                append!(body, new_exprs)
-            end
-        end
-    end
-
-    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
-
-    dprintln(3,"Body after first pass before task graph creation.")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-    expanded_body = Any[]
-
-    # TASK GRAPH
-
-    if polyhedral != 0
-        # Anand: you can insert code here.
-    end
-
-    rr = ReplacedRegion[]
-
-    expand_start = time_ns()
-
-    # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
-    for i = 1:length(body)
-        if isParforAssignmentNode(body[i])
-            parfor_assignment = body[i]
-            dprintln(3,"Expanding a parfor assignment node")
-
-            the_parfor = getParforNode(parfor_assignment)
-            lhs = getLhsFromAssignment(parfor_assignment)
-            rhs = getRhsFromAssignment(parfor_assignment)
-
-            # Add all the pre-parfor statements to the expanded body.
-            append!(expanded_body, the_parfor.preParFor)
-            the_parfor.preParFor = Any[]
-
-            # Add just the parfor to the expanded body.  The post-parfor part removed below.
-            assert(typeof(rhs) == Expr)
-            rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
-            push!(expanded_body, rhs)
-
-            # All the post parfor part to the expanded body.
-            # The regular part of the post parfor is just added.
-            # The part that indicates the return values creates individual assignment statements for each thing returned.
-            if isFusionAssignment(parfor_assignment)
-                append!(expanded_body, the_parfor.postParFor[1:end-1])
-                for j = 4:length(parfor_assignment.args)
-                    push!(expanded_body, mk_assignment_expr(parfor_assignment.args[j], the_parfor.postParFor[end][j-3], state))
-                end
-            else
-                append!(expanded_body, the_parfor.postParFor[1:end-1])
-                push!(expanded_body, mk_assignment_expr(lhs, the_parfor.postParFor[end], state))
-            end
-            the_parfor.postParFor = Any[]
-            push!(the_parfor.postParFor, 0)
-            createInstructionCountEstimate(the_parfor, state)
-        elseif isBareParfor(body[i])
-            rhs = body[i]
-            the_parfor = rhs.args[1]
-
-            # Add all the pre-parfor statements to the expanded body.
-            append!(expanded_body, the_parfor.preParFor)
-            the_parfor.preParFor = Any[]
-
-            # Add just the parfor to the expanded body.  The post-parfor part removed below.
-            assert(typeof(rhs) == Expr)
-            rhs.typ = typeof(0) # a few lines down you can see that the last post-statement of 0 is added.
-            push!(expanded_body, rhs)
-
-            the_parfor.postParFor = Any[]
-            push!(the_parfor.postParFor, 0)
-            createInstructionCountEstimate(the_parfor, state)
-        else
-            push!(expanded_body, body[i])
-        end
-    end
-
-    dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
-
-    body = expanded_body
-
-    dprintln(3,"expanded_body = ")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    dprintln(3,"fake_body = ", fake_body)
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-    dprintln(1,"Starting loop analysis.")
-    loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-    dprintln(1,"Finished loop analysis.")
-
-    if hoist_allocation == 1
-        body = hoistAllocation(body, new_lives, loop_info, state)
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-        dprintln(1,"Starting loop analysis again.")
-        loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-        dprintln(1,"Finished loop analysis.")
-    end
-
-    dprintln(3,"new_lives = ", new_lives)
-    dprintln(3,"loop_info = ", loop_info)
-
-    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
-        task_start = time_ns()
-
-        # TODO: another pass of alias analysis to re-use dead but uniquely allocated arrays
-        # AliasAnalysis.analyze_lambda_body(fake_body, state.param, state.meta2_typed, new_lives)
-
-        # Create a mapping between the minimized basic block numbers and indices in body that are in those correponding basic blocks.
-        map_reduced_bb_num_to_body = Dict{Int,Array{Int,1}}()
-        for i = 1:length(body)
-            # Get the basic block number for the first top level number associated with this entry in body.
-            bb_num = CompilerTools.LivenessAnalysis.find_bb_for_statement(i, new_lives)
-            if bb_num == nothing
-                if typeof(body[i]) != LabelNode
-                    dprintln(0,"statement that couldn't be found in liveness analysis ", body[i])
-                    throw(string("find_bb_for_statement should not fail for non-LabelNodes"))
-                end
-                continue
-            end
-            # If not previously in the map then initialize it with the current body index.  Otherwise, add the current body index
-            # as also mapping to its containing basic block.
-            if !haskey(map_reduced_bb_num_to_body, bb_num)
-                map_reduced_bb_num_to_body[bb_num] = [i]
-            else
-                map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num], i]
-            end
-        end
-
-        dprintln(3,"map_reduced_bb_num_to_body = ", map_reduced_bb_num_to_body)
-
-        bbs_in_task_graph_loops = Set()
-        bbs = new_lives.basic_blocks
-        #tgsections = TaskGraphSection[]
-
-        if put_loops_in_task_graph
-            # For each loop that loop analysis identified.
-            for one_loop in loop_info.loops
-                # If the loop is "simple", i.e., has no just a body and a back-edge and no conditionals or nested loops.
-                if length(one_loop.members) == 2
-                    # This is sort of sanity checking because the way Julia creates loops, these conditions should probably always hold.
-                    head_bb = bbs[one_loop.head]
-                    back_bb = bbs[one_loop.back_edge]
-
-                    if length(head_bb.preds) == 2 &&
-                        length(head_bb.succs) == 1 &&
-                        length(back_bb.preds) == 1 &&
-                        length(back_bb.succs) == 2
-                        before_head = getNonBlock(head_bb.preds, one_loop.back_edge)
-                        assert(typeof(before_head) == CompilerTools.LivenessAnalysis.BasicBlock)
-                        dprintln(3,"head_bb.preds = ", head_bb.preds, " one_loop.back_edge = ", one_loop.back_edge, " before_head = ", before_head)
-                        # assert(length(before_head) == 1)
-                        after_back  = getNonBlock(back_bb.succs, one_loop.head)
-                        assert(typeof(after_back) == CompilerTools.LivenessAnalysis.BasicBlock)
-                        #assert(length(after_back) == 1)
-
-                        head_indices = map_reduced_bb_num_to_body[one_loop.head]
-                        head_first_parfor = nothing
-                        for j = 1:length(head_indices)
-                            if isParforAssignmentNode(body[head_indices[j]]) || isBareParfor(body[head_indices[j]])
-                                head_first_parfor = j
-                                break
-                            end
-                        end
-
-                        back_indices = map_reduced_bb_num_to_body[one_loop.back_edge]
-                        back_first_parfor = nothing
-                        for j = 1:length(back_indices)
-                            if isParforAssignmentNode(body[back_indices[j]]) || isBareParfor(body[back_indices[j]])
-                                back_first_parfor = j
-                                break
-                            end
-                        end
-
-                        if head_first_parfor != nothing || back_first_parfor != nothing
-                            new_bbs_for_set = Set(one_loop.head, one_loop.back_edge, before_head.label, after_back.label)
-                            assert(length(intersect(bbs_in_task_graph_loops, new_bbs_for_set)) == 0)
-                            bbs_in_task_graph_loops = union(bbs_in_task_graph_loops, new_bbs_for_set)
-
-                            before_indices = map_reduced_bb_num_to_body[before_head.label]
-                            before_first_parfor = nothing
-                            for j = 1:length(before_indices)
-                                if isParforAssignmentNode(body[before_indices[j]]) || isBareParfor(body[body_indices[j]])
-                                    before_first_parfor = j
-                                    break
-                                end
-                            end
-
-                            after_indices = map_reduced_bb_num_to_body[after_back.label]
-                            after_first_parfor = nothing
-                            for j = 1:length(after_indices)
-                                if isParforAssignmentNode(body[after_indices[j]]) || isBareParfor(body[after_indices[j]])
-                                    after_first_parfor = j
-                                    break
-                                end
-                            end
-
-                            #          bb_live_info = new_lives.basic_blocks[bb_num]
-                            #          push!(replaced_regions, (first_parfor, last_parfor, makeTasks(first_parfor, last_parfor, body, bb_live_info)))
-
-                        end
-                    else
-                        dprintln(1,"Found a loop with 2 members but unexpected head or back_edge structure.")
-                        dprintln(1,"head = ", head_bb)
-                        dprintln(1,"back_edge = ", back_bb)
-                    end
-                end
-            end
-        end
-
-        for i in map_reduced_bb_num_to_body
-            bb_num = i[1]
-            body_indices = i[2]
-            bb_live_info = new_lives.basic_blocks[new_lives.cfg.basic_blocks[bb_num]]
-
-            if !in(bb_num, bbs_in_task_graph_loops)
-                if task_graph_mode == SEQUENTIAL_TASKS
-                    # Find the first parfor in the block.
-                    first_parfor = nothing
-                    for j = 1:length(body_indices)
-                        if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
-                            first_parfor = body_indices[j]
-                            break
-                        end
-                    end
-
-                    # If we found a parfor in the block.
-                    if first_parfor != nothing
-                        # Find the last parfor in the block...it might be the same as the first.
-                        last_parfor = nothing
-                        for j = length(body_indices):-1:1
-                            if isParforAssignmentNode(body[body_indices[j]]) || isBareParfor(body[body_indices[j]])
-                                last_parfor = body_indices[j]
-                                break
-                            end
-                        end
-                        assert(last_parfor != nothing)
-
-                        # Remember this section of code as something to transform into task graph format.
-                        #push!(tgsections, TaskGraphSection(first_parfor, last_parfor, body[first_parfor:last_parfor]))
-                        #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-                        push!(rr, ReplacedRegion(first_parfor, last_parfor, bb_num, makeTasks(first_parfor, last_parfor, body, bb_live_info, state, task_graph_mode)))
-                    end
-                elseif task_graph_mode == ONE_AT_A_TIME
-                    for j = 1:length(body_indices)
-                        if taskableParfor(body[body_indices[j]])
-                            # Remember this section of code as something to transform into task graph format.
-                            cur_start = cur_end = body_indices[j]
-                            #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                            #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-                            push!(rr, ReplacedRegion(body_indices[j], body_indices[j], bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-                        end
-                    end
-                elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
-                    cur_start = nothing
-                    cur_end   = nothing
-                    stmts_in_batch = Int64[]
-
-                    for j = 1:length(body_indices)
-                        if taskableParfor(body[body_indices[j]])
-                            if cur_start == nothing
-                                cur_start = cur_end = body_indices[j]
-                            else
-                                cur_end = body_indices[j]
-                            end 
-                            push!(stmts_in_batch, body_indices[j])
-                        else
-                            if cur_start != nothing
-                                dprintln(3,"Non-taskable parfor ", stmts_in_batch, " ", body[body_indices[j]])
-                                in_vars, out, locals = io_of_stmts_in_batch = getIO(stmts_in_batch, bb_live_info.statements)
-                                dprintln(3,"in_vars = ", in_vars)
-                                dprintln(3,"out_vars = ", out)
-                                dprintln(3,"local_vars = ", locals)
-
-                                cur_in_vars, cur_out, cur_locals = io_of_stmts_in_batch = getIO([body_indices[j]], bb_live_info.statements)
-                                dprintln(3,"cur_in_vars = ", cur_in_vars)
-                                dprintln(3,"cur_out_vars = ", cur_out)
-                                dprintln(3,"cur_local_vars = ", cur_locals)
-
-                                if isempty(intersect(out, cur_in_vars))
-                                    dprintln(3,"Sequential statement doesn't conflict with batch.")
-                                    push!(stmts_in_batch, body_indices[j])
-                                    cur_end = body_indices[j]
-                                else
-                                    # Remember this section of code (excluding current statement) as something to transform into task graph format.
-                                    #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                                    #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-                                    push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-
-                                    cur_start = cur_end = nothing
-                                    stmts_in_batch = Int64[]
-                                end
-                            end
-                        end
-                    end
-
-                    if cur_start != nothing
-                        # Remember this section of code as something to transform into task graph format.
-                        #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                        #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
-
-                        push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
-                    end
-                else
-                    throw(string("Unknown Parallel IR task graph formation mode."))
-                end
-            end
-        end
-
-        dprintln(3,"Regions prior to sorting.")
-        dprintln(3,rr)
-        # We replace regions in reverse order of index so that we don't mess up indices that we need to replace later.
-        sort!(rr, by=x -> x.end_index, rev=true)
-        dprintln(3,"Regions after sorting.")
-        dprintln(3,rr)
-
-        printBody(3,body)
-
-        dprintln(2, "replaced_regions")
-        for i = 1:length(rr)
-            dprintln(2, rr[i])
-
-            if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-                # new body starts with the pre-task graph portion
-                new_body = body[1:rr[i].start_index-1]
-                copy_back = Any[]
-
-                # then adds calls for each task
-                for j = 1:length(rr[i].tasks)
-                    cur_task = rr[i].tasks[j]
-                    dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
-                    if typeof(cur_task) == TaskInfo
-                        range_var = string(cur_task.task_func,"_range_var")
-                        range_sym = symbol(range_var)
-
-                        dprintln(3,"Inserting call to jl_threading_run ", range_sym)
-                        dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
-
-                        in_len  = length(cur_task.input_symbols)
-                        mod_len = length(cur_task.modified_inputs)
-                        io_len  = length(cur_task.io_symbols)
-                        red_len = length(cur_task.reduction_vars)
-                        dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
-
-                        dims = length(cur_task.loopNests)
-                        if dims > 0
-                            dprintln(3,"dims > 0")
-                            assert(dims <= 3)
-                            #whole_iteration_range = pir_range_actual()
-                            #whole_iteration_range.dim = dims
-                            cstr_params = Any[]
-                            for l = 1:dims
-                                # Note that loopNest is outer-dimension first
-                                # Should this still be outer-dimension first?  FIX FIX FIX
-                                push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
-                                push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
-                                #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
-                                #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
-                            end
-                            dprintln(3, "cstr_params = ", cstr_params)
-                            cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-                            whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
-                            dprintln(3,"whole_range_expr = ", whole_range_expr)
-                            push!(new_body, whole_range_expr) 
-
-                            #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
-
-                            real_args_build = Any[]
-                            args_type = Expr(:tuple)
-
-                            # Fill in the arg metadata.
-                            for l = 1:in_len
-                                push!(real_args_build, cur_task.input_symbols[l].name)
-                                push!(args_type.args,  cur_task.input_symbols[l].typ)
-                            end
-                            for l = 1:mod_len
-                                push!(real_args_build, cur_task.modified_inputs[l].name)
-                                push!(args_type.args,  cur_task.modified_inputs[l].typ)
-                            end
-                            for l = 1:io_len
-                                push!(real_args_build, cur_task.io_symbols[l].name)
-                                push!(args_type.args,  cur_task.io_symbols[l].typ)
-                            end
-                            for l = 1:red_len
-                                push!(real_args_build, cur_task.reduction_vars[l].name)
-                                push!(args_type.args,  cur_task.reduction_vars[l].typ)
-                            end
-
-                            dprintln(3,"task_func = ", cur_task.task_func)
-                            #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
-                            dprintln(3,"real_args_build = ", real_args_build)
-
-                            tup_var = string(cur_task.task_func,"_tup_var")
-                            tup_sym = symbol(tup_var)
-
-                            if false
-                                real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
-                                call_tup = (Function,pir_range_actual,Any)
-                                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_tuple_expr), state))
-                            else
-                                call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
-                                call_tup = eval(call_tup_expr)
-                                dprintln(3, "call_tup = ", call_tup)
-                                #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-                                push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-                            end
-
-                            if false
-                                insert_task_expr = TypedExpr(Any,
-                                    :call,
-                                    cur_task.task_func,
-                                    SymbolNode(range_sym, pir_range_actual),
-                                    real_args_build...)
-                            else
-                                # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
-                                svec_args = mk_svec_expr(Any, Any)
-                                insert_task_expr = TypedExpr(Any, 
-                                    :call, 
-                                    TopNode(:ccall), 
-                                    QuoteNode(:jl_threading_run), 
-                                    GlobalRef(Main,:Void), 
-                                    svec_args,
-                                    mk_parallelir_ref(:isf), 0, 
-                                    tup_sym, 0)
-                            end
-                            push!(new_body, insert_task_expr)
-#                            push!(new_body, TypedExpr(Any, :call, TopNode(:ccall), QuoteNode(:jl_threading_profile), GlobalRef(Main,:Void), mk_svec_expr()))
-                        else
-                            throw(string("insert sequential task not implemented yet"))
-                        end
-                    else
-                        push!(new_body, cur_task)
-                    end
-                end
-
-                # Insert call to wait on the scheduler to complete all tasks.
-                #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
-
-                # Add the statements that copy results out of temp arrays into real variables.
-                append!(new_body, copy_back)
-
-                # Then appends the post-task graph portion
-                append!(new_body, body[rr[i].end_index+1:end])
-
-                body = new_body
-
-                dprintln(3,"new_body after region ", i, " replaced")
-                printBody(3,body)
-            elseif ParallelAccelerator.client_intel_task_graph
-                # new body starts with the pre-task graph portion
-                new_body = body[1:rr[i].start_index-1]
-                copy_back = Any[]
-
-                # then adds calls for each task
-                for j = 1:length(rr[i].tasks)
-                    cur_task = rr[i].tasks[j]
-                    dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
-                    if typeof(cur_task) == TaskInfo
-                        dprintln(3,"Inserting call to insert_divisible_task")
-                        dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
-
-                        in_len  = length(cur_task.input_symbols)
-                        mod_len = length(cur_task.modified_inputs)
-                        io_len  = length(cur_task.io_symbols)
-                        red_len = length(cur_task.reduction_vars)
-                        dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
-
-                        dims = length(cur_task.loopNests)
-                        if dims > 0
-                            itn = InsertTaskNode()
-
-                            if ParallelAccelerator.client_intel_task_graph_mode == 0
-                                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_XEON
-                            elseif ParallelAccelerator.client_intel_task_graph_mode == 1
-                                itn.task_options = TASK_STATIC_SCHEDULER | TASK_AFFINITY_PHI
-                            elseif ParallelAccelerator.client_intel_task_graph_mode == 2
-                                itn.task_options = 0
-                            else
-                                throw(string("Unknown task graph mode option ", ParallelAccelerator.client_intel_task_graph_mode))
-                            end
-
-                            if task_graph_mode == SEQUENTIAL_TASKS
-                                # intentionally do nothing
-                            elseif task_graph_mode == ONE_AT_A_TIME
-                                itn.task_options |= TASK_FINISH
-                            elseif task_graph_mode == MULTI_PARFOR_SEQ_NO
-                                # intentionally do nothing
-                            else
-                                throw(string("Unknown task_graph_mode."))
-                            end
-
-                            # Fill in pir_range
-                            # Fill in the min and max grain sizes.
-                            itn.ranges.dim = dims
-                            itn.host_grain_size.dim = dims
-                            itn.phi_grain_size.dim = dims
-                            for l = 1:dims
-                                # Note that loopNest is outer-dimension first
-                                push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
-                                push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
-                                push!(itn.host_grain_size.sizes, 2)
-                                push!(itn.phi_grain_size.sizes, 2)
-                            end
-
-                            # Fill in the arg metadata.
-                            for l = 1:in_len
-                                if cur_task.input_symbols[l].typ.name == Array.name
-                                    dprintln(3, "is array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN, create_array_access_desc(cur_task.input_symbols[l])))
-                                else
-                                    dprintln(3, "is not array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN))
-                                end
-                            end
-                            for l = 1:mod_len
-                                dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
-                                if cur_task.modified_inputs[l].typ.name == Array.name
-                                    dprintln(3, "is array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
-                                else
-                                    dprintln(3, "is not array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT))
-                                end
-                            end
-                            for l = 1:io_len
-                                dprintln(3, "io_len loop: ", l, " ", cur_task.io_symbols[l])
-                                if cur_task.io_symbols[l].typ.name == Array.name
-                                    dprintln(3, "is array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT, create_array_access_desc(cur_task.io_symbols[l])))
-                                else
-                                    dprintln(3, "is not array")
-                                    push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT))
-                                end
-                            end
-                            for l = 1:red_len
-                                dprintln(3, "red_len loop: ", l, " ", cur_task.reduction_vars[l])
-                                push!(itn.args, pir_arg_metadata(cur_task.reduction_vars[l], ARG_OPT_ACCUMULATOR))
-                            end
-
-                            # Fill in the task function.
-                            itn.task_func = cur_task.task_func
-                            itn.join_func = cur_task.join_func
-
-                            dprintln(3,"InsertTaskNode = ", itn)
-
-                            insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn) 
-                            push!(new_body, insert_task_expr)
-                        else
-                            throw(string("insert sequential task not implemented yet"))
-                        end
-                    else
-                        push!(new_body, cur_task)
-                    end
-                end
-
-                # Insert call to wait on the scheduler to complete all tasks.
-                #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
-
-                # Add the statements that copy results out of temp arrays into real variables.
-                append!(new_body, copy_back)
-
-                # Then appends the post-task graph portion
-                append!(new_body, body[rr[i].end_index+1:end])
-
-                body = new_body
-
-                dprintln(3,"new_body after region ", i, " replaced")
-                printBody(3,body)
-            elseif run_as_task_decrement()
-                # new body starts with the pre-task graph portion
-                new_body = body[1:rr[i].start_index-1]
-
-                # then adds calls for each task
-                for j = 1:length(rr[i].tasks)
-                    cur_task = rr[i].tasks[j]
-                    assert(typeof(cur_task) == TaskInfo)
-
-                    dprintln(3,"Inserting call to function")
-                    dprintln(3,cur_task, " type = ", typeof(cur_task))
-                    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
-
-                    in_len = length(cur_task.input_symbols)
-                    out_len = length(cur_task.output_symbols)
-
-                    real_out_params = Any[]
-
-                    for k = 1:out_len
-                        this_param = cur_task.output_symbols[k]
-                        assert(typeof(this_param) == SymbolNode)
-                        atype = Array{this_param.typ, 1}
-                        temp_param_array = createStateVar(state, string(this_param.name, "_out_array"), atype, ISASSIGNED)
-                        push!(real_out_params, temp_param_array)
-                        new_temp_array = mk_alloc_array_1d_expr(this_param.typ, atype, 1)
-                        push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
-                    end
-
-                    #push!(new_body, TypedExpr(Void, :call, cur_task.function_sym, cur_task.input_symbols..., real_out_params...))
-                    #push!(new_body, TypedExpr(Void, :call, TopNode(cur_task.function_sym), cur_task.input_symbols..., real_out_params...))
-                    push!(new_body, TypedExpr(Void, :call, mk_parallelir_ref(cur_task.function_sym), TypedExpr(pir_range_actual, :call, :pir_range_actual), cur_task.input_symbols..., real_out_params...))
-
-                    for k = 1:out_len
-                        push!(new_body, mk_assignment_expr(cur_task.output_symbols[k], mk_arrayref1(real_out_params[k], 1, false, state), state))
-                    end
-                end
-
-                # then appends the post-task graph portion
-                append!(new_body, body[rr[i].end_index+1:end])
-
-                body = new_body
-
-                dprintln(3,"new_body after region ", i, " replaced")
-                printBody(3,body)
-            end
-        end
-
-        #    throw(string("debugging task graph"))
-        dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
-    end  # end of task graph formation section
-
-    flatten_start = time_ns()
-
-    expanded_body = Any[]
-
-    for i = 1:length(body)
-        dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
-        if isBareParfor(body[i])
-            flattenParfor(expanded_body, body[i].args[1])
-        else
-            push!(expanded_body, body[i])
-        end
-    end
-
-    body = expanded_body
-
-    dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
-
-    dprintln(3, "After flattening")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-    if shortcut_array_assignment != 0
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-
-        for i = 1:length(body)
-            node = body[i]
-            if isAssignmentNode(node)
-                lhs = node.args[1]
-                rhs = node.args[2]
-                dprintln(3,"shortcut_array_assignment = ", node)
-                if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
-                    dprintln(3,"shortcut_array_assignment to array detected")
-                    live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
-                    if !in(rhs.name, live_info.live_out)
-                        dprintln(3,"rhs is dead")
-                        # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
-                        push!(node.args, RhsDead())
-                    end
-                end
-            end
-        end
-    end
-
-    return body
-end
+include("parallel-ir-top-exprs.jl")
 
 if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 
@@ -7082,19 +5583,18 @@ end
 @doc """
 Returns true if input "a" is a tuple and each element of the tuple of isbits type.
 """
-function isbitstuple(a)
-    if isa(a, Tuple)
-        for i in a
-            if !isbits(i)
-                return false
-            end
+function isbitstuple(a::Tuple)
+    for i in a
+        if !isbits(i)
+            return false
         end
-        return true
     end
-    return false
+    return true
 end
 
-
+function isbitstuple(a::Any)
+    return false
+end
 
 function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
     ast = uncompressed_ast(ast)
@@ -7284,8 +5784,7 @@ end
 Take something returned from AstWalk and assert it should be an array but in this
 context that the array should also be of length 1 and then return that single element.
 """
-function get_one(ast)
-    assert(isa(ast,Array))
+function get_one(ast::Array)
     assert(length(ast) == 1)
     ast[1]
 end
@@ -7310,7 +5809,7 @@ end
 @doc """
 AstWalk callback that handles ParallelIR AST node types.
 """
-function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     dprintln(3,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
     dprintln(3,"PIR AstWalkCallback ret = ", ret)
@@ -7318,82 +5817,99 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_
         return ret
     end
 
-    asttyp = typeof(x)
-    if asttyp == Expr
-        head = x.head
-        args = x.args
-        #    typ  = x.typ
-        if head == :parfor
-            cur_parfor = args[1]
-            for i = 1:length(cur_parfor.preParFor)
-                x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.loopNests)
-                x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-                # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
-                AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.reductions)
-                x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-                x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-                x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.body)
-                x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.postParFor)-1
-                x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
-            end
-            return x
-        elseif head == :parfor_start || head == :parfor_end
-            dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
-            dprintln(3, "pre x = ", x)
-            cur_parfor = args[1]
-            for i = 1:length(cur_parfor.loopNests)
-                x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-                AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-                x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.reductions)
-                x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-                x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-                x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
-            end
-            for i = 1:length(cur_parfor.private_vars)
-                x.args[1].private_vars[i] = AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata)
-            end
-            dprintln(3, "post x = ", x)
-            return x
-        elseif head == :insert_divisible_task
-            cur_task = args[1]
-            for i = 1:length(cur_task.args)
-                x.args[1].value = AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
-            end
-            return x
-        elseif head == :loophead
-            for i = 1:length(args)
-                x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
-            end
-            return x
-        elseif head == :loopend
-            for i = 1:length(args)
-                x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
-            end
-            return x
+    head = x.head
+    args = x.args
+    #    typ  = x.typ
+    if head == :parfor
+        cur_parfor = args[1]
+        for i = 1:length(cur_parfor.preParFor)
+            x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
         end
-    elseif asttyp == pir_range_actual
-        for i = 1:length(x.dim)
-            x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
-            x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
+        for i = 1:length(cur_parfor.loopNests)
+            x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
+            # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
+            AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+        end
+        for i = 1:length(cur_parfor.reductions)
+            x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+            x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+            x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+        end
+        for i = 1:length(cur_parfor.body)
+            x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
+        end
+        for i = 1:length(cur_parfor.postParFor)-1
+            x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
+        end
+        return x
+    elseif head == :parfor_start || head == :parfor_end
+        dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
+        dprintln(3, "pre x = ", x)
+        cur_parfor = args[1]
+        for i = 1:length(cur_parfor.loopNests)
+            x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
+            AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+            x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+        end
+        for i = 1:length(cur_parfor.reductions)
+            x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+            x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+            x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+        end
+        for i = 1:length(cur_parfor.private_vars)
+            x.args[1].private_vars[i] = AstWalk(cur_parfor.private_vars[i], dw.callback, dw.cbdata)
+        end
+        dprintln(3, "post x = ", x)
+        return x
+    elseif head == :insert_divisible_task
+        cur_task = args[1]
+        for i = 1:length(cur_task.args)
+            x.args[1].value = AstWalk(cur_task.args[i].value, dw.callback, dw.cbdata)
+        end
+        return x
+    elseif head == :loophead
+        for i = 1:length(args)
+            x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
+        end
+        return x
+    elseif head == :loopend
+        for i = 1:length(args)
+            x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
         end
         return x
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
+function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(3,"PIR AstWalkCallback starting")
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
+
+    for i = 1:length(x.dim)
+        x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
+        x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
+    end
+    return x
+end
+
+function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(3,"PIR AstWalkCallback starting")
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -7421,35 +5937,39 @@ For each ParallelIR specific node type, form an array of expressions that AliasA
     If we read a symbol it is sufficient to just return that symbol as one of the expressions.
     If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
-function pir_alias_cb(ast, state, cbdata)
+function pir_alias_cb(ast::Expr, state, cbdata)
     dprintln(4,"pir_alias_cb")
-    asttyp = typeof(ast)
-    if asttyp == Expr
-        head = ast.head
-        args = ast.args
-        if head == :parfor
-            dprintln(3,"pir_alias_cb for :parfor")
-            expr_to_process = Any[]
 
-            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-            this_parfor = args[1]
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+        dprintln(3,"pir_alias_cb for :parfor")
+        expr_to_process = Any[]
 
-            AliasAnalysis.increaseNestLevel(state);
-            AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
-            AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
-            ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
-            AliasAnalysis.decreaseNestLevel(state);
+        assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+        this_parfor = args[1]
 
-            return ret[end]
+        AliasAnalysis.increaseNestLevel(state);
+        AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
+        AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
+        ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
+        AliasAnalysis.decreaseNestLevel(state);
 
-        elseif head == :call
-            if args[1] == TopNode(:unsafe_arrayref)
-                return AliasAnalysis.NotArray 
-            elseif args[1] == TopNode(:unsafe_arrayset)
-                return AliasAnalysis.NotArray 
-            end
+        return ret[end]
+
+    elseif head == :call
+        if args[1] == TopNode(:unsafe_arrayref)
+            return AliasAnalysis.NotArray 
+        elseif args[1] == TopNode(:unsafe_arrayset)
+            return AliasAnalysis.NotArray 
         end
     end
+
+    return DomainIR.dir_alias_cb(ast, state, cbdata)
+end
+
+function pir_alias_cb(ast::ANY, state, cbdata)
+    dprintln(4,"pir_alias_cb")
     return DomainIR.dir_alias_cb(ast, state, cbdata)
 end
 
