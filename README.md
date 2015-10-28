@@ -369,6 +369,7 @@ can be successfully compiled and run:
    String types and custom data types such as records and unions, since their 
    translation to C is difficult. There is also no support for exceptions, 
    I/O operations (only very limited `println`), and arbitrary ccalls.
+   We also do not support keyword arguments.
 
 2. We do not support calling Julia functions from C in the optimized
    function. What this implies is that we transitively convert 
