@@ -2275,17 +2275,22 @@ type ReplacedRegion
     tasks
 end
 
+type EntityType
+    name :: SymAllGen
+    typ
+end
+
 @doc """
 Structure for storing information about task formation.
 """
 type TaskInfo
     task_func       :: Function                  # The Julia task function that we generated for a task.
     function_sym
-    join_func       :: AbstractString            # The name of the C join function that we constructed and forced into the C file.
-    input_symbols   :: Array{SymbolNode,1}       # Variables that are need as input to the task.
-    modified_inputs :: Array{SymbolNode,1} 
-    io_symbols      :: Array{SymbolNode,1}
-    reduction_vars  :: Array{SymbolNode,1}
+    join_func                                    # The name of the C join function that we constructed and forced into the C file.
+    input_symbols   :: Array{EntityType,1}       # Variables that are need as input to the task.
+    modified_inputs :: Array{EntityType,1} 
+    io_symbols      :: Array{EntityType,1}
+    reduction_vars  :: Array{EntityType,1}
     code
     loopNests       :: Array{PIRLoopNest,1}      # holds information about the loop nests
 end
@@ -2524,6 +2529,10 @@ function taskableParfor(node)
     end
     if isParforAssignmentNode(node) || isBareParfor(node)
         dprintln(3,"Found parfor node, stencil: ", stencil_tasks, " reductions: ", reduce_tasks)
+        if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+            return true
+        end
+
         the_parfor = getParforNode(node)
 
         for i = 1:length(the_parfor.original_domain_nodes)
@@ -3435,6 +3444,29 @@ function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
     nothing
 end
 
+function toTaskArgName(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    x
+end
+function toTaskArgName(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    x.name
+end
+function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    newstr = string("parforToTask_gensym_", x.id)
+    ret    = symbol(newstr)
+    gsmap[x] = CompilerTools.LambdaHandling.VarDef(ret, CompilerTools.LambdaHandling.getType(x, lambdaInfo), 0)
+    return ret
+end
+
+function toTaskArgVarDef(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    CompilerTools.LambdaHandling.getVarDef(x, lambdaInfo)
+end
+function toTaskArgVarDef(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    CompilerTools.LambdaHandling.getVarDef(x.name, lambdaInfo)
+end
+function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+    gsmap[x]
+end
+
 @doc """
 Given a parfor statement index in "parfor_index" in the "body"'s statements, create a TaskInfo node for this parfor.
 """
@@ -3467,20 +3499,23 @@ function parforToTask(parfor_index, bb_statements, body, state)
         sread    = CompilerTools.ReadWriteSet.isRead(i, the_parfor.rws)
         sio      = swritten & sread
         if in(i, reduction_vars)
-            assert(sio)   # reduction_vars must be initialized before the parfor and updated during the parfor so must be io
+            # reduction_vars must be initialized before the parfor and updated during the parfor 
+            # so must be io
+            assert(sio)   
         elseif sio
-            push!(io_symbols, i)       # If input is both read and written then remember this symbol is input and output.
+            # If input is both read and written then remember this symbol is input and output.
+            push!(io_symbols, i)       
         elseif swritten
             push!(modified_symbols, i)
         else
             push!(in_array_names, i)
         end
     end
-    # Convert Set to Array
     if length(out) != 0
         throw(string("out variable of parfor task not supported right now."))
     end
-    # Convert Set to Array
+
+    # Start to form the lambda VarDef array for the locals to the task function.
     locals_array = CompilerTools.LambdaHandling.VarDef[]
     gensyms = Any[]
     gensyms_table = Dict{SymGen, Any}()
@@ -3520,27 +3555,43 @@ function parforToTask(parfor_index, bb_statements, body, state)
     dprintln(3,"gensyms_table = ", gensyms_table)
     dprintln(3,"arg_types = ", arg_types)
 
+    # Will hold GenSym's that would become parameters but can't so need to be made
+    # into symbols.
+    gsmap = Dict{GenSym,CompilerTools.LambdaHandling.VarDef}()
+
     # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
+    # If we detect a GenSym in the parameter list we replace it with a symbol derived from
+    # the GenSym number and add it to gsmap.
     all_arg_names = [:ranges;
-    map(x -> symbol(x), in_array_names);
-    map(x -> symbol(x), modified_symbols);
-    map(x -> symbol(x), io_symbols);
-    map(x -> symbol(x), reduction_vars)]
+                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), in_array_names);
+                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), modified_symbols);
+                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), io_symbols);
+                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), reduction_vars)]
+
+    dprintln(3,"gsmap = ", gsmap)
+    # Add gsmap to gensyms_table so that the GenSyms in the body can be translated to
+    # the corresponding new input parameter name.
+    for gsentry in gsmap
+      gensyms_table[gsentry[1]] = gsentry[2].name
+    end 
+
     # Form a tuple that contains the type of each parameter.
     all_arg_types_tuple = Expr(:tuple)
-    all_arg_types_tuple.args = [pir_range_actual;
-    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
-    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
-    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
-    map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
+    all_arg_types_tuple.args = [
+        pir_range_actual;
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
     all_arg_type = eval(all_arg_types_tuple)
     # Forms VarDef's for the local variables to the task function.
     args_var = CompilerTools.LambdaHandling.VarDef[]
     push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
-    append!(args_var, [ map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), in_array_names);
-    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), modified_symbols);
-    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), io_symbols);
-    map(x -> CompilerTools.LambdaHandling.getVarDef(x, state.lambdaInfo), reduction_vars)])
+    append!(args_var, 
+      [ map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), in_array_names);
+        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), modified_symbols);
+        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), io_symbols);
+        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), reduction_vars)])
     dprintln(3,"all_arg_names = ", all_arg_names)
     dprintln(3,"all_arg_type = ", all_arg_type)
     dprintln(3,"args_var = ", args_var)
@@ -3609,7 +3660,26 @@ function parforToTask(parfor_index, bb_statements, body, state)
         flattenParfor(task_body.args, the_parfor)
     end
 
-    push!(task_body.args, TypedExpr(Int, :return, 0))
+    # Add the return statement to the end of the task function.
+    # If this is not a reduction parfor then return "nothing".
+    # If it is a reduction in threading mode, return a tuple of the reduction variables.
+    # The threading infrastructure will then call a user-specified reduction function.
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
+       length(the_parfor.reductions) > 0
+        ret_tt = Expr(:tuple)
+        ret_tt.args = map(x -> x.reductionVar.typ, the_parfor.reductions)
+        ret_types = eval(ret_tt)
+        dprintln(3, "ret_types = ", ret_types)
+
+        ret_names = map(x -> x.reductionVar.name, the_parfor.reductions)
+        dprintln(3, "ret_names = ", ret_names)
+
+        push!(task_body.args, TypedExpr(ret_types, :return, mk_tuple_expr(ret_names, ret_types)))
+    else
+        #push!(task_body.args, TypedExpr(Void, :return, 0))
+        push!(task_body.args, TypedExpr(Void, :return, nothing))
+    end
+
     task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
     # Create the new :lambda Expr for the task function.
     code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
@@ -3651,62 +3721,97 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # We then force this C code into the rest of the C code generated by cgen with a special call.
     reduction_func_name = string("")
     if length(the_parfor.reductions) > 0
-        # The name of the new reduction function.
-        reduction_func_name = string("reduction_func_",unique_node_id)
+        if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+            if true
+            reduction_func_name = string("reduction_func_",unique_node_id)
+            fstring = string("function ", reduction_func_name, "(in1, in2)\n")
+            fstring = string(fstring, "return (")
 
-        the_types = AbstractString[]
-        for i = 1:length(the_parfor.reductions)
-            if the_parfor.reductions[i].reductionVar.typ == Float64
-                push!(the_types, "double")
-            elseif the_parfor.reductions[i].reductionVar.typ == Float32
-                push!(the_types, "float")
-            elseif the_parfor.reductions[i].reductionVar.typ == Int64
-                push!(the_types, "int64_t")
-            elseif the_parfor.reductions[i].reductionVar.typ == Int32
-                push!(the_types, "int32_t")
-            else
-                throw(string("Unsupported reduction var type ", the_parfor.reductions[i].reductionVar.typ))
+            for i = 1:length(the_parfor.reductions)
+                fstring = string(fstring, "in1[", i, "]")
+                if the_parfor.reductions[i].reductionFunc == :+
+                    fstring = string(fstring, "+")
+                elseif the_parfor.reductions[i].reductionFunc == :*
+                    fstring = string(fstring, "*")
+                else
+                    throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
+                end
+
+                fstring = string(fstring, "in2[", i, "]")
+
+                # Add comma between tuple elements if there is at least one more tuple element.
+                if i != length(the_parfor.reductions)
+                    fstring = string(fstring, " , ")
+                end
             end
-        end
-
-        # The reduction function doesn't return anything.
-        c_reduction_func = string("void _")
-        c_reduction_func = string(c_reduction_func, reduction_func_name)
-        # All reduction functions have the same signature so that the runtime can call back into them.
-        # The accumulator is effectively a pointer to Any[].  This accumulator is initialized by the runtime with the initial reduction value for the given type.
-        # The new_reduction_vars are also a pointer to Any[] and contains new value to merge into the accumulating reduction var in accumulator.
-        c_reduction_func = string(c_reduction_func, "(void **accumulator, void **new_reduction_vars) {\n")
-        for i = 1:length(the_parfor.reductions)
-            # For each reduction, put one statement in the C function.  Figure out here if it is a + or * reduction.
-            if the_parfor.reductions[i].reductionFunc == :+
-                this_op = "+"
-            elseif the_parfor.reductions[i].reductionFunc == :*
-                this_op = "*"
-            else
-                throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
+ 
+            fstring = string(fstring, ")\nend\n")
+            dprintln(3, "Reduction function for threads mode = ", fstring)
+            fparse  = parse(fstring)
+            feval   = eval(fparse)
+            dprintln(3, "Reduction function for threads done.")
             end
-            # Add the statement to the function basically of this form *(accumulator[i]) = *(accumulator[i]) + *(new_reduction_vars[i]).
-            # but instead of "+" use the operation type determined above stored in "this_op" and before you can dereference each element, you have to cast
-            # the pointer to the appropriate type for this reduction element as stored in the_types[i].
-            c_reduction_func = string(c_reduction_func, "*((", the_types[i], "*)accumulator[", i-1, "]) = *((", the_types[i], "*)accumulator[", i-1, "]) ", this_op, " *((", the_types[i], "*)new_reduction_vars[", i-1, "]);\n")
-        end
-        c_reduction_func = string(c_reduction_func, "}\n")
-        dprintln(3,"Created reduction function is:")
-        dprintln(3,c_reduction_func)
+        else
+            # The name of the new reduction function.
+            reduction_func_name = string("reduction_func_",unique_node_id)
 
-        # Tell cgen to put this reduction function directly into the C code.
-        ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
+            the_types = AbstractString[]
+            for i = 1:length(the_parfor.reductions)
+                if the_parfor.reductions[i].reductionVar.typ == Float64
+                    push!(the_types, "double")
+                elseif the_parfor.reductions[i].reductionVar.typ == Float32
+                    push!(the_types, "float")
+                elseif the_parfor.reductions[i].reductionVar.typ == Int64
+                    push!(the_types, "int64_t")
+                elseif the_parfor.reductions[i].reductionVar.typ == Int32
+                    push!(the_types, "int32_t")
+                else
+                    throw(string("Unsupported reduction var type ", the_parfor.reductions[i].reductionVar.typ))
+                end
+            end
+
+            # The reduction function doesn't return anything.
+            c_reduction_func = string("void _")
+            c_reduction_func = string(c_reduction_func, reduction_func_name)
+            # All reduction functions have the same signature so that the runtime can call back into them.
+            # The accumulator is effectively a pointer to Any[].  This accumulator is initialized by the runtime with the initial reduction value for the given type.
+            # The new_reduction_vars are also a pointer to Any[] and contains new value to merge into the accumulating reduction var in accumulator.
+            c_reduction_func = string(c_reduction_func, "(void **accumulator, void **new_reduction_vars) {\n")
+            for i = 1:length(the_parfor.reductions)
+                # For each reduction, put one statement in the C function.  Figure out here if it is a + or * reduction.
+                if the_parfor.reductions[i].reductionFunc == :+
+                    this_op = "+"
+                elseif the_parfor.reductions[i].reductionFunc == :*
+                    this_op = "*"
+                else
+                    throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
+                end
+                # Add the statement to the function basically of this form *(accumulator[i]) = *(accumulator[i]) + *(new_reduction_vars[i]).
+                # but instead of "+" use the operation type determined above stored in "this_op" and before you can dereference each element, you have to cast
+                # the pointer to the appropriate type for this reduction element as stored in the_types[i].
+                c_reduction_func = string(c_reduction_func, "*((", the_types[i], "*)accumulator[", i-1, "]) = *((", the_types[i], "*)accumulator[", i-1, "]) ", this_op, " *((", the_types[i], "*)new_reduction_vars[", i-1, "]);\n")
+            end
+            c_reduction_func = string(c_reduction_func, "}\n")
+            dprintln(3,"Created reduction function is:")
+            dprintln(3,c_reduction_func)
+
+            # Tell cgen to put this reduction function directly into the C code.
+            ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
+        end
     end
 
-    return TaskInfo(task_func,     # The task function that we just generated of type Function.
-    task_func_sym, # The task function's Symbol name.
-    reduction_func_name, # The name of the C reduction function created for this task.
-    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), in_array_names),
-    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), modified_symbols),
-    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), io_symbols),
-    map(x -> SymbolNode(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), reduction_vars),
-    code,          # The AST for the task function.
-    saved_loopNests)
+    dprintln(3,"End of parforToTask")
+
+    ret = TaskInfo(task_func,     # The task function that we just generated of type Function.
+                    task_func_sym, # The task function's Symbol name.
+                    reduction_func_name, # The name of the C reduction function created for this task.
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), in_array_names),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), modified_symbols),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), io_symbols),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), reduction_vars),
+                    code,          # The AST for the task function.
+                    saved_loopNests)
+    return ret
 end
 
 @doc """
