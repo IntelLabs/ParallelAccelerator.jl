@@ -699,8 +699,6 @@ end
 # sequence of expressions
 # ast = [ expr, ... ]
 function top_level_from_exprs(ast::Array{Any,1}, depth, state)
-
-    
     main_proc_start = time_ns()
     
     body = top_level_mk_body(ast, depth, state)
@@ -750,6 +748,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     dprintln(3,"loop_info = ", loop_info)
 
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
+        dprintln(3, "Entering top_level_mk_task_graph.")
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
