@@ -343,6 +343,10 @@ const ignoreSet = Set{Symbol}(ignoreSym)
 
 const allocCalls = Set{Symbol}([:jl_alloc_array_1d, :jl_alloc_array_2d, :jl_alloc_array_3d, :jl_new_array])
 
+const afoldTyps = Type[Base.AddFun, Base.MulFun, Base.AndFun, Base.OrFun]
+const afoldOprs = Symbol[:+, :*, :&, :|]
+const afoldlDict = Dict{Type,Symbol}(zip(afoldTyps, afoldOprs))
+
 # some part of the code still requires this
 unique_id = 0
 function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
@@ -923,6 +927,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
     if verifyMapOps(state, fun, args) && (isarray(typ) || isbitarray(typ)) 
         return translate_call_map(state,env_,typ, fun, args)
+    elseif is(fun, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
+        opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
+        dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
+        expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
+        dprintln(env, "translated expr = ", expr)
     elseif is(fun, :cartesianarray)
         return translate_call_cartesianarray(state,env_,typ, args)
     elseif is(fun, :runStencil)
