@@ -1396,33 +1396,36 @@ end
 @doc """
 AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.
 """
-function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
+function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
     use_dbg_level = 3
     dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
 
-    if typeof(x) == Expr
-        dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
-        if x.head == :call
-            dprintln(use_dbg_level,"sub_arrayset_walk is :call")
-            if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
-                # Here we have a call to arrayset.
-                dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
-                array_name = x.args[2]
-                value      = x.args[3]
-                index      = x.args[4]
-                assert(isa(array_name, SymNodeGen))
-                # If the array being assigned to is in temp_map.
-                if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
-                    return nothing
-                elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
-                    return nothing
-                else
-                    dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
-                end
+    dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
+    if x.head == :call
+        dprintln(use_dbg_level,"sub_arrayset_walk is :call")
+        if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+            # Here we have a call to arrayset.
+            dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
+            array_name = x.args[2]
+            value      = x.args[3]
+            index      = x.args[4]
+            assert(isa(array_name, SymNodeGen))
+            # If the array being assigned to is in temp_map.
+            if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
+                return nothing
+            elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
+                return nothing
+            else
+                dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
             end
         end
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function sub_arrayset_walk(x::ANY, cbd, top_level_number, is_top_level, read)
+    dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
