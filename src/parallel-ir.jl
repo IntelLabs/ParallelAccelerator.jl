@@ -4693,39 +4693,12 @@ function removeNothingStmts(args :: Array{Any,1}, state)
     return newBody
 end
 
-@doc """
-AstWalk callback to determine the array equivalence classes.
-"""
-function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
 
-    if ntype == Expr && node.head == :lambda
-        save_lambdaInfo  = state.lambdaInfo
-        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
-        body = CompilerTools.LambdaHandling.getBody(node)
 
-        AstWalk(body, create_equivalence_classes, state)
-
-        state.lambdaInfo = save_lambdaInfo
-
-        return node
-    end
-
-    # We can only extract array equivalences from top-level statements.
-    if is_top_level
-        dprintln(3,"create_equivalence_classes is_top_level")
-
-        if isAssignmentNode(node)
-            # Here the node is an assignment.
+function create_equivalence_classes_assignment(lhs, rhs, state)
+# Here the node is an assignment.
             dprintln(3,"Is an assignment node.")
-            lhs = node.args[1]
             dprintln(4,lhs)
-            rhs = node.args[2]
             dprintln(4,rhs)
 
             if isa(rhs, Expr)
@@ -4805,17 +4778,49 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
                     end
                 end
             end
-        elseif isa(node, Expr)
+end
+
+
+@doc """
+AstWalk callback to determine the array equivalence classes.
+"""
+function create_equivalence_classes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    dprintln(3,"node.head = ", node.head)
+
+    if node.head == :lambda
+        save_lambdaInfo  = state.lambdaInfo
+        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
+        body = CompilerTools.LambdaHandling.getBody(node)
+        AstWalk(body, create_equivalence_classes, state)
+        state.lambdaInfo = save_lambdaInfo
+        return node
+    end
+
+    # We can only extract array equivalences from top-level statements.
+    if is_top_level
+        dprintln(3,"create_equivalence_classes is_top_level")
+
+        if isAssignmentNode(node)
+            create_equivalence_classes_assignment(node.args[1], node.args[2], state)
+        else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
                 extractArrayEquivalencies(node, state)
             end
-        else
-            dprintln(3,"Not an assignment or expr node.")
         end
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+
+function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    dprintln(3,"Not an assignment or expr node.")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 
 # mmapInline() helper function
 function modify!(dict, lhs, i)
