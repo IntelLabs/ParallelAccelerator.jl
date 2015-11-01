@@ -4957,22 +4957,9 @@ function check_used(defs, usedAt, shapeAssertAt, expr,i)
 end
 
 
-@doc """
-# If a definition of a mmap is only used once and not aliased, it can be inlined into its
-# use side as long as its dependencies have not been changed.
-# FIXME: is the implementation still correct when branches are present?
-"""
-function mmapInline(ast, lives, uniqSet)
-    body = ast.args[3]
-    defs = Dict{Union{Symbol, GenSym}, Int}()
-    usedAt = Dict{Union{Symbol, GenSym}, Int}()
-    modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-    shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
-    assert(isa(body, Expr) && is(body.head, :body))
-
-    # first do a loop to see which def is only referenced once
-    for i =1:length(body.args)
-        expr = body.args[i]
+# mmapInline() helper function
+function mmapInline_refs(expr, i, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
+                                modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
         head = isa(expr, Expr) ? expr.head : nothing
         # record usedAt, and reject those used more than once
         # record definition
@@ -5025,6 +5012,25 @@ function mmapInline(ast, lives, uniqSet)
                 end
             end
         end
+end
+
+
+@doc """
+# If a definition of a mmap is only used once and not aliased, it can be inlined into its
+# use side as long as its dependencies have not been changed.
+# FIXME: is the implementation still correct when branches are present?
+"""
+function mmapInline(ast::Expr, lives, uniqSet)
+    body = ast.args[3]
+    defs = Dict{Union{Symbol, GenSym}, Int}()
+    usedAt = Dict{Union{Symbol, GenSym}, Int}()
+    modifiedAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
+    shapeAssertAt = Dict{Union{Symbol, GenSym}, Array{Int}}()
+    assert(isa(body, Expr) && is(body.head, :body))
+
+    # first do a loop to see which def is only referenced once
+    for i =1:length(body.args)
+        mmapInline_refs(body.args[i], i, uniqSet, defs, usedAt, modifiedAt, shapeAssertAt)
     end
     dprintln(3, "MI: defs = ", defs)
     # print those that are used once
