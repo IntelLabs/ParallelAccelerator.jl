@@ -4497,7 +4497,7 @@ end
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
 don't already have one and make sure they all share one equivalence class.
 """
-function extractArrayEquivalencies(node :: ANY, state)
+function extractArrayEquivalencies(node :: Expr, state)
     input_args = node.args
 
     # Make sure we get what we expect from domain IR.
@@ -4590,91 +4590,90 @@ end
 
 
 
-function create_equivalence_classes_assignment(lhs, rhs, state)
-# Here the node is an assignment.
-            dprintln(3,"Is an assignment node.")
-            dprintln(4,lhs)
-            dprintln(4,rhs)
+function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
 
-            if isa(rhs, Expr)
-                if rhs.head == :assertEqShape
-                    # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
-                    dprintln(3,"Creating array length assignment from assertEqShape")
-                    from_assertEqShape(rhs, state)
-                elseif rhs.head == :alloc
-                    # Here an array on the left-hand side is being created from size specification on the right-hand side.
-                    # Map those array sizes to the corresponding array equivalence class.
-                    sizes = rhs.args[2]
-                    n = length(sizes)
-                    assert(n >= 1 && n <= 3)
-                    dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
-                    checkAndAddSymbolCorrelation(lhs, state, sizes)            
-                elseif rhs.head == :call
-                    dprintln(3, "Detected call rhs in from_assignment.")
-                    dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
-                    if length(rhs.args) > 1
-                        dprintln(3, " arg2 = ", rhs.args[2])
-                    end
-                    if rhs.args[1] == TopNode(:ccall)
-                        # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
-                        if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                            dim1 = rhs.args[7]
-                            dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1])            
-                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                            dim1 = rhs.args[7]
-                            dim2 = rhs.args[9]
-                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
-                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
-                            dim1 = rhs.args[7]
-                            dim2 = rhs.args[9]
-                            dim3 = rhs.args[11]
-                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
-                        end
-                    elseif rhs.args[1] == TopNode(:arraylen)
-                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-                        array_param = rhs.args[2]                  # length takes one param, which is the array
-                        assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-                        array_param_type = array_param.typ         # get its type
-                        if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
-                            dim_symbols = [getSName(lhs)]
-                            dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-                        end
-                    elseif rhs.args[1] == TopNode(:arraysize)
-                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-                        if length(rhs.args) == 2
-                            array_param = rhs.args[2]                  # length takes one param, which is the array
-                            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-                            array_param_type = array_param.typ         # get its type
-                            array_dims = ndims(array_param_type)
-                            dim_symbols = Symbol[]
-                            for dim_i = 1:array_dims
-                                push!(dim_symbols, lhs[dim_i])
-                            end
-                            dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-                        elseif length(rhs.args) == 3
-                            dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
-                        else
-                            throw(string("arraysize AST node didn't have 2 or 3 arguments."))
-                        end
-                    end
-                elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
-                    # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
-                    rhs_corr = extractArrayEquivalencies(rhs, state)
-                    dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
-                    if rhs_corr != nothing && isa(lhs, SymAllGen)
-                        lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
-                        merge_correlations(state, lhs_corr, rhs_corr)
-                        dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
-                    end
-                end
+    dprintln(4,lhs)
+    dprintln(4,rhs)
+
+    if rhs.head == :assertEqShape
+        # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
+        dprintln(3,"Creating array length assignment from assertEqShape")
+        from_assertEqShape(rhs, state)
+    elseif rhs.head == :alloc
+        # Here an array on the left-hand side is being created from size specification on the right-hand side.
+        # Map those array sizes to the corresponding array equivalence class.
+        sizes = rhs.args[2]
+        n = length(sizes)
+        assert(n >= 1 && n <= 3)
+        dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
+        checkAndAddSymbolCorrelation(lhs, state, sizes)            
+    elseif rhs.head == :call
+        dprintln(3, "Detected call rhs in from_assignment.")
+        dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
+        if length(rhs.args) > 1
+            dprintln(3, " arg2 = ", rhs.args[2])
+        end
+        if rhs.args[1] == TopNode(:ccall)
+            # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
+            if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                dim1 = rhs.args[7]
+                dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+                checkAndAddSymbolCorrelation(lhs, state, [dim1])            
+            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                dim1 = rhs.args[7]
+                dim2 = rhs.args[9]
+                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
+            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
+                dim1 = rhs.args[7]
+                dim2 = rhs.args[9]
+                dim3 = rhs.args[11]
+                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
+                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
+        elseif rhs.args[1] == TopNode(:arraylen)
+            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+            array_param = rhs.args[2]                  # length takes one param, which is the array
+            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+            array_param_type = array_param.typ         # get its type
+            if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
+                dim_symbols = [getSName(lhs)]
+                dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+            end
+        elseif rhs.args[1] == TopNode(:arraysize)
+            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+            if length(rhs.args) == 2
+                array_param = rhs.args[2]                  # length takes one param, which is the array
+                assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+                array_param_type = array_param.typ         # get its type
+                array_dims = ndims(array_param_type)
+                dim_symbols = Symbol[]
+                for dim_i = 1:array_dims
+                    push!(dim_symbols, lhs[dim_i])
+                end
+                dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+            elseif length(rhs.args) == 3
+                dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
+            else
+                throw(string("arraysize AST node didn't have 2 or 3 arguments."))
+            end
+        end
+    elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
+        # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
+        rhs_corr = extractArrayEquivalencies(rhs, state)
+        dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
+        if rhs_corr != nothing && isa(lhs, SymAllGen)
+            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
+            merge_correlations(state, lhs_corr, rhs_corr)
+            dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
+        end
+    end
 end
 
+function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
+end
 
 @doc """
 AstWalk callback to determine the array equivalence classes.
@@ -4698,6 +4697,8 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
         dprintln(3,"create_equivalence_classes is_top_level")
 
         if isAssignmentNode(node)
+            # Here the node is an assignment.
+            dprintln(3,"Is an assignment node.")
             create_equivalence_classes_assignment(node.args[1], node.args[2], state)
         else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
