@@ -3985,6 +3985,59 @@ function from_assertEqShape(node::Expr, state)
     end
 end
 
+function from_assignment_fusion(args::Array{Any,1}, depth, state)
+    lhs = args[1]
+    rhs = args[2]
+    dprintln(3,"from_assignment lhs = ", lhs)
+    dprintln(3,"from_assignment rhs = ", rhs)
+    if isa(rhs, Expr) && rhs.head == :lambda
+        # skip handling rhs lambdas
+        rhs = [rhs]
+    else
+        rhs = from_expr(rhs, depth, state, false)
+    end
+    dprintln(3,"from_assignment rhs after = ", rhs)
+    assert(isa(rhs,Array))
+    assert(length(rhs) == 1)
+    rhs = rhs[1]
+
+    # Eliminate assignments to variables which are immediately dead.
+    # The variable name.
+    lhsName = toSymGen(lhs)
+    # Get liveness information for the current statement.
+    statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+    @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
+
+    dprintln(3,statement_live_info)
+    dprintln(3,"def = ", statement_live_info.def)
+
+    # Make sure this variable is listed as a "def" for this statement.
+    assert(CompilerTools.LivenessAnalysis.isDef(lhsName, statement_live_info))
+
+    # If the lhs symbol is not in the live out information for this statement then it is dead.
+    if !in(lhsName, statement_live_info.live_out) && hasNoSideEffects(rhs)
+        dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+        # Eliminate the statement.
+        return [], nothing
+    end
+
+    @assert typeof(rhs)==Expr && rhs.head==:parfor "Expected :parfor assignment"
+    out_typ = rhs.typ
+    #dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
+    # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
+    the_parfor = rhs.args[1]
+    for i = 4:length(args)
+        rhs_entry = the_parfor.postParFor[end][i-3]
+        assert(typeof(args[i]) == SymbolNode)
+        assert(typeof(rhs_entry) == SymbolNode)
+        if rhs_entry.typ.name == Array.name
+            add_merge_correlations(toSymGen(rhs_entry), toSymGen(args[i]), state)
+        end
+    end
+
+    return [toSNGen(lhs, out_typ); rhs], out_typ
+end
+
 @doc """
 Process an assignment expression.
 Starts by recurisvely processing the right-hand side of the assignment.
@@ -4034,21 +4087,9 @@ function from_assignment(lhs, rhs, depth, state)
         # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
         if rhs.head == :parfor
             the_parfor = rhs.args[1]
-            if length(ast) > 2
-                assert(typeof(ast[3]) == FusionSentinel)
-                for i = 4:length(ast)
-                    rhs_entry = the_parfor.postParFor[end][i-3]
-                    assert(typeof(ast[i]) == SymbolNode)
-                    assert(typeof(rhs_entry) == SymbolNode)
-                    if rhs_entry.typ.name == Array.name
-                        add_merge_correlations(toSymGen(rhs_entry), toSymGen(ast[i]), state)
-                    end
-                end
-            else
-                if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
-                    dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
-                    add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
-                end
+            if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
+                dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
+                add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
             end
             # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
             # statically if our array length correlations indicate they are in the same length set.
@@ -5675,8 +5716,13 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         dprintln(3,"Processing body end")
     elseif head == :(=)
         dprintln(3,"Before from_assignment typ is ", typ)
-        @assert length(args)==2 "Parallel-IR invalid assignment"
-        args, new_typ = from_assignment(args[1], args[2], depth, state)
+        if length(args)>=3
+            @assert isa(args[3], FusionSentinel) "Parallel-IR invalid fusion assignment"
+            args, new_typ = from_assignment_fusion(args, depth, state)
+        else
+            @assert length(args)==2 "Parallel-IR invalid assignment"
+            args, new_typ = from_assignment(args[1], args[2], depth, state)
+        end
         if length(args) == 0
             return []
         end
