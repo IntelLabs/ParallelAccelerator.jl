@@ -4070,7 +4070,7 @@ end
 Create array equivalences from an assertEqShape AST node.
 There are two arrays in the args to assertEqShape.
 """
-function from_assertEqShape(node, state)
+function from_assertEqShape(node::Expr, state)
     dprintln(3,"from_assertEqShape ", node)
     a1 = node.args[1]    # first array to compare
     a2 = node.args[2]    # second array to compare
@@ -4120,10 +4120,7 @@ function from_assignment(ast::Array{Any,1}, depth, state)
     lhsName = toSymGen(lhs)
     # Get liveness information for the current statement.
     statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
-    if statement_live_info == nothing
-        dprintln(0, state.top_level_number, " ", state.block_lives)
-    end
-    assert(statement_live_info != nothing)
+    @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
 
     dprintln(3,statement_live_info)
     dprintln(3,"def = ", statement_live_info.def)
