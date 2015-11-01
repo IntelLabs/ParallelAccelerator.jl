@@ -999,7 +999,7 @@ function isAssignmentNode(node :: Expr)
     return node.head == :(=)
 end
 
-function isAssignmentNode(node)
+function isAssignmentNode(node::Any)
     return false
 end
 
@@ -1025,10 +1025,23 @@ function isBareParfor(node)
     return false
 end
 
+
+function isParforAssignmentNodeInner(lhs::SymAllGen, rhs::Expr)
+    if rhs.head==:parfor
+        dprintln(4,"Found a parfor assignment node.")
+        return true
+    end
+    return false
+end
+
+function isParforAssignmentNodeInner(lhs::Any, rhs::Any)
+    return false
+end
+
 @doc """
 Is a node an assignment expression with a parfor node as the right-hand side.
 """
-function isParforAssignmentNode(node)
+function isParforAssignmentNode(node::Expr)
     dprintln(4,"isParforAssignmentNode")
     dprintln(4,node)
 
@@ -1038,21 +1051,16 @@ function isParforAssignmentNode(node)
         dprintln(4,lhs)
         rhs = node.args[2]
         dprintln(4,rhs)
-
-        if(isa(lhs, SymAllGen))
-            if(typeof(rhs) == Expr && rhs.head == :parfor)
-                dprintln(4,"Found a parfor assignment node.")
-                return true
-            else
-                dprintln(4,"rhs is not a parfor")
-            end
-        else
-            dprintln(4,"lhs is not a SymbolNode")
-        end
+        return isParforAssignmentNodeInner(lhs, rhs)
     else
-        dprintln(4,"node is not an Expr")
+        dprintln(4,"node is not an assignment Expr")
     end
 
+    return false
+end
+
+function isParforAssignmentNode(node::Any)
+    dprintln(4,"node is not an Expr")
     return false
 end
 
