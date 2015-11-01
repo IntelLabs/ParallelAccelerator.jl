@@ -43,6 +43,7 @@ import CompilerTools.AstWalker
 import CompilerTools.ReadWriteSet
 import CompilerTools.LivenessAnalysis
 import CompilerTools.Loops
+import CompilerTools.Loops.DomLoops
 
 # uncomment this line when using Debug.jl
 #using Debug
@@ -5040,7 +5041,7 @@ end
 @doc """
 Try to hoist allocations outside the loop if possible.
 """
-function hoistAllocation(ast, lives, domLoop, state :: expr_state)
+function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
     for l in domLoop.loops
         dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
         headBlk = lives.cfg.basic_blocks[ l.head ]
@@ -5224,9 +5225,6 @@ end
 @doc """
 Returns true if the given "ast" node is a DomainIR operation.
 """
-function isDomainNode(ast)
-    return false
-end
 
 function isDomainNode(ast :: Expr)
     head = ast.head
@@ -5244,6 +5242,11 @@ function isDomainNode(ast :: Expr)
 
     return false
 end
+
+function isDomainNode(ast)
+    return false
+end
+
 
 @doc """
 Returns true if the given AST "node" must remain the last statement in a basic block.
