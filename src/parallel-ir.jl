@@ -4096,12 +4096,9 @@ Starts by recurisvely processing the right-hand side of the assignment.
 Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
     Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.
 """
-function from_assignment(ast::Array{Any,1}, depth, state)
+function from_assignment(lhs, rhs, depth, state)
     # :(=) assignment
     # ast = [ ... ]
-    assert(length(ast) == 2)
-    lhs = ast[1]
-    rhs = ast[2]
     dprintln(3,"from_assignment lhs = ", lhs)
     dprintln(3,"from_assignment rhs = ", rhs)
     if isa(rhs, Expr) && rhs.head == :lambda
@@ -5783,7 +5780,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         dprintln(3,"Processing body end")
     elseif head == :(=)
         dprintln(3,"Before from_assignment typ is ", typ)
-        args, new_typ = from_assignment(args, depth, state)
+        @assert length(args)==2 "Parallel-IR invalid assignment"
+        args, new_typ = from_assignment(args[1], args[2], depth, state)
         if length(args) == 0
             return []
         end
