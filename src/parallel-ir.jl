@@ -874,7 +874,7 @@ include("parallel-ir-mk-parfor.jl")
 The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
-function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::Expr, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     # If the node is an assignment node or a loop head node.
     if isAssignmentNode(x) || isLoopheadNode(x)
         lhs = x.args[1]
@@ -895,6 +895,10 @@ function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int6
             push!(state, sname)
         end
     end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function getPrivateSetInner(x::ANY, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
