@@ -4853,9 +4853,9 @@ end
 
 
 # mmapInline() helper function
-function mmapInline_refs(expr, i, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
+function mmapInline_refs(expr::Expr, i::Int, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
                                 modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
-        head = isa(expr, Expr) ? expr.head : nothing
+        head = expr.head
         # record usedAt, and reject those used more than once
         # record definition
         if is(head, :(=))
@@ -4907,6 +4907,12 @@ function mmapInline_refs(expr, i, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int
                 end
             end
         end
+end
+
+# mmapInline() helper function
+function mmapInline_refs(expr::Any, i::Int, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
+                                modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
+    check_used(defs, usedAt, shapeAssertAt, expr,i)
 end
 
 
