@@ -43,6 +43,7 @@ import CompilerTools.AstWalker
 import CompilerTools.ReadWriteSet
 import CompilerTools.LivenessAnalysis
 import CompilerTools.Loops
+import CompilerTools.Loops.DomLoops
 
 # uncomment this line when using Debug.jl
 #using Debug
@@ -874,7 +875,7 @@ include("parallel-ir-mk-parfor.jl")
 The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
-function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::Expr, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     # If the node is an assignment node or a loop head node.
     if isAssignmentNode(x) || isLoopheadNode(x)
         lhs = x.args[1]
@@ -895,6 +896,10 @@ function getPrivateSetInner(x, state :: Set{SymAllGen}, top_level_number :: Int6
             push!(state, sname)
         end
     end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function getPrivateSetInner(x::ANY, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -994,7 +999,7 @@ function isAssignmentNode(node :: Expr)
     return node.head == :(=)
 end
 
-function isAssignmentNode(node)
+function isAssignmentNode(node::Any)
     return false
 end
 
@@ -1020,10 +1025,23 @@ function isBareParfor(node)
     return false
 end
 
+
+function isParforAssignmentNodeInner(lhs::SymAllGen, rhs::Expr)
+    if rhs.head==:parfor
+        dprintln(4,"Found a parfor assignment node.")
+        return true
+    end
+    return false
+end
+
+function isParforAssignmentNodeInner(lhs::Any, rhs::Any)
+    return false
+end
+
 @doc """
 Is a node an assignment expression with a parfor node as the right-hand side.
 """
-function isParforAssignmentNode(node)
+function isParforAssignmentNode(node::Expr)
     dprintln(4,"isParforAssignmentNode")
     dprintln(4,node)
 
@@ -1033,21 +1051,16 @@ function isParforAssignmentNode(node)
         dprintln(4,lhs)
         rhs = node.args[2]
         dprintln(4,rhs)
-
-        if(isa(lhs, SymAllGen))
-            if(typeof(rhs) == Expr && rhs.head == :parfor)
-                dprintln(4,"Found a parfor assignment node.")
-                return true
-            else
-                dprintln(4,"rhs is not a parfor")
-            end
-        else
-            dprintln(4,"lhs is not a SymbolNode")
-        end
+        return isParforAssignmentNodeInner(lhs, rhs)
     else
-        dprintln(4,"node is not an Expr")
+        dprintln(4,"node is not an assignment Expr")
     end
 
+    return false
+end
+
+function isParforAssignmentNode(node::Any)
+    dprintln(4,"node is not an Expr")
     return false
 end
 
@@ -1383,33 +1396,36 @@ end
 @doc """
 AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.
 """
-function sub_arrayset_walk(x, cbd, top_level_number, is_top_level, read)
+function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
     use_dbg_level = 3
     dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
 
-    if typeof(x) == Expr
-        dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
-        if x.head == :call
-            dprintln(use_dbg_level,"sub_arrayset_walk is :call")
-            if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
-                # Here we have a call to arrayset.
-                dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
-                array_name = x.args[2]
-                value      = x.args[3]
-                index      = x.args[4]
-                assert(isa(array_name, SymNodeGen))
-                # If the array being assigned to is in temp_map.
-                if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
-                    return nothing
-                elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
-                    return nothing
-                else
-                    dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
-                end
+    dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
+    if x.head == :call
+        dprintln(use_dbg_level,"sub_arrayset_walk is :call")
+        if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+            # Here we have a call to arrayset.
+            dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
+            array_name = x.args[2]
+            value      = x.args[3]
+            index      = x.args[4]
+            assert(isa(array_name, SymNodeGen))
+            # If the array being assigned to is in temp_map.
+            if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
+                return nothing
+            elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
+                return nothing
+            else
+                dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
             end
         end
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function sub_arrayset_walk(x::ANY, cbd, top_level_number, is_top_level, read)
+    dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -4054,7 +4070,7 @@ end
 Create array equivalences from an assertEqShape AST node.
 There are two arrays in the args to assertEqShape.
 """
-function from_assertEqShape(node, state)
+function from_assertEqShape(node::Expr, state)
     dprintln(3,"from_assertEqShape ", node)
     a1 = node.args[1]    # first array to compare
     a2 = node.args[2]    # second array to compare
@@ -4074,18 +4090,9 @@ function from_assertEqShape(node, state)
     end
 end
 
-@doc """
-Process an assignment expression.
-Starts by recurisvely processing the right-hand side of the assignment.
-Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
-    Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.
-"""
-function from_assignment(ast::Array{Any,1}, depth, state)
-    # :(=) assignment
-    # ast = [ ... ]
-    assert(length(ast) == 2)
-    lhs = ast[1]
-    rhs = ast[2]
+function from_assignment_fusion(args::Array{Any,1}, depth, state)
+    lhs = args[1]
+    rhs = args[2]
     dprintln(3,"from_assignment lhs = ", lhs)
     dprintln(3,"from_assignment rhs = ", rhs)
     if isa(rhs, Expr) && rhs.head == :lambda
@@ -4104,10 +4111,66 @@ function from_assignment(ast::Array{Any,1}, depth, state)
     lhsName = toSymGen(lhs)
     # Get liveness information for the current statement.
     statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
-    if statement_live_info == nothing
-        dprintln(0, state.top_level_number, " ", state.block_lives)
+    @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
+
+    dprintln(3,statement_live_info)
+    dprintln(3,"def = ", statement_live_info.def)
+
+    # Make sure this variable is listed as a "def" for this statement.
+    assert(CompilerTools.LivenessAnalysis.isDef(lhsName, statement_live_info))
+
+    # If the lhs symbol is not in the live out information for this statement then it is dead.
+    if !in(lhsName, statement_live_info.live_out) && hasNoSideEffects(rhs)
+        dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+        # Eliminate the statement.
+        return [], nothing
     end
-    assert(statement_live_info != nothing)
+
+    @assert typeof(rhs)==Expr && rhs.head==:parfor "Expected :parfor assignment"
+    out_typ = rhs.typ
+    #dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
+    # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
+    the_parfor = rhs.args[1]
+    for i = 4:length(args)
+        rhs_entry = the_parfor.postParFor[end][i-3]
+        assert(typeof(args[i]) == SymbolNode)
+        assert(typeof(rhs_entry) == SymbolNode)
+        if rhs_entry.typ.name == Array.name
+            add_merge_correlations(toSymGen(rhs_entry), toSymGen(args[i]), state)
+        end
+    end
+
+    return [toSNGen(lhs, out_typ); rhs], out_typ
+end
+
+@doc """
+Process an assignment expression.
+Starts by recurisvely processing the right-hand side of the assignment.
+Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
+    Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.
+"""
+function from_assignment(lhs, rhs, depth, state)
+    # :(=) assignment
+    # ast = [ ... ]
+    dprintln(3,"from_assignment lhs = ", lhs)
+    dprintln(3,"from_assignment rhs = ", rhs)
+    if isa(rhs, Expr) && rhs.head == :lambda
+        # skip handling rhs lambdas
+        rhs = [rhs]
+    else
+        rhs = from_expr(rhs, depth, state, false)
+    end
+    dprintln(3,"from_assignment rhs after = ", rhs)
+    assert(isa(rhs,Array))
+    assert(length(rhs) == 1)
+    rhs = rhs[1]
+
+    # Eliminate assignments to variables which are immediately dead.
+    # The variable name.
+    lhsName = toSymGen(lhs)
+    # Get liveness information for the current statement.
+    statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
+    @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
 
     dprintln(3,statement_live_info)
     dprintln(3,"def = ", statement_live_info.def)
@@ -4129,21 +4192,9 @@ function from_assignment(ast::Array{Any,1}, depth, state)
         # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
         if rhs.head == :parfor
             the_parfor = rhs.args[1]
-            if length(ast) > 2
-                assert(typeof(ast[3]) == FusionSentinel)
-                for i = 4:length(ast)
-                    rhs_entry = the_parfor.postParFor[end][i-3]
-                    assert(typeof(ast[i]) == SymbolNode)
-                    assert(typeof(rhs_entry) == SymbolNode)
-                    if rhs_entry.typ.name == Array.name
-                        add_merge_correlations(toSymGen(rhs_entry), toSymGen(ast[i]), state)
-                    end
-                end
-            else
-                if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
-                    dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
-                    add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
-                end
+            if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
+                dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
+                add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
             end
             # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
             # statically if our array length correlations indicate they are in the same length set.
@@ -4586,7 +4637,7 @@ end
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
 don't already have one and make sure they all share one equivalence class.
 """
-function extractArrayEquivalencies(node :: ANY, state)
+function extractArrayEquivalencies(node :: Expr, state)
     input_args = node.args
 
     # Make sure we get what we expect from domain IR.
@@ -4677,26 +4728,107 @@ function removeNothingStmts(args :: Array{Any,1}, state)
     return newBody
 end
 
+
+
+function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
+
+    dprintln(4,lhs)
+    dprintln(4,rhs)
+
+    if rhs.head == :assertEqShape
+        # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
+        dprintln(3,"Creating array length assignment from assertEqShape")
+        from_assertEqShape(rhs, state)
+    elseif rhs.head == :alloc
+        # Here an array on the left-hand side is being created from size specification on the right-hand side.
+        # Map those array sizes to the corresponding array equivalence class.
+        sizes = rhs.args[2]
+        n = length(sizes)
+        assert(n >= 1 && n <= 3)
+        dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
+        checkAndAddSymbolCorrelation(lhs, state, sizes)            
+    elseif rhs.head == :call
+        dprintln(3, "Detected call rhs in from_assignment.")
+        dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
+        if length(rhs.args) > 1
+            dprintln(3, " arg2 = ", rhs.args[2])
+        end
+        if rhs.args[1] == TopNode(:ccall)
+            # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
+            if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                dim1 = rhs.args[7]
+                dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+                checkAndAddSymbolCorrelation(lhs, state, [dim1])            
+            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                dim1 = rhs.args[7]
+                dim2 = rhs.args[9]
+                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
+            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
+                dim1 = rhs.args[7]
+                dim2 = rhs.args[9]
+                dim3 = rhs.args[11]
+                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
+                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
+            end
+        elseif rhs.args[1] == TopNode(:arraylen)
+            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+            array_param = rhs.args[2]                  # length takes one param, which is the array
+            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+            array_param_type = array_param.typ         # get its type
+            if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
+                dim_symbols = [getSName(lhs)]
+                dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+            end
+        elseif rhs.args[1] == TopNode(:arraysize)
+            # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
+            if length(rhs.args) == 2
+                array_param = rhs.args[2]                  # length takes one param, which is the array
+                assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
+                array_param_type = array_param.typ         # get its type
+                array_dims = ndims(array_param_type)
+                dim_symbols = Symbol[]
+                for dim_i = 1:array_dims
+                    push!(dim_symbols, lhs[dim_i])
+                end
+                dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+            elseif length(rhs.args) == 3
+                dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
+            else
+                throw(string("arraysize AST node didn't have 2 or 3 arguments."))
+            end
+        end
+    elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
+        # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
+        rhs_corr = extractArrayEquivalencies(rhs, state)
+        dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
+        if rhs_corr != nothing && isa(lhs, SymAllGen)
+            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
+            merge_correlations(state, lhs_corr, rhs_corr)
+            dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
+        end
+    end
+end
+
+function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
+end
+
 @doc """
 AstWalk callback to determine the array equivalence classes.
 """
-function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function create_equivalence_classes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    dprintln(3,"node.head = ", node.head)
 
-    if ntype == Expr && node.head == :lambda
+    if node.head == :lambda
         save_lambdaInfo  = state.lambdaInfo
         state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
         body = CompilerTools.LambdaHandling.getBody(node)
-
         AstWalk(body, create_equivalence_classes, state)
-
         state.lambdaInfo = save_lambdaInfo
-
         return node
     end
 
@@ -4707,99 +4839,24 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
         if isAssignmentNode(node)
             # Here the node is an assignment.
             dprintln(3,"Is an assignment node.")
-            lhs = node.args[1]
-            dprintln(4,lhs)
-            rhs = node.args[2]
-            dprintln(4,rhs)
-
-            if isa(rhs, Expr)
-                if rhs.head == :assertEqShape
-                    # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
-                    dprintln(3,"Creating array length assignment from assertEqShape")
-                    from_assertEqShape(rhs, state)
-                elseif rhs.head == :alloc
-                    # Here an array on the left-hand side is being created from size specification on the right-hand side.
-                    # Map those array sizes to the corresponding array equivalence class.
-                    sizes = rhs.args[2]
-                    n = length(sizes)
-                    assert(n >= 1 && n <= 3)
-                    dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
-                    checkAndAddSymbolCorrelation(lhs, state, sizes)            
-                elseif rhs.head == :call
-                    dprintln(3, "Detected call rhs in from_assignment.")
-                    dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
-                    if length(rhs.args) > 1
-                        dprintln(3, " arg2 = ", rhs.args[2])
-                    end
-                    if rhs.args[1] == TopNode(:ccall)
-                        # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
-                        if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                            dim1 = rhs.args[7]
-                            dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1])            
-                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                            dim1 = rhs.args[7]
-                            dim2 = rhs.args[9]
-                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
-                        elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
-                            dim1 = rhs.args[7]
-                            dim2 = rhs.args[9]
-                            dim3 = rhs.args[11]
-                            dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
-                            checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
-                        end
-                    elseif rhs.args[1] == TopNode(:arraylen)
-                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-                        array_param = rhs.args[2]                  # length takes one param, which is the array
-                        assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-                        array_param_type = array_param.typ         # get its type
-                        if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
-                            dim_symbols = [getSName(lhs)]
-                            dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-                        end
-                    elseif rhs.args[1] == TopNode(:arraysize)
-                        # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-                        if length(rhs.args) == 2
-                            array_param = rhs.args[2]                  # length takes one param, which is the array
-                            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-                            array_param_type = array_param.typ         # get its type
-                            array_dims = ndims(array_param_type)
-                            dim_symbols = Symbol[]
-                            for dim_i = 1:array_dims
-                                push!(dim_symbols, lhs[dim_i])
-                            end
-                            dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                            checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
-                        elseif length(rhs.args) == 3
-                            dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
-                        else
-                            throw(string("arraysize AST node didn't have 2 or 3 arguments."))
-                        end
-                    end
-                elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
-                    # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
-                    rhs_corr = extractArrayEquivalencies(rhs, state)
-                    dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
-                    if rhs_corr != nothing && isa(lhs, SymAllGen)
-                        lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
-                        merge_correlations(state, lhs_corr, rhs_corr)
-                        dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
-                    end
-                end
-            end
-        elseif isa(node, Expr)
+            create_equivalence_classes_assignment(node.args[1], node.args[2], state)
+        else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
                 extractArrayEquivalencies(node, state)
             end
-        else
-            dprintln(3,"Not an assignment or expr node.")
         end
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+
+function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    dprintln(3,"Not an assignment or expr node.")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 
 # mmapInline() helper function
 function modify!(dict, lhs, i)
@@ -4863,40 +4920,110 @@ function eliminateShapeAssert(dict, lhs, body)
 end
 
 # mmapInline() helper function
-function check_used(defs, usedAt, shapeAssertAt, expr,i)
-    if isa(expr, Expr)
-        if is(expr.head, :assertEqShape)
-            # handle assertEqShape separately, do not consider them
-            # as valid references
-            for arg in expr.args
-                s = isa(arg, SymbolNode) ? arg.name : arg 
-                if isa(s, Symbol) || isa(s, GenSym)
-                    modify!(shapeAssertAt, s, i)
-                end
-            end
-        else
-            for arg in expr.args
-                check_used(defs, usedAt, shapeAssertAt, arg,i)
+function check_used(defs, usedAt, shapeAssertAt, expr::Expr,i)
+    if is(expr.head, :assertEqShape)
+        # handle assertEqShape separately, do not consider them
+        # as valid references
+        for arg in expr.args
+            s = isa(arg, SymbolNode) ? arg.name : arg 
+            if isa(s, Symbol) || isa(s, GenSym)
+                modify!(shapeAssertAt, s, i)
             end
         end
-    elseif isa(expr, Symbol) || isa(expr, GenSym)
-        if haskey(usedAt, expr) # already used? remove from defs
-            delete!(defs, expr)
-        else
-            usedAt[expr] = i
-        end 
-    elseif isa(expr, SymbolNode)
-        if haskey(usedAt, expr.name) # already used? remove from defs
-            dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
-            delete!(defs, expr.name)
-        else
-            usedAt[expr.name] = i
-        end 
-    elseif isa(expr, Array) || isa(expr, Tuple)
-        for e in expr
-            check_used(defs, usedAt, shapeAssertAt, e, i)
+    else
+        for arg in expr.args
+            check_used(defs, usedAt, shapeAssertAt, arg,i)
         end
     end
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::Union{Symbol,GenSym},i)
+    if haskey(usedAt, expr) # already used? remove from defs
+        delete!(defs, expr)
+    else
+        usedAt[expr] = i
+    end
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::SymbolNode,i)
+    if haskey(usedAt, expr.name) # already used? remove from defs
+        dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
+        delete!(defs, expr.name)
+    else
+        usedAt[expr.name] = i
+    end 
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::Union{Array, Tuple},i)
+    for e in expr
+        check_used(defs, usedAt, shapeAssertAt, e, i)
+    end
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::Any,i)
+end
+
+# mmapInline() helper function
+function mmapInline_refs(expr::Expr, i::Int, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
+    modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
+    head = expr.head
+    # record usedAt, and reject those used more than once
+    # record definition
+    if is(head, :(=))
+        lhs = expr.args[1]
+        rhs = expr.args[2]
+        check_used(defs, usedAt, shapeAssertAt, rhs,i)
+        assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+        modify!(modifiedAt, lhs, i)
+        if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
+            ok = true
+            for j in rhs.args[1]
+                if isa(j, SymbolNode) j = j.name end
+                if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
+                    ok=false
+                    break
+                end
+            end
+            if (ok) defs[lhs] = i end
+            dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
+        end
+    else
+        check_used(defs, usedAt, shapeAssertAt, expr,i)
+    end
+    # check if args may be modified in place
+    if is(head, :mmap!)
+        for j in 1:length(expr.args[2].outputs)
+            v = expr.args[1][j]
+            if isa(v, SymbolNode)
+                v = v.name
+            end
+            if isa(v, Symbol) || isa(v, GenSym)
+                modify!(modifiedAt, v, i)
+            end
+        end
+    elseif is(head, :stencil!)
+        krnStat = expr.args[1]
+        iterations = expr.args[2]
+        bufs = expr.args[3]
+        for k in krnStat.modified
+            s = bufs[k]
+            if isa(s, SymbolNode) s = s.name end
+            modify!(modifiedAt, s, i)
+        end
+        if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
+            for j in 1:min(krnStat.rotateNum, length(bufs))
+                s = bufs[j]
+                if isa(s, SymbolNode) s = s.name end
+                modify!(modifiedAt, s, i)
+            end
+        end
+    end
+end
+
+# mmapInline() helper function
+function mmapInline_refs(expr::Any, i::Int, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
+                                modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
+    check_used(defs, usedAt, shapeAssertAt, expr,i)
 end
 
 
@@ -4905,7 +5032,7 @@ end
 # use side as long as its dependencies have not been changed.
 # FIXME: is the implementation still correct when branches are present?
 """
-function mmapInline(ast, lives, uniqSet)
+function mmapInline(ast::Expr, lives, uniqSet)
     body = ast.args[3]
     defs = Dict{Union{Symbol, GenSym}, Int}()
     usedAt = Dict{Union{Symbol, GenSym}, Int}()
@@ -4915,59 +5042,7 @@ function mmapInline(ast, lives, uniqSet)
 
     # first do a loop to see which def is only referenced once
     for i =1:length(body.args)
-        expr = body.args[i]
-        head = isa(expr, Expr) ? expr.head : nothing
-        # record usedAt, and reject those used more than once
-        # record definition
-        if is(head, :(=))
-            lhs = expr.args[1]
-            rhs = expr.args[2]
-            check_used(defs, usedAt, shapeAssertAt, rhs,i)
-            assert(isa(lhs, Symbol) || isa(lhs, GenSym))
-            modify!(modifiedAt, lhs, i)
-            if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
-                ok = true
-                for j in rhs.args[1]
-                    if isa(j, SymbolNode) j = j.name end
-                    if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
-                        ok=false
-                        break
-                    end
-                end
-                if (ok) defs[lhs] = i end
-                dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
-            end
-        else
-            check_used(defs, usedAt, shapeAssertAt, expr,i)
-        end
-        # check if args may be modified in place
-        if is(head, :mmap!)
-            for j in 1:length(expr.args[2].outputs)
-                v = expr.args[1][j]
-                if isa(v, SymbolNode)
-                    v = v.name
-                end
-                if isa(v, Symbol) || isa(v, GenSym)
-                    modify!(modifiedAt, v, i)
-                end
-            end
-        elseif is(head, :stencil!)
-            krnStat = expr.args[1]
-            iterations = expr.args[2]
-            bufs = expr.args[3]
-            for k in krnStat.modified
-                s = bufs[k]
-                if isa(s, SymbolNode) s = s.name end
-                modify!(modifiedAt, s, i)
-            end
-            if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
-                for j in 1:min(krnStat.rotateNum, length(bufs))
-                    s = bufs[j]
-                    if isa(s, SymbolNode) s = s.name end
-                    modify!(modifiedAt, s, i)
-                end
-            end
-        end
+        mmapInline_refs(body.args[i], i, uniqSet, defs, usedAt, modifiedAt, shapeAssertAt)
     end
     dprintln(3, "MI: defs = ", defs)
     # print those that are used once
@@ -5036,7 +5111,7 @@ end
 @doc """
 Try to hoist allocations outside the loop if possible.
 """
-function hoistAllocation(ast, lives, domLoop, state :: expr_state)
+function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
     for l in domLoop.loops
         dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
         headBlk = lives.cfg.basic_blocks[ l.head ]
@@ -5220,9 +5295,6 @@ end
 @doc """
 Returns true if the given "ast" node is a DomainIR operation.
 """
-function isDomainNode(ast)
-    return false
-end
 
 function isDomainNode(ast :: Expr)
     head = ast.head
@@ -5240,6 +5312,11 @@ function isDomainNode(ast :: Expr)
 
     return false
 end
+
+function isDomainNode(ast)
+    return false
+end
+
 
 @doc """
 Returns true if the given AST "node" must remain the last statement in a basic block.
@@ -5762,7 +5839,13 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         dprintln(3,"Processing body end")
     elseif head == :(=)
         dprintln(3,"Before from_assignment typ is ", typ)
-        args, new_typ = from_assignment(args, depth, state)
+        if length(args)>=3
+            @assert isa(args[3], FusionSentinel) "Parallel-IR invalid fusion assignment"
+            args, new_typ = from_assignment_fusion(args, depth, state)
+        else
+            @assert length(args)==2 "Parallel-IR invalid assignment"
+            args, new_typ = from_assignment(args[1], args[2], depth, state)
+        end
         if length(args) == 0
             return []
         end
