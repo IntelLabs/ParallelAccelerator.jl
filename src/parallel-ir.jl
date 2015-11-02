@@ -4815,98 +4815,104 @@ function eliminateShapeAssert(dict, lhs, body)
 end
 
 # mmapInline() helper function
-function check_used(defs, usedAt, shapeAssertAt, expr,i)
-    if isa(expr, Expr)
-        if is(expr.head, :assertEqShape)
-            # handle assertEqShape separately, do not consider them
-            # as valid references
-            for arg in expr.args
-                s = isa(arg, SymbolNode) ? arg.name : arg 
-                if isa(s, Symbol) || isa(s, GenSym)
-                    modify!(shapeAssertAt, s, i)
-                end
-            end
-        else
-            for arg in expr.args
-                check_used(defs, usedAt, shapeAssertAt, arg,i)
+function check_used(defs, usedAt, shapeAssertAt, expr::Expr,i)
+    if is(expr.head, :assertEqShape)
+        # handle assertEqShape separately, do not consider them
+        # as valid references
+        for arg in expr.args
+            s = isa(arg, SymbolNode) ? arg.name : arg 
+            if isa(s, Symbol) || isa(s, GenSym)
+                modify!(shapeAssertAt, s, i)
             end
         end
-    elseif isa(expr, Symbol) || isa(expr, GenSym)
-        if haskey(usedAt, expr) # already used? remove from defs
-            delete!(defs, expr)
-        else
-            usedAt[expr] = i
-        end 
-    elseif isa(expr, SymbolNode)
-        if haskey(usedAt, expr.name) # already used? remove from defs
-            dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
-            delete!(defs, expr.name)
-        else
-            usedAt[expr.name] = i
-        end 
-    elseif isa(expr, Array) || isa(expr, Tuple)
-        for e in expr
-            check_used(defs, usedAt, shapeAssertAt, e, i)
+    else
+        for arg in expr.args
+            check_used(defs, usedAt, shapeAssertAt, arg,i)
         end
     end
 end
 
+function check_used(defs, usedAt, shapeAssertAt, expr::Union{Symbol,GenSym},i)
+    if haskey(usedAt, expr) # already used? remove from defs
+        delete!(defs, expr)
+    else
+        usedAt[expr] = i
+    end
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::SymbolNode,i)
+    if haskey(usedAt, expr.name) # already used? remove from defs
+        dprintln(3, "MI: def ", expr.name, " removed due to multi-use")
+        delete!(defs, expr.name)
+    else
+        usedAt[expr.name] = i
+    end 
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::Union{Array, Tuple},i)
+    for e in expr
+        check_used(defs, usedAt, shapeAssertAt, e, i)
+    end
+end
+
+function check_used(defs, usedAt, shapeAssertAt, expr::Any,i)
+end
 
 # mmapInline() helper function
 function mmapInline_refs(expr::Expr, i::Int, uniqSet, defs::Dict{Union{Symbol, GenSym}, Int}, usedAt::Dict{Union{Symbol, GenSym}, Int}, 
-                                modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
-        head = expr.head
-        # record usedAt, and reject those used more than once
-        # record definition
-        if is(head, :(=))
-            lhs = expr.args[1]
-            rhs = expr.args[2]
-            check_used(defs, usedAt, shapeAssertAt, rhs,i)
-            assert(isa(lhs, Symbol) || isa(lhs, GenSym))
-            modify!(modifiedAt, lhs, i)
-            if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
-                ok = true
-                for j in rhs.args[1]
-                    if isa(j, SymbolNode) j = j.name end
-                    if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
-                        ok=false
-                        break
-                    end
+    modifiedAt::Dict{Union{Symbol, GenSym}, Array{Int}}, shapeAssertAt::Dict{Union{Symbol, GenSym}, Array{Int}})
+    head = expr.head
+    # record usedAt, and reject those used more than once
+    # record definition
+    if is(head, :(=))
+        lhs = expr.args[1]
+        rhs = expr.args[2]
+        check_used(defs, usedAt, shapeAssertAt, rhs,i)
+        assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+        modify!(modifiedAt, lhs, i)
+        if isa(rhs, Expr) && is(rhs.head, :mmap) && in(lhs, uniqSet)
+            ok = true
+            for j in rhs.args[1]
+                if isa(j, SymbolNode) j = j.name end
+                if !in(j, uniqSet) # being conservative by demanding arguments not being aliased
+                    ok=false
+                    break
                 end
-                if (ok) defs[lhs] = i end
-                dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
             end
-        else
-            check_used(defs, usedAt, shapeAssertAt, expr,i)
+            if (ok) defs[lhs] = i end
+            dprintln(3, "MI: def for ", lhs, " ok=", ok, " defs=", defs)
         end
-        # check if args may be modified in place
-        if is(head, :mmap!)
-            for j in 1:length(expr.args[2].outputs)
-                v = expr.args[1][j]
-                if isa(v, SymbolNode)
-                    v = v.name
-                end
-                if isa(v, Symbol) || isa(v, GenSym)
-                    modify!(modifiedAt, v, i)
-                end
+    else
+        check_used(defs, usedAt, shapeAssertAt, expr,i)
+    end
+    # check if args may be modified in place
+    if is(head, :mmap!)
+        for j in 1:length(expr.args[2].outputs)
+            v = expr.args[1][j]
+            if isa(v, SymbolNode)
+                v = v.name
             end
-        elseif is(head, :stencil!)
-            krnStat = expr.args[1]
-            iterations = expr.args[2]
-            bufs = expr.args[3]
-            for k in krnStat.modified
-                s = bufs[k]
+            if isa(v, Symbol) || isa(v, GenSym)
+                modify!(modifiedAt, v, i)
+            end
+        end
+    elseif is(head, :stencil!)
+        krnStat = expr.args[1]
+        iterations = expr.args[2]
+        bufs = expr.args[3]
+        for k in krnStat.modified
+            s = bufs[k]
+            if isa(s, SymbolNode) s = s.name end
+            modify!(modifiedAt, s, i)
+        end
+        if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
+            for j in 1:min(krnStat.rotateNum, length(bufs))
+                s = bufs[j]
                 if isa(s, SymbolNode) s = s.name end
                 modify!(modifiedAt, s, i)
             end
-            if !((isa(iterations, Number) && iterations == 1) || krnStat.rotateNum == 0)
-                for j in 1:min(krnStat.rotateNum, length(bufs))
-                    s = bufs[j]
-                    if isa(s, SymbolNode) s = s.name end
-                    modify!(modifiedAt, s, i)
-                end
-            end
         end
+    end
 end
 
 # mmapInline() helper function
