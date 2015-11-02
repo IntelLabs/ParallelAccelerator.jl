@@ -485,7 +485,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
     if rhs.head==:call && checkTopNodeName(rhs.args[1],:typed_hvcat)
         dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
-        @assert isa(rhs.args[2], GlobalRef) && rhs.args[2].mod==Main "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
+        @assert isa(rhs.args[2], GlobalRef) "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
         typ = toCtype(eval(rhs.args[2].name))
 
         arr_info = rhs.args[3]
