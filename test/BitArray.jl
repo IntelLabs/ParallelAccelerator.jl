@@ -23,43 +23,43 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module BitArrayTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-using AbsTest
-println("Testing abs()...")
-@test AbsTest.test1() == 3
-@test AbsTest.test2() == 3.0
-@test AbsTest.test3() == 3.0
-@test AbsTest.test4() == ones(10, 10)
-@test AbsTest.test5() == ones(10, 10).+0.1
-@test AbsTest.test6() == ones(10, 10)
-println("Done testing abs().")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
 
-include("BitArray.jl")
-using BitArrayTest 
-println("Testing BitArrays...")
-@test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
-println("Done testing BitArrays.")
+@acc function bitarrtest(A::Array{Float64,1})
+    pcond = A .> 2.0 
+    A[pcond] = 0.1 
+    return A
+end
+
+@acc function bitarrtest2(A::Array{Float64,1})
+    A[A.>2.0] = 0.1 
+    return A
+end
+
+@acc function bitarrtest3(A::Array{Float64,1},B::Array{Float64,1},C::Array{Float64,1})  
+    pcond = A .> C
+    A[pcond] = B[pcond]
+    return A
+end
+
+function test1()
+    return bitarrtest([1.1; 2.2; 3.2; 1.9])
+end
+
+function test2()
+    return bitarrtest2([1.1; 2.2; 3.2; 1.9])
+end
+
+function test3()
+    return bitarrtest3([1.1; 2.2; 3.2; 1.9], [9.0; 9.0; 10.0; 11.0], [2.0; 2.0; 2.0; 2.0])
+end
 
 
-
-
-
-include("aug_assign.jl")
-
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = dirname(@__FILE__)
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+end
