@@ -23,44 +23,36 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module SeqTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-using AbsTest
-println("Testing abs()...")
-@test AbsTest.test1() == 3
-@test AbsTest.test2() == 3.0
-@test AbsTest.test3() == 3.0
-@test AbsTest.test4() == ones(10, 10)
-@test AbsTest.test5() == ones(10, 10).+0.1
-@test AbsTest.test6() == ones(10, 10)
-println("Done testing abs().")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-include("BitArray.jl")
-using BitArrayTest 
-println("Testing BitArrays...")
-@test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
-println("Done testing BitArrays.")
+# testing sequential code taken from quant example
+@acc function mmult(u::Array{Float64, 2}, v::Array{Float64, 2}) 
+    m, l0 = size(u)
+    l, n = size(v)
+    # assert(l0 == l)
+    r = Array(Float64, m, n)
+    for i = 1:m 
+        for j = 1:n 
+            s = convert(Float64, 0)
+            for k = 1:l 
+                s += u[i, k] * v[k, j]
+            end 
+            r[i, j] = s 
+        end 
+    end 
+    return r
+end
 
-include("seq.jl")
-using SeqTest 
-println("Testing sequential code...")
-@test_approx_eq SeqTest.test1() [9.0 12.0; 10.0 20.0]
-println("Done testing sequential code.")
+function test1()
+    A = [2.0 1.0; 2.0 2.0]
+    B = [4.0 2.0; 1.0 8.0]
+    return mmult(A, B) 
+end
 
-include("aug_assign.jl")
-
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = dirname(@__FILE__)
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+end
