@@ -23,51 +23,25 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module CatTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-using AbsTest
-println("Testing abs()...")
-@test AbsTest.test1() == 3
-@test AbsTest.test2() == 3.0
-@test AbsTest.test3() == 3.0
-@test AbsTest.test4() == ones(10, 10)
-@test AbsTest.test5() == ones(10, 10).+0.1
-@test AbsTest.test6() == ones(10, 10)
-println("Done testing abs().")
+ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-include("BitArray.jl")
-using BitArrayTest 
-println("Testing BitArrays...")
-@test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
-println("Done testing BitArrays.")
-
-include("seq.jl")
-using SeqTest 
-println("Testing sequential code...")
-@test_approx_eq SeqTest.test1() [9.0 12.0; 10.0 20.0]
-println("Done testing sequential code.")
-
-include("cat.jl")
-using CatTest 
-println("Testing cat...")
-@test_approx_eq CatTest.test1() [3.0; 1.0]
-println("Done testing cat.")
+@acc function cat1(a::Array{Float64,1})
+    d = 3.0 
+    a1 = a[1]
+    a3 = a[3]
+    C = [a1/d, a3/d] 
+    return C
+end
 
 
-include("aug_assign.jl")
+function test1()
+    return cat1([9.0; 2.0; 3.0]) 
+end
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = dirname(@__FILE__)
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+end
