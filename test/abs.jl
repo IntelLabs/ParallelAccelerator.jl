@@ -24,31 +24,43 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
 module AbsTest
-importall ParallelAccelerator
+using ParallelAccelerator
 
-ParallelAccelerator.DomainIR.set_debug_level(4)
-ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.cgen.set_debug_level(4)
-ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
 @acc function example(x)
     abs(x)
 end
 
 function test1()
-    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Array{Float64,2},))
-    A = ones(10, 10)
-    return example_acc(A)
+    return example(-3)
 end
 
 function test2()
-    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
-    return example_acc(-3)
+    return example(-3.0)
 end
 
 function test3()
-    example_acc = ParallelAccelerator.accelerate(AbsTest.example, (Int,))
-    return example_acc(3)
+    return example(3.0)
+end
+
+
+function test4()
+    A = zeros(10, 10).-1
+    return example(A)
+end
+
+function test5()
+    A = zeros(10, 10).-1.1
+    return example(A)
+end
+
+function test6()
+    A = zeros(10, 10).+1.0
+    return example(A)
 end
 
 end

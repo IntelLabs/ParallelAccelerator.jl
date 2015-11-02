@@ -28,12 +28,14 @@ using Base.Test
 
 include("abs.jl")
 using AbsTest
-
-@test AbsTest.test1() == ones(10, 10)
-
-@test AbsTest.test2() == 3
-
-@test AbsTest.test3() == 3
+println("Testing abs()...")
+@test AbsTest.test1() == 3
+@test AbsTest.test2() == 3.0
+@test AbsTest.test3() == 3.0
+@test AbsTest.test4() == ones(10, 10)
+@test AbsTest.test5() == ones(10, 10).+0.1
+@test AbsTest.test6() == ones(10, 10)
+println("Done testing abs().")
 
 include("aug_assign.jl")
 
