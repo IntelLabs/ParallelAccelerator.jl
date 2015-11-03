@@ -26,10 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-const spot = convert(Float64,100.0)
-const strike = convert(Float64,110.0)
-const vol = convert(Float64,0.25)
-const maturity = convert(Float64,2.0)
+const spot = 100.0
+const strike = 110.0
+const vol = 0.25
+const maturity = 2.0
 
 function det2x2(a::Array{Float64,2})
   a1 = a[1]
@@ -113,7 +113,7 @@ end
         valPut3 = valPut2 .* valPut1  # assetval ^ 3
         valPut4 = valPut2 .* valPut2  # assetval ^ 4
         # compute the regression
-        ridgecorrect = convert(Float64,0.01)
+        ridgecorrect = 0.01
         sum0 = sum(valPut0)
         sum1 = sum(valPut1)
         sum2 = sum(valPut2)
