@@ -26,9 +26,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module CatTest
 using ParallelAccelerator
 
-ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.cgen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
 @acc function cat1(a::Array{Float64,1})
@@ -39,9 +39,26 @@ ParallelAccelerator.cgen.set_debug_level(4)
     return C
 end
 
+@acc function cat2(d::Float64)
+    C= [2.0/d 3.0/d; 1.0/d 20.0/d]
+    return C.+1.0
+end
+
+@acc function cat3(d::Float64)
+    C= Float64[2.0/d 3.0/d; 1.0/d 20.0/d]
+    return C.+1.0
+end
 
 function test1()
     return cat1([9.0; 2.0; 3.0]) 
+end
+
+function test2()
+    return cat2(2.0) 
+end
+
+function test3()
+    return cat3(2.0) 
 end
 
 end

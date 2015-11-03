@@ -26,10 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using Base.Test
 importall ParallelAccelerator
 
-ParallelAccelerator.DomainIR.set_debug_level(4)
-ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.cgen.set_debug_level(4)
-ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
 
 @acc function example(x)
