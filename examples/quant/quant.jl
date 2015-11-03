@@ -73,23 +73,6 @@ function inv3x3(a::Array{Float64,2})
     det2x2(Float64[a21 a22; a31 a32])/d det2x2(Float64[a12 a11; a32 a31])/d det2x2(Float64[a11 a12; a21 a22])/d ] 
 end
 
-function mmult(u::Array{Float64, 2}, v::Array{Float64, 2})
-  m, l0 = size(u)
-  l, n = size(v)
-  # assert(l0 == l)
-  r = Array(Float64, m, n)
-  for i = 1:m
-    for j = 1:n
-      s = convert(Float64, 0)
-      for k = 1:l
-        s += u[i, k] * v[k, j]
-      end
-      r[i, j] = s
-    end
-  end
-  return r
-end
-
 function init( numPaths::Int, numSteps::Int ) 
     # Pre-compute some values
     dt = maturity / numSteps
@@ -148,7 +131,7 @@ end
         vp0 = dotp(cashFlowPut, valPut0)
         vp1 = dotp(cashFlowPut, valPut1)
         vp2 = dotp(cashFlowPut, valPut2)
-        (betaPut0,betaPut1,betaPut2) = mmult(Float64[vp0 vp1 vp2], invsqr)
+        (betaPut0,betaPut1,betaPut2) = [vp0 vp1 vp2]*invsqr
         regImpliedCashFlow = valPut0 .* betaPut0 .+ valPut1 .* betaPut1 .+ valPut2 .* betaPut2
         payoff = valPut0 .* (strike .- curasset)
         pcond = payoff .> regImpliedCashFlow
