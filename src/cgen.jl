@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #
 # A prototype Julia to C++ generator
-# Jaswanth Sreeram (jaswanth.sreeram@intel.com)
+# Originally created by Jaswanth Sreeram.
 #
 
 module cgen
@@ -157,6 +157,11 @@ end
 include_blas = false
 function set_include_blas(val::Bool=true)
     global include_blas = val
+end
+
+insertAliasCheck = true
+function set_alias_check(val)
+    global insertAliasCheck = val
 end
 
 # Reset and reuse the LambdaGlobalData object across function
@@ -2047,7 +2052,7 @@ end
 
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
-function createEntryPointWrapper(functionName, params, args, jtyp)
+function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
   if length(params) > 0
     params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
   else
@@ -2072,11 +2077,27 @@ function createEntryPointWrapper(functionName, params, args, jtyp)
     end
     #printf(\"Starting execution of cgen generated code\\n\");
     #printf(\"End of execution of cgen generated code\\n\");
-    s::ASCIIString =
+    s::ASCIIString = ""
+    if alias_check != nothing
+        assert(isa(alias_check, AbstractString))
+        unaliased_func = functionName * "_unaliased"
+
+        s *=
+        "extern \"C\" void _$(functionName)_($wrapperParams, $retSlot) {\n
+            $allocResult
+            if ($alias_check) {
+                $functionName($actualParams);
+            } else {
+                $unaliased_func($actualParams);
+            }
+        }\n"
+    else
+        s *=
     "extern \"C\" void _$(functionName)_($wrapperParams, $retSlot) {\n
         $allocResult
         $functionName($actualParams);
     }\n"
+    end
     s
 end
 
@@ -2117,15 +2138,39 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     end
     # Find varargs expression if present
     vararglist = []
+    num_array_params = 0
+    canAliasCheck = insertAliasCheck
+    array_list = ""
     for k in params
         if isa(k, Expr) # If k is a vararg expression
+            canAliasCheck = false
             dprintln(3,"vararg expr: ", k, k.args[1], k.head)
             if isa(k.args[1], Symbol) && haskey(lstate.symboltable, k.args[1])
                 push!(vararglist, (k.args[1], lstate.symboltable[k.args[1]]))
                 dprintln(3,lstate.symboltable[k.args[1]])
                 dprintln(3,vararglist)
             end
+        else
+            assert(typeof(k) == Symbol)
+            ptyp = lstate.symboltable[k]
+            if isArrayType(ptyp)
+#                if !isArrayOfPrimitiveJuliaType(ptyp)
+#                    canAliasCheck = false
+#                end
+                if num_array_params > 0
+                    array_list *= ","
+                end
+                array_list *= "&" * canonicalize(k)
+                num_array_params += 1
+            end
         end
+    end
+    dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
+    if canAliasCheck && num_array_params > 0
+        alias_check = "j2c_alias_test<" * string(num_array_params) * ">({" * array_list * "})"
+        dprintln(3,"alias_check = ", alias_check)
+    else
+        alias_check = nothing
     end
 
     # Translate arguments
@@ -2153,7 +2198,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
     # Create an entry point that will be called by the Julia code.
     if isEntryPoint
-        wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType)
+        wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
         rtyp = "void"
         retargs = foldl((a, b) -> "$a, $b",
         [toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
@@ -2301,7 +2346,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
         push!(Opts, "-qopenmp")
     end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icpc $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
