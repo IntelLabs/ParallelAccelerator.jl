@@ -23,8 +23,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using Base.Test
-importall ParallelAccelerator
+module BitArrayTest
+using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
@@ -32,13 +32,34 @@ importall ParallelAccelerator
 #ParallelAccelerator.set_debug_level(4)
 
 
-@acc function example(x)
-    for i in 1:length(x)
-        x[i] += 2
-    end
-    x
+@acc function bitarrtest(A::Array{Float64,1})
+    pcond = A .> 2.0 
+    A[pcond] = 0.1 
+    return A
 end
 
-x = [1 2 3 4]
-@test x + 2 == example(x)
-@test x + 3 != example(x)
+@acc function bitarrtest2(A::Array{Float64,1})
+    A[A.>2.0] = 0.1 
+    return A
+end
+
+@acc function bitarrtest3(A::Array{Float64,1},B::Array{Float64,1},C::Array{Float64,1})  
+    pcond = A .> C
+    A[pcond] = B[pcond]
+    return A
+end
+
+function test1()
+    return bitarrtest([1.1; 2.2; 3.2; 1.9])
+end
+
+function test2()
+    return bitarrtest2([1.1; 2.2; 3.2; 1.9])
+end
+
+function test3()
+    return bitarrtest3([1.1; 2.2; 3.2; 1.9], [9.0; 9.0; 10.0; 11.0], [2.0; 2.0; 2.0; 2.0])
+end
+
+
+end

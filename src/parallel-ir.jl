@@ -1425,7 +1425,8 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
 end
 
 function sub_arrayset_walk(x::ANY, cbd, top_level_number, is_top_level, read)
-    dprintln(3,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
+    use_dbg_level = 3
+    dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 

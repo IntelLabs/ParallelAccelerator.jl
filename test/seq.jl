@@ -23,22 +23,36 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using Base.Test
-importall ParallelAccelerator
+module SeqTest
+using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
 #ParallelAccelerator.cgen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-
-@acc function example(x)
-    for i in 1:length(x)
-        x[i] += 2
-    end
-    x
+# testing sequential code taken from quant example
+@acc function mmult(u::Array{Float64, 2}, v::Array{Float64, 2}) 
+    m, l0 = size(u)
+    l, n = size(v)
+    # assert(l0 == l)
+    r = Array(Float64, m, n)
+    for i = 1:m 
+        for j = 1:n 
+            s = convert(Float64, 0)
+            for k = 1:l 
+                s += u[i, k] * v[k, j]
+            end 
+            r[i, j] = s 
+        end 
+    end 
+    return r
 end
 
-x = [1 2 3 4]
-@test x + 2 == example(x)
-@test x + 3 != example(x)
+function test1()
+    A = [2.0 1.0; 2.0 2.0]
+    B = [4.0 2.0; 1.0 8.0]
+    return mmult(A, B) 
+end
+
+end

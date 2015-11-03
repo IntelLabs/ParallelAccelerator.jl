@@ -25,7 +25,6 @@ script:
   # Build and test ParallelAccelerator.
   - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator")'
   # Run examples.
-  - julia -e 'Pkg.add("ImageMagick")'
   - julia examples/black-scholes/black-scholes.jl
   - julia examples/gaussian-blur/gaussian-blur.jl
   - julia examples/harris/harris.jl

@@ -23,22 +23,42 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using Base.Test
-importall ParallelAccelerator
+module CatTest
+using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
 #ParallelAccelerator.cgen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-
-@acc function example(x)
-    for i in 1:length(x)
-        x[i] += 2
-    end
-    x
+@acc function cat1(a::Array{Float64,1})
+    d = 3.0 
+    a1 = a[1]
+    a3 = a[3]
+    C = [a1/d, a3/d] 
+    return C
 end
 
-x = [1 2 3 4]
-@test x + 2 == example(x)
-@test x + 3 != example(x)
+@acc function cat2(d::Float64)
+    C= [2.0/d 3.0/d; 1.0/d 20.0/d]
+    return C.+1.0
+end
+
+@acc function cat3(d::Float64)
+    C= Float64[2.0/d 3.0/d; 1.0/d 20.0/d]
+    return C.+1.0
+end
+
+function test1()
+    return cat1([9.0; 2.0; 3.0]) 
+end
+
+function test2()
+    return cat2(2.0) 
+end
+
+function test3()
+    return cat3(2.0) 
+end
+
+end
