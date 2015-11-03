@@ -467,6 +467,16 @@ function checkTopNodeName(arg::ANY, name::Symbol)
     return false
 end
 
+function checkGlobalRefName(arg::GlobalRef, name::Symbol)
+    return arg.name==name
+end
+
+function checkGlobalRefName(arg::ANY, name::Symbol)
+    return false
+end
+
+
+
 function from_assignment_fix_tupple(lhs, rhs::Expr)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
   if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
@@ -478,27 +488,45 @@ end
 function from_assignment_fix_tupple(lhs, rhs::ANY)
 end
 
+function toSymGen(x)
+    if isa(x, SymbolNode)
+        x.name
+    elseif isa(x, GenSym) || isa(x, Symbol) 
+        x   
+    else
+        error("Expecting Symbol, SymbolNode, or GenSym, but got ", x)
+    end 
+end
+
 
 function from_assignment_match_hvcat(lhs, rhs::Expr)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
-    if rhs.head==:call && checkTopNodeName(rhs.args[1],:typed_hvcat)
+    if rhs.head==:call && (checkTopNodeName(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
         dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
-        @assert isa(rhs.args[2], GlobalRef) "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
-        typ = toCtype(eval(rhs.args[2].name))
-
-        arr_info = rhs.args[3]
+        is_typed::Bool = checkTopNodeName(rhs.args[1],:typed_hvcat)
+        
         rows = Int64[]
-        if isa(arr_info, Expr) && arr_info.head==:call
-            rows = arrinfo[2:end]
+        values = Any[]
+        typ = "double"
+
+        if is_typed
+            @assert isa(rhs.args[2], GlobalRef) "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
+            typ = toCtype(eval(rhs.args[2].name))
+            rows = lstate.tupleTable[rhs.args[3]]
+            values = rhs.args[4:end]
         else
-            rows = lstate.tupleTable[arr_info]
+            rows = lstate.tupleTable[rhs.args[2]]
+            values = rhs.args[3:end]
+            arr_var = toSymGen(lhs)
+            atyp, arr_dims = parseArrayType(lstate.symboltable[arr_var])
+            typ = toCtype(atyp)
         end
+
         nr = length(rows)
         nc = rows[1] # all rows should have the same size
         s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
-        values = rhs.args[4:end]
         s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
     end
     return s
