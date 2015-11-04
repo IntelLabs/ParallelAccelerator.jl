@@ -1464,9 +1464,46 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     return expr
 end
 
+label_start = 9999999
+function get_next_label_number()
+    global label_start += 1
+    return label_start
+end
+
+function label_node_uniquifier(node, cbdata, top_level_number, is_top_level, read)
+    if isa(node, LabelNode)
+        if !haskey(cbdata, node.label)
+            cbdata[node.label] = get_next_label_number()
+        end
+        return LabelNode(cbdata[node.label])
+    end
+    AstWalker.ASTWALK_RECURSE
+end
+
+function update_gotos(node, cbdata, top_level_number, is_top_level, read)
+    if isa(node, GotoNode)
+        if haskey(cbdata, node.label)
+            return GotoNode(cbdata[node.label])
+        end
+    elseif isa(node, Expr) && node.head == :gotoifnot
+        if haskey(cbdata, node.args[2])
+            node.args[2] = cbdata[node.args[2]]
+            return node
+        end
+    end
+    AstWalker.ASTWALK_RECURSE
+end
+
 function translate_call_parallel_for(state, env, args::Array{Any,1})
     (ast, ety) = lambdaTypeinf(args[1], (Int, ))
     ast = from_expr("anonymous", env.cur_module, ast)
+    # Temporary hack for multiple parfors embedded in a function.  Julia will
+    # generate gotos+labels for the loops in the parfor body But since these
+    # blocks will be inlined when parfor code generation occurs The labels need
+    # to be unique (not an issue in julia since they use a closure)
+    mapping = Dict{Int, Int}()
+    ast = AstWalker.AstWalk(ast, label_node_uniquifier, mapping)
+    ast = AstWalker.AstWalk(ast, update_gotos, mapping)
     loopvars = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
     etys = [Int for _ in length(loopvars)]
     body = ast.args[3]
@@ -1708,7 +1745,7 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         elseif head == :parallel_for
             map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[1])
             map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[2])
-            args[3] = AstWalker.AstWalk(args[3], AstWalkCallback, dw)
+            # args[3] = AstWalker.AstWalk(args[3], AstWalkCallback, dw)
             return x
         elseif head == :assertEqShape
             assert(length(args) == 2)
