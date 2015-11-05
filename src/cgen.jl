@@ -161,6 +161,7 @@ end
 
 insertAliasCheck = true
 function set_alias_check(val)
+    dprintln(3, "set_alias_check =", val)
     global insertAliasCheck = val
 end
 
@@ -2105,8 +2106,11 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     end
     #printf(\"Starting execution of cgen generated code\\n\");
     #printf(\"End of execution of cgen generated code\\n\");
+
+    # If we are forcing vectorization then we will not emit the alias check
+    emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
     s::ASCIIString = ""
-    if alias_check != nothing
+    if emitaliascheck && alias_check != nothing
         assert(isa(alias_check, AbstractString))
         unaliased_func = functionName * "_unaliased"
 
@@ -2142,6 +2146,8 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
         # of the roots
         emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
     end
+    dprintln(3,"vectorizationlevel = ", vectorizationlevel)
+    dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
     dprintln(3,"Ast = ", ast)
     dprintln(3,"functionName = ", functionName)
     dprintln(3,"Starting processing for $ast")
