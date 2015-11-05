@@ -234,6 +234,7 @@ function updateDef(state::IRState, s::SymAllGen, rhs)
     #dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
     @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
     (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
+    (isa(s, Symbol) && isEscapingVariable(s, state.linfo)) ||
     (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
     s = isa(s, GenSym) ? s.id : s
     state.defs[s] = rhs
@@ -1087,7 +1088,6 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
     dprintln(env, "got getindex or setindex!")
     args = normalize_args(state, env, args)
     arr = args[1]
-    println(arr)
     arrTyp = getType(arr, state.linfo)
     dprintln(env, "arrTyp = ", arrTyp)
     if isrange(arrTyp) && length(args) == 2
@@ -1495,7 +1495,7 @@ function update_gotos(node, cbdata, top_level_number, is_top_level, read)
 end
 
 function translate_call_parallel_for(state, env, args::Array{Any,1})
-    (ast, ety) = lambdaTypeinf(args[1], (Int, ))
+    (ast, ety) = lambdaTypeinf(args[1], tuple([Int for _ in 1:length(args) - 1]...))
     ast = from_expr("anonymous", env.cur_module, ast)
     # Temporary hack for multiple parfors embedded in a function.  Julia will
     # generate gotos+labels for the loops in the parfor body But since these

@@ -135,7 +135,7 @@ function cartesianarray(body, T1, T2, T3, ndims)
   return a, b, c
 end
 
-function parallel_for(loopvar, range, body)
+@noinline function parallel_for(fn, loopvar, range)
   throw("Not Implemented")
 end
 
