@@ -115,7 +115,7 @@ PRINTF("scala copy from mic data = %x dst = %x\n", data, dst);
 //         {
 //             tmp = (ELEMENT_TYPE*)data;
 //         }
-#pragma offload target(mic:run_where) inout(dst:length(len)) in(data) in(len)
+#pragma offload target(mic:run_where) out(dst:length(len)) in(data) in(len)
         {
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }

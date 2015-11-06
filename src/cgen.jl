@@ -1706,7 +1706,7 @@ function from_parforstart(args)
     end
 
     s *= rdsprolog * "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
-    s *= "#pragma omp for collapse($(length(lpNests))) private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
+    s *= "#pragma omp for collapse($(length(lpNests))) schedule(static, 1) private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     # s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     s *= loopheaders
     s
@@ -2284,6 +2284,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
         s = from_header(true) * "extern \"C\" {\n" * s * "\n}"
     end
     cgenOutput = "$generated_file_dir/$outfile_name.cpp"
+    println(cgenOutput)
     cf = open(cgenOutput, "w")
     write(cf, s)
     dprintln(3,"Done committing cgen code")
