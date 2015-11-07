@@ -286,6 +286,7 @@ function from_includes()
     "#include <stdint.h>\n",
     "#include <float.h>\n",
     "#include <limits.h>\n",
+    "#include <complex.h>\n",
     "#include <math.h>\n",
     "#include <stdio.h>\n",
     "#include <iostream>\n",
@@ -396,7 +397,6 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         lstate.symboltable[k] = v.typ
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
-        @assert !(v.typ<:Complex) "CGen: Complex numbers are not supported yet"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -406,7 +406,6 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
         @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
-        @assert !(gensyms[k]<:Complex) "CGen: Complex numbers are not supported yet"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
@@ -667,6 +666,10 @@ function toCtype(typ::DataType)
         return " j2c_array< $(atyp) > "
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
+    elseif typ == Complex64
+        return "float _Complex"
+    elseif typ == Complex128
+        return "double _Complex"
     elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
@@ -1253,15 +1256,17 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         s = args[2].value
         if isa(args[1], Module)
             M = args[1]
-            dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
+        elseif args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re) 
+            func = args[2] == QuoteNode(:im) ? "creal" : "cimag";
+            t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
             M = ""
             s = ""
             t = from_expr(args[1]) * "." * from_expr(args[2])
             #M, _s = resolveCallTarget([args[1]])
-            dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         end
+        dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
         return resolveCallTarget(f)
 
@@ -1278,42 +1283,32 @@ function resolveCallTarget(f::ANY, args::Array{Any, 1})
     return "","",""
 end
 
-function pattern_match_call_math(fun::TopNode, input::GenSym)
+function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
-    if in(fun.name,libm_math_functions) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+    isFloat = typ == Float64 || typ == Float32
+    isComplex = typ <: Complex
+    isInt = typ <: Integer
+    if in(fun.name,libm_math_functions) && (isFloat || isComplex)
         dprintln(3,"FOUND ", fun.name)
-        s = string(fun.name)*"("*from_expr(input)*");"
+        s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "fabs("*from_expr(input)*");"
-    end
-    if is(fun.name,:abs) && (lstate.symboltable[input]==Int64 || lstate.symboltable[input]==Int32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "abs("*from_expr(input)*");"
+    if is(fun.name,:abs) && (isFloat || isComplex || isInt)
+      dprintln(3,"FOUND ", fun.name)
+      fname = isInt ? "abs" : (isFloat ? "fabs" : (typ == Complex64 ? "cabsf" : "cabs"))
+      s = fname*"("*input*");"
     end
     return s
 end
 
+function pattern_match_call_math(fun::TopNode, input::GenSym)
+  pattern_match_call_math(fun, from_expr(input), lstate.symboltable[input])
+end
+
 
 function pattern_match_call_math(fun::TopNode, input::SymbolNode)
-    s = ""
-    if in(fun.name,libm_math_functions) && (input.typ==Float64 || input.typ==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = string(fun.name)*"("*from_expr(input.name)*");"
-    end
-    # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (input.typ==Float64 || input.typ==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "fabs("*from_expr(input)*");"
-    end
-    if is(fun.name,:abs) && (input.typ==Int64 || input.typ==Int32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "abs("*from_expr(input)*");"
-    end
-    return s
+  pattern_match_call_math(fun, from_expr(input), input.typ)
 end
 
 function pattern_match_call_math(fun::GlobalRef, input)
@@ -1767,7 +1762,11 @@ end
 function from_new(args)
     s = ""
     typ = args[1] #type of the object
-    if isa(typ, DataType)
+    if typ <: Complex
+        assert(length(args) == 3)
+        dprintln(3, "new complex number")
+        s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+    elseif isa(typ, DataType)
         objtyp, ptyps = parseParametricType(typ)
         ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
         s = ctyp * "{"

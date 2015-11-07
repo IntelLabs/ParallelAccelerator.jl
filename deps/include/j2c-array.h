@@ -827,7 +827,11 @@ void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
     case 8:
         a = new j2c_array<int64_t>((int64_t*)data, ndim, dims);
         break;
+    case 16:
+        a = new j2c_array<double _Complex>((double _Complex *)data, ndim, dims);
+        break;
     default:
+        fprintf(stderr, "J2C Array does not support %d-byte  element size.", elem_bytes);
         assert(false);
         break;
     }
@@ -883,7 +887,11 @@ void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
     case 8:
         ((int64_t*)value)[0] = ((j2c_array<int64_t>*)arr)->ARRAYELEM(idx);
         break;
+    case 16:
+        ((double _Complex*)value)[0] = ((j2c_array<double _Complex>*)arr)->ARRAYELEM(idx);
+        break;
     default:
+        fprintf(stderr, "J2C Array does not support %d-byte  element size.", elem_bytes);
         assert(false);
         break;
     }
@@ -910,7 +918,11 @@ void j2c_array_set(int elem_bytes, void *arr, unsigned idx, void *value)
     case 8:
         ((j2c_array<int64_t>*)arr)->ARRAYELEM(idx) = ((int64_t*)value)[0];
         break;
+    case 16:
+        ((j2c_array<double _Complex>*)arr)->ARRAYELEM(idx) = ((double _Complex*)value)[0];
+        break;
     default:
+        fprintf(stderr, "J2C Array does not support %d-byte  element size.", elem_bytes);
         assert(false);
         break;
     }
