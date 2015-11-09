@@ -26,8 +26,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
+ParallelAccelerator.cgen.set_alias_check(false)
+
 include("image.jl")
 using Image
+
+#ParallelAccelerator.set_debug_level(3)
+#ParallelAccelerator.cgen.set_debug_level(3)
 
 # Block Jacobi preconditioner
 # Used in singleScaleOpticalFlow below

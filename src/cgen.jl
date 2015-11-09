@@ -2140,7 +2140,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
 end
 
 # This is the entry point to cgen from the PSE driver
-function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
+function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}(), isEntryPoint = true)
     global inEntryPoint
     inEntryPoint = isEntryPoint
     global lstate
@@ -2263,6 +2263,17 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     c = hdr * forwarddecl * from_worklist() * s * wrapper
     if isEntryPoint
         resetLambdaState(lstate)
+
+        if length(array_types_in_sig) > 0
+            gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
+            for (key, value) in array_types_in_sig
+                atyp = toCtype(key)
+                elemtyp = toCtype(eltype(key))
+                gen_j2c_array_new *= "case " * string(value) * ":\na = new " * atyp * "((" * elemtyp * "*)data, ndim, dims);\nbreak;\n"
+            end
+            gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
+            c *= gen_j2c_array_new   
+        end
     end
     c
 end
@@ -2336,7 +2347,7 @@ function from_worklist()
         dprintln(3,a)
         length(a) >= 1 ? dprintln(3,a[1].args) : ""
         dprintln(3,"============ End of AST for ", fname, " ============")
-        si = length(a) >= 1 ? from_root(a[1], fname, false) : ""
+        si = length(a) >= 1 ? from_root(a[1], fname, Dict{DataType,Int64}(), false) : ""
         dprintln(3,"============== C++ after compiling ", fname, " ===========")
         dprintln(3,si)
         dprintln(3,"============== End of C++ for ", fname, " ===========")

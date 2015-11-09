@@ -316,6 +316,16 @@ bool isNested(j2c_array<ELEMENT_TYPE> &jai) {
 }
 
 template <typename ELEMENT_TYPE>
+void ARRAYGET(j2c_array<ELEMENT_TYPE> *arr, uint64_t i, void *v) {
+    arr->getnonnested(i,v);
+}
+
+template <typename ELEMENT_TYPE>
+void ARRAYGET(j2c_array<j2c_array<ELEMENT_TYPE> > *arr, uint64_t i, void *v) {
+    arr->getnested(i,v);
+}
+
+template <typename ELEMENT_TYPE>
 class j2c_array : public j2c_array_interface {
 protected:
     int64_t* offsets;
@@ -328,6 +338,18 @@ public:
 
     virtual void * getData(void) {
         return data;
+    }
+
+    void getnonnested(uint64_t i, void *v) {
+        std::cout << "non-nested ARRAYGET v = " << v << std::endl;
+        fflush(stdout);
+        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+    }
+
+    void getnested(uint64_t i, void *v) {
+        std::cout << "nested ARRAYGET v = " << v << std::endl;
+        fflush(stdout);
+        *((ELEMENT_TYPE**)v) = &data[i - 1 - offsets[0]];
     }
 
     /*
@@ -695,7 +717,8 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
     void ARRAYGET(uint64_t i, void *v) {
         std::cout << "ARRAYGET v = " << v << std::endl;
         fflush(stdout);
-        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+        ::ARRAYGET(this, i, v);
+//        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
     }
 
     void ARRAYSET(uint64_t i, void *v) {
@@ -822,6 +845,7 @@ int j2c_array_bytesize()
 }
 #endif
 
+#if 0
 extern "C" // DLLEXPORT
 void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
 {
@@ -853,6 +877,7 @@ void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
     }
     return a;
 }
+#endif
 
 /* own means the caller wants to own the pointer */
 extern "C" // DLLEXPORT
@@ -898,7 +923,6 @@ void j2c_array_set(int elem_bytes, void *arr, unsigned idx, void *value)
     std::cout << "j2c_array_set arr = " << arr << " value = " << value << std::endl;
     j2c_array_interface *jai = (j2c_array_interface*)arr;
     jai->ARRAYSET(idx, value);
-    }
 }
 
 
