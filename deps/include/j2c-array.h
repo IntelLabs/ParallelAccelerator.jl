@@ -341,14 +341,12 @@ public:
     }
 
     void getnonnested(uint64_t i, void *v) {
-        std::cout << "non-nested ARRAYGET v = " << v << std::endl;
-        fflush(stdout);
+//        std::cout << "non-nested ARRAYGET v = " << v << std::endl;
         *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
     }
 
     void getnested(uint64_t i, void *v) {
-        std::cout << "nested ARRAYGET v = " << v << std::endl;
-        fflush(stdout);
+//        std::cout << "nested ARRAYGET v = " << v << std::endl;
         *((ELEMENT_TYPE**)v) = &data[i - 1 - offsets[0]];
     }
 
@@ -422,7 +420,6 @@ PRINTF("decrement done\n");
     }
 
     void increment(void) {
-      std::cout << "increment this = " << this << " data = " << data << " refcount = " << refcount << std::endl;
       if (refcount) {
 PRINTF("increment %x => %d + 1\n", data, *refcount);
 #ifdef DEBUGJ2C
@@ -715,14 +712,12 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
     }
 
     void ARRAYGET(uint64_t i, void *v) {
-        std::cout << "ARRAYGET v = " << v << std::endl;
-        fflush(stdout);
+//        std::cout << "ARRAYGET v = " << v << std::endl;
         ::ARRAYGET(this, i, v);
     }
 
     void ARRAYSET(uint64_t i, void *v) {
-        std::cout << "ARRAYSET this = " << this << " data = " << data << " i = " << i << " v = " << v << std::endl;
-        fflush(stdout);
+//        std::cout << "ARRAYSET this = " << this << " data = " << data << " i = " << i << " v = " << v << std::endl;
         data[i - 1 - offsets[0]] = *(ELEMENT_TYPE*)v;
     }
 
@@ -910,7 +905,7 @@ unsigned j2c_array_size(void *arr, unsigned dim)
 extern "C" // DLLEXPORT
 void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-    std::cout << "j2c_array_get arr = " << arr << " value = " << value << std::endl;
+//    std::cout << "j2c_array_get arr = " << arr << " value = " << value << std::endl;
     j2c_array_interface *jai = (j2c_array_interface*)arr;
     jai->ARRAYGET(idx, value);
 }
@@ -919,7 +914,7 @@ void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
 extern "C" // DLLEXPORT
 void j2c_array_set(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-    std::cout << "j2c_array_set arr = " << arr << " value = " << value << std::endl;
+//    std::cout << "j2c_array_set arr = " << arr << " value = " << value << std::endl;
     j2c_array_interface *jai = (j2c_array_interface*)arr;
     jai->ARRAYSET(idx, value);
 }
@@ -930,8 +925,7 @@ extern "C" // DLLEXPORT
 void j2c_array_delete(void* a)
 {
     j2c_array_interface *jai = (j2c_array_interface*)a;
-    std::cout << "j2c_array_delete this = " << jai << std::endl;
-    fflush(stdout);
+//    std::cout << "j2c_array_delete this = " << jai << std::endl;
     delete jai;
 }
 
