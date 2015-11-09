@@ -137,8 +137,6 @@ end
 # Note that:
 # 1. We assume the input j2c array object contains no data pointer aliases.
 # 2. The returned Julia array will share the pointer to J2C array data at leaf level.
-# 3. The input j2c array object will be de-referenced before return, and shall
-#    be later manually freed. 
 function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr{Void}, Array})
   dims = Array(Int, N)
   len  = 1
@@ -160,7 +158,6 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
     for i = 1:len
       ptr = j2c_array_get(inp, i, Ptr{Void})
       arr[i] = _from_j2c_array(ptr, sub_type, sub_dim, ptr_array_dict)
-      j2c_array_deref(ptr)
     end
   end
   return arr
