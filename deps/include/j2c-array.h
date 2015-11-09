@@ -422,6 +422,7 @@ PRINTF("decrement done\n");
     }
 
     void increment(void) {
+      std::cout << "increment this = " << this << " data = " << data << " refcount = " << refcount << std::endl;
       if (refcount) {
 PRINTF("increment %x => %d + 1\n", data, *refcount);
 #ifdef DEBUGJ2C
@@ -717,7 +718,6 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
         std::cout << "ARRAYGET v = " << v << std::endl;
         fflush(stdout);
         ::ARRAYGET(this, i, v);
-//        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
     }
 
     void ARRAYSET(uint64_t i, void *v) {
