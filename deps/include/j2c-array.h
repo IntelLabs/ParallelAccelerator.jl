@@ -114,22 +114,22 @@ class j2c_array_copy {
    /* Both copy_to_mic and copy_from_mic are meant to be called from host */
    static inline void copy_to_mic(int run_where, uintptr_t dst, ELEMENT_TYPE *data, uint64_t start, uint64_t len) {
    // FIXME: use into syntax if someone knows how to make it work
-PRINTF("scala copy to mic data = %x start = %d len = %d\n", data, start, len);
+PRINTF("scalar copy to mic data = %x start = %d len = %d\n", data, start, len);
         data += start;
         dst  += sizeof(ELEMENT_TYPE) * start;
 // #pragma offload target(mic:run_where) in(data:length(len))
         {
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }
-PRINTF("scala copy to mic data => %x\n", data);
+PRINTF("scalar copy to mic data => %x\n", data);
     }
 
     static inline void copy_from_mic(int run_where, ELEMENT_TYPE *dst, uintptr_t data, uint64_t start, uint64_t len) {
-PRINTF("scala copy from mic data = %x start = %d len = %d\n", data, start, len);
+PRINTF("scalar copy from mic data = %x start = %d len = %d\n", data, start, len);
         ELEMENT_TYPE *tmp;
         data += sizeof(ELEMENT_TYPE) * start;
         dst  += start;
-PRINTF("scala copy from mic data = %x dst = %x\n", data, dst);
+PRINTF("scalar copy from mic data = %x dst = %x\n", data, dst);
 // #pragma offload target(mic:run_where) out(tmp[0:len]:into(dst[0:len]) preallocated alloc_if(1))
         {
             tmp = (ELEMENT_TYPE*)data;
@@ -165,7 +165,7 @@ PRINTF("scala copy from mic data = %x dst = %x\n", data, dst);
     static ELEMENT_TYPE *alloc_elements(uint64_t len) {
         //ELEMENT_TYPE *x = (ELEMENT_TYPE*)malloc(sizeof(ELEMENT_TYPE) * len);
         ELEMENT_TYPE *x = new ELEMENT_TYPE[len];
-PRINTF("alloc scala elements %x\n", x);
+PRINTF("alloc scalar elements %x\n", x);
         return x;
     }
 
@@ -290,6 +290,8 @@ public:
     virtual void decrement(void) = 0;
     virtual void * getData(void) = 0;
     virtual void * being_returned(void) = 0;
+    virtual void ARRAYGET(uint64_t i, void *v) = 0;
+    virtual void ARRAYSET(uint64_t i, void *v) = 0;
 };
 
 // The catchall case for adding a 
@@ -314,6 +316,16 @@ bool isNested(j2c_array<ELEMENT_TYPE> &jai) {
 }
 
 template <typename ELEMENT_TYPE>
+void ARRAYGET(j2c_array<ELEMENT_TYPE> *arr, uint64_t i, void *v) {
+    arr->getnonnested(i,v);
+}
+
+template <typename ELEMENT_TYPE>
+void ARRAYGET(j2c_array<j2c_array<ELEMENT_TYPE> > *arr, uint64_t i, void *v) {
+    arr->getnested(i,v);
+}
+
+template <typename ELEMENT_TYPE>
 class j2c_array : public j2c_array_interface {
 protected:
     int64_t* offsets;
@@ -326,6 +338,18 @@ public:
 
     virtual void * getData(void) {
         return data;
+    }
+
+    void getnonnested(uint64_t i, void *v) {
+        std::cout << "non-nested ARRAYGET v = " << v << std::endl;
+        fflush(stdout);
+        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+    }
+
+    void getnested(uint64_t i, void *v) {
+        std::cout << "nested ARRAYGET v = " << v << std::endl;
+        fflush(stdout);
+        *((ELEMENT_TYPE**)v) = &data[i - 1 - offsets[0]];
     }
 
     /*
@@ -689,6 +713,19 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
         return data[i - 1 - offsets[0]];
     }
 
+    void ARRAYGET(uint64_t i, void *v) {
+        std::cout << "ARRAYGET v = " << v << std::endl;
+        fflush(stdout);
+        ::ARRAYGET(this, i, v);
+//        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+    }
+
+    void ARRAYSET(uint64_t i, void *v) {
+        std::cout << "ARRAYSET this = " << this << " data = " << data << " i = " << i << " v = " << v << std::endl;
+        fflush(stdout);
+        data[i - 1 - offsets[0]] = *(ELEMENT_TYPE*)v;
+    }
+
     ELEMENT_TYPE& ARRAYELEM(uint64_t i, uint64_t j) {
         return data[((j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]];
     }
@@ -799,13 +836,15 @@ uint64_t TOTALSIZE(j2c_array< j2c_array<ELEMENT_TYPE> > &array) {
     return ret;
 }
 
-
+#if 0
 extern "C" // DLLEXPORT
 int j2c_array_bytesize()
 {
     return sizeof(j2c_array<uintptr_t>);
 }
+#endif
 
+#if 0
 extern "C" // DLLEXPORT
 void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
 {
@@ -837,6 +876,7 @@ void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
     }
     return a;
 }
+#endif
 
 /* own means the caller wants to own the pointer */
 extern "C" // DLLEXPORT
@@ -870,69 +910,28 @@ unsigned j2c_array_size(void *arr, unsigned dim)
 extern "C" // DLLEXPORT
 void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-    switch (elem_bytes)
-    {
-    case 0:
-        ((j2c_array<uintptr_t>**)value)[0] = ((j2c_array<j2c_array<uintptr_t> >*)arr)->ARRAYELEMREF(idx);
-        break;
-    case 1:
-        ((int8_t*)value)[0] = ((j2c_array<int8_t>*)arr)->ARRAYELEM(idx);
-        break;
-    case 2:
-        ((int16_t*)value)[0] = ((j2c_array<int16_t>*)arr)->ARRAYELEM(idx);
-        break;
-    case 4:
-        ((int32_t*)value)[0] = ((j2c_array<int32_t>*)arr)->ARRAYELEM(idx);
-        break;
-    case 8:
-        ((int64_t*)value)[0] = ((j2c_array<int64_t>*)arr)->ARRAYELEM(idx);
-        break;
-    case 16:
-        ((double _Complex*)value)[0] = ((j2c_array<double _Complex>*)arr)->ARRAYELEM(idx);
-        break;
-    default:
-        fprintf(stderr, "J2C Array does not support %d-byte  element size.", elem_bytes);
-        assert(false);
-        break;
-    }
+    std::cout << "j2c_array_get arr = " << arr << " value = " << value << std::endl;
+    j2c_array_interface *jai = (j2c_array_interface*)arr;
+    jai->ARRAYGET(idx, value);
 }
 
 /* in the case elem_bytes = 0, value is a pointer to a j2c_array object */
 extern "C" // DLLEXPORT
 void j2c_array_set(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-    switch (elem_bytes)
-    {
-    case 0:
-        ((j2c_array<j2c_array<uintptr_t> >*)arr)->ARRAYELEM(idx) = *(j2c_array<uintptr_t>*)value;
-        break;
-    case 1:
-        ((j2c_array<int8_t>*)arr)->ARRAYELEM(idx) = ((int8_t*)value)[0];
-        break;
-    case 2:
-        ((j2c_array<int16_t>*)arr)->ARRAYELEM(idx) = ((int16_t*)value)[0];
-        break;
-    case 4:
-        ((j2c_array<int32_t>*)arr)->ARRAYELEM(idx) = ((int32_t*)value)[0];
-        break;
-    case 8:
-        ((j2c_array<int64_t>*)arr)->ARRAYELEM(idx) = ((int64_t*)value)[0];
-        break;
-    case 16:
-        ((j2c_array<double _Complex>*)arr)->ARRAYELEM(idx) = ((double _Complex*)value)[0];
-        break;
-    default:
-        fprintf(stderr, "J2C Array does not support %d-byte  element size.", elem_bytes);
-        assert(false);
-        break;
-    }
+    std::cout << "j2c_array_set arr = " << arr << " value = " << value << std::endl;
+    j2c_array_interface *jai = (j2c_array_interface*)arr;
+    jai->ARRAYSET(idx, value);
 }
+
 
 /* Only delete this array object, no nested deletion */
 extern "C" // DLLEXPORT
 void j2c_array_delete(void* a)
 {
     j2c_array_interface *jai = (j2c_array_interface*)a;
+    std::cout << "j2c_array_delete this = " << jai << std::endl;
+    fflush(stdout);
     delete jai;
 }
 
