@@ -853,7 +853,7 @@ void *j2c_array_new(int elem_bytes, void *data, unsigned ndim, int64_t *dims)
     switch (elem_bytes)
     {
     case 0: // special case for array of array
-        a = new j2c_array<j2c_array<uintptr_t> >((j2c_array<uintptr_t>*)data, ndim, dims);
+        a = new j2c_array<j2c_array_interface *>((j2c_array_interface **)data, ndim, dims);
         break;
     case 1:
         a = new j2c_array<int8_t>((int8_t*)data, ndim, dims);
