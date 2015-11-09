@@ -1762,21 +1762,28 @@ end
 function from_new(args)
     s = ""
     typ = args[1] #type of the object
-    if typ <: Complex
-        assert(length(args) == 3)
-        dprintln(3, "new complex number")
-        s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
-    elseif isa(typ, DataType)
-        objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
-        s = ctyp * "{"
-        s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
-    elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
-        typ = getfield(typ.args[2], typ.args[3].value)
-        objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
-        s = ctyp * "{"
-        s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+    dprintln(3,"from_new args = ", args)
+    if isa(typ, DataType)
+        if typ <: Complex
+            assert(length(args) == 3)
+            dprintln(3, "new complex number")
+            s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+        else
+            objtyp, ptyps = parseParametricType(typ)
+            ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+            s = ctyp * "{"
+            s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
+        end
+    elseif isa(typ, Expr)
+        if isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
+            typ = getfield(typ.args[2], typ.args[3].value)
+            objtyp, ptyps = parseParametricType(typ)
+            ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
+            s = ctyp * "{"
+            s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+        else
+            throw(string("CGen Error: unhandled args in from_new ", args))
+        end
     end
     s
 end
@@ -1967,7 +1974,7 @@ function from_expr(ast::ANY)
     #s *= dispatch(lstate.adp, ast, ast)
     asttyp = typeof(ast)
     dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
-    throw("CGen Error: Could not translate node")
+    throw(string("CGen Error: Could not translate node: ", ast, " with type: ", asttyp))
 end
 
 function resolveFunction(func::Symbol, mod::Module, typs)
