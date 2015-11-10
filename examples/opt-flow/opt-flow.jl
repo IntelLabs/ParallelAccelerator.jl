@@ -26,6 +26,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
+ParallelAccelerator.ParallelIR.set_debug_level(3)
+
 include("image.jl")
 using Image
 
