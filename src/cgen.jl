@@ -903,8 +903,24 @@ function from_steprange_last(args)
   return "("*stop*"-("*stop*"-"*start*")%"*step*")"
 end
 
+
+function isTupleGlobalRef(arg::GlobalRef)
+    return arg.mod==Base && arg.name==:tuple
+end
+
+function isTupleGlobalRef(arg::Any)
+    return false
+end
+
 function get_shape_from_tupple(arg::Expr)
     res = ""
+    if arg.head==:call && isTupleGlobalRef(arg.args[1])
+        shp = AbstractString[]
+        for i in 2:length(arg.args)
+            push!(shp, from_expr(arg.args[i]))
+        end
+        res = foldl((a, b) -> "$a, $b", shp)
+    end
     return res
 end
 
@@ -921,7 +937,7 @@ function get_alloc_shape(args, dims)
     if res!=""
         return res
     end
-    shp = []
+    shp = AbstractString[]
     for i in 1:dims
         push!(shp, from_expr(args[6+(i-1)*2]))
     end
@@ -940,6 +956,7 @@ function from_arrayalloc(args)
     typ = toCtype(typ)
     dprintln(3,"Array alloc after ctype conversion typ = ", typ)
     shape::AbstractString = get_alloc_shape(args, dims)
+    dprintln(3,"Array alloc shape = ", shape)
     return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
 end
 
