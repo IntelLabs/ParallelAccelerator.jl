@@ -26,8 +26,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-ParallelAccelerator.cgen.set_alias_check(false)
-
 include("image.jl")
 using Image
 
