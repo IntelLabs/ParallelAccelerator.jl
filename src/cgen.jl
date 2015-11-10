@@ -1706,6 +1706,7 @@ function from_parforstart(args)
     end
 
     s *= rdsprolog * "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
+    # s *= "#pragma omp for collapse($(length(lpNests))) private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     s *= "#pragma omp for collapse($(length(lpNests))) schedule(static, 1) private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     # s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     s *= loopheaders
@@ -2353,11 +2354,7 @@ function getLinkCommand(outfile_name, lib)
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
-          if backend_compiler == USE_ICC
-              push!(linkLibs,"-mkl")
-          else
-              push!(linkLibs,"-lmkl_rt")
-          end
+          push!(linkLibs,"-lmkl_rt")
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
       end
