@@ -903,6 +903,32 @@ function from_steprange_last(args)
   return "("*stop*"-("*stop*"-"*start*")%"*step*")"
 end
 
+function get_shape_from_tupple(arg::Expr)
+    res = ""
+    return res
+end
+
+function get_shape_from_tupple(arg::ANY)
+    return ""
+end
+
+function get_alloc_shape(args, dims)
+    res = ""
+    # in cases like rand(s1,s2), array allocation has only a tupple
+    if length(args)==7
+        res = get_shape_from_tupple(args[6])
+    end
+    if res!=""
+        return res
+    end
+    shp = []
+    for i in 1:dims
+        push!(shp, from_expr(args[6+(i-1)*2]))
+    end
+    res = foldl((a, b) -> "$a, $b", shp)
+    return res
+end
+
 function from_arrayalloc(args)
     dprintln(3,"Array alloc args:")
     map((i)->dprintln(3,args[i]), 1:length(args))
@@ -913,12 +939,8 @@ function from_arrayalloc(args)
     dprintln(3,"Array alloc dims = ", dims)
     typ = toCtype(typ)
     dprintln(3,"Array alloc after ctype conversion typ = ", typ)
-    shp = []
-    for i in 1:dims
-        push!(shp, from_expr(args[6+(i-1)*2]))
-    end
-    shp = foldl((a, b) -> "$a, $b", shp)
-    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shp);\n"
+    shape::AbstractString = get_alloc_shape(args, dims)
+    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
 end
 
 function from_builtins_comp(f, args)
