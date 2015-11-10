@@ -712,7 +712,11 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
     }
 
     void ARRAYGET(uint64_t i, void *v) {
+<<<<<<< Updated upstream
         ::ARRAYGET(this, i, v);
+=======
+        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+>>>>>>> Stashed changes
     }
 
     void ARRAYSET(uint64_t i, void *v) {
