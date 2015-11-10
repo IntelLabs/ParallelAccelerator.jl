@@ -4047,7 +4047,8 @@ function hasNoSideEffects(node :: Expr)
         end
     elseif node.head == :call
         func = node.args[1]
-        if func == TopNode(:box) ||
+        if func == GlobalRef(Base, :box) ||
+            func == TopNode(:box) ||
             func == TopNode(:tuple) ||
             func == TopNode(:getindex_bool_1d) ||
             func == :getindex
