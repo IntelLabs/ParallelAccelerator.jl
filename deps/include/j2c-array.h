@@ -709,13 +709,10 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
     }
 
     void ARRAYGET(uint64_t i, void *v) {
-//        std::cout << "ARRAYGET v = " << v << std::endl;
         ::ARRAYGET(this, i, v);
-//        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
     }
 
     void ARRAYSET(uint64_t i, void *v) {
-//        std::cout << "ARRAYSET this = " << this << " data = " << data << " i = " << i << " v = " << v << std::endl;
         data[i - 1 - offsets[0]] = *(ELEMENT_TYPE*)v;
     }
 
@@ -903,7 +900,6 @@ unsigned j2c_array_size(void *arr, unsigned dim)
 extern "C" // DLLEXPORT
 void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-//    std::cout << "j2c_array_get arr = " << arr << " value = " << value << std::endl;
     j2c_array_interface *jai = (j2c_array_interface*)arr;
     jai->ARRAYGET(idx, value);
 }
@@ -912,7 +908,6 @@ void j2c_array_get(int elem_bytes, void *arr, unsigned idx, void *value)
 extern "C" // DLLEXPORT
 void j2c_array_set(int elem_bytes, void *arr, unsigned idx, void *value)
 {
-//    std::cout << "j2c_array_set arr = " << arr << " value = " << value << std::endl;
     j2c_array_interface *jai = (j2c_array_interface*)arr;
     jai->ARRAYSET(idx, value);
 }
