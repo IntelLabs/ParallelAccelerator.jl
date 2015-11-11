@@ -441,7 +441,10 @@ function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
     if dim <= length(x.range)
         #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
         # TODO: do something with skip!
-        return mk_add_int_expr(mk_sub_int_expr(x.range[dim].last,x.range[dim].start), 1)
+        r = x.range[dim]
+        last = isa(r.exprs.last_val, Expr) ? r.last : r.exprs.last_val
+        start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
+        return DomainIR.add(DomainIR.sub(last, start), 1)
     else
         return mk_arraylen_expr(x.array, dim)
     end 
@@ -615,20 +618,6 @@ function getArrayNumDims(array :: GenSym, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
     assert(gstyp.name == Array.name)
     gstyp.parameters[2]
-end
-
-@doc """
-Returns a :call expression to add_int for two operands.
-"""
-function mk_add_int_expr(op1, op2)
-    return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
-end
-
-@doc """
-Returns a :call expression to sub_int for two operands.
-"""
-function mk_sub_int_expr(op1, op2)
-    return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
 end
 
 @doc """

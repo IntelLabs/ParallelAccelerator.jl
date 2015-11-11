@@ -39,7 +39,7 @@ function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1}, 
     dprintln(3,"pre-base = ", base)
 
     if dim <= length(range_var) && !isStartOneRange(range[dim].exprs)
-        base = mk_add_int_expr(base, range_var[dim])
+        base = DomainIR.add(base, range_var[dim])
     end
 
     dprintln(3,"post-base = ", base)
