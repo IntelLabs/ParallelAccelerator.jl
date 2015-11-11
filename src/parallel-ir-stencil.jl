@@ -52,10 +52,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local stat = args[1]
   local border = stat.borderSty
   local border_inloop = false
+  local oob_skip = false
   local oob_dst_zero = false
   local oob_src_zero = false
   local oob_wraparound = false
   assert(isa(border, Symbol))
+  oob_skip = is(border, :oob_skip)
   oob_dst_zero = is(border, :oob_dst_zero)
   oob_src_zero = is(border, :oob_src_zero)
   oob_wraparound = is(border, :oob_wraparound)
@@ -195,13 +197,13 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   end
   borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
-  borderCond = TypedExpr(Void, head,
+  borderCond = oob_skip ? Any[] : Any[TypedExpr(Void, head,
         PIRParForAst(toSymGen(buf),
             vcat(lowerGotos, upperGotos, borderExpr),
             [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
             PIRReduction[],
-            [], [], irState.top_level_number, get_unique_num(), false))
+            [], [], irState.top_level_number, get_unique_num(), false))]
 
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
