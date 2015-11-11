@@ -1377,6 +1377,18 @@ function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
     return ""
 end
 
+function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
+    res = ""
+    if(fun.name==:randn!)
+        res = "cgen_n_distribution(cgen_rand_generator);\n"
+    end
+    return res 
+end
+
+function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY)
+    return ""
+end
+
 function getSymType(a::Union{Symbol,GenSym})
     return lstate.symboltable[a]
 end
@@ -1442,6 +1454,10 @@ function pattern_match_call(ast::Array{Any, 1})
     # rand! call has 4 args
     if(length(ast)==4)
         s = pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
+    end
+    # randn! call has 3 args
+    if(length(ast)==3)
+        s = pattern_match_call_randn(ast[1],ast[2],ast[3])
     end
     # gemm calls have 6 args
     if(length(ast)==6)
@@ -1883,7 +1899,9 @@ function from_expr(ast::Expr)
     elseif head == :body
         dprintln(3,"Compiling body")
         if include_rand
-            s *= "std::default_random_engine cgen_rand_generator;\nstd::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
+            s *= "std::default_random_engine cgen_rand_generator;\n"
+            s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
+            s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
         end
         s *= from_exprs(args)
 
@@ -2234,7 +2252,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
         set_include_blas(true)
     end
 
-    if contains(string(ast),"rand!")
+    if contains(string(ast),"rand!") || contains(string(ast),"randn!")
         global include_rand = true
     end
 
