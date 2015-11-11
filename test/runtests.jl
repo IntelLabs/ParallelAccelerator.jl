@@ -41,6 +41,7 @@ include("rand.jl")
 using RandTest
 println("Testing rand()...")
 @test all(RandTest.test1() .<= ones(2,3).*2.0) && all(RandTest.test1() .>= zeros(2,3)) 
+@test size(RandTest.test2())==(2,3)
 println("Done testing rand()...")
 
 

@@ -37,8 +37,18 @@ using ParallelAccelerator
     return C
 end
 
+@acc function simple_randn(size1::Int64, size2::Int64)
+    A = randn(size1,size2)
+    C = A.*2.0
+    return C
+end
+
 function test1()
     return simple_rand(2,3)
+end
+
+function test2()
+    return simple_randn(2,3)
 end
 
 end
