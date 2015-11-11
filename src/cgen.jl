@@ -1373,6 +1373,9 @@ function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     return res 
 end
 
+function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
+    return ""
+end
 
 function getSymType(a::Union{Symbol,GenSym})
     return lstate.symboltable[a]
