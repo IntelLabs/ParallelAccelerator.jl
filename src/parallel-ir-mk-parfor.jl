@@ -565,7 +565,7 @@ function mk_parfor_args_from_parallel_for(args::Array{Any,1}, state)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,loop_len)
         CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
+        loopNests[i] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
     end
 
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
