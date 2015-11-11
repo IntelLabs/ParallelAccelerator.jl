@@ -843,6 +843,10 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
         if haskey(liftOps, fun) # lift operation to array level
             fun = liftOps[fun]
         end
+    elseif fun==:rand!
+        # remove third argument. 
+        # it is Base.arraylen that we can't handle well and don't need for translation
+        splice!(args,3)
     end
     return (fun, args)
 end

@@ -159,6 +159,9 @@ function set_include_blas(val::Bool=true)
     global include_blas = val
 end
 
+# include random number generator?
+include_rand = false
+
 insertAliasCheck = true
 function set_alias_check(val)
     dprintln(3, "set_alias_check =", val)
@@ -278,6 +281,10 @@ function from_includes()
         end
     end
     s = ""
+    if include_rand==true 
+        s *= "#include <random>\n"
+    end
+
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
@@ -1358,6 +1365,15 @@ function pattern_match_call_math(fun::ANY, input::ANY)
     return ""
 end
 
+function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
+    res = ""
+    if(fun.name==:rand!)
+        res = "cgen_distribution(cgen_rand_generator);\n"
+    end
+    return res 
+end
+
+
 function getSymType(a::Union{Symbol,GenSym})
     return lstate.symboltable[a]
 end
@@ -1419,6 +1435,10 @@ function pattern_match_call(ast::Array{Any, 1})
     s = ""
     if(length(ast)==2)
         s = pattern_match_call_math(ast[1],ast[2])
+    end
+    # rand! call has 4 args
+    if(length(ast)==4)
+        s = pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
     # gemm calls have 6 args
     if(length(ast)==6)
@@ -1859,6 +1879,9 @@ function from_expr(ast::Expr)
 
     elseif head == :body
         dprintln(3,"Compiling body")
+        if include_rand
+            s *= "std::default_random_engine cgen_rand_generator;\nstd::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
+        end
         s *= from_exprs(args)
 
     elseif head == :new
@@ -2208,6 +2231,10 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
         set_include_blas(true)
     end
 
+    if contains(string(ast),"rand!")
+        global include_rand = true
+    end
+
     # Translate the body
     bod = from_expr(ast)
 
@@ -2292,9 +2319,9 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     else
         rtyp = toCtype(typ)
     end
-    s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+    s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
-    forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
+    forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
     if inEntryPoint
         inEntryPoint = false
     end
