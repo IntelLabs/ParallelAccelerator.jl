@@ -265,9 +265,6 @@ PRINTF("copy_from_mic copy %x\n", _data[i]);
 
     static void free_elements(j2c_array<ELEMENT_TYPE>* a, uint64_t len) {
 PRINTF("delete array elements %x\n", a);
-        for (int i = 0; i < len; i++) {
-            if (a[i].data != NULL) a[i].decrement();
-        }
 #ifdef ALIAS_ANA
         pert_unregister_data((void*)a);
 #endif
@@ -712,11 +709,7 @@ PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
     }
 
     void ARRAYGET(uint64_t i, void *v) {
-<<<<<<< Updated upstream
         ::ARRAYGET(this, i, v);
-=======
-        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
->>>>>>> Stashed changes
     }
 
     void ARRAYSET(uint64_t i, void *v) {

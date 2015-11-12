@@ -397,6 +397,9 @@ type InputInfo
         new(nothing, 0, 0, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
     end
 end
+function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
+    return getRangeOrArray(inputInfo[1], num_dims)
+end
 
 function isWholeArray(inputInfo :: InputInfo) 
     return length(inputInfo.select_bitarrays) == 0 && length(inputInfo.range) == 0 
@@ -1998,7 +2001,9 @@ function fuse(body, body_index, cur, state)
             return 2;
         end
 
-        first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+        if isa(prev_parfor.first_input, SymAllGen)
+            first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+        end
 
         # Merge each part of the two parfor nodes.
 
@@ -2092,7 +2097,7 @@ function fuse(body, body_index, cur, state)
         # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
         # prevParFor where the array is in allocs_to_eliminate.
         prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
-                                  map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
+                                  isa(prev_parfor.first_input, SymAllGen) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor ]
         dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
