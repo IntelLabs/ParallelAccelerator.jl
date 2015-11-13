@@ -2294,7 +2294,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     end
     dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
     if canAliasCheck && num_array_params > 0
-        alias_check = "j2c_alias_test<" * string(num_array_params) * ">({" * array_list * "})"
+        alias_check = "j2c_alias_test<" * string(num_array_params) * ">({{" * array_list * "}})"
         dprintln(3,"alias_check = ", alias_check)
     else
         alias_check = nothing
