@@ -158,7 +158,18 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   package_root = ParallelAccelerator.getPackageRoot()
   function_name_string = ParallelAccelerator.cgen.canonicalize(string(func.name))
 
-  outfile_name = cgen.writec(cgen.from_root(code, function_name_string))
+  array_types_in_sig = Dict{DataType,Int64}()
+  atiskey = 1;
+  for t in signature
+      while isarray(t)
+          array_types_in_sig[t] = atiskey;
+          atiskey += 1
+          t = eltype(t)
+      end
+  end
+  dprintln(3, "array_types_in_sig = ", array_types_in_sig)
+ 
+  outfile_name = cgen.writec(cgen.from_root(code, function_name_string, array_types_in_sig))
   cgen.compile(outfile_name)
   dyn_lib = cgen.link(outfile_name)
  
@@ -188,11 +199,29 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   modified_args = Array(Any, length(sig_dims))
   extra_inits = Array(Any, 0)
   j2c_array = gensym("j2c_arr")
+
+  @eval begin
+    # Create a new j2c array object with element size in bytes and given dimension.
+    # It will share the data pointer of the given inp array, and if inp is nothing,
+    # the j2c array will allocate fresh memory to hold data.
+    # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
+    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
+      # note that C interface mandates Int64 for dimension data
+      _dims = Int64[ convert(Int64, x) for x in dims ]
+      _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
+
+      #ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
+      #      convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
+      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
+            convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
+    end
+  end
+
   for i = 1:length(sig_dims)
     arg = original_args[i]
     if sig_dims[i] > 0 
       j = length(extra_inits) + 1
-      push!(extra_inits, :(to_j2c_array($arg, ptr_array_dict)))
+      push!(extra_inits, :(to_j2c_array($arg, ptr_array_dict, $array_types_in_sig, $j2c_array_new)))
       modified_args[i] = :($(j2c_array)[$j])
     else
       modified_args[i] = arg

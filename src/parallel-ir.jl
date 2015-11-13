@@ -155,12 +155,23 @@ function EquivalenceClassesClear(ec :: EquivalenceClasses)
     empty!(ec.data)
 end
 
+type RangeExprs
+    start_val
+    skip_val
+    last_val
+end
+
+function isStartOneRange(re :: RangeExprs)
+    return re.start_val == 1
+end
+
 @doc """
 The parfor AST node type.
 While we are lowering domain IR to parfors and fusing we use this representation because it
 makes it easier to associate related statements before and after the loop to the loop itself.
 """
 type PIRParForAst
+    first_input  :: Union{SymAllGen, Array{RangeExprs,1} } 
     body                                      # holds the body of the innermost loop (outer loops can't have anything in them except inner loops)
     preParFor    :: Array{Any,1}              # do these statements before the parfor
     loopNests    :: Array{PIRLoopNest,1}      # holds information about the loop nests
@@ -181,13 +192,13 @@ type PIRParForAst
     instruction_count_expr
     simply_indexed :: Bool
 
-    function PIRParForAst(b, pre, nests, red, post, orig, t, unique, si)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, si)
         r = CompilerTools.ReadWriteSet.from_exprs(b)
-        new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 
-    function PIRParForAst(b, pre, nests, red, post, orig, t, r, unique, si)
-        new(b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, si)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
     end
 end
 
@@ -230,8 +241,10 @@ type expr_state
     top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
     # Arrays created from each other are known to have the same size. Store such correlations here.
     # If two arrays have the same dictionary value, they are equal in size.
+    next_eq_class            :: Int
     array_length_correlation :: Dict{SymGen,Int}
     symbol_array_correlation :: Dict{Array{SymGen,1},Int}
+    range_correlation        :: Dict{Array{Any,1},Int}
     lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
     max_label :: Int # holds the max number of all LabelNodes
 
@@ -242,7 +255,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, init_corr, Dict{Array{SymGen,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
+        new(bl, 0, 0, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{Any,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
     end
 end
 
@@ -359,9 +372,10 @@ type RangeData
     start
     skip
     last
+    exprs :: RangeExprs
 
-    function RangeData(s, sk, l)
-        new(s, sk, l)
+    function RangeData(s, sk, l, sv, skv, lv)
+        new(s, sk, l, RangeExprs(sv, skv, lv))
     end
 end
 
@@ -370,6 +384,8 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
     array                                # The name of the array.
+    dim                                  # The number of dimensions.
+    out_dim                              # The number of indexed (non-const) dimensions.
     select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
     range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
     range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
@@ -378,8 +394,29 @@ type InputInfo
     rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
     function InputInfo()
-        new(nothing, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
+        new(nothing, 0, 0, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
     end
+end
+
+function isWholeArray(inputInfo :: InputInfo) 
+    return length(inputInfo.select_bitarrays) == 0 && length(inputInfo.range) == 0 
+end
+function isMask(inputInfo :: InputInfo)
+    return length(inputInfo.select_bitarrays) > 0
+end
+function isRange(inputInfo :: InputInfo)
+    return length(inputInfo.range) > 0
+end 
+
+function getRangeOrArray(inputInfo :: InputInfo, num_dims)
+    if isRange(inputInfo)
+        return map(x -> x.exprs, inputInfo.range[1:num_dims])
+    else
+        return inputInfo.array
+    end
+end
+function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
+    return getRangeOrArray(inputInfo[1], num_dims)
 end
 
 @doc """
@@ -404,7 +441,10 @@ function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
     if dim <= length(x.range)
         #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
         # TODO: do something with skip!
-        return mk_add_int_expr(mk_sub_int_expr(x.range[dim].last,x.range[dim].start), 1)
+        r = x.range[dim]
+        last = isa(r.exprs.last_val, Expr) ? r.last : r.exprs.last_val
+        start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
+        return DomainIR.add(DomainIR.sub(last, start), 1)
     else
         return mk_arraylen_expr(x.array, dim)
     end 
@@ -567,6 +607,7 @@ Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: SymbolNode, state :: expr_state)
     assert(array.typ.name == Array.name)
+    dprintln(3, "getArrayNumDims from SymbolNode array = ", array, " ", array.typ, " ", array.typ.parameters[2])
     array.typ.parameters[2]
 end
 
@@ -577,72 +618,6 @@ function getArrayNumDims(array :: GenSym, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
     assert(gstyp.name == Array.name)
     gstyp.parameters[2]
-end
-
-@doc """
-Returns a :call expression to add_int for two operands.
-"""
-function mk_add_int_expr(op1, op2)
-    return TypedExpr(Int64, :call, GlobalRef(Base, :add_int), op1, op2)
-end
-
-@doc """
-Returns a :call expression to sub_int for two operands.
-"""
-function mk_sub_int_expr(op1, op2)
-    return TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), op1, op2)
-end
-
-@doc """
-Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
-"""
-function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1})
-    dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var)
-    xtyp = typeof(index_vars[dim])
-
-    if xtyp == Int64 || xtyp == GenSym
-        base = index_vars[dim]
-    else
-        base = SymbolNode(index_vars[dim],Int64)
-    end
-
-    dprintln(3,"pre-base = ", base)
-
-    if dim <= length(range_var)
-        base = mk_add_int_expr(base, range_var[dim])
-    end
-
-    dprintln(3,"post-base = ", base)
-
-    return base
-end
-
-@doc """
-Return an expression that corresponds to getting the index_var index from the array array_name.
-If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
-"""
-function mk_arrayref1(array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
-    dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
-    dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-    elem_typ = getArrayElemType(array_name, state)
-    dprintln(3,"mk_arrayref1 element type = ", elem_typ)
-    dprintln(3,"mk_arrayref1 range_var = ", range_var)
-
-    if inbounds
-        fname = :unsafe_arrayref
-    else
-        fname = :arrayref
-    end
-
-    indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
-    dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
-
-    TypedExpr(
-    elem_typ,
-    :call,
-    TopNode(fname),
-    :($array_name),
-    indsyms...)
 end
 
 @doc """
@@ -672,38 +647,6 @@ variable to be parfor loop private and eventually go in an OMP private clause.
 function makePrivateParfor(var_name :: Symbol, state)
     res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.lambdaInfo)
     assert(res)
-end
-
-@doc """
-Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
-The paramater "inbounds" is true if this access is known to be within the bounds of the array.
-"""
-function mk_arrayset1(array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[])
-    dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
-    dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
-    elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
-    dprintln(3,"mk_arrayset1 element type = ", elem_typ)
-    dprintln(3,"mk_arrayset1 range_var = ", range_var)
-
-    # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
-    if inbounds
-        fname = :unsafe_arrayset
-    else
-        fname = :arrayset
-    end
-
-    # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
-    # a SymbolNode containing the index expression type "Int".
-    indsyms = [ augment_sn(x,index_vars,range_var) for x = 1:length(index_vars) ]
-    dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
-
-    TypedExpr(
-       elem_typ,
-       :call,
-       TopNode(fname),
-       array_name,
-       :($value),
-       indsyms...)
 end
 
 @doc """
@@ -789,9 +732,18 @@ end
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
 function addUnknownArray(x :: SymGen, state :: expr_state)
-    a = collect(values(state.array_length_correlation))
-    m = length(a) == 0 ? 0 : maximum(a)
+    m = state.next_eq_class
+    state.next_eq_class += 1
     state.array_length_correlation[x] = m + 1
+end
+
+@doc """
+Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
+"""
+function addUnknownRange(x :: Array{Any,1}, state :: expr_state)
+    m = state.next_eq_class
+    state.next_eq_class += 1
+    state.range_correlation[x] = m + 1
 end
 
 @doc """
@@ -835,6 +787,25 @@ function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
         addUnknownArray(x, state)
     end
     state.array_length_correlation[x]
+end
+
+@doc """
+Gets (or adds if absent) the range correlation for the given array of RangeExprs.
+"""
+function getOrAddRangeCorrelation(ranges :: Array{RangeExprs,1}, state :: expr_state)
+    # We can't match on array of RangeExprs so we flatten to Array of Any
+    aa = Any[]
+    for i = 1:length(ranges)
+        push!(aa, ranges[i].start_val)
+        push!(aa, ranges[i].skip_val)
+        push!(aa, ranges[i].last_val)
+    end
+
+    if !haskey(state.range_correlation, aa)
+        dprintln(3,"Correlation for range not found = ", ranges)
+        addUnknownRange(aa, state)
+    end
+    state.range_correlation[aa]
 end
 
 @doc """
@@ -1698,6 +1669,9 @@ end
 Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".
 """
 function getParforCorrelation(parfor, state)
+if true
+    return getCorrelation(parfor.first_input, state)
+else
     if length(parfor.preParFor) == 0
         return nothing
     end
@@ -1715,6 +1689,20 @@ function getParforCorrelation(parfor, state)
         end
     end
     return nothing
+end
+end
+
+@doc """
+Get the equivalence class of a domain IR input in inputInfo.
+"""
+function getCorrelation(sng :: SymAllGen, state :: expr_state)
+    dprintln(3, "getCorrelation for SymNodeGen = ", sng)
+    return getOrAddArrayCorrelation(toSymGen(sng), state)
+end
+
+function getCorrelation(are :: Array{RangeExprs,1}, state :: expr_state)
+    dprintln(3, "getCorrelation for Array{RangeExprs} = ", are)
+    return getOrAddRangeCorrelation(are, state)
 end
 
 @doc """
@@ -1862,10 +1850,12 @@ function fuse(body, body_index, cur, state)
     first_in = first(cur_input_set)
     out_correlation = getParforCorrelation(prev_parfor, state)
     if out_correlation == nothing
+        dprintln(3, "Fusion will not happen because out_correlation = nothing")
         return false
     end
-    in_correlation  = state.array_length_correlation[first_in]
+    in_correlation  = getParforCorrelation(cur_parfor, state)
     if in_correlation == nothing
+        dprintln(3, "Fusion will not happen because in_correlation = nothing")
         return false
     end
     dprintln(3,"first_in = ", first_in)
@@ -1902,6 +1892,8 @@ function fuse(body, body_index, cur, state)
     cur_iei  = iterations_equals_inputs(cur_parfor)
     dprintln(3, "iterations_equals_inputs prev and cur = ", prev_iei, " ", cur_iei)
     dprintln(3, "loweredAliasMap = ", loweredAliasMap)
+    dprintln(3, "prev_parfor.simply_indexed = ", prev_parfor.simply_indexed)
+    dprintln(3, "cur_parfor.simply_indexed = ", cur_parfor.simply_indexed)
 
     if prev_iei &&
         cur_iei  &&
@@ -1995,7 +1987,9 @@ function fuse(body, body_index, cur, state)
             return 2;
         end
 
-        first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+        if isa(prev_parfor.first_input, SymAllGen)
+            first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+        end
 
         # Merge each part of the two parfor nodes.
 
@@ -2089,7 +2083,7 @@ function fuse(body, body_index, cur, state)
         # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
         # prevParFor where the array is in allocs_to_eliminate.
         prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
-        map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) ]
+                                  isa(prev_parfor.first_input, SymAllGen) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor ]
         dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
@@ -4042,7 +4036,8 @@ function hasNoSideEffects(node :: Expr)
         end
     elseif node.head == :call
         func = node.args[1]
-        if func == TopNode(:box) ||
+        if func == GlobalRef(Base, :box) ||
+            func == TopNode(:box) ||
             func == TopNode(:tuple) ||
             func == TopNode(:getindex_bool_1d) ||
             func == :getindex
@@ -5875,7 +5870,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # first arg is input arrays, second arg is DomainLambda
         domain_oprs = [DomainOperation(:mmap, args)]
         args = mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state)
-        dprintln(1,"switching to parfor node for mmap, got ", args, " something wrong!")
+        dprintln(1,"switching to parfor node for mmap, got ", args)
     elseif head == :mmap!
         head = :parfor
         # Make sure we get what we expect from domain IR.

@@ -450,7 +450,7 @@ function from_range(rhs)
 end
 
 function rangeToMask(state, r::Int, arraysize)
-    return mk_range(r, r, 1)
+    return mk_range(state, r, r, 1)
 end
 
 function rangeToMask(state, r::SymAllGen, arraysize)
@@ -462,7 +462,7 @@ function rangeToMask(state, r::SymAllGen, arraysize)
         (start, step, final) = from_range(r)
         mk_range(start, step, final)
     elseif isinttyp(typ) 
-        mk_range(r, convert(typ, 1), r)
+        mk_range(state, r, convert(typ, 1), r)
     else
         error("Unhandled range object: ", r)
     end
@@ -472,7 +472,7 @@ function rangeToMask(state, r::GlobalRef, arraysize)
     # FIXME: why doesn't this assert work?
     #@assert (r.mod!=Main || r.name!=symbol(":")) "unhandled GlobalRef range"
     if r.mod==Main && r.name==symbol(":")
-        return mk_range(1, 1, arraysize)
+        return mk_range(state, 1, 1, arraysize)
     else
         error("unhandled GlobalRef range object: ", r)
     end
@@ -615,6 +615,93 @@ function elmTypOf(x)
         error("expect Array type, but got ", x)
     end
 end
+
+
+# A simple integer arithmetic simplifier that does three things:
+# 1. inline constant definitions.
+# 2. normalize into sums, with variables and constants.
+# 3. statically evaluate arithmetic operations on constants. 
+# Note that no sharing is preserved due to flattening, so use it with caution.
+function simplify(state, expr::Expr)
+    if isAddExpr(expr)
+        x = simplify(state, expr.args[2])
+        y = simplify(state, expr.args[3])
+        add(x, y)
+    elseif isSubExpr(expr)
+        x = simplify(state, expr.args[2])
+        y = simplify(state, expr.args[3])
+        add(x, neg(y))
+    elseif isMulExpr(expr)
+        x = simplify(state, expr.args[2])
+        y = simplify(state, expr.args[3])
+        mul(x, y)
+    elseif isNegExpr(expr)
+        neg(simplify(state, expr.args[2]))
+    elseif isBoxExpr(expr)
+        simplify(state, expr.args[3])
+    else
+        expr
+    end
+end
+
+function simplify(state, expr::SymbolNode)
+    def = lookupConstDefForArg(state, expr)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+end
+
+function simplify(state, expr::GenSym)
+    def = lookupConstDefForArg(state, expr)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+end
+
+function simplify(state, expr::Array)
+    [ simplify(state, e) for e in expr ]
+end
+
+function simplify(state, expr)
+    return expr
+end
+
+isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Base, s))
+add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
+mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
+neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
+isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
+isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
+isAddExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :add_int) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd))
+isSubExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sub_int) || isTopNodeOrGlobalRef(x.args[1], :checked_ssub))
+isMulExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :mul_int) || isTopNodeOrGlobalRef(x.args[1], :checked_smul))
+isAddExprInt(x::Expr) = isAddExpr(x) && isa(x.args[3], Int)
+isMulExprInt(x::Expr) = isMulExpr(x) && isa(x.args[3], Int)
+sub(x, y) = add(x, neg(y))
+add(x::Int,  y::Int) = x + y
+add(x::Int,  y::Expr)= add(y, x)
+add(x::Int,  y)      = add(y, x)
+add(x::Expr, y::Int) = isAddExprInt(x) ? add(x.args[2], x.args[3] + y) : add_expr(x, y)
+add(x::Expr, y::Expr)= isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y)
+add(x::Expr, y)      = isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y)
+add(x,       y::Expr)= add(y, x)
+add(x,       y)      = add_expr(x, y)
+neg(x::Int)          = -x
+neg(x::Expr)         = isNegExpr(x) ? x.args[3] : 
+                       (isAddExpr(x) ? add(neg(x.args[2]), neg(x.args[3])) :
+                       (isMulExpr(x) ? mul(x.args[2], neg(x.args[3])) : neg_expr(x)))
+neg(x)               = neg_expr(x)
+mul(x::Int,  y::Int) = x * y
+mul(x::Int,  y::Expr)= mul(y, x)
+mul(x::Int,  y)      = mul(y, x)
+mul(x::Expr, y::Int) = isMulExprInt(x) ? mul(x.args[2], x.args[3] * y) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
+mul(x::Expr, y::Expr)= isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.arg3[2], y)) : mul_expr(x, y))
+mul(x::Expr, y)      = isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
+mul(x,       y::Expr)= mul(y, x)
+mul(x,       y)      = mul_expr(x, y)
+
+# simplify expressions passed to alloc and range.
+mk_alloc(state, typ, s) = mk_alloc(typ, simplify(state, s))
+mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(state, step), simplify(state, final))
 
 # :lambda expression
 # (:lambda, {param, meta@{localvars, types, freevars}, body})
@@ -843,6 +930,10 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
         if haskey(liftOps, fun) # lift operation to array level
             fun = liftOps[fun]
         end
+    elseif fun==:rand!
+        # remove third argument. 
+        # it is Base.arraylen that we can't handle well and don't need for translation
+        splice!(args,3)
     end
     return (fun, args)
 end
@@ -979,7 +1070,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
             error("Expect QuoteNode or DataType, but got typExp = ", typExp)
         end
         assert(isa(elemTyp, DataType))
-        expr = mk_alloc(elemTyp, args)
+        expr = mk_alloc(state, elemTyp, args)
         expr.typ = typ
     elseif is(fun, :broadcast_shape)
         dprintln(env, "got ", fun)
@@ -1358,7 +1449,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     tmpNodes = Array(GenSym, length(arrtyps))
     # allocate the tmp array
     for i = 1:length(arrtyps)
-        arrdef = type_expr(arrtyps[i], mk_alloc(etys[i], dimExp))
+        arrdef = type_expr(arrtyps[i], mk_alloc(state, etys[i], dimExp))
         tmparr = addGenSym(arrtyps[i], state.linfo)
         updateDef(state, tmparr, arrdef)
         emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
@@ -1637,6 +1728,12 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     else
         throw(string("ParallelAccelerator.DomainIR.from_expr: unknown Expr head :", head))
     end
+    return ast
+end
+
+function from_expr(state::IRState, env::IREnv, ast::LabelNode)
+    # clear defs for every basic block.
+    state.defs = Dict{Union{Symbol,Int}, Any}()
     return ast
 end
 

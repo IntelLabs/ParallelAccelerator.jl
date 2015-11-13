@@ -159,8 +159,12 @@ function set_include_blas(val::Bool=true)
     global include_blas = val
 end
 
+# include random number generator?
+include_rand = false
+
 insertAliasCheck = true
 function set_alias_check(val)
+    dprintln(3, "set_alias_check =", val)
     global insertAliasCheck = val
 end
 
@@ -277,6 +281,10 @@ function from_includes()
         end
     end
     s = ""
+    if include_rand==true 
+        s *= "#include <random>\n"
+    end
+
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
@@ -285,6 +293,7 @@ function from_includes()
     "#include <stdint.h>\n",
     "#include <float.h>\n",
     "#include <limits.h>\n",
+    "#include <complex.h>\n",
     "#include <math.h>\n",
     "#include <stdio.h>\n",
     "#include <iostream>\n",
@@ -395,7 +404,6 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         lstate.symboltable[k] = v.typ
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
-        @assert !(v.typ<:Complex) "CGen: Complex numbers are not supported yet"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -405,7 +413,6 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
         @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
-        @assert !(gensyms[k]<:Complex) "CGen: Complex numbers are not supported yet"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
@@ -666,6 +673,10 @@ function toCtype(typ::DataType)
         return " j2c_array< $(atyp) > "
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
+    elseif typ == Complex64
+        return "float _Complex"
+    elseif typ == Complex128
+        return "double _Complex"
     elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
@@ -899,6 +910,48 @@ function from_steprange_last(args)
   return "("*stop*"-("*stop*"-"*start*")%"*step*")"
 end
 
+
+function isTupleGlobalRef(arg::GlobalRef)
+    return arg.mod==Base && arg.name==:tuple
+end
+
+function isTupleGlobalRef(arg::Any)
+    return false
+end
+
+function get_shape_from_tupple(arg::Expr)
+    res = ""
+    if arg.head==:call && isTupleGlobalRef(arg.args[1])
+        shp = AbstractString[]
+        for i in 2:length(arg.args)
+            push!(shp, from_expr(arg.args[i]))
+        end
+        res = foldl((a, b) -> "$a, $b", shp)
+    end
+    return res
+end
+
+function get_shape_from_tupple(arg::ANY)
+    return ""
+end
+
+function get_alloc_shape(args, dims)
+    res = ""
+    # in cases like rand(s1,s2), array allocation has only a tupple
+    if length(args)==7
+        res = get_shape_from_tupple(args[6])
+    end
+    if res!=""
+        return res
+    end
+    shp = AbstractString[]
+    for i in 1:dims
+        push!(shp, from_expr(args[6+(i-1)*2]))
+    end
+    res = foldl((a, b) -> "$a, $b", shp)
+    return res
+end
+
 function from_arrayalloc(args)
     dprintln(3,"Array alloc args:")
     map((i)->dprintln(3,args[i]), 1:length(args))
@@ -909,12 +962,9 @@ function from_arrayalloc(args)
     dprintln(3,"Array alloc dims = ", dims)
     typ = toCtype(typ)
     dprintln(3,"Array alloc after ctype conversion typ = ", typ)
-    shp = []
-    for i in 1:dims
-        push!(shp, from_expr(args[6+(i-1)*2]))
-    end
-    shp = foldl((a, b) -> "$a, $b", shp)
-    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shp);\n"
+    shape::AbstractString = get_alloc_shape(args, dims)
+    dprintln(3,"Array alloc shape = ", shape)
+    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
 end
 
 function from_builtins_comp(f, args)
@@ -1252,15 +1302,17 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         s = args[2].value
         if isa(args[1], Module)
             M = args[1]
-            dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
+        elseif args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re) 
+            func = args[2] == QuoteNode(:im) ? "creal" : "cimag";
+            t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
             M = ""
             s = ""
             t = from_expr(args[1]) * "." * from_expr(args[2])
             #M, _s = resolveCallTarget([args[1]])
-            dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
         end
+        dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
         return resolveCallTarget(f)
 
@@ -1277,42 +1329,32 @@ function resolveCallTarget(f::ANY, args::Array{Any, 1})
     return "","",""
 end
 
-function pattern_match_call_math(fun::TopNode, input::GenSym)
+function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
-    if in(fun.name,libm_math_functions) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
+    isFloat = typ == Float64 || typ == Float32
+    isComplex = typ <: Complex
+    isInt = typ <: Integer
+    if in(fun.name,libm_math_functions) && (isFloat || isComplex)
         dprintln(3,"FOUND ", fun.name)
-        s = string(fun.name)*"("*from_expr(input)*");"
+        s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (lstate.symboltable[input]==Float64 || lstate.symboltable[input]==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "fabs("*from_expr(input)*");"
-    end
-    if is(fun.name,:abs) && (lstate.symboltable[input]==Int64 || lstate.symboltable[input]==Int32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "abs("*from_expr(input)*");"
+    if is(fun.name,:abs) && (isFloat || isComplex || isInt)
+      dprintln(3,"FOUND ", fun.name)
+      fname = isInt ? "abs" : (isFloat ? "fabs" : (typ == Complex64 ? "cabsf" : "cabs"))
+      s = fname*"("*input*");"
     end
     return s
 end
 
+function pattern_match_call_math(fun::TopNode, input::GenSym)
+  pattern_match_call_math(fun, from_expr(input), lstate.symboltable[input])
+end
+
 
 function pattern_match_call_math(fun::TopNode, input::SymbolNode)
-    s = ""
-    if in(fun.name,libm_math_functions) && (input.typ==Float64 || input.typ==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = string(fun.name)*"("*from_expr(input.name)*");"
-    end
-    # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (input.typ==Float64 || input.typ==Float32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "fabs("*from_expr(input)*");"
-    end
-    if is(fun.name,:abs) && (input.typ==Int64 || input.typ==Int32)
-        dprintln(3,"FOUND ", fun.name)
-        s = "abs("*from_expr(input)*");"
-    end
-    return s
+  pattern_match_call_math(fun, from_expr(input), input.typ)
 end
 
 function pattern_match_call_math(fun::GlobalRef, input)
@@ -1320,6 +1362,30 @@ function pattern_match_call_math(fun::GlobalRef, input)
 end
 
 function pattern_match_call_math(fun::ANY, input::ANY)
+    return ""
+end
+
+function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
+    res = ""
+    if(fun.name==:rand!)
+        res = "cgen_distribution(cgen_rand_generator);\n"
+    end
+    return res 
+end
+
+function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
+    return ""
+end
+
+function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
+    res = ""
+    if(fun.name==:randn!)
+        res = "cgen_n_distribution(cgen_rand_generator);\n"
+    end
+    return res 
+end
+
+function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY)
     return ""
 end
 
@@ -1384,6 +1450,14 @@ function pattern_match_call(ast::Array{Any, 1})
     s = ""
     if(length(ast)==2)
         s = pattern_match_call_math(ast[1],ast[2])
+    end
+    # rand! call has 4 args
+    if(length(ast)==4)
+        s = pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
+    end
+    # randn! call has 3 args
+    if(length(ast)==3)
+        s = pattern_match_call_randn(ast[1],ast[2],ast[3])
     end
     # gemm calls have 6 args
     if(length(ast)==6)
@@ -1766,17 +1840,28 @@ end
 function from_new(args)
     s = ""
     typ = args[1] #type of the object
+    dprintln(3,"from_new args = ", args)
     if isa(typ, DataType)
-        objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
-        s = ctyp * "{"
-        s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
-    elseif isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
-        typ = getfield(typ.args[2], typ.args[3].value)
-        objtyp, ptyps = parseParametricType(typ)
-        ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
-        s = ctyp * "{"
-        s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+        if typ <: Complex
+            assert(length(args) == 3)
+            dprintln(3, "new complex number")
+            s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+        else
+            objtyp, ptyps = parseParametricType(typ)
+            ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+            s = ctyp * "{"
+            s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
+        end
+    elseif isa(typ, Expr)
+        if isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
+            typ = getfield(typ.args[2], typ.args[3].value)
+            objtyp, ptyps = parseParametricType(typ)
+            ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
+            s = ctyp * "{"
+            s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+        else
+            throw(string("CGen Error: unhandled args in from_new ", args))
+        end
     end
     s
 end
@@ -1813,6 +1898,11 @@ function from_expr(ast::Expr)
 
     elseif head == :body
         dprintln(3,"Compiling body")
+        if include_rand
+            s *= "std::default_random_engine cgen_rand_generator;\n"
+            s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
+            s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
+        end
         s *= from_exprs(args)
 
     elseif head == :new
@@ -1967,7 +2057,7 @@ function from_expr(ast::ANY)
     #s *= dispatch(lstate.adp, ast, ast)
     asttyp = typeof(ast)
     dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
-    throw("CGen Error: Could not translate node")
+    throw(string("CGen Error: Could not translate node: ", ast, " with type: ", asttyp))
 end
 
 function resolveFunction(func::Symbol, mod::Module, typs)
@@ -2105,8 +2195,11 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     end
     #printf(\"Starting execution of cgen generated code\\n\");
     #printf(\"End of execution of cgen generated code\\n\");
+
+    # If we are forcing vectorization then we will not emit the alias check
+    emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
     s::ASCIIString = ""
-    if alias_check != nothing
+    if emitaliascheck && alias_check != nothing
         assert(isa(alias_check, AbstractString))
         unaliased_func = functionName * "_unaliased"
 
@@ -2130,7 +2223,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
 end
 
 # This is the entry point to cgen from the PSE driver
-function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
+function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}(), isEntryPoint = true)
     global inEntryPoint
     inEntryPoint = isEntryPoint
     global lstate
@@ -2142,6 +2235,8 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
         # of the roots
         emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
     end
+    dprintln(3,"vectorizationlevel = ", vectorizationlevel)
+    dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
     dprintln(3,"Ast = ", ast)
     dprintln(3,"functionName = ", functionName)
     dprintln(3,"Starting processing for $ast")
@@ -2155,6 +2250,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
     if contains(string(ast),"gemm_wrapper!")
         set_include_blas(true)
+    end
+
+    if contains(string(ast),"rand!") || contains(string(ast),"randn!")
+        global include_rand = true
     end
 
     # Translate the body
@@ -2241,9 +2340,9 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     else
         rtyp = toCtype(typ)
     end
-    s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+    s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
-    forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
+    forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
     if inEntryPoint
         inEntryPoint = false
     end
@@ -2251,6 +2350,17 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     c = hdr * forwarddecl * from_worklist() * s * wrapper
     if isEntryPoint
         resetLambdaState(lstate)
+
+        if length(array_types_in_sig) > 0
+            gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
+            for (key, value) in array_types_in_sig
+                atyp = toCtype(key)
+                elemtyp = toCtype(eltype(key))
+                gen_j2c_array_new *= "case " * string(value) * ":\na = new " * atyp * "((" * elemtyp * "*)data, ndim, dims);\nbreak;\n"
+            end
+            gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
+            c *= gen_j2c_array_new   
+        end
     end
     c
 end
@@ -2324,7 +2434,7 @@ function from_worklist()
         dprintln(3,a)
         length(a) >= 1 ? dprintln(3,a[1].args) : ""
         dprintln(3,"============ End of AST for ", fname, " ============")
-        si = length(a) >= 1 ? from_root(a[1], fname, false) : ""
+        si = length(a) >= 1 ? from_root(a[1], fname, Dict{DataType,Int64}(), false) : ""
         dprintln(3,"============== C++ after compiling ", fname, " ===========")
         dprintln(3,si)
         dprintln(3,"============== End of C++ for ", fname, " ===========")

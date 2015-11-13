@@ -46,14 +46,16 @@ function __init__()
     # It will share the data pointer of the given inp array, and if inp is nothing,
     # the j2c array will allocate fresh memory to hold data.
     # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
-    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
-      # note that C interface mandates Int64 for dimension data
-      _dims = Int64[ convert(Int64, x) for x in dims ]
-      _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
-
-      ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
-            convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
-    end
+#    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
+#      # note that C interface mandates Int64 for dimension data
+#      _dims = Int64[ convert(Int64, x) for x in dims ]
+#      _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
+#
+#      #ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
+#      #      convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
+#      ccall((:j2c_array_new, cgen_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
+#            convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
+#    end
 
     # Array size in the given dimension.
     function j2c_array_size(arr::Ptr{Void}, dim::Int)
@@ -112,16 +114,18 @@ end
 # Note that Julia array data are not copied but shared by the J2C array
 # The caller needs to make sure these arrays stay alive so long as the
 # returned j2c array is alive.
-function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr{Void}, Array})
+function to_j2c_array{T, N}(inp :: Array{T, N}, ptr_array_dict :: Dict{Ptr{Void}, Array}, mapAtypeKey :: Dict{DataType,Int64}, j2c_array_new)
+  allocation_key = mapAtypeKey[typeof(inp)]
   dims = size(inp)
   _isbits = isbits(T)
   nbytes = _isbits ? sizeof(T) : 0
   _inp = _isbits ? inp : nothing
-  arr = j2c_array_new(nbytes, _inp, N, dims)
+  #arr = j2c_array_new(nbytes, _inp, N, dims)
+  arr = j2c_array_new(allocation_key, _inp, N, dims)
   ptr_array_dict[convert(Ptr{Void}, pointer(inp))] = inp  # establish a mapping between pointer and the original array
   if !(_isbits)
     for i = 1:length(inp)
-      obj = to_j2c_array(inp[i], ptr_array_dict) # obj is a new j2c array
+      obj = to_j2c_array(inp[i], ptr_array_dict, mapAtypeKey, j2c_array_new) # obj is a new j2c array
       j2c_array_set(arr, i, obj) # obj is duplicated during this set
       j2c_array_delete(obj)      # safe to delete obj without triggering free
     end
@@ -133,8 +137,6 @@ end
 # Note that:
 # 1. We assume the input j2c array object contains no data pointer aliases.
 # 2. The returned Julia array will share the pointer to J2C array data at leaf level.
-# 3. The input j2c array object will be de-referenced before return, and shall
-#    be later manually freed. 
 function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr{Void}, Array})
   dims = Array(Int, N)
   len  = 1
@@ -156,7 +158,6 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
     for i = 1:len
       ptr = j2c_array_get(inp, i, Ptr{Void})
       arr[i] = _from_j2c_array(ptr, sub_type, sub_dim, ptr_array_dict)
-      j2c_array_deref(ptr)
     end
   end
   return arr
