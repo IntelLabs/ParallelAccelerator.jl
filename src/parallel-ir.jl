@@ -202,6 +202,13 @@ type PIRParForAst
     end
 end
 
+function parforArrayInput(parfor :: PIRParForAst)
+    return isa(parfor.first_input, SymAllGen)
+end
+function parforRangeInput(parfor :: PIRParForAst)
+    return isa(parfor.first_input, Array{RangeExprs,1})
+end
+
 @doc """
 Not currently used but might need it at some point.
 Search a whole PIRParForAst object and replace one SymAllGen with another.
@@ -763,6 +770,12 @@ function merge_correlations(state, unchanging, eliminate)
             state.symbol_array_correlation[i[1]] = unchanging
         end
     end
+    for i in state.range_correlation
+        if i[2] == eliminate
+            state.range_correlation[i[1]] = unchanging
+        end
+    end
+
     nothing
 end
 
@@ -1987,7 +2000,7 @@ function fuse(body, body_index, cur, state)
             return 2;
         end
 
-        if isa(prev_parfor.first_input, SymAllGen)
+        if parforArrayInput(prev_parfor)
             first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
         end
 
@@ -2083,7 +2096,7 @@ function fuse(body, body_index, cur, state)
         # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
         # prevParFor where the array is in allocs_to_eliminate.
         prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
-                                  isa(prev_parfor.first_input, SymAllGen) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor ]
+                                  parforArrayInput(prev_parfor) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor]
         dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
@@ -4593,25 +4606,32 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
             #
             # If this statement defines some variable.
             if !isempty(live_info.def)
+                dprintln(3, "Checking if the statement is hoistable.")
+                dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
                 # Assume that hoisting is safe until proven otherwise.
                 dep_only_on_parameter = true
                 # Look at all the variables on which this statement depends.
                 # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
                 for i in live_info.use
                     if !in(i, data.hoistable_scalars)
+                        dprintln(3, "Could not hoist because the statement depends on :", i)
                         dep_only_on_parameter = false
                         break
                     end
                 end
+
                 if dep_only_on_parameter 
                     # If this statement is defined in more than one place then it isn't hoistable.
                     for i in live_info.def 
+                        dprintln(3,"Checking if ", i, " is multiply defined.")
+                        dprintln(4,"data.lives = ", data.lives)
                         if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                            dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
                             dep_only_on_parameter = false
-                            dprintln(3,"variable ", i, " assigned more than once")
                             break
                         end
                     end
+
                     if dep_only_on_parameter 
                         dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
                         push!(data.top_level_no_deps, node)
@@ -4656,19 +4676,26 @@ function extractArrayEquivalencies(node :: Expr, state)
         throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
     end
 
-    if !isa(input_arrays[1], SymAllGen)
-        dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
-        return nothing
-    end
+#    if !isa(input_arrays[1], SymAllGen)
+#        dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
+#        return nothing
+#    end
 
+    inputInfo = InputInfo[]
+    for i = 1 : length(input_arrays)
+        push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
+    end
+    num_dim_inputs = findSelectedDimensions(inputInfo, state)
+
+    main_length_correlation = getCorrelation(getRangeOrArray(inputInfo[1], num_dim_inputs), state)
     # Get the correlation set of the first input array.
-    main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
+    #main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
-    for i = 2:len_input_arrays
+    for i = 2:length(inputInfo)
         dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
-        this_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[i]), state)
+        this_correlation = getCorrelation(getRangeOrArray(inputInfo[i], num_dim_inputs), state)
         # Verify that all the inputs are the same size by verifying they are in the same correlation set.
         if this_correlation != main_length_correlation
             merge_correlations(state, main_length_correlation, this_correlation)
@@ -4676,6 +4703,9 @@ function extractArrayEquivalencies(node :: Expr, state)
     end
 
     dprintln(3,"extractArrayEq result = ", state.array_length_correlation)
+    if length(state.range_correlation) > 0
+        dprintln(3,"range_correlations = ", state.range_correlation)
+    end
     return main_length_correlation
 end
 
@@ -4724,10 +4754,7 @@ function removeNothingStmts(args :: Array{Any,1}, state)
     return newBody
 end
 
-
-
 function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
-
     dprintln(4,lhs)
     dprintln(4,rhs)
 
@@ -4804,6 +4831,9 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
             dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
+            if length(state.range_correlation) > 0
+                dprintln(3,"range_correlations = ", state.range_correlation)
+            end
         end
     end
 end
@@ -5237,7 +5267,7 @@ function PIRHoistAllocation(x)
     global hoist_allocation = x
 end
 
-bb_reorder = 0
+bb_reorder = 1
 @doc """
 If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.
 """
