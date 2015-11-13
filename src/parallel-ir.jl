@@ -4616,25 +4616,32 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
             #
             # If this statement defines some variable.
             if !isempty(live_info.def)
+                dprintln(3, "Checking if the statement is hoistable.")
+                dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
                 # Assume that hoisting is safe until proven otherwise.
                 dep_only_on_parameter = true
                 # Look at all the variables on which this statement depends.
                 # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
                 for i in live_info.use
                     if !in(i, data.hoistable_scalars)
+                        dprintln(3, "Could not hoist because the statement depends on :", i)
                         dep_only_on_parameter = false
                         break
                     end
                 end
+
                 if dep_only_on_parameter 
                     # If this statement is defined in more than one place then it isn't hoistable.
                     for i in live_info.def 
+                        dprintln(3,"Checking if ", i, " is multiply defined.")
+                        dprintln(4,"data.lives = ", data.lives)
                         if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                            dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
                             dep_only_on_parameter = false
-                            dprintln(3,"variable ", i, " assigned more than once")
                             break
                         end
                     end
+
                     if dep_only_on_parameter 
                         dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
                         push!(data.top_level_no_deps, node)
@@ -5270,7 +5277,7 @@ function PIRHoistAllocation(x)
     global hoist_allocation = x
 end
 
-bb_reorder = 0
+bb_reorder = 1
 @doc """
 If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.
 """
