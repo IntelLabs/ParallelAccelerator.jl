@@ -545,9 +545,11 @@ function from_assignment(args::Array{Any,1})
         return match_cat_t
     end
 
-
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
+    if rhsO == ";"
+        return ""
+    end
 
   if !typeAvailable(lhs)
         if typeAvailable(rhs)
@@ -630,6 +632,7 @@ function toCtype(typ::DataType)
     elseif isArrayType(typ)
         atyp, dims = parseArrayType(typ)
         atyp = toCtype(atyp)
+        return "$atyp *"
         assert(dims >= 0)
         return " j2c_array< $(atyp) > "
     elseif isPtrType(typ)
@@ -712,6 +715,7 @@ end
 function from_getindex(args)
     s = ""
     src = from_expr(args[1])
+    return src * "[" * from_expr(args[2]) * " - 1]"
     s *= src * ".ARRAYELEM("
     idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
@@ -724,6 +728,7 @@ end
 function from_setindex(args)
     s = ""
     src = from_expr(args[1])
+    return src * "[" * from_expr(args[2]) * " - 1]"
     s *= src * ".ARRAYELEM("
     idxs = map(from_expr, args[3:end])
     for i in 1:length(idxs)
@@ -803,7 +808,9 @@ function from_ccall(args)
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
     end
-    s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
+    if length(args[argsStart:2:end]) > 0
+        s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
+    end
     s *= ")"
     dprintln(3,"from_ccall: ", s)
     s
@@ -813,6 +820,7 @@ function from_arrayset(args)
     idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
+    return src * "[" * from_expr(args[3]) * " - 1] = $val"
     "$src.ARRAYELEM($idxs) = $val"
 end
 
@@ -891,7 +899,7 @@ function from_builtins_comp(f, args)
 end
 
 function from_array_ptr(args)
-    return "$(from_expr(args[4])).data"
+    return "$(from_expr(args[4]))"
 end
 
 function from_sizeof(args)
@@ -900,9 +908,9 @@ end
 
 function from_pointer(args)
     if length(args) == 1
-        return "$(from_expr(args[1])).data"
+        return "$(from_expr(args[1]))"
     else
-        return "$(from_expr(args[1])).data + $(from_expr(args[2]))"
+        return "$(from_expr(args[1])) + $(from_expr(args[2]))"
     end
 end
 
@@ -1285,6 +1293,14 @@ function pattern_match_call_math(fun::TopNode, input::SymbolNode)
     return s
 end
 
+function pattern_match_call_math(fun::TopNode, input)
+    s = ""
+    if in(fun.name,libm_math_functions)
+        s = string(fun.name)*"("*from_expr(input)*");"
+    end
+    s
+end
+
 function pattern_match_call_math(fun::GlobalRef, input)
     return pattern_match_call_math(TopNode(fun.name), input)
 end
@@ -1358,6 +1374,12 @@ function pattern_match_call(ast::Array{Any, 1})
     # gemm calls have 6 args
     if(length(ast)==6)
         s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6])
+    end
+    if isa(ast[1], GlobalRef) && ast[1].name == :_LOOP_END
+        s = "}"
+    end
+    if isa(ast[1], GlobalRef) && ast[1].name == :_REMOVE_THIS_LINE
+        s = ";"
     end
     return s
 end
@@ -1759,17 +1781,55 @@ end
 
 function from_loophead(args)
     iv = from_expr(args[1])
-    decl = "uint64_t"
+    decl = "int64_t"
     if haskey(lstate.symboltable, args[1])
         decl = toCtype(lstate.symboltable[args[1]])
     end
     start = from_expr(args[2])
     stop = from_expr(args[3])
-    "for($decl $iv = $start; $iv <= $stop; $iv += 1) {\n"
+    s = "#pragma ivdep \n"
+    s *="for(int64_t $iv = $start; $iv <= $stop; $iv += 1) {\n"
+    s
+end
+
+function from_parallel_loophead(args)
+    private = ""
+    if length(args[4]) > 0
+        private = "private("
+        for var in args[4]
+            private *= "$(canonicalize(var)),"
+        end
+        private = chop(private)
+        private *= ")"
+    end
+    inner_private = "private("
+    for iv in args[1]
+        inner_private *= "$iv,"
+    end
+    inner_private = chop(inner_private)
+    inner_private *= ")"
+
+    s = "#pragma omp parallel $private \n{\n"
+    s *= "#pragma omp for schedule(static,1) collapse($(length(args[1]))) $inner_private\n"
+    for (iv, start, stop) in zip(args[1], args[2], args[3])
+        start = from_expr(start)
+        stop = from_expr(stop)
+        iv = from_expr(iv)
+        s *="for(int64_t $iv = $start; $iv <= $stop; $iv += 1) {\n"
+    end
+    s
 end
 
 function from_loopend(args)
     "}\n"
+end
+
+function from_parallel_loopend(args)
+    s = "}\n"
+    for i in 1:args[1]
+        s *= "}\n"
+    end
+    s
 end
 
 
@@ -1849,8 +1909,14 @@ function from_expr(ast::Expr)
     elseif head == :loophead
         s *= from_loophead(args)
 
+    elseif head == :parallel_loophead
+        s *= from_parallel_loophead(args)
+
     elseif head == :loopend
         s *= from_loopend(args)
+
+    elseif head == :parallel_loopend
+        s *= from_parallel_loopend(args)
 
     # type_goto is "a virtual control flow edge used to convey
     # type data to static_typeof, also to be removed."  We can
@@ -1859,7 +1925,7 @@ function from_expr(ast::Expr)
         #Nothing
 
     else
-        dprintln(3,"Unknown head in expression: ", head)
+        println(3,"Unknown head in expression: ", head)
         throw("Unknown head")
     end
     s
@@ -1993,7 +2059,7 @@ function from_formalargs(params, vararglist, unaliased=false)
         dprintln(3,"Type is: ", typeof(params[p]))
         if get(lstate.symboltable, params[p], false) != false
             ptyp = toCtype(lstate.symboltable[params[p]])
-            s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
+            s *= ptyp * (# (isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
                 * (isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
                 * canonicalize(params[p])
                 * (p < length(params) ? ", " : ""))
@@ -2305,13 +2371,13 @@ function getCompileCommand(full_outfile_name, cgenOutput; offload=false)
   if backend_compiler == USE_ICC
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
-        push!(Opts, "-qopenmp")
+        push!(Opts, "-openmp")
     end
     if offload
         push!(Opts, "-qoffload-attribute-target=mic")
     end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icpc $Opts -g $vecOpts -qopt-report-phase=vec -qopt-report=2 -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
@@ -2354,14 +2420,15 @@ function getLinkCommand(outfile_name, lib)
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
-          push!(linkLibs,"-lmkl_rt")
+          # push!(linkLibs,"-lmkl_rt")
+          push!(linkLibs,"-mkl")
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
       end
   end
   if backend_compiler == USE_ICC
       if USE_OMP==1
-          push!(Opts,"-qopenmp")
+          push!(Opts,"-openmp")
       end
       linkCommand = `icpc -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
