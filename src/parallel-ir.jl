@@ -1682,27 +1682,7 @@ end
 Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".
 """
 function getParforCorrelation(parfor, state)
-if true
     return getCorrelation(parfor.first_input, state)
-else
-    if length(parfor.preParFor) == 0
-        return nothing
-    end
-    # FIXME: is this reliable?? -- PaulLiu
-    for i in 1:length(parfor.preParFor)
-        first_stmt = parfor.preParFor[i]
-        if (typeof(first_stmt) == Expr) && (first_stmt.head == symbol('='))
-            rhs = first_stmt.args[2]
-            if (typeof(rhs) == Expr) && (rhs.head == :call)
-                if (rhs.args[1] == TopNode(:arraysize)) && (isa(rhs.args[2], SymNodeGen))
-                    dprintln(3,"Getting parfor array correlation for array = ", rhs.args[2])
-                    return getOrAddArrayCorrelation(toSymGen(rhs.args[2]), state) 
-                end
-            end
-        end
-    end
-    return nothing
-end
 end
 
 @doc """
@@ -5818,7 +5798,6 @@ end
 function from_expr(ast::GlobalRef, depth, state :: expr_state, top_level)
     mod = ast.mod
     name = ast.name
-    # typ = ast.typ  # FIXME: is this type needed?
     typ = typeof(mod)
     dprintln(2,"GlobalRef type ",typeof(mod))
     return [ast]
