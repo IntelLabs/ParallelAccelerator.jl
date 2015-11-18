@@ -1810,6 +1810,7 @@ function from_parallel_loophead(args)
     inner_private *= ")"
 
     s = "#pragma omp parallel $private \n{\n"
+    # s *= "#pragma omp for schedule(static,1) collapse($(length(args[1]))) $inner_private\n"
     s *= "#pragma omp for schedule(static,1) collapse($(length(args[1]))) $inner_private\n"
     for (iv, start, stop) in zip(args[1], args[2], args[3])
         start = from_expr(start)
@@ -1995,6 +1996,8 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
       "DBL_MIN"
     elseif is(ast, -Inf32) 
       "FLT_MIN"
+    elseif isa(ast, Float32)
+      string(ast) * "f"
     else
       string(ast)
     end
@@ -2204,6 +2207,10 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
 
     # If emitting unaliased versions, get "restrict"ed decls for arguments
     argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
+    argsaligned = ""
+    for p in params
+        argsaligned *= "\n__assume_aligned($(canonicalize(p)), 64);"
+    end
 
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
@@ -2240,7 +2247,7 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
         rtyp = toCtype(typ)
     end
     s::ASCIIString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
-    s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
+    s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$argsaligned\n$bod\n}\n" : ""
     forwarddecl::ASCIIString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
     if inEntryPoint
         inEntryPoint = false
@@ -2376,8 +2383,13 @@ function getCompileCommand(full_outfile_name, cgenOutput; offload=false)
     if offload
         push!(Opts, "-qoffload-attribute-target=mic")
     end
+    if haskey(ENV, "CGEN_OPTREPORT")
+        opt_report =  ["-opt-report-phase=offload", "-qopt-report-phase=vec", "-qopt-report=5"]
+    else
+        opt_report =  []
+    end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -g $vecOpts -qopt-report-phase=vec -qopt-report=2 -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icpc $Opts -g $vecOpts $opt_report -vec-threshold0 -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
@@ -2422,6 +2434,7 @@ function getLinkCommand(outfile_name, lib)
       if mkl_lib!=""
           # push!(linkLibs,"-lmkl_rt")
           push!(linkLibs,"-mkl")
+          push!(linkLibs,"-DMKL_ILP64")
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
       end

@@ -944,13 +944,26 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
 extern "C"
 void alloc_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
-    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(1) free_if(0))
+    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(1) free_if(0) align(64))
 }
 
 extern "C"
 void copy_to_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
     #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0))
+}
+
+extern "C"
+void async_copy_to_mic(void * pointer, int nbytes, int run_where) {
+    char *tmp = (char *) pointer;
+    uintptr_t sig = (uintptr_t) pointer;
+    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0)) signal(sig)
+}
+
+extern "C"
+void wait_async_copy_to_mic(void * pointer, int run_where) {
+    uintptr_t sig = (uintptr_t) pointer;
+    #pragma offload_wait target(mic:run_where) wait(sig)
 }
 
 extern "C"
