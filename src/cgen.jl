@@ -904,9 +904,9 @@ function from_nfields(arg::SymbolNode)
 end
 
 function from_steprange_last(args)
-  start = from_expr(args[1])
-  step = from_expr(args[2])
-  stop = from_expr(args[3])
+  start = "(" * from_expr(args[1]) * ")"
+  step  = "(" * from_expr(args[2]) * ")"
+  stop  = "(" * from_expr(args[3]) * ")"
   return "("*stop*"-("*stop*"-"*start*")%"*step*")"
 end
 
@@ -1126,11 +1126,12 @@ function from_intrinsic(f :: ANY, args)
         return "sqrt(" * from_expr(args[1]) * ")"
     elseif intr == "sub_float"
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
-    elseif intr == "div_float"
-        return "(" * from_expr(args[1]) * ")" *
-            " / " * "(" * from_expr(args[2]) * ")"
+    elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int"
+        return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
     elseif intr == "sitofp"
         return from_expr(args[1]) * from_expr(args[2])
+    elseif intr == "fptosi"
+        return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "fptrunc" || intr == "fpext"
         dprintln(3,"Args = ", args)
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
