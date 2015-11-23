@@ -1792,9 +1792,12 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
             end
             for i = 1:length(ranges)
                 # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
-                assert(isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask))
-                for j = 1:length(ranges[i].args)
-                    ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
+                if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
+                    for j = 1:length(ranges[i].args)
+                        ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
+                    end
+                else
+                    assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
                 end
             end
             return x
