@@ -450,7 +450,9 @@ function from_range(rhs)
 end
 
 function rangeToMask(state, r::Int, arraysize)
-    return mk_range(state, r, r, 1)
+    # return mk_range(state, r, r, 1)
+    # scalar is not treated as a range in Julia
+    return r
 end
 
 function rangeToMask(state, r::SymAllGen, arraysize)
@@ -1201,6 +1203,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             #newlhs = addGenSym(typ, state.linfo)
             etyp = elmTypOf(atyp)
             ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
+            dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
                 expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
             else
