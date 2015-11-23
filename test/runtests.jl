@@ -27,54 +27,16 @@ using ParallelAccelerator
 using Base.Test
 
 include("abs.jl")
-using AbsTest
-println("Testing abs()...")
-@test AbsTest.test1() == 3
-@test AbsTest.test2() == 3.0
-@test AbsTest.test3() == 3.0
-@test AbsTest.test4() == ones(10, 10)
-@test AbsTest.test5() == ones(10, 10).+0.1
-@test AbsTest.test6() == ones(10, 10)
-println("Done testing abs().")
 
 include("rand.jl")
-using RandTest
-println("Testing rand()...")
-@test all(RandTest.test1() .<= ones(2,3).*2.0) && all(RandTest.test1() .>= zeros(2,3)) 
-@test size(RandTest.test2())==(2,3)
-println("Done testing rand()...")
-
 
 include("BitArray.jl")
-using BitArrayTest 
-println("Testing BitArrays...")
-@test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]
-@test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
-println("Done testing BitArrays.")
 
 include("range.jl")
-using RangeTest 
-println("Testing ranges...")
-@test RangeTest.test1() > 1.66e3
-@test RangeTest.test2() > 1.66e3
-println("Done testing ranges.")
-
 
 include("seq.jl")
-using SeqTest 
-println("Testing sequential code...")
-@test_approx_eq SeqTest.test1() [9.0 12.0; 10.0 20.0]
-println("Done testing sequential code.")
 
 include("cat.jl")
-using CatTest 
-println("Testing cat...")
-@test_approx_eq CatTest.test1() [3.0; 1.0]
-@test_approx_eq CatTest.test2() [2.0 2.5; 1.5 11.0]
-@test_approx_eq CatTest.test3() [2.0 2.5; 1.5 11.0]
-println("Done testing cat.")
-
 
 include("aug_assign.jl")
 
