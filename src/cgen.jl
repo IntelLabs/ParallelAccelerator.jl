@@ -1366,6 +1366,14 @@ function pattern_match_call_math(fun::ANY, input::ANY)
     return ""
 end
 
+function pattern_match_call_throw(fun::GlobalRef, input)
+    return "throw \"Julia throw() called.\"\n"
+end
+
+function pattern_match_call_throw(fun::ANY, input::ANY)
+    return ""
+end
+
 function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     res = ""
     if(fun.name==:rand!)
@@ -1450,7 +1458,10 @@ function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
     if(length(ast)==2)
-        s = pattern_match_call_math(ast[1],ast[2])
+        s = pattern_match_call_throw(ast[1],ast[2])
+        if s==""
+            s = pattern_match_call_math(ast[1],ast[2])
+        end
     end
     # rand! call has 4 args
     if(length(ast)==4)
