@@ -209,7 +209,8 @@ _Intrinsics = [
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
-        "ashr_int", "lshr_int", "shl_int"
+        "ashr_int", "lshr_int", "shl_int",
+        "cttz_int"
 ]
 
 # math functions
@@ -299,7 +300,8 @@ function from_includes()
     "#include <stdio.h>\n",
     "#include <iostream>\n",
     "#include \"$packageroot/deps/include/j2c-array.h\"\n",
-    "#include \"$packageroot/deps/include/pse-types.h\"\n")
+    "#include \"$packageroot/deps/include/pse-types.h\"\n",
+    "#include \"$packageroot/deps/include/cgen_intrinsics.h\"\n")
     )
     return s
 end
@@ -1109,6 +1111,8 @@ function from_intrinsic(f :: ANY, args)
         return "!" * "(" * from_expr(args[1]) * ")"
     elseif intr == "ctpop_int"
         return "__builtin_popcount" * "(" * from_expr(args[1]) * ")"
+    elseif intr == "cttz_int"
+        return "cgen_cttz_int" * "(" * from_expr(args[1]) * ")"
     elseif intr == "ashr_int" || intr == "lshr_int"
         return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
     elseif intr == "shl_int" 
@@ -1489,7 +1493,7 @@ function pattern_match_call(ast::Array{Any, 1})
     # randn! call has 3 args
     if(length(ast)==3)
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
-        s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        #s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
     end
     # gemm calls have 6 args
     if(length(ast)==6)
