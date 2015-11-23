@@ -208,7 +208,8 @@ _Intrinsics = [
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm"
+        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
+        "ashr_int", "lshr_int", "shl_int"
 ]
 
 # math functions
@@ -1108,6 +1109,10 @@ function from_intrinsic(f :: ANY, args)
         return "!" * "(" * from_expr(args[1]) * ")"
     elseif intr == "ctpop_int"
         return "__builtin_popcount" * "(" * from_expr(args[1]) * ")"
+    elseif intr == "ashr_int" || intr == "lshr_int"
+        return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
+    elseif intr == "shl_int" 
+        return "($(from_expr(args[1]))) << ($(from_expr(args[2])))"
     elseif intr == "add_float"
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
     elseif intr == "lt_float"
