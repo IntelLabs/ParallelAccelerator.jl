@@ -53,6 +53,14 @@ println("Testing BitArrays...")
 @test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
 println("Done testing BitArrays.")
 
+#include("range.jl")
+#using RangeTest 
+#println("Testing ranges...")
+#@test RangeTest.test1() > 1.66e3
+#@test RangeTest.test2() > 1.66e3
+#println("Done testing ranges.")
+
+
 include("seq.jl")
 using SeqTest 
 println("Testing sequential code...")
