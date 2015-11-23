@@ -1379,6 +1379,18 @@ function pattern_match_call_throw(fun::ANY, input::ANY)
     return ""
 end
 
+function pattern_match_call_powersq(fun::GlobalRef, x::Number, y::Integer)
+    s = ""
+    if fun.name==:power_by_squaring
+        s = "cgen_pown("*from_expr(x)*","*from_expr(y)*")"
+    end
+    return s
+end
+
+function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY)
+    return ""
+end
+
 function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     res = ""
     if(fun.name==:rand!)
@@ -1464,9 +1476,7 @@ function pattern_match_call(ast::Array{Any, 1})
     s = ""
     if(length(ast)==2)
         s = pattern_match_call_throw(ast[1],ast[2])
-        if s==""
-            s = pattern_match_call_math(ast[1],ast[2])
-        end
+        s *= pattern_match_call_math(ast[1],ast[2])
     end
     # rand! call has 4 args
     if(length(ast)==4)
@@ -1475,6 +1485,7 @@ function pattern_match_call(ast::Array{Any, 1})
     # randn! call has 3 args
     if(length(ast)==3)
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
+        s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
     end
     # gemm calls have 6 args
     if(length(ast)==6)
