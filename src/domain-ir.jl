@@ -404,7 +404,7 @@ function ismask(state, r::SymGen)
 end
 
 function ismask(state, r::GlobalRef)
-    return r.mod==Main && r.name==:(:)
+    return r.name==:(:)
 end
 
 function ismask(state, r::Any)
@@ -471,7 +471,7 @@ end
 function rangeToMask(state, r::GlobalRef, arraysize)
     # FIXME: why doesn't this assert work?
     #@assert (r.mod!=Main || r.name!=symbol(":")) "unhandled GlobalRef range"
-    if r.mod==Main && r.name==symbol(":")
+    if r.name==symbol(":")
         return mk_range(state, 1, 1, arraysize)
     else
         error("unhandled GlobalRef range object: ", r)
