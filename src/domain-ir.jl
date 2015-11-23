@@ -460,9 +460,10 @@ function rangeToMask(state, r::SymAllGen, arraysize)
     elseif isunitrange(typ)
         r = lookupConstDefForArg(state, r)
         (start, step, final) = from_range(r)
-        mk_range(start, step, final)
+        mk_range(state, start, step, final)
     elseif isinttyp(typ) 
-        mk_range(state, r, convert(typ, 1), r)
+        #mk_range(state, r, convert(typ, 1), r)
+        r
     else
         error("Unhandled range object: ", r)
     end
