@@ -1372,7 +1372,11 @@ function pattern_match_call_math(fun::ANY, input::ANY)
 end
 
 function pattern_match_call_throw(fun::GlobalRef, input)
-    return "throw \"Julia throw() called.\"\n"
+    s = ""
+    if fun.name==:throw
+        s = "throw(\"Julia throw() called.\")"
+    end
+    return s
 end
 
 function pattern_match_call_throw(fun::ANY, input::ANY)
