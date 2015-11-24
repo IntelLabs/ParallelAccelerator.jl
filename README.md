@@ -265,7 +265,7 @@ runStencil(kernel :: Function, buffer1, buffer2, ...,
            iteration :: Int, boundaryHandling :: Symbol)
 ```
 
-As an example, the following (taken from [our Gaussian blur example](https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl)
+As an example, the following (taken from [our Gaussian blur example](https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl))
 performs a 5x5 stencil computation (note the use of Julia's `do` syntax that lets
 the user write a lambda function):
 
