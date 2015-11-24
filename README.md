@@ -7,7 +7,7 @@ Performance Scripting project at Intel Labs.
 
 ## Prerequisites
 
-  * **Julia v0.4.0.** If you don't have it yet, there are various ways
+  * **Julia v0.4.x**. If you don't have it yet, there are various ways
     to install Julia:
       * Go to http://julialang.org/downloads/ and download the
         appropriate version listed under "Current Release".
@@ -19,7 +19,7 @@ Performance Scripting project at Intel Labs.
 
     Check that you can run Julia and get to a `julia>` prompt.  You
     will know you're running the correct version if when you run it,
-    you see `Version 0.4.0`.
+    you see `Version 0.4.0` or `Version 0.4.1`.
   * **Either `gcc`/`g++` or `icc`/`icpc`.** We recommend GCC 4.8.4 or
     later and ICC 15.0.3 or later.  At package build time,
     ParallelAccelerator will check to see if you have ICC installed.
@@ -139,7 +139,7 @@ present in standard Julia, so programmers can use ParallelAccelerator to run
 the same Julia program without (significantly) modifying the source code. 
 
 The `@acc` macro provided by ParallelAccelerator first intercepts Julia
-functions at macro level and substitutes the set of implicitly parallel
+functions at the macro level and substitutes the set of implicitly parallel
 operations that we are targeting. `@acc` points them to those supplied in the
 `ParallelAccelerator.API` module. It then creates a proxy function that when
 called with concrete arguments (and known types) will try to compile the
@@ -169,15 +169,15 @@ Julia programs that are safe to parallelize. It also tries to be non-invasive,
 which means a user function or program should continue to work as expected even
 when only a part of it is accelerated. It is still important to know what
 parts are accelerated, however. As a general guideline,
-we encourage users to write program using high-level array operations rather
+we encourage users to write programs using high-level array operations rather
 than writing explicit for-loops which can have unrestricted mutations or unknown
 side-effects. High-level operations are more amenable to analysis and
 optimization provided by ParallelAccelerator.
 
 To help user verify program correctness, the optimizations of ParallelAccelerator
 can be turned off by setting environment variable `PROSPECT_MODE=none` before
-running the julia program. Doing so will still trigger certain useful macro 
-translations (such as `runStencil`, see below), but no optimizations or
+running Julia.  Programs that use ParallelAccelerator will still run
+(including those that use `runStencil`, described below), but no optimizations or
 Julia-to-C translation will take place. Users can also use `@noacc`
 at the function call site to use the original version of the function.
 
@@ -225,11 +225,11 @@ unlike general loops, their iteration variables have no inter-dependencies.
 So the `@acc` macro will turn them into an internal form that we call
 `cartesianarray`:
 
-```
+``` .julia
 A = Type[ f (x1, x2, ...) for x1 in r1, x2 in r2, ... ]
 ```
 becomes
-```
+``` .julia
 cartesianarray((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
              Type,
              (length(r1), length(r2), ...))
@@ -237,16 +237,16 @@ cartesianarray((i1,i2,...) -> begin x1 = r1[i1]; x2 = r2[i2]; f(x1,x2,...) end,
 
 This `cartesianarray` function is also exported by `ParallelAccelerator` and
 can be directly used by the user. Both the above two forms are acceptable
-programs, and equivalent in semantics, they both produce a N-dimensional array
+programs, and equivalent in semantics.  They both produce a N-dimensional array
 whose element is of `Type`, where `N` is the number of `x`s and `r`s, and
 currently only up-to-3 dimensions are supported.
 
-It should be noted, however, not all comprehensions are safe to parallelize.
-For example, if the function `f` above reads and writes to a variable outside of comprehension, 
-then making it run in parallel can produce non-deterministic
-result. Therefore, it is the responsibility of the user to avoid using `@acc` such situations arise.
+It should be noted, however, that not all comprehensions are safe to parallelize.
+For example, if the function `f` above reads and writes to a variable outside of the comprehension, 
+then making it run in parallel can produce a non-deterministic
+result. Therefore, it is the responsibility of the user to avoid using `@acc` in such situations.
 
-Another difference between parallel comprehension and the afore-mentioned *map*
+Another difference between parallel comprehension and the aforementioned *map*
 operation is that array indexing operations in the body of a parallel
 comprehension remain explicit and therefore should go through
 necessary bounds-checking to ensure safety. On the other hand, in all *map* operations such
@@ -260,16 +260,16 @@ on the current values of their neighboring elements. Since Julia's base library
 does not provide such an API, ParallelAccelerator exports a general
 `runStencil` interface to help with stencil programming:
 
-```
+``` .julia
 runStencil(kernel :: Function, buffer1, buffer2, ..., 
            iteration :: Int, boundaryHandling :: Symbol)
 ```
 
-As an example, the following (taken from Gaussian Blur example) computes a
-5x5 stencil computation (note the use of Julia's `do` syntax that lets
-user write a lambda function):
+As an example, the following (taken from [our Gaussian blur example](https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl)
+performs a 5x5 stencil computation (note the use of Julia's `do` syntax that lets
+the user write a lambda function):
 
-```
+``` .julia
 runStencil(buf, img, iterations, :oob_skip) do b, a
        b[0,0] =
             (a[-2,-2] * 0.003  + a[-1,-2] * 0.0133 + a[0,-2] * 0.0219 + a[1,-2] * 0.0133 + a[2,-2] * 0.0030 +
@@ -281,33 +281,35 @@ runStencil(buf, img, iterations, :oob_skip) do b, a
     end
 ```
 
-It take two input arrays, `buf` and `img`, and performs an iterative stencil
-loop (ISL) of given `iterations`. The stencil kernel is specified by a lambda
+It takes two input arrays, `buf` and `img`, and performs an iterative stencil
+loop (ISL) of the number of iterations given by `iterations`.
+The stencil kernel is specified by a lambda
 function that takes two arrays `a` and `b` (that correspond to `buf` and
 `img`), and computes the value of the output buffer using relative indices
 as if a cursor is traversing all array elements. `[0,0]` represents
 the current cursor position. The `return` statement in this lambda reverses
 the position of `a` and `b` to specify a buffer rotation that should happen
-in-between the stencil iterations. The use of `runStencil` will assume
+in between the stencil iterations. `runStencil` assumes that
 all input and output buffers are of the same dimension and size.
 
 Stencil boundary handling can be specified as one of the following symbols:
 
-* `:oob_skip`. Writing to output is skipped when input indexing is out-of-bound.
-* `:oob_wraparound`. Indexing is `wrapped-around` at the array boundaries so they are always safe.
-* `:oob_dst_zero`. Writing 0 to output array when any of the input indexing is out-of-bound.
-* `:oob_src_zero`. Assume 0 is returned by a read operation when indexing is out-of-bound.
+* `:oob_skip`: Writing to output is skipped when input indexing is out-of-bound.
+* `:oob_wraparound`: Indexing is "wrapped around" at the array boundaries so they are always safe.
+* `:oob_dst_zero`: Write 0 to the output array when any of the input indices is out-of-bounds.
+* `:oob_src_zero`. Assume 0 is returned by a read operation when indexing is out-of-bounds.
 
-Just like parallel comprehension, accessing the variables outside is allowed
-in a stencil body. However, accessing outside array values is
+Just as with parallel comprehension, accessing the variables outside the body
+of the `runStencil` lambda expression is allowed.
+However, accessing outside array values is
 not supported, and reading/writing the same outside variable can cause
 non-determinism. 
 
 All arrays that need to be relatively indexed can be specified as
-input buffers. `runStencil` does not impose any implicit  buffer rotation
-order and the user can choose not to rotate buffers in `return`. There 
+input buffers. `runStencil` does not impose any implicit buffer rotation
+order, and the user can choose not to rotate buffers in `return`. There 
 can be multiple output buffers as well. Finally, the call to `runStencil` does 
-not have any return value, and inputs are rotated for `iteration - 1` times if rotation is specified.
+not have any return value, and inputs are rotated `iterations - 1` times if rotation is specified.
 
 ParallelAccelerator exports a naive Julia implementation of `runStencil` that
 runs without using `@acc`. Its purpose is mostly for correctness checking.
@@ -359,16 +361,15 @@ embedding process but we are working towards a solution to this minor issue.
 
 ## Limitations 
 
-One of the most notable limitation is that ParallelAccelerator currently
-tries to compile Julia to C, which puts some constraints on what
+Currently, ParallelAccelerator tries to compile Julia to C, which puts some constraints on what
 can be successfully compiled and run:
 
 1. We only support a limited subset of Julia language features currently.
    This includes basic numbers and dense array types, a subset of math 
    functions, and basic control flow structures. Notably, we do not support 
-   String types and custom data types such as records and unions, since their 
+   `String` types and custom data types such as records and unions, since their 
    translation to C is difficult. There is also no support for exceptions, 
-   I/O operations (only very limited `println`), and arbitrary ccalls.
+   I/O operations (only very limited `println`), and arbitrary `ccall`s.
    We also do not support keyword arguments.
 
 2. We do not support calling Julia functions from C in the optimized
@@ -383,20 +384,20 @@ can be successfully compiled and run:
    Julia does not annotate all expressions in a typed AST with complete type 
    information. For example, this happens for some expressions that call Julia's 
    own intrinsics. We are working on supporting more of them if we can derive 
-   the actual type to be not `Any`, but this is still a work-in-progress.
+   the actual type to be not `Any`, but this is still a work in progress.
 
 At the moment ParallelAccelerator only supports the Julia-to-C back-end. We
-are working on alternatives such as Julia's upcoming threading implementation 
+are working on alternatives that make use of Julia's upcoming threading implementation 
 that hopefully can alleviate the above mentioned
-restrictions without sacrificing much of the speed brought by quality C
-compilers and parallel runtime such as OpenMP.  
+restrictions, without sacrificing much of the speed brought by quality C
+compilers and parallel runtimes such as OpenMP.
 
 Apart from the constraints imposed by Julia-to-C translation, our current 
 implementation of ParallelAccelerator has some other limitations:
 
 1. We currently support a limited subset of Julia functions available in the `Base` library.
-   However, not all Julia functions in the Base library
-   are supported yet and using them may or may not work in ParallelAccelerator.
+   However, not all Julia functions in `Base`
+   are supported yet, and using them may or may not work in ParallelAccelerator.
    For supported functions, we rely on capturing operator names to resolve array related functions and operators
    to our API module. This prevents them from being inlined by Julia
    which helps our translation. For unsupported functions such as `mean(x)`,
@@ -419,14 +420,14 @@ implementation of ParallelAccelerator has some other limitations:
 ## Comments, Suggestions, and Bug Reports
 
 Performance tuning is a hard problem, especially in 
-high performance scientific programs. ParallelAccelerator
+high-performance scientific programs. ParallelAccelerator
 is but a first step of bringing reasonable parallel performance to a
-productivity language by utilizing both domain specific and general compiler
+productivity language by utilizing both domain-specific and general compiler
 optimization techniques without much effort from the user. However,
-eventually there will be bottlenecks and not all optimizations work in
+eventually there will be bottlenecks, and not all optimizations work in
 favor of each other. ParallelAccelerator is still a proof-of-concept
 at this stage and we hope to hear from all users. We welcome bug reports and code contributions. 
 Please feel free to use our system, fork the project, contact us by email, and
-file bug reports on the issue tracker.
+file bug reports on [the issue tracker](https://github.com/IntelLabs/ParallelAccelerator.jl/issues).
 
 
