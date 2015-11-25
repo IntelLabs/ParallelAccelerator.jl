@@ -197,7 +197,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         if !haskey(map_reduced_bb_num_to_body, bb_num)
             map_reduced_bb_num_to_body[bb_num] = [i]
         else
-            map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num], i]
+            map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num]; i]
         end
     end
 
@@ -728,6 +728,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         dprintln(3, body[j])
     end
 
+    dprintln(3,"lambdaInfo = ", state.lambdaInfo)
     fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
     dprintln(3,"fake_body = ", fake_body)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
