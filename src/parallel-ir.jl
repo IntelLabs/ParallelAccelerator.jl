@@ -161,9 +161,34 @@ type RangeExprs
     last_val
 end
 
+@doc """
+Holds the information from one Domain IR :range Expr.
+"""
+type RangeData
+    start
+    skip
+    last
+    exprs :: RangeExprs
+    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
+
+    function RangeData(s, sk, l, sv, skv, lv, temp_var)
+        new(s, sk, l, RangeExprs(sv, skv, lv), temp_var)
+    end
+end
+
 function isStartOneRange(re :: RangeExprs)
     return re.start_val == 1
 end
+
+type MaskSelector
+    value :: SymAllGen
+end
+
+type SingularSelector
+    value :: Union{SymAllGen,Number}
+end
+
+typealias DimensionSelector Union{RangeData, MaskSelector, SingularSelector}
 
 @doc """
 The parfor AST node type.
@@ -171,7 +196,7 @@ While we are lowering domain IR to parfors and fusing we use this representation
 makes it easier to associate related statements before and after the loop to the loop itself.
 """
 type PIRParForAst
-    first_input  :: Union{SymAllGen, Array{RangeExprs,1} } 
+    first_input  :: Union{SymAllGen, Array{DimensionSelector,1} } 
     body                                      # holds the body of the innermost loop (outer loops can't have anything in them except inner loops)
     preParFor    :: Array{Any,1}              # do these statements before the parfor
     loopNests    :: Array{PIRLoopNest,1}      # holds information about the loop nests
@@ -206,7 +231,7 @@ function parforArrayInput(parfor :: PIRParForAst)
     return isa(parfor.first_input, SymAllGen)
 end
 function parforRangeInput(parfor :: PIRParForAst)
-    return isa(parfor.first_input, Array{RangeExprs,1})
+    return isa(parfor.first_input, Array{DimensionSelector,1})
 end
 
 @doc """
@@ -373,55 +398,38 @@ function mk_untyped_assignment(lhs, rhs)
 end
 
 @doc """
-Holds the information from one Domain IR :range Expr.
-"""
-type RangeData
-    start
-    skip
-    last
-    exprs :: RangeExprs
-
-    function RangeData(s, sk, l, sv, skv, lv)
-        new(s, sk, l, RangeExprs(sv, skv, lv))
-    end
-end
-
-@doc """
 Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
     array                                # The name of the array.
     dim                                  # The number of dimensions.
     out_dim                              # The number of indexed (non-const) dimensions.
-    select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
-    range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
-    range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
+    range :: Array{DimensionSelector,1}  # Empty if whole array, else one RangeData or BitArray mask per dimension.
     elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
     pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
     rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
 
     function InputInfo()
-        new(nothing, 0, 0, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
+        new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
     end
 end
 
 function isWholeArray(inputInfo :: InputInfo) 
-    return length(inputInfo.select_bitarrays) == 0 && length(inputInfo.range) == 0 
+    return length(inputInfo.range) == 0 
 end
-function isMask(inputInfo :: InputInfo)
-    return length(inputInfo.select_bitarrays) > 0
-end
+
 function isRange(inputInfo :: InputInfo)
     return length(inputInfo.range) > 0
 end 
 
 function getRangeOrArray(inputInfo :: InputInfo, num_dims)
     if isRange(inputInfo)
-        return map(x -> x.exprs, inputInfo.range[1:num_dims])
+        return inputInfo.range[1:num_dims]
     else
         return inputInfo.array
     end
 end
+
 function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
     return getRangeOrArray(inputInfo[1], num_dims)
 end
@@ -445,7 +453,7 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
-    if dim <= length(x.range)
+    if dim <= length(x.range) && isa(x.range[dim], RangeData)
         #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
         # TODO: do something with skip!
         r = x.range[dim]
@@ -673,7 +681,8 @@ function simpleIndex(dict)
             dprintln(3,"typeof(ae) = ", typeof(ae), " ae = ", ae)
             for j = 1:length(ae)
                 # If the indexing expression isn't simple then return false.
-                if (typeof(ae[j]) != SymbolNode &&
+                if (!isa(ae[j], Number) &&
+                    !isa(ae[j], SymAllGen) &&
                     (typeof(ae[j]) != Expr ||
                     ae[j].head != :(::)   ||
                     typeof(ae[j].args[1]) != Symbol))
@@ -805,13 +814,17 @@ end
 @doc """
 Gets (or adds if absent) the range correlation for the given array of RangeExprs.
 """
-function getOrAddRangeCorrelation(ranges :: Array{RangeExprs,1}, state :: expr_state)
+function getOrAddRangeCorrelation(ranges :: Array{DimensionSelector,1}, state :: expr_state)
     # We can't match on array of RangeExprs so we flatten to Array of Any
     aa = Any[]
     for i = 1:length(ranges)
-        push!(aa, ranges[i].start_val)
-        push!(aa, ranges[i].skip_val)
-        push!(aa, ranges[i].last_val)
+        if isa(ranges[i], RangeData)
+            push!(aa, ranges[i].exprs.start_val)
+            push!(aa, ranges[i].exprs.skip_val)
+            push!(aa, ranges[i].exprs.last_val)
+        else
+            push!(aa, ranges[i])
+        end
     end
 
     if !haskey(state.range_correlation, aa)
@@ -1693,8 +1706,8 @@ function getCorrelation(sng :: SymAllGen, state :: expr_state)
     return getOrAddArrayCorrelation(toSymGen(sng), state)
 end
 
-function getCorrelation(are :: Array{RangeExprs,1}, state :: expr_state)
-    dprintln(3, "getCorrelation for Array{RangeExprs} = ", are)
+function getCorrelation(are :: Array{DimensionSelector,1}, state :: expr_state)
+    dprintln(3, "getCorrelation for Array{DimensionSelector,1} = ", are)
     return getOrAddRangeCorrelation(are, state)
 end
 
@@ -3876,7 +3889,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
         head = ast.head
         args = ast.args
         if head == :parfor
-            dprintln(3,"pir_live_cb for :parfor")
+            dprintln(4,"pir_live_cb for :parfor")
             expr_to_process = Any[]
 
             assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
@@ -3894,6 +3907,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
             #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
             assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
             fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+            dprintln(3,"fake_body = ", fake_body)
 
             body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
             live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
@@ -3909,7 +3923,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
 
             return expr_to_process
         elseif head == :parfor_start
-            dprintln(3,"pir_live_cb for :parfor_start")
+            dprintln(4,"pir_live_cb for :parfor_start")
             expr_to_process = Any[]
 
             assert(typeof(args[1]) == PIRParForStartEnd)
@@ -3929,7 +3943,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
             return Any[]
         elseif head == :insert_divisible_task
             # Is this right?  Do I need pir_range stuff here too?
-            dprintln(3,"pir_live_cb for :insert_divisible_task")
+            dprintln(4,"pir_live_cb for :insert_divisible_task")
             expr_to_process = Any[]
 
             cur_task = args[1]
@@ -3945,7 +3959,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
 
             return expr_to_process
         elseif head == :loophead
-            dprintln(3,"pir_live_cb for :loophead")
+            dprintln(4,"pir_live_cb for :loophead")
             assert(length(args) == 3)
 
             expr_to_process = Any[]
@@ -3979,7 +3993,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
                 return expr_to_process
             end
         elseif head == :(=)
-            dprintln(3,"pir_live_cb for :(=)")
+            dprintln(4,"pir_live_cb for :(=)")
             if length(args) > 2
                 expr_to_process = Any[]
                 push!(expr_to_process, args[1])
@@ -5458,6 +5472,7 @@ end
 Form a Julia :lambda Expr from a DomainLambda.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
+    dprintln(3,"lambdaFromDomainLambda dl_inputs = ", dl_inputs)
     #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
     type_data = CompilerTools.LambdaHandling.VarDef[]
     input_arrays = Symbol[]
@@ -6082,9 +6097,9 @@ end
 
 
 function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"PIR AstWalkCallback starting")
+    dprintln(4,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    dprintln(4,"PIR AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -6097,9 +6112,9 @@ function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number 
 end
 
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"PIR AstWalkCallback starting")
+    dprintln(4,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    dprintln(4,"PIR AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end

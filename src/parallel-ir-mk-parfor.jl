@@ -26,9 +26,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 @doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
-function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1}, range :: Array{RangeData,1})
+function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1})
     xtyp = typeof(index_vars[dim])
-    dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range_var = ", range_var, " xtyp = ", xtyp)
+    dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range = ", range, " xtyp = ", xtyp)
 
     if xtyp == Int64 || xtyp == SymbolNode || xtyp == Expr
         base = index_vars[dim]
@@ -38,8 +38,10 @@ function augment_sn(dim :: Int64, index_vars, range_var :: Array{SymNodeGen,1}, 
 
     dprintln(3,"pre-base = ", base)
 
-    if dim <= length(range_var) && !isStartOneRange(range[dim].exprs)
-        base = DomainIR.add(base, range_var[dim])
+    if dim <= length(range) && 
+       isa(range[dim], RangeData) &&
+       !isStartOneRange(range[dim].exprs)
+        base = DomainIR.add(base, range[dim].offset_temp_var)
     end
 
     dprintln(3,"post-base = ", base)
@@ -51,12 +53,17 @@ end
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
-function mk_arrayref1(num_dim_inputs, array_name, index_vars, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[], range :: Array{RangeData,1} = RangeData[])
+function mk_arrayref1(num_dim_inputs, 
+                      array_name, 
+                      index_vars, 
+                      inbounds, 
+                      state     :: expr_state, 
+                      range     :: Array{DimensionSelector,1} = DimensionSelector[])
     dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
     dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     elem_typ = getArrayElemType(array_name, state)
     dprintln(3,"mk_arrayref1 element type = ", elem_typ)
-    dprintln(3,"mk_arrayref1 range_var = ", range_var)
+    dprintln(3,"mk_arrayref1 range = ", range)
 
     if inbounds
         fname = :unsafe_arrayref
@@ -65,7 +72,7 @@ function mk_arrayref1(num_dim_inputs, array_name, index_vars, inbounds, state ::
     end
 
     indsyms = [ x <= num_dim_inputs ? 
-                   augment_sn(x, index_vars, range_var, range) : 
+                   augment_sn(x, index_vars, range) : 
                    index_vars[x] 
                 for x = 1:length(index_vars) ]
     dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
@@ -82,12 +89,18 @@ end
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
-function mk_arrayset1(num_dim_inputs, array_name, index_vars, value, inbounds, state :: expr_state, range_var :: Array{SymNodeGen,1} = SymNodeGen[], range :: Array{RangeData,1} = RangeData[])
+function mk_arrayset1(num_dim_inputs, 
+                      array_name, 
+                      index_vars, 
+                      value, 
+                      inbounds, 
+                      state :: expr_state, 
+                      range :: Array{DimensionSelector,1} = DimensionSelector[])
     dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
     dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
     dprintln(3,"mk_arrayset1 element type = ", elem_typ)
-    dprintln(3,"mk_arrayset1 range_var = ", range_var)
+    dprintln(3,"mk_arrayset1 range = ", range)
 
     # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
     if inbounds
@@ -99,7 +112,7 @@ function mk_arrayset1(num_dim_inputs, array_name, index_vars, value, inbounds, s
     # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
     # a SymbolNode containing the index expression type "Int".
     indsyms = [ x <= num_dim_inputs ? 
-                   augment_sn(x, index_vars, range_var, range) : 
+                   augment_sn(x, index_vars, range) : 
                    index_vars[x] 
                 for x = 1:length(index_vars) ]
     dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
@@ -178,21 +191,24 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo.array,i), state)
             input_array_rangeconds[i] = nothing
         elseif isRange(inputInfo)
-            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), inputInfo.range[i].start, state)
-            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), inputInfo.range[i].skip, state)
-            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), inputInfo.range[i].last, state)
-            input_array_rangeconds[i] = nothing
-        elseif isMask(inputInfo)
-            mask_array = inputInfo.select_bitarrays[i]
-            assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.lambdaInfo)))
-            if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-                mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+            this_dim = inputInfo.range[i]
+            if isa(this_dim, RangeData)
+                array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), inputInfo.range[i].start, state)
+                array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), inputInfo.range[i].skip, state)
+                array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), inputInfo.range[i].last, state)
+                input_array_rangeconds[i] = nothing
+            else
+                mask_array = this_dim
+                assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.lambdaInfo)))
+                if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+                    mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+                end
+                # TODO: generate dimension check on mask_array
+                array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
+                array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
+                array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo.array,i), state)
+                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
             end
-            # TODO: generate dimension check on mask_array
-            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
-            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
-            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo.array,i), state)
-            input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
         end 
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_start)
@@ -203,11 +219,10 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         push!(save_array_lens, save_array_len)
 
-        loopNests[num_dim_inputs - i + 1] =
-        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-        SymbolNode(symbol(save_array_start), Int),
-        SymbolNode(symbol(save_array_len),Int),
-        SymbolNode(symbol(save_array_step), Int))
+        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
+                                                        SymbolNode(symbol(save_array_start), Int),
+                                                        SymbolNode(symbol(save_array_len),Int),
+                                                        SymbolNode(symbol(save_array_step), Int))
     end
 
     assert(length(dl.outputs) == 1)
@@ -332,10 +347,20 @@ function createTempForRangeOffset(num_used, ranges :: Array{RangeData,1}, unique
     return range_array
 end
 
+function getSName(rd :: RangeData)
+    return getSName(rd.offset_temp_var)
+end
+function getSName(rd :: MaskSelector)
+    return getSName(rd.value)
+end
+function getSName(rd :: SingularSelector)
+    return rd.value
+end
+
 @doc """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{SymNodeGen,1}, unique_id :: Int64, state :: expr_state)
+function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{DimensionSelector,1}, unique_id :: Int64, state :: expr_state)
     key = toSymGen(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     # Is it okay to just use range[1] here instead of all the ranges?
@@ -351,18 +376,36 @@ end
 @doc """
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
-function rangeToRangeData(range :: Expr, pre_offsets::Array{Expr,1}, arr, range_num::Int, state)
-    @assert (range.head == :range) ":range expression expected"
-    start = createTempForRangeInfo(arr, 1, range_num, "start", state);
-    step  = createTempForRangeInfo(arr, 1, range_num, "step", state);
-    last  = createTempForRangeInfo(arr, 1, range_num, "last", state);
-    return RangeData(start, step, last, range.args[1], range.args[2], range.args[3])
+function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
+    dprintln(3,"rangeToRangeData for Expr")
+    if range.head == :range
+        start = createTempForRangeInfo(arr, 1, range_num, "start", state);
+        step  = createTempForRangeInfo(arr, 1, range_num, "step", state);
+        last  = createTempForRangeInfo(arr, 1, range_num, "last", state);
+        range_temp_var = createStateVar(state, string("parallel_ir_range_", start, "_", skip, "_", last, "_", range_num, "_1"), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+        return RangeData(start, step, last, range.args[1], range.args[2], range.args[3], range_temp_var)
+    elseif range.head == :tomask
+        return MaskSelector(range.args[1])   # Return the BitArray mask
+    else 
+        throw(string(":range or :tomask expression expected"))
+    end
+end
+function rangeToRangeData(other :: Union{SymAllGen,Number}, arr, range_num :: Int, state)
+    dprintln(3,"rangeToRangeData for non-Expr")
+    return SingularSelector(other)
+end
+
+function rangeToRangeData(sym, arr, range_num :: Int, state)
+    return sym
 end
 
 function addRangePreoffsets(rd :: RangeData, pre_offsets :: Array{Expr,1}, state)
     push!(pre_offsets, mk_assignment_expr(rd.start, rd.exprs.start_val, state))
     push!(pre_offsets, mk_assignment_expr(rd.skip,  rd.exprs.skip_val,  state))
     push!(pre_offsets, mk_assignment_expr(rd.last,  rd.exprs.last_val,  state))
+end
+function addRangePreoffsets(rd :: Union{MaskSelector,SingularSelector}, pre_offsets :: Array{Expr,1}, state)
+    # Intentionally do nothing.
 end
 
 @doc """
@@ -376,17 +419,21 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
     select_array       = select.args[1] # the array to select from
     input_array_ranges = select.args[2] # range object
 
-    range_array = RangeData[]
+    dprintln(3,"selectToRangeData: select_array = ", select_array, " input_array_ranges = ", input_array_ranges)
+
+    range_array = DimensionSelector[]
 
     # The expression could be :ranges which means there are multiple dimensions or
     # a single dimension with a :range expression.
     if input_array_ranges.head == :ranges
         for i = 1:length(input_array_ranges.args)
-            push!(range_array, rangeToRangeData(input_array_ranges.args[i], pre_offsets, select.args[1], i, state))
+            push!(range_array, rangeToRangeData(input_array_ranges.args[i], select.args[1], i, state))
         end
     else
-        push!(range_array, rangeToRangeData(input_array_ranges, pre_offsets, select_array, 0 ,state))
+        push!(range_array, rangeToRangeData(input_array_ranges, select_array, 0, state))
     end
+
+    dprintln(3,"range_array = ", range_array)
 
     # Should be the full dimensions of the array.
     cur = length(range_array)
@@ -395,13 +442,11 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
     # Scan backward from last dimension to the first.
     for rindex = cur:-1:1
         rd = range_array[rindex]
-        dprintln(3, "start_val = ", rd.exprs.start_val, " last_val = ", rd.exprs.last_val)
-        # If start and last expr are identical then this is a singular dimension.
-        if rd.exprs.start_val == rd.exprs.last_val
-            dprintln(3, "Found ending dimension where start of range equals end of range so eliminated this dimension.")
+        if isa(rd, SingularSelector)
+            dprintln(3, "Found singular ending dimension so eliminated this dimension.")
             cur -= 1
         else
-            # Once we find one trailing dimension that isn't eliminated then dimension shriking has to stop.
+            # Once we find one trailing dimension that isn't eliminated then dimension shrinking has to stop.
             break
         end 
     end    
@@ -423,31 +468,24 @@ function get_mmap_input_info(input_array :: Expr, state)
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
         thisInfo.out_dim = thisInfo.dim
         argtyp = typeof(thisInfo.array)
-        dprintln(3,"get_mmap_input_info thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
+        dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
         @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
         select_kind = input_array.args[2].head
         @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
+        dprintln(3,"select_kind = ", select_kind)
         if select_kind == :tomask
-            thisInfo.select_bitarrays = input_array.args[2].args
-            thisInfo.range = RangeData[]
-            thisInfo.range_offset = SymbolNode[]
+            thisInfo.range = [MaskSelector(x) for x in input_array.args[2].args]
             thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-            thisInfo.pre_offsets = Expr[]
         else
-            thisInfo.pre_offsets = Expr[]
             (thisInfo.range, thisInfo.out_dim) = selectToRangeData(input_array, thisInfo.pre_offsets, state)
-            thisInfo.range_offset = createTempForRangeOffset(thisInfo.out_dim, thisInfo.range, 1, state)
-            thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range_offset, 1, state)
-            thisInfo.pre_offsets = [thisInfo.pre_offsets; generatePreOffsetStatements(thisInfo.out_dim, thisInfo.range_offset, thisInfo.range)]
+            thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range, 1, state)
+            thisInfo.pre_offsets = [thisInfo.pre_offsets; generatePreOffsetStatements(thisInfo.out_dim, thisInfo.range)]
         end
     else
         thisInfo.array = input_array
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
         thisInfo.out_dim = thisInfo.dim
-        thisInfo.range = RangeData[]
-        thisInfo.range_offset = SymbolNode[]
         thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-        thisInfo.pre_offsets = Expr[]
     end
     return thisInfo
 end
@@ -457,17 +495,20 @@ function get_mmap_input_info(input_array :: SymAllGen, state)
     thisInfo.array = input_array
     thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
     thisInfo.out_dim = thisInfo.dim
-    thisInfo.range = RangeData[]
-    thisInfo.range_offset = SymbolNode[]
     thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
-    thisInfo.pre_offsets = Expr[]
     return thisInfo
 end
 
 function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
-    # we only support bitarray selection for 1D arrays
-    if length(thisInfo.select_bitarrays)==1
-        mask_array = thisInfo.select_bitarrays[1] 
+    # We only support bitarray selection for 1D arrays
+    for i = 1:length(thisInfo.range)
+        if !isa(thisInfo.range[i], MaskSelector)
+            continue
+        end        
+        if i > 1
+            throw(string("bitarray_mask only support for 1D arrays"))
+        end
+        mask_array = thisInfo.range[i].value
         # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
         #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
         #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
@@ -532,7 +573,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
     for(i = 1:length(inputInfo))
-        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset, inputInfo[i].range), state))
+        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
     end
 
     # not used here?
@@ -580,17 +621,17 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     out_body = out_body[1:oblen-1]
     for i = 1:length(dl.outputs)
         if length(inputInfo[i].range) != 0
-            tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range_offset, 2, state)
+            tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range, 2, state)
         else
             tfa = createTempForArray(inputInfo[i].array, 2, state)
         end
         #tfa = createTempForArray(dl.outputs[i], 2, state)
         #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
         push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset, inputInfo[i].range))
+        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         if length(condExprs) > 0
-            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset, inputInfo[i].range))
+            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
+            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         end
     end
 
@@ -698,25 +739,29 @@ end
 
 # ===============================================================================================================================
 
-function generatePreOffsetStatements(num_dim_inputs, range_offsets :: Array{SymNodeGen,1}, ranges :: Array{RangeData,1})
-    assert(length(range_offsets) >= num_dim_inputs)
-    assert(length(ranges)        >= num_dim_inputs)
+function generatePreOffsetStatement(range :: RangeData, ret)
+    # Special case ranges that start with 1 as they don't require the start of the range added to the loop index.
+    if !isStartOneRange(range.exprs)
+        dprintln(3,"range = ", range)
+
+        range_expr = mk_assignment_expr(range.offset_temp_var, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
+        push!(ret, range_expr)
+    end
+end
+
+function generatePreOffsetStatement(range :: Union{MaskSelector,SingularSelector}, ret)
+    # Intentionally do nothing.
+end
+
+function generatePreOffsetStatements(num_dim_inputs, ranges :: Array{DimensionSelector,1})
+    assert(length(ranges) >= num_dim_inputs)
 
     ret = Expr[]
 
     #for i = 1:length(ranges)
     for i = 1:num_dim_inputs
         range = ranges[i]
-        # Special case ranges that start with 1 as they don't require the start of the range added to the loop index.
-        if !isStartOneRange(range.exprs)
-            range_offset = range_offsets[i]
-
-            dprintln(3,"range = ", range)
-            dprintln(3,"range_offset = ", range_offset)
-
-            range_expr = mk_assignment_expr(range_offset, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
-            push!(ret, range_expr)
-        end
+        generatePreOffsetStatement(range, ret)
     end
 
     return ret
@@ -776,7 +821,9 @@ function getConstDims(num_dim_inputs, inputInfo :: InputInfo)
     ret = []
 
     for i = num_dim_inputs+1:length(inputInfo.range)
-        push!(ret, inputInfo.range[i].exprs.start_val)
+        this_dim = inputInfo.range[i]
+        assert(isa(this_dim, SingularSelector))
+        push!(ret, this_dim.value)
     end
 
     return ret
@@ -835,7 +882,9 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
                               num_dim_inputs,
                               inputInfo[i].array, 
                               [parfor_index_syms; getConstDims(num_dim_inputs, inputInfo[i])...], 
-                              true, state, inputInfo[i].range_offset, inputInfo[i].range), 
+                              true,  # inbounds is true
+                              state, 
+                              inputInfo[i].range), 
                            state))
     end
 
@@ -908,8 +957,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
         push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state))
         if length(condExprs) > 0
-            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range_offset, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range_offset, inputInfo[i].range))
+            push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
+            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         end
         # keep the sum of the sizes of the individual output array elements
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)
