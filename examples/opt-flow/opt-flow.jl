@@ -168,32 +168,32 @@ Horn-Schunck multi-frame optical flow estimator.
 
 Usage:
   opt-flow.jl -h | --help
-  opt-flow.jl [--image_name_prefix=<prefix>] [--image_name_suffix=<suffix>] [--num_frames=<frames>]
+  opt-flow.jl [--image-name-prefix=<image-name-prefix>] [--image-name-suffix=<image-name-suffix>] [--num-frames=<num-frames>]
 
 Options:
   -h --help                     Show this screen.
-  --image_name_prefix=<prefix>  Specify an image filename prefix; defaults to "small_0".
-  --image_name_suffix=<suffix>  Specify an image filename prefix; defaults to ".dat".
-  --num_frames=<frames>         Specify a number of frames (at least 2); defaults to 2.
+  --image-name-prefix=<image-name-prefix>  Specify an image filename prefix; defaults to "small_0".
+  --image-name-suffix=<image-name-suffix>  Specify an image filename prefix; defaults to ".dat".
+  --num-frames=<num-frames>                Specify a number of frames (at least 2); defaults to 2.
 
 Assumes that image files are in the same directory as opt-flow.jl.
 """
     arguments = docopt(doc)
 
-    if (arguments["--image_name_prefix"] != nothing)
-        fname_prefix = arguments["--image_name_prefix"]
+    if (arguments["--image-name-prefix"] != nothing)
+        fname_prefix = arguments["--image-name-prefix"]
     else
         fname_prefix = "small_0"
     end
 
-    if (arguments["--image_name_suffix"] != nothing)
-        fname_suffix = arguments["--image_name_suffix"]
+    if (arguments["--image-name-suffix"] != nothing)
+        fname_suffix = arguments["--image-name-suffix"]
     else
         fname_suffix = ".dat"
     end
 
-    if (arguments["--num_frames"] != nothing)
-        nframes = parse(Int, arguments["--num_frames"])
+    if (arguments["--num-frames"] != nothing)
+        nframes = parse(Int, arguments["--num-frames"])
     else
         nframes = 2
     end
