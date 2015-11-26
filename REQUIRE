@@ -2,4 +2,5 @@ julia 0.4
 DocOpt
 Images
 ImageMagick
+Winston
 CompilerTools

@@ -32,4 +32,5 @@ script:
   - julia examples/laplace-3d/laplace-3d.jl
   - julia examples/opt-flow/opt-flow.jl
   - julia examples/quant/quant.jl
+  - julia examples/wave-2d/wave-2d.jl
 
