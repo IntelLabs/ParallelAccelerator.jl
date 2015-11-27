@@ -30,7 +30,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 using ParallelAccelerator
 using DocOpt
-#using Winston
+if "--demo" in ARGS
+    using Winston
+end
 
 @acc function runWaveStencil(p::Array{Float64,2},
                              c::Array{Float64,2},
@@ -45,12 +47,11 @@ end
 function wave2d(demo::Bool)
 
     speed = 10         # propagation speed
+    s = 512            # array size (spatial resolution of the simulation)
 
     if (demo)
-        s = 128        # array size (spatial resolution of the simulation)
         stopTime = 0.1 # time step at which to stop the main loop
     else
-        s = 512
         stopTime = 0.05
     end
 
