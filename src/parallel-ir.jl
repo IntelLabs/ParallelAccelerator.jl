@@ -2337,6 +2337,10 @@ type pir_range_actual
     function pir_range_actual(l1, u1, l2, u2, l3, u3)
         new(3, Int64[l1; l2; l3], Int64[u1; u2; u3])
     end
+    function pir_range_actual(larray :: Array{Int64,1}, uarray :: Array{Int64,1})
+        assert(length(larray) == length(uarray))
+        new(length(larray), larray, uarray)
+    end
 end
 
 ARG_OPT_IN = 1
@@ -2910,15 +2914,86 @@ if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 
 #println_mutex = Mutex()
 
-function test1(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual)
-  println("test1 space = ", full_iteration_space)
-  nothing
-end
-
 function tprintln(args...)
   for a in args
     ccall(:puts, Cint, (Cstring,), string(a))
   end
+end
+
+type dimlength
+    dim
+    len
+end
+
+type isf_range
+    dim
+    lower_bound
+    upper_bound
+end
+
+function chunk(rs :: Int, re :: Int, divisions :: Int)
+    assert(divisions >= 1)
+    total = (re - rs) + 1 
+    if divisions == 1
+        return (rs, re, re + 1)
+    else
+        len, rem = divrem(total, divisions)
+        res_end = rs + len - 1
+        return (rs, res_end, res_end + 1)
+    end
+end
+
+function isfRangeToActual(build :: Array{isf_range,1}, dims)
+    unsort = sort(build, by=x->x.dim)
+    ParallelAccelerator.ParallelIR.pir_range_actual(map(x -> x.lower_bound, unsort), map(x -> x.upper_bound, unsort))    
+end
+
+function divide_work(assignments :: Array{ParallelAccelerator.ParallelIR.pir_range_actual,1}, 
+                     build       :: Array{isf_range, 1}, 
+                     start_thread, end_thread, dims, index)
+    num_threads = (end_thread - start_thread) + 1
+
+#    dprintln(3,"divide_work num_threads = ", num_threads, " build = ", build, " start = ", start_thread, " end = ", end_thread, " dims = ", dims, " index = ", index)
+    assert(num_threads >= 1)
+    if num_threads == 1
+        assert(length(build) <= length(dims))
+
+        if length(build) == length(dims)
+            pra = isfRangeToActual(build, dims)
+            assignments[start_thread] = pra
+        else 
+            new_build = [build[1:(index-1)]; isf_range(dims[index].dim, 1, dims[index].len)]
+            divide_work(assignments, new_build, start_thread, end_thread, dims, index+1)
+        end
+    else
+        assert(index <= length(dims))
+        total_len = sum(map(x -> x.len, dims[index:end]))
+        percentage = dims[index].len / total_len
+        divisions_for_this_dim = Int(round(num_threads * percentage))
+
+        chunkstart = 1
+        chunkend   = dims[index].len
+
+        threadstart = start_thread
+        threadend   = end_thread
+
+#        dprintln(3, "total = ", total_len, " percentage = ", percentage, " divisions = ", divisions_for_this_dim)
+        for i = 1:divisions_for_this_dim
+            (ls, le, chunkstart)  = chunk(chunkstart,  chunkend,  divisions_for_this_dim - i + 1)
+            (ts, te, threadstart) = chunk(threadstart, threadend, divisions_for_this_dim - i + 1)
+            divide_work(assignments, [build[1:(index-1)]; isf_range(dims[index].dim, ls, le)], ts, te, dims, index+1) 
+        end
+ 
+    end
+end
+
+function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual, numtotal :: Int)
+#    dprintln(3, "divide_fis space = ", full_iteration_space, " numtotal = ", numtotal)
+    dims = sort(dimlength[dimlength(i, full_iteration_space.upper_bounds[i] - full_iteration_space.lower_bounds[i] + 1)  for i = 1:full_iteration_space.dim], by=x->x.len, rev=true)
+#    dprintln(3, "dims = ", dims)
+    assignments = Array(ParallelAccelerator.ParallelIR.pir_range_actual, numtotal)
+    divide_work(assignments, isf_range[], 1, numtotal, dims, 1)
+    return assignments
 end
 
 @doc """
@@ -2928,6 +3003,7 @@ It takes the task function to run, the full iteration space to run and the norma
 function isf(t :: Function, 
              full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
              rest...)
+#    ccall(:puts, Cint, (Cstring,), "Running isf.")
     tid = Base.Threads.threadid()
 #    ta = [typeof(x) for x in rest]
 #    Base.Threads.lock!(println_mutex)
@@ -2944,22 +3020,10 @@ function isf(t :: Function,
 
         # Handle the case where iterations is less than the core count.
         if num_iters <= nthreads()
-            if false
-                if tid == 1
-                    #println("ISF tid = ", tid, " t = ", t, " fis = ", full_iteration_space, " args = ", rest...)
-                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
-                    #return t(full_iteration_space, rest...)
-                else
-                    return nothing
-                end
+            if tid <= num_iters
+                return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
             else
-                if tid <= num_iters
-                    #return t(ParallelAccelerator.ParallelIR.pir_range_actual(1,2), rest...)
-                    return t(ParallelAccelerator.ParallelIR.pir_range_actual(tid,tid), rest...)
-                else
-                    #return t(pir_range_actual([0],[-1]), rest...)
-                    return nothing
-                end
+                return nothing
             end
         else
             # one dimensional scheduling
@@ -2975,8 +3039,6 @@ function isf(t :: Function,
 #            Base.Threads.unlock!(println_mutex)
             try 
               tres = t(ParallelAccelerator.ParallelIR.pir_range_actual(ls,le), rest...)
-#             range_actual = ParallelAccelerator.ParallelIR.pir_range_actual(ls,le)
-#             tres = test1(range_actual)
             catch something
              # println("Call to t created exception ", something)
               ccall(:puts, Cint, (Cstring,), "caught some exception")
@@ -2984,10 +3046,20 @@ function isf(t :: Function,
 #            tprintln("After t call tid = ", tid)
             return tres
         end
-    elseif full_iteration_space.dim == 2
-        assert(0)
-    else
-        assert(0)
+    elseif full_iteration_space.dim >= 2
+        assignments = divide_fis(full_iteration_space, nthreads())
+
+        try 
+#            msg = string("Running num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
+#            ccall(:puts, Cint, (Cstring,), msg)
+            tres = t(assignments[tid], rest...)
+        catch something
+            msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
+            ccall(:puts, Cint, (Cstring,), msg)
+            msg = string(something)
+            ccall(:puts, Cint, (Cstring,), msg)
+        end 
+        return tres
     end
 end
 
