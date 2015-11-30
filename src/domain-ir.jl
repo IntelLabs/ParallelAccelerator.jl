@@ -1186,7 +1186,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
         if isa(rExpr, Expr) && typ == Int 
             # only handle range of Int type 
             (start, step, final) = from_range(rExpr)
-            return mk_expr(typ, :call, :add_int, start, mk_expr(typ, :call, :mul_int, mk_expr(typ, :call, :sub_int, args[2], 1), step))
+            return mk_expr(typ, :call, GlobalRef(Base, :add_int), start, mk_expr(typ, :call, GlobalRef(Base, :mul_int), mk_expr(typ, :call, GlobalRef(Base, :sub_int), args[2], 1), step))
         end
     elseif isarray(arrTyp) || isbitarray(arrTyp)
         ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
