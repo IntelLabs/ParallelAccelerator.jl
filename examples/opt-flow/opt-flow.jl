@@ -26,14 +26,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-ParallelAccelerator.ParallelIR.set_debug_level(3)
-
 include("image.jl")
 using Image
 
 #ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.cgen.set_debug_level(3)
 
+@acc begin
 # Block Jacobi preconditioner
 # Used in singleScaleOpticalFlow below
 # Needs to be toplevel function for use with ParallelAccelerator
@@ -47,7 +46,6 @@ using Image
     rru, rrv
 end
 
-@acc begin
 # Solve optical flow problem at one scale
 # Flow problem is formulated as the solution of a linear system where matrix is sparse
 # Use an iterative method to 
