@@ -56,3 +56,8 @@ function test1()
 end
 
 end
+
+println("Testing sequential code...")
+@test_approx_eq SeqTest.test1() [9.0 12.0; 10.0 20.0]
+println("Done testing sequential code.")
+

@@ -61,5 +61,12 @@ function test3()
     return bitarrtest3([1.1; 2.2; 3.2; 1.9], [9.0; 9.0; 10.0; 11.0], [2.0; 2.0; 2.0; 2.0])
 end
 
-
 end
+
+println("Testing BitArrays...")
+@test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
+@test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]
+@test BitArrayTest.test3() == [1.1; 9.0; 10.0; 1.9]
+println("Done testing BitArrays.")
+
+
