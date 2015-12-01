@@ -1749,6 +1749,17 @@ function from_expr(state::IRState, env::IREnv, ast::LambdaStaticData)
     return ast
 end
 
+function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
+    if ccall(:jl_is_const, Int32, (Any, Any), ast.mod, ast.name) == 1
+        def = getfield(ast.mod, ast.name)
+        if isbits(def) && !isa(def, IntrinsicFunction)
+            return def
+        end
+    end
+    dprintln(2, " not handled ", ast)
+    return ast
+end
+
 function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     name = isa(ast, SymbolNode) ? ast.name : ast
     # if it is global const, we replace it with its const value
