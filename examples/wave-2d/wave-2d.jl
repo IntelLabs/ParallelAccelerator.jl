@@ -46,11 +46,11 @@ end
 
 function wave2d(demo::Bool)
 
-    speed = 10         # propagation speed
-    s = 512            # array size (spatial resolution of the simulation)
+    speed = 10         # Propagation speed
+    s = 512            # Array size (spatial resolution of the simulation)
 
     if (demo)
-        stopTime = 0.1 # time step at which to stop the main loop
+        stopTime = 0.1 # Time step at which to stop the main loop
     else
         stopTime = 0.05
     end
@@ -64,8 +64,8 @@ function wave2d(demo::Bool)
     c = zeros(s, s) # current
     f = zeros(s, s) # future
 
-    dt = 0.0001         # time resolution of the simulation
-    dx = 0.01           # distance between elements
+    dt = 0.0001     # Time resolution of the simulation
+    dx = 0.01       # Distance between elements
     r = speed * dt / dx 
 
     n = 300
