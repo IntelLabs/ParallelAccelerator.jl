@@ -55,10 +55,10 @@ function wave2d(demo::Bool)
         stopTime = 0.05
     end
 
-    s2 = div(s,2)
-    s4 = div(s,4)
-    s8 = div(s,8)
-    s16 = div(s,16)
+    s2 = div(s, 2)
+    s4 = div(s, 4)
+    s8 = div(s, 8)
+    s16 = div(s, 16)
 
     p = zeros(s, s) # past
     c = zeros(s, s) # current
@@ -73,7 +73,7 @@ function wave2d(demo::Bool)
     for i = s2 - s16 : s2 + s16
         # Initial conditions
         c[i, s2 - s16 : s2 + s16] = - 2 * cos(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos(0.5 * 2 * pi / (s8) * i)
-        p[i,1:s] = c[i,1:s]
+        p[i, 1:s] = c[i, 1:s]
     end
 
     # Main loop
@@ -82,21 +82,21 @@ function wave2d(demo::Bool)
         runWaveStencil(p, c, f, r)
 
         # Dynamic source
-        f[s2+s4-1 : s2+s4+1 , 1:2] = 1.5 * sin(t*n)
-        f[s2-s4-1 : s2-s4+1 , 1:2] = 1.5 * sin(t*n)
-        f[2 : s-1,1:2] = 1
+        f[s2+s4-1:s2+s4+1, 1:2] = 1.5 * sin(t*n)
+        f[s2-s4-1:s2-s4+1, 1:2] = 1.5 * sin(t*n)
+        f[2:s-1, 1:2] = 1
 
         # Transparent boundary handling
-        f[2:s-1,1] = (2 * c[2:s-1,1] + (r-1) * p[2:s-1,1] + 2*r*r*(c[2:s-1,2] + c[3:s,1] + c[1:s-2,1] - 3 * c[2:s-1,1]))/(1+r)   # Y:1
-        f[2:s-1,s] = (2 * c[2:s-1,s] + (r-1) * p[2:s-1,s] + 2*r*r*(c[2:s-1,s-1] + c[3:s,s] + c[1:s-2,s] - 3 * c[2:s-1,s]))/(1+r) # Y:s
-        f[1,2:s-1] = (2 * c[1,2:s-1] + (r-1) * p[1,2:s-1] + 2*r*r*(c[2,2:s-1] + c[1,3:s] + c[1,1:s-2] - 3 * c[1,2:s-1]))/(1+r)   # X:1
-        f[s,2:s-1] = (2 * c[s,2:s-1] + (r-1) * p[s,2:s-1] + 2*r*r*(c[s-1,2:s-1] + c[s,3:s] + c[s,1:s-2] - 3 * c[s,2:s-1]))/(1+r) # Y:s
+        f[2:s-1, 1] = (2 * c[2:s-1, 1] + (r-1) * p[2:s-1, 1] + 2*r*r*(c[2:s-1, 2]   + c[3:s, 1] + c[1:s-2, 1] - 3 * c[2:s-1, 1])) / (1+r) # Y:1
+        f[2:s-1, s] = (2 * c[2:s-1, s] + (r-1) * p[2:s-1, s] + 2*r*r*(c[2:s-1, s-1] + c[3:s, s] + c[1:s-2, s] - 3 * c[2:s-1, s])) / (1+r) # Y:s
+        f[1, 2:s-1] = (2 * c[1, 2:s-1] + (r-1) * p[1, 2:s-1] + 2*r*r*(c[2, 2:s-1]   + c[1, 3:s] + c[1, 1:s-2] - 3 * c[1, 2:s-1])) / (1+r) # X:1
+        f[s, 2:s-1] = (2 * c[s, 2:s-1] + (r-1) * p[s, 2:s-1] + 2*r*r*(c[s-1, 2:s-1] + c[s, 3:s] + c[s, 1:s-2] - 3 * c[s, 2:s-1])) / (1+r) # Y:s
 
         # Transparent corner handling
-        f[1,1] = ( 2 * c[1,1] + (r-1) * p[1,1] + 2*r*r* ( c[2,1] + c[1,2] - 2*c[1,1]    )) / (1+r) # X:1 ; Y:1
-        f[s,s] = ( 2 * c[s,s] + (r-1) * p[s,s] + 2*r*r* ( c[s-1,s] + c[s,s-1] - 2*c[s,s])) / (1+r) # X:s ; Y:s
-        f[1,s] = ( 2 * c[1,s] + (r-1) * p[1,s] + 2*r*r* ( c[2,s] + c[1,s-1] - 2*c[1,s]  )) / (1+r) # X:1 ; Y:s
-        f[s,1] = ( 2 * c[s,1] + (r-1) * p[s,1] + 2*r*r* ( c[s-1,1] + c[s,2] - 2*c[s,1]  )) / (1+r) # X:s ; Y:1
+        f[1, 1] = (2 * c[1, 1] + (r-1) * p[1, 1] + 2*r*r* (c[2, 1]   + c[1, 2]   - 2*c[1, 1])) / (1+r) # X:1; Y:1
+        f[s, s] = (2 * c[s, s] + (r-1) * p[s, s] + 2*r*r* (c[s-1, s] + c[s, s-1] - 2*c[s, s])) / (1+r) # X:s; Y:s
+        f[1, s] = (2 * c[1, s] + (r-1) * p[1, s] + 2*r*r* (c[2, s]   + c[1, s-1] - 2*c[1, s])) / (1+r) # X:1; Y:s
+        f[s, 1] = (2 * c[s, 1] + (r-1) * p[s, 1] + 2*r*r* (c[s-1, 1] + c[s, 2]   - 2*c[s, 1])) / (1+r) # X:s; Y:1
 
         # Rotate buffers for next iteration
         tmp = p
@@ -105,7 +105,7 @@ function wave2d(demo::Bool)
         f = tmp
 
         if (demo)
-            if mod( t / dt , 10 ) == 0
+            if mod(t/dt, 10) == 0
                 b = Winston.imagesc(c)
                 Winston.display(b)
             end
