@@ -971,4 +971,9 @@ void copy_from_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
     #pragma offload_transfer target(mic:run_where) out(tmp : length(nbytes) alloc_if(0) free_if(0))
 }
+
+extern "C"
+void wait_for(int run_where, int* signal) {
+#pragma offload_wait target(mic:run_where) wait(signal)
+}
 #endif /* PSE_ARRAY_H_ */

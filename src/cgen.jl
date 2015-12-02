@@ -1802,6 +1802,11 @@ function from_parallel_loophead(args)
         private = chop(private)
         private *= ")"
     end
+    num_threads = ""
+    if args[5] > 0
+        num_threads = "num_threads($(args[5]))"
+    end
+    schedule = args[6]
     inner_private = "private("
     for iv in args[1]
         inner_private *= "$iv,"
@@ -1809,9 +1814,8 @@ function from_parallel_loophead(args)
     inner_private = chop(inner_private)
     inner_private *= ")"
 
-    s = "#pragma omp parallel $private \n{\n"
-    # s *= "#pragma omp for schedule(static,1) collapse($(length(args[1]))) $inner_private\n"
-    s *= "#pragma omp for schedule(static,1) collapse($(length(args[1]))) $inner_private\n"
+    s = "#pragma omp parallel $private $num_threads \n{\n"
+    s *= "#pragma omp for $schedule collapse($(length(args[1]))) $inner_private\n"
     for (iv, start, stop) in zip(args[1], args[2], args[3])
         start = from_expr(start)
         stop = from_expr(stop)
@@ -1918,6 +1922,15 @@ function from_expr(ast::Expr)
 
     elseif head == :parallel_loopend
         s *= from_parallel_loopend(args)
+
+    elseif head == :offload_head
+        copy = ""
+        for var in args[1]
+            copy *= "in($(canonicalize(var)) : length(1)) "
+        end
+        s *= "#pragma offload target(mic:$(args[2])) $copy \n{\n"
+    elseif head == :offload_end
+        s *= "}\n"
 
     # type_goto is "a virtual control flow edge used to convey
     # type data to static_typeof, also to be removed."  We can
@@ -2366,7 +2379,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     return outfile_name
 end
 
-function getCompileCommand(full_outfile_name, cgenOutput; offload=false)
+function getCompileCommand(full_outfile_name, cgenOutput, flags; offload=false)
   # return an error if this is not overwritten with a valid compiler
   compileCommand = `echo "invalid backend compiler"`
 
@@ -2389,19 +2402,19 @@ function getCompileCommand(full_outfile_name, cgenOutput; offload=false)
         opt_report =  []
     end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -g $vecOpts $opt_report -vec-threshold0 -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `icpc $flags $Opts -g $vecOpts $opt_report -mavx -vec-threshold0 -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `g++ $flags $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
 end
 
-function compile(outfile_name; offload=false)
+function compile(outfile_name; offload=false, flags=[])
   global use_bcpp
   packageroot = getPackageRoot()
 
@@ -2419,7 +2432,7 @@ function compile(outfile_name; offload=false)
   end
 
   full_outfile_name = `$generated_file_dir/$outfile_name.o`
-  compileCommand = getCompileCommand(full_outfile_name, cgenOutput; offload=offload)
+  compileCommand = getCompileCommand(full_outfile_name, cgenOutput, flags; offload=offload)
   dprintln(1,compileCommand)
   run(compileCommand)
 end
