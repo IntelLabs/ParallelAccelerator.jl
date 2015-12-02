@@ -49,7 +49,7 @@ function wave2d(demo::Bool)
     speed = 10         # Propagation speed
     s = 512            # Array size (spatial resolution of the simulation)
 
-    if (demo)
+    if demo
         stopTime = 0.1 # Time step at which to stop the main loop
     else
         stopTime = 0.05
@@ -104,10 +104,10 @@ function wave2d(demo::Bool)
         c = f
         f = tmp
 
-        if (demo)
+        if demo
             if mod(t/dt, 10) == 0
-                b = Winston.imagesc(c)
-                Winston.display(b)
+                plot = Winston.imagesc(c)
+                Winston.display(plot)
             end
         end
     end
