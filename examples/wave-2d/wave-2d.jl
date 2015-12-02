@@ -30,7 +30,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 using ParallelAccelerator
 using DocOpt
-#using Winston
+if "--demo" in ARGS
+    using Winston
+end
 
 @acc function runWaveStencil(p::Array{Float64,2},
                              c::Array{Float64,2},
@@ -45,12 +47,11 @@ end
 function wave2d(demo::Bool)
 
     speed = 10         # propagation speed
+    s = 512            # array size (spatial resolution of the simulation)
 
     if (demo)
-        s = 128        # array size (spatial resolution of the simulation)
         stopTime = 0.1 # time step at which to stop the main loop
     else
-        s = 512
         stopTime = 0.05
     end
 
@@ -97,9 +98,11 @@ function wave2d(demo::Bool)
         f[1,s] = ( 2 * c[1,s] + (r-1) * p[1,s] + 2*r*r* ( c[2,s] + c[1,s-1] - 2*c[1,s]  )) / (1+r) # X:1 ; Y:s
         f[s,1] = ( 2 * c[s,1] + (r-1) * p[s,1] + 2*r*r* ( c[s-1,1] + c[s,2] - 2*c[s,1]  )) / (1+r) # X:s ; Y:1
 
-        # TODO: figure out what's going on with the array assignment bug.
-        p[1:s, 1:s] = c[1:s, 1:s]
-        c[1:s, 1:s] = f[1:s, 1:s]
+        # Rotate buffers for next iteration
+        tmp = p
+        p = c
+        c = f
+        f = tmp
 
         if (demo)
             if mod( t / dt , 10 ) == 0
