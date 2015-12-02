@@ -29,6 +29,7 @@ script:
   - julia examples/black-scholes/black-scholes.jl
   - julia examples/gaussian-blur/gaussian-blur.jl
   - julia examples/harris/harris.jl
+  - julia examples/juliaset/juliaset.jl
   - julia examples/laplace-3d/laplace-3d.jl
   - julia examples/opt-flow/opt-flow.jl
   - julia examples/quant/quant.jl
