@@ -197,7 +197,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         if !haskey(map_reduced_bb_num_to_body, bb_num)
             map_reduced_bb_num_to_body[bb_num] = [i]
         else
-            map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num], i]
+            map_reduced_bb_num_to_body[bb_num] = [map_reduced_bb_num_to_body[bb_num]; i]
         end
     end
 
