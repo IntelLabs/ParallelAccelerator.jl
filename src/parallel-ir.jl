@@ -3067,6 +3067,10 @@ function isf(t :: Function,
 #            ccall(:puts, Cint, (Cstring,), msg)
             tres = t(assignments[tid], rest...)
         catch something
+            bt = catch_backtrace()
+            s = sprint(io->Base.show_backtrace(io, bt))
+            ccall(:puts, Cint, (Cstring,), string(s))
+
             msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
             ccall(:puts, Cint, (Cstring,), msg)
             msg = string(something)
@@ -3456,46 +3460,25 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-        if true
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), SymbolNode(gensym2_sym,Int64)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_second_unless))
-           push!(new_body, LabelNode(label_after_first_unless))
+        push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), SymbolNode(gensym2_sym,Int64)), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_second_unless))
+        push!(new_body, LabelNode(label_after_first_unless))
 
 #           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym3_sym,Int64), SymbolNode(pound_s1_sym,Int64), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym4_sym,Int64), Expr(:call, mk_parallelir_ref(:assign_gs4), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), state))
-           push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(gensym3_sym,Int64), SymbolNode(pound_s1_sym,Int64), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(gensym4_sym,Int64), Expr(:call, mk_parallelir_ref(:assign_gs4), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), state))
+        push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
+        push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
 
-           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
+        recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
 
-           push!(new_body, LabelNode(label_before_second_unless))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
-           push!(new_body, LabelNode(label_after_second_unless))
-           push!(new_body, LabelNode(label_last))
-        else
-           # OLD CODE
-           push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
-           push!(new_body, LabelNode(label_after_first_unless))
-
-           push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
-           push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
-
-           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
-           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
-
-           push!(new_body, LabelNode(label_before_second_unless))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
-           push!(new_body, LabelNode(label_after_second_unless))
-           push!(new_body, LabelNode(label_last))
-        end
+        push!(new_body, LabelNode(label_before_second_unless))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
+        push!(new_body, LabelNode(label_after_second_unless))
+        push!(new_body, LabelNode(label_last))
     end
 end
 
