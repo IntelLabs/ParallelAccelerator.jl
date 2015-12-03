@@ -4,7 +4,9 @@
 [![Coverage Status](https://coveralls.io/repos/IntelLabs/ParallelAccelerator.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/IntelLabs/ParallelAccelerator.jl?branch=master)
 
 This is the ParallelAccelerator Julia package, part of the High
-Performance Scripting project at Intel Labs. 
+Performance Scripting project at Intel Labs.
+Please join our discussion group <http://groups.google.com/group/julia-hps/>
+to ask questions or discuss features/issues.
 
 ## Prerequisites
 
