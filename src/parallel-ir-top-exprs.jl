@@ -695,6 +695,80 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
     return body
 end
 
+function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol,Array{Any,1}}, state, newLambdaInfo, next_available_label)
+    # Only handle 1D loophead right now.
+
+    if stmt.head == :loophead
+        assert(length(stmt.args) == 3)
+        loop_id = stmt.args[1]
+        loop_start = stmt.args[2]
+        loop_end   = stmt.args[3]
+    else
+        assert(length(stmt.args) == 1)
+        loop_id = stmt.args[1]
+        if haskey(LoopEndDict, loop_id)
+            append!(new_body, LoopEndDict[loop_id])
+        else
+            throw(string("loophead information missing for loop ", loop_id))
+        end
+        return nothing
+    end
+
+    assert(typeof(loop_id) == Symbol)
+    uniq = get_unique_num()
+
+    label_after_first_unless   = next_available_label
+    label_before_second_unless = next_available_label + 1
+    label_after_second_unless  = next_available_label + 2
+    label_last                 = next_available_label + 3
+
+    gensym2_var = string("#recreate_gensym2_", uniq, "_", 0)
+    gensym2_sym = symbol(gensym2_var)
+    gensym0_var = string("#recreate_gensym0_", uniq, "_", 1)
+    gensym0_sym = symbol(gensym0_var)
+    pound_s1_var = string("#recreate_pound_s1_", uniq, "_", 2)
+    pound_s1_sym = symbol(pound_s1_var)
+    gensym3_var = string("#recreate_gensym3_", uniq, "_", 3)
+    gensym3_sym = symbol(gensym3_var)
+    gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
+    gensym4_sym = symbol(gensym4_var)
+    CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaInfo)
+
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
+
+    push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
+    push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, SymbolNode(gensym2_sym,Int64)), state))
+    push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
+    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_second_unless))
+    push!(new_body, LabelNode(label_after_first_unless))
+
+#       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+
+    push!(new_body, mk_assignment_expr(SymbolNode(gensym3_sym,Int64), SymbolNode(pound_s1_sym,Int64), state))
+    push!(new_body, mk_assignment_expr(SymbolNode(gensym4_sym,Int64), Expr(:call, mk_parallelir_ref(:assign_gs4), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), state))
+#    push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
+    push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
+
+    for_loop_end = Any[]
+
+    push!(for_loop_end, LabelNode(label_before_second_unless))
+    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
+    push!(for_loop_end, LabelNode(label_after_second_unless))
+    push!(for_loop_end, LabelNode(label_last))
+
+    LoopEndDict[loop_id] = for_loop_end    
+
+    return next_available_label + 3
+end
+
+
 # TOP_LEVEL
 # sequence of expressions
 # ast = [ expr, ... ]
@@ -757,12 +831,22 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     expanded_body = Any[]
 
+    max_label   = getMaxLabel(0, body)
+    LoopEndDict = Dict{Symbol,Array{Any,1}}()
+
     for i = 1:length(body)
         dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
         if isBareParfor(body[i])
             flattenParfor(expanded_body, body[i].args[1])
         else
-            push!(expanded_body, body[i])
+            # Convert loophead and loopend into Julia loops.
+            if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
+               typeof(body[i]) == Expr && 
+               (body[i].head == :loophead || body[i].head == :loopend)
+                max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
+            else
+                push!(expanded_body, body[i])
+            end
         end
     end
 
