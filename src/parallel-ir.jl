@@ -422,6 +422,7 @@ function getRangeOrArray(inputInfo :: InputInfo, num_dims)
         return inputInfo.array
     end
 end
+
 function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
     return getRangeOrArray(inputInfo[1], num_dims)
 end
@@ -673,7 +674,8 @@ function simpleIndex(dict)
             dprintln(3,"typeof(ae) = ", typeof(ae), " ae = ", ae)
             for j = 1:length(ae)
                 # If the indexing expression isn't simple then return false.
-                if (typeof(ae[j]) != SymbolNode &&
+                if (!isa(ae[j], Number) &&
+                    !isa(ae[j], SymAllGen) &&
                     (typeof(ae[j]) != Expr ||
                     ae[j].head != :(::)   ||
                     typeof(ae[j].args[1]) != Symbol))
@@ -3054,6 +3056,10 @@ function isf(t :: Function,
 #            ccall(:puts, Cint, (Cstring,), msg)
             tres = t(assignments[tid], rest...)
         catch something
+            bt = catch_backtrace()
+            s = sprint(io->Base.show_backtrace(io, bt))
+            ccall(:puts, Cint, (Cstring,), string(s))
+
             msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
             ccall(:puts, Cint, (Cstring,), msg)
             msg = string(something)
@@ -3443,7 +3449,6 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-        if true
            push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
            push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), SymbolNode(gensym2_sym,Int64)), state))
            push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
@@ -3463,26 +3468,6 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
            push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
            push!(new_body, LabelNode(label_after_second_unless))
            push!(new_body, LabelNode(label_last))
-        else
-           # OLD CODE
-           push!(new_body, mk_assignment_expr(SymbolNode(colon_sym,Any), mk_colon_expr(convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_start_expr(colon_sym), state))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym) ), label_after_second_unless))
-           push!(new_body, LabelNode(label_after_first_unless))
-
-           push!(new_body, mk_assignment_expr(SymbolNode(next_sym,Any),  mk_next_expr(colon_sym, start_sym), state))
-           push!(new_body, mk_assignment_expr(this_nest.indexVariable,   mk_tupleref_expr(next_sym, 1, Any), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(start_sym,Any), mk_tupleref_expr(next_sym, 2, Any), state))
-
-           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "loopIndex = ", this_nest.indexVariable))
-           #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), colon_sym, " ", start_sym))
-           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
-
-           push!(new_body, LabelNode(label_before_second_unless))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:(!)), TypedExpr(Any, :call, TopNode(:done), colon_sym, start_sym))), label_after_first_unless))
-           push!(new_body, LabelNode(label_after_second_unless))
-           push!(new_body, LabelNode(label_last))
-        end
     end
 end
 
@@ -3948,7 +3933,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
         head = ast.head
         args = ast.args
         if head == :parfor
-            dprintln(3,"pir_live_cb for :parfor")
+            dprintln(4,"pir_live_cb for :parfor")
             expr_to_process = Any[]
 
             assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
@@ -3966,6 +3951,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
             #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
             assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
             fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+            dprintln(3,"fake_body = ", fake_body)
 
             body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
             live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
@@ -3981,7 +3967,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
 
             return expr_to_process
         elseif head == :parfor_start
-            dprintln(3,"pir_live_cb for :parfor_start")
+            dprintln(4,"pir_live_cb for :parfor_start")
             expr_to_process = Any[]
 
             assert(typeof(args[1]) == PIRParForStartEnd)
@@ -4001,7 +3987,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
             return Any[]
         elseif head == :insert_divisible_task
             # Is this right?  Do I need pir_range stuff here too?
-            dprintln(3,"pir_live_cb for :insert_divisible_task")
+            dprintln(4,"pir_live_cb for :insert_divisible_task")
             expr_to_process = Any[]
 
             cur_task = args[1]
@@ -4017,7 +4003,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
 
             return expr_to_process
         elseif head == :loophead
-            dprintln(3,"pir_live_cb for :loophead")
+            dprintln(4,"pir_live_cb for :loophead")
             assert(length(args) == 3)
 
             expr_to_process = Any[]
@@ -4051,7 +4037,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
                 return expr_to_process
             end
         elseif head == :(=)
-            dprintln(3,"pir_live_cb for :(=)")
+            dprintln(4,"pir_live_cb for :(=)")
             if length(args) > 2
                 expr_to_process = Any[]
                 push!(expr_to_process, args[1])
@@ -4449,15 +4435,20 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     elseif isa(node, DomainLambda)
         dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
         intersection_dict = Dict{SymGen,Any}()
+        # For each statement in this basic block of the form "A = B".
         for copy in data.copies
+            # If the DomainLambda has an escaping def of the left-hand side.
             if haskey(node.linfo.escaping_defs, copy[1])
                 ed = node.linfo.escaping_defs[copy[1]]
+                dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
+                ed.name = copy[2]
                 intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
                 delete!(node.linfo.escaping_defs, copy[1])
                 node.linfo.escaping_defs[copy[2]] = ed
             end
         end 
         dprintln(3,"Intersection dict = ", intersection_dict)
+        dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
         if !isempty(intersection_dict)
             origBody      = node.genBody
             newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
@@ -5530,6 +5521,7 @@ end
 Form a Julia :lambda Expr from a DomainLambda.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
+    dprintln(3,"lambdaFromDomainLambda dl_inputs = ", dl_inputs)
     #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
     type_data = CompilerTools.LambdaHandling.VarDef[]
     input_arrays = Symbol[]
@@ -6154,9 +6146,9 @@ end
 
 
 function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"PIR AstWalkCallback starting")
+    dprintln(4,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    dprintln(4,"PIR AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -6169,9 +6161,9 @@ function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number 
 end
 
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"PIR AstWalkCallback starting")
+    dprintln(4,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    dprintln(4,"PIR AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
