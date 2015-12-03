@@ -450,9 +450,7 @@ function from_range(rhs)
 end
 
 function rangeToMask(state, r::Int, arraysize)
-    # return mk_range(state, r, r, 1)
-    # scalar is not treated as a range in Julia
-    return r
+    return mk_range(state, r, r, 1)
 end
 
 function rangeToMask(state, r::SymAllGen, arraysize)
@@ -462,10 +460,9 @@ function rangeToMask(state, r::SymAllGen, arraysize)
     elseif isunitrange(typ)
         r = lookupConstDefForArg(state, r)
         (start, step, final) = from_range(r)
-        mk_range(state, start, step, final)
+        mk_range(start, step, final)
     elseif isinttyp(typ) 
-        #mk_range(state, r, convert(typ, 1), r)
-        r
+        mk_range(state, r, convert(typ, 1), r)
     else
         error("Unhandled range object: ", r)
     end
@@ -1203,7 +1200,6 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             #newlhs = addGenSym(typ, state.linfo)
             etyp = elmTypOf(atyp)
             ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
-            dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
                 expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
             else
@@ -1660,24 +1656,13 @@ function from_expr(state::IRState, env::IREnv, ast::LambdaStaticData)
     return ast
 end
 
-function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
-    if ccall(:jl_is_const, Int32, (Any, Any), ast.mod, ast.name) == 1
-        def = getfield(ast.mod, ast.name)
-        if isbits(def) && !isa(def, IntrinsicFunction)
-            return def
-        end
-    end
-    dprintln(2, " not handled ", ast)
-    return ast
-end
-
 function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     name = isa(ast, SymbolNode) ? ast.name : ast
     # if it is global const, we replace it with its const value
     def = lookupDefInAllScopes(state, name)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
-        if isbits(def) && !isa(def, IntrinsicFunction)
+        if isbits(def)
             return def
         end
     end
@@ -1803,12 +1788,9 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
             end
             for i = 1:length(ranges)
                 # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
-                if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
+                assert(isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask))
                 for j = 1:length(ranges[i].args)
                     ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
-                    end
-                else
-                    assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
                 end
             end
             return x
