@@ -31,7 +31,7 @@ using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray, ..API
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..DomainIR.isarray, ..API
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -156,7 +156,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   off_time_start = time_ns()
 
   package_root = ParallelAccelerator.getPackageRoot()
-  function_name_string = ParallelAccelerator.cgen.canonicalize(string(func.name))
+  function_name_string = ParallelAccelerator.CGen.canonicalize(string(func.name))
 
   array_types_in_sig = Dict{DataType,Int64}()
   atiskey = 1;
@@ -169,9 +169,9 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   dprintln(3, "array_types_in_sig = ", array_types_in_sig)
  
-  outfile_name = cgen.writec(cgen.from_root(code, function_name_string, array_types_in_sig))
-  cgen.compile(outfile_name)
-  dyn_lib = cgen.link(outfile_name)
+  outfile_name = CGen.writec(CGen.from_root(code, function_name_string, array_types_in_sig))
+  CGen.compile(outfile_name)
+  dyn_lib = CGen.link(outfile_name)
  
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
@@ -185,7 +185,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   
   lambdaInfo = lambdaExprToLambdaInfo(code)
   ret_type = getReturnType(lambdaInfo)
-  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
+  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
   ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
 
   # Convert Arrays in signature to Ptr and add extra arguments for array dimensions

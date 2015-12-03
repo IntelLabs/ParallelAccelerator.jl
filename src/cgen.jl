@@ -28,7 +28,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 # Originally created by Jaswanth Sreeram.
 #
 
-module cgen
+module CGen
 
 import CompilerTools.DebugMsg
 import CompilerTools.LambdaHandling.SymAllGen
@@ -555,7 +555,7 @@ function from_assignment_match_cat_t(lhs, rhs::Expr)
     s = ""
     if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
         dims = rhs.args[2]
-        @assert dims==2 "cgen: only 2d cat_t() is supported now"
+        @assert dims==2 "CGen: only 2d cat_t() is supported now"
         size = length(rhs.args[4:end])
         typ = toCtype(eval(rhs.args[3].name))
         s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
@@ -2229,8 +2229,8 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
             allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
         end
     end
-    #printf(\"Starting execution of cgen generated code\\n\");
-    #printf(\"End of execution of cgen generated code\\n\");
+    #printf(\"Starting execution of CGen generated code\\n\");
+    #printf(\"End of execution of CGen generated code\\n\");
 
     # If we are forcing vectorization then we will not emit the alias check
     emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
@@ -2258,7 +2258,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     s
 end
 
-# This is the entry point to cgen from the PSE driver
+# This is the entry point to CGen from the PSE driver
 function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}(), isEntryPoint = true)
     global inEntryPoint
     inEntryPoint = isEntryPoint
@@ -2500,7 +2500,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     cgenOutput = "$generated_file_dir/$outfile_name.cpp"
     cf = open(cgenOutput, "w")
     write(cf, s)
-    dprintln(3,"Done committing cgen code")
+    dprintln(3,"Done committing CGen code")
     close(cf)
     return outfile_name
 end
@@ -2590,11 +2590,11 @@ function link(outfile_name)
   linkCommand = getLinkCommand(outfile_name, lib)
   dprintln(1,linkCommand)
   run(linkCommand)
-  dprintln(3,"Done cgen linking")
+  dprintln(3,"Done CGen linking")
   return lib
 end
 
-# When in standalone mode, this is the entry point to cgen.
+# When in standalone mode, this is the entry point to CGen.
 function generate(func::Function, typs; init_lstate=false)
   global lstate
   if init_lstate
@@ -2604,4 +2604,4 @@ function generate(func::Function, typs; init_lstate=false)
   insert(func, name, typs)
   return from_worklist()
 end
-end # cgen module
+end # CGen module

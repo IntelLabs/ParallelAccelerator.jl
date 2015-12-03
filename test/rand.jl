@@ -28,7 +28,7 @@ using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.cgen.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
 @acc function simple_rand(size1::Int64, size2::Int64)

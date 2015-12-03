@@ -30,7 +30,7 @@ include("image.jl")
 using Image
 
 #ParallelAccelerator.set_debug_level(3)
-#ParallelAccelerator.cgen.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
 
 @acc begin
 # Block Jacobi preconditioner
