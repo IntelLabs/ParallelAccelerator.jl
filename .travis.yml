@@ -24,7 +24,7 @@ script:
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
   # Build and test ParallelAccelerator.
-  - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator")'
+  - julia --code-coverage -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator"); Pkg.test("ParallelAccelerator")'
   # Run examples.
   - julia examples/black-scholes/black-scholes.jl
   - julia examples/boltzmann/boltzmann.jl
@@ -35,4 +35,5 @@ script:
   - julia examples/opt-flow/opt-flow.jl
   - julia examples/quant/quant.jl
   - julia examples/wave-2d/wave-2d.jl
-
+after_success:
+      - julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
