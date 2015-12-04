@@ -48,6 +48,6 @@ include("../examples/black-scholes/black-scholes.jl")
 include("../examples/opt-flow/opt-flow.jl")
 
 # Delete file left behind by opt-flow.
-dir = dirname(@__FILE__)
+dir = pwd()
 img_file = joinpath(dir, "out.flo")
 rm(img_file)
