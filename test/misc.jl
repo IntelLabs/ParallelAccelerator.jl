@@ -23,26 +23,27 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module MiscTest
 using ParallelAccelerator
+
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
+
+@acc function for_ret()
+    for f = 1:10
+    end
+end
+
+function test1()
+    return for_ret()
+end
+
+end
+
 using Base.Test
+println("Testing miscellaneous features...")
+@test MiscTest.test1() == nothing
+println("Done testing miscellaneous features...")
 
-include("abs.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("misc.jl")
-include("aug_assign.jl")
-
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)

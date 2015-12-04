@@ -244,10 +244,14 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   num_rets = length(ret_typs)
   ret_arg_exps = Array(Any, 0)
   extra_sig = Array(Type, 0)
-  for i = 1:num_rets
-      (typ, is_array) = ret_typs[i]
-      push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
-      push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), SymbolNode(:ret_args, Array{Any,1}), i)))
+  # We special-case functions that return Void/nothing since it is common.
+  Void_return = (num_rets == 1 && ret_typs[1][1] == Void)
+  if !Void_return
+      for i = 1:num_rets
+          (typ, is_array) = ret_typs[i]
+          push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
+          push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), SymbolNode(:ret_args, Array{Any,1}), i)))
+      end
   end
   
   dprintln(2,"signature = ", signature, " -> ", ret_typs)
@@ -292,7 +296,8 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       for i = 1:length($(j2c_array))
         j2c_array_delete($(j2c_array)[i])
       end
-      return ($num_rets == 1 ? result[1] : tuple(result...))
+      # If the function returns nothing then just force it here since cgen code can't return it.
+      return ($num_rets == 1 ? ($Void_return ? nothing : result[1]) : tuple(result...))
   end
   
   off_time = time_ns() - off_time_start
