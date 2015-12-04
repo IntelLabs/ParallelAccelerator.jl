@@ -224,7 +224,8 @@ tokenXlate = Dict(
     '.' => "dot",
     '^' => "hat",
     '|' => "bar",
-    '&' => "amp"
+    '&' => "amp",
+    '=' => "eq"
 )
 
 replacedTokens = Set("#")
@@ -2091,6 +2092,9 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
+function from_expr(ast::Complex)
+    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+end
 
 function from_expr(ast::ANY)
     #s *= dispatch(lstate.adp, ast, ast)
