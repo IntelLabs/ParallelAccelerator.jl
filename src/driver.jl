@@ -355,6 +355,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
       alreadyOptimized[(func, signature)] = ast 
       dir_ast::Expr = toDomainIR(func_ref, ast, signature)
       pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
+      pir_ast = toFlatParfors(func_ref, pir_ast, signature)
       alreadyOptimized[(func, signature)] = pir_ast
       out = pir_ast
     else
