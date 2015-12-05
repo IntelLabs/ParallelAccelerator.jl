@@ -229,6 +229,7 @@ function __init__()
       if isDistributedMode()
           addOptPass(toDistributedIR, PASS_TYPED)
       end
+      addOptPass(toFlatParfors, PASS_TYPED)
       addOptPass(toCGen, PASS_TYPED)
     end
 end

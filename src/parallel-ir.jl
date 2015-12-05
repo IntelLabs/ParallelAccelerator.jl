@@ -2911,6 +2911,7 @@ function PIRTaskGraphMode(x)
 end
 
 include("parallel-ir-top-exprs.jl")
+include("parallel-ir-flatten.jl")
 
 if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 
