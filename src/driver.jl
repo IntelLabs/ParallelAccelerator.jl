@@ -25,13 +25,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray, runStencilMacro, captureOperators
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
 
 using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..cgen, ..DomainIR.isarray, ..API
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..DomainIR.isarray, ..API
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -129,12 +129,18 @@ end
 function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   pir_start = time_ns()
 # uncomment these 2 lines for ParallelIR profiling
-#  code = @profile ParallelIR.from_expr(string(func.name), ast)
+#  code = @profile ParallelIR.from_root(string(func.name), ast)
 #  Profile.print()
-  code = ParallelIR.from_expr(string(func.name), ast)
+  code = ParallelIR.from_root(string(func.name), ast)
   pir_time = time_ns() - pir_start
   dprintln(3, "parallel code = ", code)
   dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
+  return code
+end
+
+function toFlatParfors(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+  code = ParallelIR.flattenParfors(string(func.name), ast)
+  dprintln(3, "flattened code = ", code)
   return code
 end
 
@@ -156,7 +162,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   off_time_start = time_ns()
 
   package_root = ParallelAccelerator.getPackageRoot()
-  function_name_string = ParallelAccelerator.cgen.canonicalize(string(func.name))
+  function_name_string = ParallelAccelerator.CGen.canonicalize(string(func.name))
 
   array_types_in_sig = Dict{DataType,Int64}()
   atiskey = 1;
@@ -169,9 +175,9 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   dprintln(3, "array_types_in_sig = ", array_types_in_sig)
  
-  outfile_name = cgen.writec(cgen.from_root(code, function_name_string, array_types_in_sig))
-  cgen.compile(outfile_name)
-  dyn_lib = cgen.link(outfile_name)
+  outfile_name = CGen.writec(CGen.from_root(code, function_name_string, array_types_in_sig))
+  CGen.compile(outfile_name)
+  dyn_lib = CGen.link(outfile_name)
  
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
@@ -185,7 +191,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   
   lambdaInfo = lambdaExprToLambdaInfo(code)
   ret_type = getReturnType(lambdaInfo)
-  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in cgen mode.
+  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
   ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
 
   # Convert Arrays in signature to Ptr and add extra arguments for array dimensions
@@ -244,10 +250,14 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   num_rets = length(ret_typs)
   ret_arg_exps = Array(Any, 0)
   extra_sig = Array(Type, 0)
-  for i = 1:num_rets
-      (typ, is_array) = ret_typs[i]
-      push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
-      push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), SymbolNode(:ret_args, Array{Any,1}), i)))
+  # We special-case functions that return Void/nothing since it is common.
+  Void_return = (num_rets == 1 && ret_typs[1][1] == Void)
+  if !Void_return
+      for i = 1:num_rets
+          (typ, is_array) = ret_typs[i]
+          push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
+          push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), SymbolNode(:ret_args, Array{Any,1}), i)))
+      end
   end
   
   dprintln(2,"signature = ", signature, " -> ", ret_typs)
@@ -292,7 +302,8 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       for i = 1:length($(j2c_array))
         j2c_array_delete($(j2c_array)[i])
       end
-      return ($num_rets == 1 ? result[1] : tuple(result...))
+      # If the function returns nothing then just force it here since cgen code can't return it.
+      return ($num_rets == 1 ? ($Void_return ? nothing : result[1]) : tuple(result...))
   end
   
   off_time = time_ns() - off_time_start
@@ -344,6 +355,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
       alreadyOptimized[(func, signature)] = ast 
       dir_ast::Expr = toDomainIR(func_ref, ast, signature)
       pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
+      pir_ast = toFlatParfors(func_ref, pir_ast, signature)
       alreadyOptimized[(func, signature)] = pir_ast
       out = pir_ast
     else

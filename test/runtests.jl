@@ -27,16 +27,12 @@ using ParallelAccelerator
 using Base.Test
 
 include("abs.jl")
-
 include("rand.jl")
-
 include("BitArray.jl")
-
 include("range.jl")
-
 include("seq.jl")
-
 include("cat.jl")
+
 using CatTest 
 println("Testing cat...")
 @test_approx_eq CatTest.test1() [3.0; 1.0]
@@ -54,6 +50,7 @@ rt2 = RangeTest.test2()
 @test ndims(rt2) == 2
 @test rt2 == reshape([2.2 6.6], 2, 1)
 
+include("misc.jl")
 include("aug_assign.jl")
 
 # Examples.  We're not including them all here, because it would take
@@ -64,6 +61,6 @@ include("../examples/black-scholes/black-scholes.jl")
 include("../examples/opt-flow/opt-flow.jl")
 
 # Delete file left behind by opt-flow.
-dir = dirname(@__FILE__)
+dir = pwd()
 img_file = joinpath(dir, "out.flo")
 rm(img_file)

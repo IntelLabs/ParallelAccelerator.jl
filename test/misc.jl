@@ -23,22 +23,27 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using Base.Test
-importall ParallelAccelerator
+module MiscTest
+using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-
-@acc function example(x)
-    for i in 1:length(x)
-        x[i] += 2
+@acc function for_ret()
+    for f = 1:10
     end
-    x
 end
 
-x = [1 2 3 4]
-@test x + 2 == example(x)
-@test x + 3 != example(x)
+function test1()
+    return for_ret()
+end
+
+end
+
+using Base.Test
+println("Testing miscellaneous features...")
+@test MiscTest.test1() == nothing
+println("Done testing miscellaneous features...")
+

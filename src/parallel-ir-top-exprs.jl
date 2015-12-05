@@ -827,8 +827,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
-    flatten_start = time_ns()
-
     expanded_body = Any[]
 
     max_label   = getMaxLabel(0, body)
@@ -836,8 +834,11 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     for i = 1:length(body)
         dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
-        if isBareParfor(body[i])
-            flattenParfor(expanded_body, body[i].args[1])
+            # Convert loophead and loopend into Julia loops.
+        if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
+            typeof(body[i]) == Expr && 
+            (body[i].head == :loophead || body[i].head == :loopend)
+            max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
         else
             # Convert loophead and loopend into Julia loops.
             if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
@@ -851,36 +852,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     end
 
     body = expanded_body
-
-    dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
-
-    dprintln(3, "After flattening")
-    for j = 1:length(body)
-        dprintln(3, body[j])
-    end
-
-    if shortcut_array_assignment != 0
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-
-        for i = 1:length(body)
-            node = body[i]
-            if isAssignmentNode(node)
-                lhs = node.args[1]
-                rhs = node.args[2]
-                dprintln(3,"shortcut_array_assignment = ", node)
-                if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
-                    dprintln(3,"shortcut_array_assignment to array detected")
-                    live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
-                    if !in(rhs.name, live_info.live_out)
-                        dprintln(3,"rhs is dead")
-                        # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
-                        push!(node.args, RhsDead())
-                    end
-                end
-            end
-        end
-    end
 
     return body
 end

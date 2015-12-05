@@ -696,7 +696,7 @@ mul(x::Int,  y)      = mul(y, x)
 mul(x::Expr, y::Int) = isMulExprInt(x) ? mul(x.args[2], x.args[3] * y) : 
                        (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
 mul(x::Expr, y::Expr)= isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
-                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.arg3[2], y)) : mul_expr(x, y))
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
 mul(x::Expr, y)      = isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
                        (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
 mul(x,       y::Expr)= mul(y, x)

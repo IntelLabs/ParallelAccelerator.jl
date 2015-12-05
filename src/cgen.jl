@@ -28,7 +28,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 # Originally created by Jaswanth Sreeram.
 #
 
-module cgen
+module CGen
 
 import CompilerTools.DebugMsg
 import CompilerTools.LambdaHandling.SymAllGen
@@ -224,7 +224,8 @@ tokenXlate = Dict(
     '.' => "dot",
     '^' => "hat",
     '|' => "bar",
-    '&' => "amp"
+    '&' => "amp",
+    '=' => "eq"
 )
 
 replacedTokens = Set("#")
@@ -405,6 +406,9 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     for k in keys(vars)
         v = vars[k] # v is a VarDef
         lstate.symboltable[k] = v.typ
+        if v.typ == Any
+            dprintln(1, "Variable with Any type: ", v)
+        end
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
         if !in(k, params) && (v.desc & 32 != 0)
@@ -555,7 +559,7 @@ function from_assignment_match_cat_t(lhs, rhs::Expr)
     s = ""
     if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
         dims = rhs.args[2]
-        @assert dims==2 "cgen: only 2d cat_t() is supported now"
+        @assert dims==2 "CGen: only 2d cat_t() is supported now"
         size = length(rhs.args[4:end])
         typ = toCtype(eval(rhs.args[3].name))
         s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
@@ -849,7 +853,10 @@ function from_ccall(args)
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
     end
-    s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
+    to_fold = args[argsStart:2:end]
+    if length(to_fold) > 0
+        s *= mapfoldl(from_expr, (a, b)-> "$a, $b", to_fold)
+    end
     s *= ")"
     dprintln(3,"from_ccall: ", s)
     s
@@ -1633,7 +1640,10 @@ function from_return(args)
                 retExp *= "*ret" * string(i-1) * " = " * from_expr(arg1) * ".f" * string(i-1) * ";\n"
             end
         else
-            retExp = "*ret0 = " * from_expr(arg1) * ";\n"
+            # Skip the "*ret0 = ..." stmt for the special case of Void/nothing return value.
+            if arg1 != nothing
+                retExp = "*ret0 = " * from_expr(arg1) * ";\n"
+            end
         end
         return retExp * "return"
     else
@@ -2088,6 +2098,9 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
+function from_expr(ast::Complex)
+    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+end
 
 function from_expr(ast::ANY)
     #s *= dispatch(lstate.adp, ast, ast)
@@ -2207,30 +2220,35 @@ end
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
-  if length(params) > 0
-    params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
-  else
-    params = ""
-  end
-    actualParams = params * foldl((a, b) -> "$a, $b",
-        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
+    dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
+    if length(params) > 0
+        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
+    else
+        params = ""
+    end
+    # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
+    actualParams = params * (length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
+        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)]))
     wrapperParams = "int run_where"
-  if length(args) > 0
-    wrapperParams *= ", $args"
-  end
+    if length(args) > 0
+        wrapperParams *= ", $args"
+    end
     allocResult = ""
     retSlot = ""
-    for i in 1:length(jtyp)
-        delim = i < length(jtyp) ? ", " : ""
-        retSlot *= toCtype(jtyp[i]) *
-            (isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
-        if isArrayType(jtyp[i])
-            typ = toCtype(jtyp[i])
-            allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
+    if length(jtyp) > 0
+        retSlot = ", "
+        for i in 1:length(jtyp)
+            delim = i < length(jtyp) ? ", " : ""
+            retSlot *= toCtype(jtyp[i]) *
+                (isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
+            if isArrayType(jtyp[i])
+                typ = toCtype(jtyp[i])
+                allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
+            end
         end
     end
-    #printf(\"Starting execution of cgen generated code\\n\");
-    #printf(\"End of execution of cgen generated code\\n\");
+    #printf(\"Starting execution of CGen generated code\\n\");
+    #printf(\"End of execution of CGen generated code\\n\");
 
     # If we are forcing vectorization then we will not emit the alias check
     emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
@@ -2240,7 +2258,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
         unaliased_func = functionName * "_unaliased"
 
         s *=
-        "extern \"C\" void _$(functionName)_($wrapperParams, $retSlot) {\n
+        "extern \"C\" void _$(functionName)_($wrapperParams $retSlot) {\n
             $allocResult
             if ($alias_check) {
                 $functionName($actualParams);
@@ -2250,7 +2268,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
         }\n"
     else
         s *=
-    "extern \"C\" void _$(functionName)_($wrapperParams, $retSlot) {\n
+    "extern \"C\" void _$(functionName)_($wrapperParams $retSlot) {\n
         $allocResult
         $functionName($actualParams);
     }\n"
@@ -2258,7 +2276,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     s
 end
 
-# This is the entry point to cgen from the PSE driver
+# This is the entry point to CGen from the PSE driver
 function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}(), isEntryPoint = true)
     global inEntryPoint
     inEntryPoint = isEntryPoint
@@ -2352,8 +2370,13 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
 
     hdr = ""
     wrapper = ""
+    dprintln(3,"returnType = ", returnType)
     if istupletyp(returnType)
         returnType = tuple(returnType.parameters...)
+    elseif returnType == Void
+        # We special case a single Void/nothing return value since it is common.
+        # We ignore such Void returns on the CGen side and the proxy in driver.jl will force a "nothing" return.
+        returnType = ()
     else
         returnType = (returnType,)
     end
@@ -2363,8 +2386,13 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     if isEntryPoint
         wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
         rtyp = "void"
-        retargs = foldl((a, b) -> "$a, $b",
-        [toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
+        if length(returnType) > 0
+            retargs = foldl((a, b) -> "$a, $b",
+               [toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
+        else
+            # Must be the special case for Void/nothing so don't do anything here.
+            retargs = ""
+        end
 
         if length(args) > 0
             args *= ", " * retargs
@@ -2500,7 +2528,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     cgenOutput = "$generated_file_dir/$outfile_name.cpp"
     cf = open(cgenOutput, "w")
     write(cf, s)
-    dprintln(3,"Done committing cgen code")
+    dprintln(3,"Done committing CGen code")
     close(cf)
     return outfile_name
 end
@@ -2590,11 +2618,11 @@ function link(outfile_name)
   linkCommand = getLinkCommand(outfile_name, lib)
   dprintln(1,linkCommand)
   run(linkCommand)
-  dprintln(3,"Done cgen linking")
+  dprintln(3,"Done CGen linking")
   return lib
 end
 
-# When in standalone mode, this is the entry point to cgen.
+# When in standalone mode, this is the entry point to CGen.
 function generate(func::Function, typs; init_lstate=false)
   global lstate
   if init_lstate
@@ -2604,4 +2632,4 @@ function generate(func::Function, typs; init_lstate=false)
   insert(func, name, typs)
   return from_worklist()
 end
-end # cgen module
+end # CGen module
