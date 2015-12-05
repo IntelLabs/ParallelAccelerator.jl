@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toCGen, toCartesianArray, runStencilMacro, captureOperators
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
 
 using CompilerTools
 using CompilerTools.AstWalker
@@ -135,6 +135,12 @@ function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   pir_time = time_ns() - pir_start
   dprintln(3, "parallel code = ", code)
   dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
+  return code
+end
+
+function toFlatParfors(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+  code = ParallelIR.flattenParfors(string(func.name), ast)
+  dprintln(3, "flattened code = ", code)
   return code
 end
 
