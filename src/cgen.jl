@@ -405,6 +405,9 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     for k in keys(vars)
         v = vars[k] # v is a VarDef
         lstate.symboltable[k] = v.typ
+        if v.typ == Any
+            dprintln(1, "Variable with Any type: ", v)
+        end
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
         if !in(k, params) && (v.desc & 32 != 0)
@@ -849,7 +852,10 @@ function from_ccall(args)
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
     end
-    s *= mapfoldl(from_expr, (a, b)-> "$a, $b", args[argsStart:2:end])
+    to_fold = args[argsStart:2:end]
+    if length(to_fold) > 0
+        s *= mapfoldl(from_expr, (a, b)-> "$a, $b", to_fold)
+    end
     s *= ")"
     dprintln(3,"from_ccall: ", s)
     s
