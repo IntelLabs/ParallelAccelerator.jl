@@ -2291,7 +2291,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     end
     dprintln(3,"vectorizationlevel = ", vectorizationlevel)
     dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
-    dprintln(3,"Ast = ", ast)
+    dprintln(1,"Ast = ", ast)
     dprintln(3,"functionName = ", functionName)
     dprintln(3,"Starting processing for $ast")
     params  =   ast.args[1]
