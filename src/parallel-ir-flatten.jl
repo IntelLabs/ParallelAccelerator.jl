@@ -26,8 +26,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 function flattenParfors(function_name, ast::Expr)
     flatten_start = time_ns()
 
-    println("before flattening:")
-    println(ast)
     assert(ast.head == :lambda)
     dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
@@ -82,8 +80,6 @@ function flattenParfors(function_name, ast::Expr)
 
     body.args = args
     lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
-    println("after  flattening:")
-    println(lambda)
     return lambda
 end
 
