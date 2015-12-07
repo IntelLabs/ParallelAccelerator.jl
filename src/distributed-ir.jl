@@ -25,21 +25,28 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DistributedIR
 
+using Debug
 
-import CompilerTools.AstWalker
+using CompilerTools
+import CompilerTools.DebugMsg
+DebugMsg.init()
+using CompilerTools.AstWalker
 import CompilerTools.ReadWriteSet
-
+using CompilerTools.LambdaHandling
+import ..ParallelIR
+import ..ParallelIR.isArrayType
+import ..ParallelIR.getParforNode
 
 # ENTRY to distributedIR
-function from_root(function_name, ast :: Expr)
+@debug function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
     dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     state::DistIrState = initDistState(linfo)
-
-    AstWalk(ast, get_arr_dist_info)
-    
+@bp
+    AstWalk(ast, get_arr_dist_info, state)
+    @bp
     return ast
 end
 
@@ -55,15 +62,17 @@ end
 # information about AST gathered and used in DistributedIR
 type DistIrState
     # information about all arrays
-    arrs_dist_info::Dict{SymGen, Array{ArrDistInfo,1}}
+    arrs_dist_info::Dict{SymGen, ArrDistInfo}
+    parfor_info::Dict{Int, Array{SymGen,1}}
+    lambdaInfo
     
-    function DistIrState()
-        new(Dict{SymGen, Array{ArrDistInfo,1}}())
+    function DistIrState(linfo)
+        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo)
     end
 end
 
 function initDistState(linfo)
-    state = DistIrState()
+    state = DistIrState(linfo)
     
     #params = linfo.input_params
     vars = linfo.var_defs
@@ -89,22 +98,67 @@ function initDistState(linfo)
 end
 
 # state for get_arr_dist_info AstWalk
-type ArrInfoState
+#=type ArrInfoState
     inParfor::
     state # DIR state
 end
+=#
+
 @doc """
 mark sequential arrays
 """
-function get_arr_dist_info(node::Expr)
+function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, read)
     head = node.head
+    # arrays written in parfors are ok for now
     if head==:parfor
-    else if head!=:body && head!=:block
+        parfor = getParforNode(node)
+        rws = parfor.rws
+        
+        readArrs = [k for k in keys(rws.readSet.arrays)]
+        writeArrs = [k for k in keys(rws.writeSet.arrays)]
+        allArrs = [readArrs;writeArrs]
+        # keep mapping from parfors to arrays
+        state.parfor_info[parfor.unique_id] = allArrs
+        
+        # only 1D parfors supported for now
+        if !parfor.simply_indexed || length(parfor.loopNests)!=1
+            for arr in allArrs
+                state.arrs_dist_info[arr].isSequential = true
+            end
+            return nothing
+        end
+        
+        indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
+        
+        for arr in keys(rws.readSet.arrays)
+             index = rws.readSet.arrays[arr]
+             if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
+                state.arrs_dist_info[arr].isSequential = true
+             end
+        end
+        
+        for arr in keys(rws.writeSet.arrays)
+             index = rws.writeSet.arrays[arr]
+             if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
+                state.arrs_dist_info[arr].isSequential = true
+             end
+        end
+        return nothing
+    # arrays written in sequential code are not distributed
+    elseif head!=:body && head!=:block && head!=:lambda
+        rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
+        readArrs = [k for k in keys(rws.readSet.arrays)]
+        writeArrs = [k for k in keys(rws.writeSet.arrays)]
+        allArrs = [readArrs;writeArrs]
+        for arr in allArrs
+            state.arrs_dist_info[arr].isSequential = true
+        end
+        return nothing
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function get_arr_dist_info(ast::Any)
+function get_arr_dist_info(ast::Any, state, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 

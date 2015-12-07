@@ -31,7 +31,7 @@ using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..DomainIR.isarray, ..API
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..DistributedIR, ..CGen, ..DomainIR.isarray, ..API
 import ..dprint, ..dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -146,7 +146,7 @@ end
 
 function toDistributedIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   dir_start = time_ns()
-  code = ast #DistributedIR.from_top(string(func.name), ast)
+  code = DistributedIR.from_root(string(func.name), ast)
   dir_time = time_ns() - dir_start
   dprintln(3, "Distributed code = ", code)
   dprintln(1, "accelerate: DistributedIR conversion time = ", ns_to_sec(dir_time))
