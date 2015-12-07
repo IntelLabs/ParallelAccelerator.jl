@@ -27,17 +27,85 @@ module DistributedIR
 
 
 import CompilerTools.AstWalker
+import CompilerTools.ReadWriteSet
 
 
+# ENTRY to distributedIR
+function from_root(function_name, ast :: Expr)
+    @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
+    dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    state::DistIrState = initDistState(linfo)
 
-function from_top(function_name, ast :: Expr)
-    assert(ast.head == :lambda)
-    dprintln(1,"Starting main DistributedIR.from_top.  function = ", function_name, " ast = ", ast)
-
+    AstWalk(ast, get_arr_dist_info)
+    
     return ast
 end
 
-
-
+type ArrDistInfo
+    isSequential::Bool      # can't be distributed; e.g. it is used in sequential code
+    dim_sizes::Array{Int,1}      # sizes of array dimensions
+    
+    function ArrDistInfo(num_dims::Int)
+        new(false, zeros(num_dims))
+    end
 end
+
+# information about AST gathered and used in DistributedIR
+type DistIrState
+    # information about all arrays
+    arrs_dist_info::Dict{SymGen, Array{ArrDistInfo,1}}
+    
+    function DistIrState()
+        new(Dict{SymGen, Array{ArrDistInfo,1}}())
+    end
+end
+
+function initDistState(linfo)
+    state = DistIrState()
+    
+    #params = linfo.input_params
+    vars = linfo.var_defs
+    gensyms = linfo.gen_sym_typs
+
+    # Populate the symbol table
+    for sym in keys(vars)
+        v = vars[sym] # v is a VarDef
+        if isArrayType(v.typ)
+            arrInfo = ArrDistInfo(ndims(v.typ))
+            state.arrs_dist_info[sym] = arrInfo
+        end 
+    end
+
+    for k in 1:length(gensyms)
+        typ = gensyms[k]
+        if isArrayType(typ)
+            arrInfo = ArrDistInfo(ndims(typ))
+            state.arrs_dist_info[GenSym(k-1)] = arrInfo
+        end
+    end
+    return state
+end
+
+# state for get_arr_dist_info AstWalk
+type ArrInfoState
+    inParfor::
+    state # DIR state
+end
+@doc """
+mark sequential arrays
+"""
+function get_arr_dist_info(node::Expr)
+    head = node.head
+    if head==:parfor
+    else if head!=:body && head!=:block
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function get_arr_dist_info(ast::Any)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+end # DistributedIR

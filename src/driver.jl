@@ -146,7 +146,7 @@ end
 
 function toDistributedIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   dir_start = time_ns()
-  code = DistributedIR.from_top(string(func.name), ast)
+  code = ast #DistributedIR.from_top(string(func.name), ast)
   dir_time = time_ns() - dir_start
   dprintln(3, "Distributed code = ", code)
   dprintln(1, "accelerate: DistributedIR conversion time = ", ns_to_sec(dir_time))
