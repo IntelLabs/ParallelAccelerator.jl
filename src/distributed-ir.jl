@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DistributedIR
 
-using Debug
+#using Debug
 
 using CompilerTools
 import CompilerTools.DebugMsg
@@ -38,15 +38,15 @@ import ..ParallelIR.isArrayType
 import ..ParallelIR.getParforNode
 
 # ENTRY to distributedIR
-@debug function from_root(function_name, ast :: Expr)
+function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
     dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     state::DistIrState = initDistState(linfo)
-@bp
+#@bp
     AstWalk(ast, get_arr_dist_info, state)
-    @bp
+#    @bp
     return ast
 end
 
