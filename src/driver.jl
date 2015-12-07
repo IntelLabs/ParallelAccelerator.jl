@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
+export accelerate, toDomainIR, toParallelIR, toDistributedIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
 
 using CompilerTools
 using CompilerTools.AstWalker
