@@ -4210,8 +4210,8 @@ function from_root(function_name, ast :: Expr)
     assert(length(ast) == 1)
     ast = ast[1]
 
-    dprintln(3,"Final ParallelIR function = ", function_name, " ast = ")
-    printLambda(3, ast)
+    dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
+    printLambda(1, ast)
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     end
