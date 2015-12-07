@@ -4487,6 +4487,34 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is
         for i = 1:length(cur_parfor.postParFor)-1
             x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
         end
+        # update read write set in case of symbol replacement like unused variable elimination
+        old_set = copy(x.args[1].rws.readSet.scalars)
+        for sym in old_set
+            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+            delete!(x.args[1].rws.readSet.scalars,sym)
+            push!(x.args[1].rws.readSet.scalars,o_sym)
+        end
+        old_set = copy(x.args[1].rws.writeSet.scalars)
+        for sym in old_set
+            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+            delete!(x.args[1].rws.writeSet.scalars,sym)
+            push!(x.args[1].rws.writeSet.scalars,o_sym)
+        end
+        old_set = [k for k in keys(x.args[1].rws.readSet.arrays)]
+        for sym in old_set
+            val = x.args[1].rws.readSet.arrays[sym]
+            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+            delete!(x.args[1].rws.readSet.arrays,sym)
+            x.args[1].rws.readSet.arrays[o_sym] = val
+        end
+        old_set = [k for k in keys(x.args[1].rws.writeSet.arrays)]
+        for sym in old_set
+            val = x.args[1].rws.writeSet.arrays[sym]
+            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+            delete!(x.args[1].rws.writeSet.arrays,sym)
+            x.args[1].rws.writeSet.arrays[o_sym] = val
+        end
+
         return x
     elseif head == :parfor_start || head == :parfor_end
         dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
