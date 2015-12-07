@@ -44,9 +44,11 @@ function from_root(function_name, ast :: Expr)
 
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     state::DistIrState = initDistState(linfo)
-#@bp
+
+    dprintln(3,"state before walk: ",state)
     AstWalk(ast, get_arr_dist_info, state)
-#    @bp
+    dprintln(3,"state after walk: ",state)
+
     return ast
 end
 
@@ -125,7 +127,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
             end
-            return nothing
+            return node
         end
         
         indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
@@ -143,7 +145,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
-        return nothing
+        return node
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
         rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
@@ -153,7 +155,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         for arr in allArrs
             state.arrs_dist_info[arr].isSequential = true
         end
-        return nothing
+        return node
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
