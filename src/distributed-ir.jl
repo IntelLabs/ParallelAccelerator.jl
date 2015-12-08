@@ -46,10 +46,16 @@ function from_root(function_name, ast :: Expr)
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     state::DistIrState = initDistState(linfo)
 
-    dprintln(3,"state before walk: ",state)
+    dprintln(3,"DistIR state before walk: ",state)
     AstWalk(ast, get_arr_dist_info, state)
-    dprintln(3,"state after walk: ",state)
+    dprintln(3,"DistIR state after walk: ",state)
 
+    # now that we have the array info, see if parfors are distributable 
+    checkParforsForDistribution(state)
+    dprintln(3,"DistIR state after check: ",state)
+    
+    # transform
+    # ast = from_expr(ast)
     return ast
 end
 
@@ -67,10 +73,12 @@ type DistIrState
     # information about all arrays
     arrs_dist_info::Dict{SymGen, ArrDistInfo}
     parfor_info::Dict{Int, Array{SymGen,1}}
-    lambdaInfo
+    lambdaInfo::LambdaInfo
+    seq_parfors::Array{Int,1}
+    dist_arrays::Array{SymGen,1}
     
     function DistIrState(linfo)
-        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo)
+        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[])
     end
 end
 
@@ -174,6 +182,58 @@ end
 
 function get_arr_dist_info(ast::Any, state, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+@doc """
+All arrays of a parfor should distributable for it to be distributable.
+If an array is used in any sequential parfor, it is not distributable.
+"""
+function checkParforsForDistribution(state::DistIrState)
+    changed = true
+    while changed
+        changed = false
+        for parfor_id in keys(state.parfor_info)
+            arrays = state.parfor_info[parfor_id]
+            for arr in arrays
+                # all parfor arrays should have same size
+                if state.arrs_dist_info[arr].isSequential ||
+                        !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[arrays[1]].dim_sizes)
+                    changed = true
+                    push!(state.seq_parfors, parfor_id)
+                    for a in arrays
+                        state.arrs_dist_info[a].isSequential = true
+                    end
+                    break
+                end
+            end
+        end
+    end
+    # all arrays of distributed parfors are distributable at this point 
+    for parfor_id in keys(state.parfor_info)
+        if !in(state.seq_parfors, parfor_id)
+            dprintln(2,"DistIR distributable parfor: ", parfor_id," arrays: ", state.parfor_info[parfor_id])
+            append!(state.dist_arrays, state.parfor_info[parfor_id])
+        end
+    end
+end
+
+function isEqualDimSize(sizes1::Array{Union{SymAllGen,Int},1} , sizes2::Array{Union{SymAllGen,Int},1})
+    if length(sizes1)!=length(sizes2)
+        return false
+    end
+    for i in 1:length(sizes1)
+        if !eqSize(sizes1[i],sizes2[i])
+            return false
+        end
+    end
+    return true
+end
+
+function eqSize(a::SymbolNode, b::SymbolNode)
+    return a.name == b.name
+end
+
+function eqSize(a::Any, b::Any)
+    return a==b
 end
 
 end # DistributedIR
