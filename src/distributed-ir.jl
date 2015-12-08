@@ -36,6 +36,7 @@ using CompilerTools.LambdaHandling
 import ..ParallelIR
 import ..ParallelIR.isArrayType
 import ..ParallelIR.getParforNode
+import ..ParallelIR.isAllocation
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -54,10 +55,10 @@ end
 
 type ArrDistInfo
     isSequential::Bool      # can't be distributed; e.g. it is used in sequential code
-    dim_sizes::Array{Int,1}      # sizes of array dimensions
+    dim_sizes::Array{Union{SymAllGen,Int},1}      # sizes of array dimensions
     
     function ArrDistInfo(num_dims::Int)
-        new(false, zeros(num_dims))
+        new(false, zeros(Int64,num_dims))
     end
 end
 
@@ -113,8 +114,13 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
     head = node.head
     # arrays written in parfors are ok for now
     
-    dprintln(3,"DisIR arr info walk Expr node: ", node)
-    if head==:parfor
+    dprintln(3,"DistIR arr info walk Expr node: ", node)
+    # length==8 since 1D only is supported for now
+    if head==:(=) && isAllocation(node.args[2]) && length(node.args[2].args)==8
+        arr = node.args[1]
+        state.arrs_dist_info[arr].dim_sizes = [node.args[2].args[7]] # 1D hack
+        dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
+    elseif head==:parfor
         parfor = getParforNode(node)
         rws = parfor.rws
         
@@ -126,7 +132,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         
         # only 1D parfors supported for now
         if !parfor.simply_indexed || length(parfor.loopNests)!=1
-            dprintln(2,"DisIR arr info walk parfor sequential: ", node)
+            dprintln(2,"DistIR arr info walk parfor sequential: ", node)
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
             end
@@ -137,7 +143,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
              if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
-                dprintln(2,"DisIR arr info walk arr read index sequential: ", index, " ", indexVariable)
+                dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -145,7 +151,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
              if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
-                dprintln(2,"DisIR arr info walk arr write index sequential: ", index, " ", indexVariable)
+                dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -157,13 +163,14 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         writeArrs = [k for k in keys(rws.writeSet.arrays)]
         allArrs = [readArrs;writeArrs]
         for arr in allArrs
-            dprintln(2,"DisIR arr info walk arr in sequential code: ", arr, " ", node)
+            dprintln(2,"DistIR arr info walk arr in sequential code: ", arr, " ", node)
             state.arrs_dist_info[arr].isSequential = true
         end
         return node
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+
 
 function get_arr_dist_info(ast::Any, state, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
