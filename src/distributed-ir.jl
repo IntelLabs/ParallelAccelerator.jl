@@ -54,7 +54,9 @@ function from_root(function_name, ast :: Expr)
     checkParforsForDistribution(state)
     dprintln(3,"DistIR state after check: ",state)
     
-    # transform
+    # transform body
+    @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
+    body = from_toplevel_body(ast.args[3], state)
     # ast = from_expr(ast)
     return ast
 end
@@ -234,6 +236,49 @@ end
 
 function eqSize(a::Any, b::Any)
     return a==b
+end
+
+# nodes are :body of AST
+function from_toplevel_body(nodes::Array{Any,1}, state)
+    res = genDistributedInit(state)
+    for node in nodes
+        new_exprs = from_expr(node, state)
+        append!(res, new_exprs)
+    end
+    return res
+end
+
+
+function from_expr(node::Expr, state)
+    head = node.head
+    if head==:(=)
+        return from_assignment(node)
+    elseif head==:parfor
+        return from_parfor(node)
+    elseif head==:block
+    else
+        return [node]
+    end
+end
+
+
+function from_expr(node::Any, state)
+    return [node]
+end
+
+# generates initialization code for distributed execution
+function genDistributedInit(state)
+    initCall = Expr(:call,TopNode(:hps_dist_init))
+    numPesCall = Expr(:call,TopNode(:hps_dist_num_pes))
+    nodeIdCall = Expr(:call,TopNode(:hps_dist_node_id))
+    
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_num_pes"), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_node_id"), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+
+    num_pes_assign = Expr(:(=), :__hps_num_pes, numPesCall)
+    node_id_assign = Expr(:(=), :__hps_node_id, nodeIdCall)
+
+    return [initCall; num_pes_assign; node_id_assign]
 end
 
 end # DistributedIR
