@@ -112,7 +112,7 @@ mark sequential arrays
 function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, read)
     head = node.head
     # arrays written in parfors are ok for now
-    #@bp
+    
     dprintln(3,"DisIR arr info walk Expr node: ", node)
     if head==:parfor
         parfor = getParforNode(node)
@@ -134,19 +134,18 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         end
         
         indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
-        
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
-             if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
-                dprintln(2,"DisIR arr info walk arr index sequential: ", index, " ", indexVariable)
+             if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
+                dprintln(2,"DisIR arr info walk arr read index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
         
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
-             if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
-                dprintln(2,"DisIR arr info walk arr index sequential: ", index, " ", indexVariable)
+             if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
+                dprintln(2,"DisIR arr info walk arr write index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
