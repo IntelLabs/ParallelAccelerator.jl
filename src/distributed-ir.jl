@@ -112,6 +112,8 @@ mark sequential arrays
 function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, read)
     head = node.head
     # arrays written in parfors are ok for now
+    #@bp
+    dprintln(3,"DisIR arr info walk Expr node: ", node)
     if head==:parfor
         parfor = getParforNode(node)
         rws = parfor.rws
@@ -124,6 +126,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         
         # only 1D parfors supported for now
         if !parfor.simply_indexed || length(parfor.loopNests)!=1
+            dprintln(2,"DisIR arr info walk parfor sequential: ", node)
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
             end
@@ -135,6 +138,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
              if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
+                dprintln(2,"DisIR arr info walk arr index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -142,6 +146,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
              if length(index)!=1 || length(index[1])!=1 || index[1][1]!=indexVariable
+                dprintln(2,"DisIR arr info walk arr index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -153,6 +158,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         writeArrs = [k for k in keys(rws.writeSet.arrays)]
         allArrs = [readArrs;writeArrs]
         for arr in allArrs
+            dprintln(2,"DisIR arr info walk arr in sequential code: ", arr, " ", node)
             state.arrs_dist_info[arr].isSequential = true
         end
         return node
