@@ -45,6 +45,7 @@ import ..ParallelIR.ISASSIGNEDBYINNERFUNCTION
 import ..ParallelIR.ISCONST
 import ..ParallelIR.ISASSIGNEDONCE
 import ..ParallelIR.ISPRIVATEPARFORLOOP
+import ..ParallelIR.PIRReduction
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -346,8 +347,12 @@ function from_parfor(node::Expr, state)
         for stmt in parfor.body
             adjust_arrayrefs(stmt, loop_start_var)
         end
+        res = [loop_div_expr; loop_start_expr; loop_end_expr; node]
 
-        return [loop_div_expr; loop_start_expr; loop_end_expr; node]
+        dist_reductions = gen_dist_reductions(parfor.reductions)
+        append!(res, dist_reductions)
+
+        return res
     end
     return [node]
 end
@@ -386,6 +391,15 @@ end
 
 function isTopNode(node::Any)
     return false
+end
+
+function gen_dist_reductions(reductions::Array{PIRReduction,1})
+    res = Any[]
+    for reduce in reductions
+        reduceCall = Expr(:call,TopNode(:hps_dist_reduce),reduce.reductionVar,reduce.reductionFunc)
+        push!(res,reduceCall)
+    end
+    return res
 end
 
 end # DistributedIR
