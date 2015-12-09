@@ -577,6 +577,31 @@ function from_assignment_match_cat_t(lhs, rhs::ANY)
     return ""
 end
 
+function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
+    if rhs.head==:call && length(rhs.args)==1 && isTopNode(rhs.args[1])
+        dist_call = rhs.args[1].name
+        if dist_call ==:hps_dist_num_pes
+            return "MPI_Comm_size(MPI_COMM_WORLD,&$lhs);"
+        elseif dist_call ==:hps_dist_node_id
+            return "MPI_Comm_rank(MPI_COMM_WORLD,&$lhs);"
+        end
+    end
+    return ""
+end
+
+function isTopNode(a::TopNode)
+    return true
+end
+
+function isTopNode(a::Any)
+    return false
+end
+
+function from_assignment_match_dist(lhs::Any, rhs::Any)
+    return ""
+end
+
+
 function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
@@ -584,6 +609,10 @@ function from_assignment(args::Array{Any,1})
 
     from_assignment_fix_tupple(lhs, rhs)
 
+    match_hps_dist = from_assignment_match_dist(lhs, rhs)
+    if match_hps_dist!=""
+        return match_hps_dist
+    end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
     if match_hvcat!=""
@@ -1501,9 +1530,24 @@ function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::
     return ""
 end
 
+function pattern_match_call_dist_init(f::TopNode)
+    if f.name==:hps_dist_init
+        return "MPI_Init(0,0);"
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_init(f::Any)
+    return ""
+end
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
+    if length(ast)==1
+         s = pattern_match_call_dist_init(ast[1])
+    end
     if(length(ast)==2)
         s = pattern_match_call_throw(ast[1],ast[2])
         s *= pattern_match_call_math(ast[1],ast[2])
