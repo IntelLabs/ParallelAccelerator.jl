@@ -499,15 +499,7 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
     new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
     #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
 
-    if typeof(length) == SymbolNode
-        length_expr = length
-    elseif typeof(length) == Symbol
-        length_expr = SymbolNode(length,Int)
-    elseif typeof(length) == Int64
-        length_expr = length
-    else
-        throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
-    end
+    length_expr = get_length_expr(length)
 
     TypedExpr(
        atype,
@@ -521,6 +513,18 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        0,
        length_expr,
        0)
+end
+
+function get_length_expr(length::Union{SymbolNode,Int64})
+    return length
+end
+
+function get_length_expr(length::Symbol)
+    return SymbolNode(length, Int)
+end
+
+function get_length_expr(length::Any)
+    throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
 end
 
 @doc """
