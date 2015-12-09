@@ -281,8 +281,8 @@ function genDistributedInit(state)
     numPesCall = Expr(:call,TopNode(:hps_dist_num_pes))
     nodeIdCall = Expr(:call,TopNode(:hps_dist_node_id))
     
-    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_num_pes"), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_node_id"), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_num_pes"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_node_id"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
     num_pes_assign = Expr(:(=), :__hps_num_pes, numPesCall)
     node_id_assign = Expr(:(=), :__hps_node_id, nodeIdCall)
