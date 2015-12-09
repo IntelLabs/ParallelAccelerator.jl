@@ -328,20 +328,24 @@ function from_parfor(node::Expr, state)
         loopnest = parfor.loopNests[1]
         @assert loopnest.lower==1 && loopnest.step==1 "DistIR only simple PIR loops supported now"
 
-        loop_start_var = symbol("__hps_loop_"*string(getDistNewID(state)))
-        loop_end_var = symbol("__hps_loop_"*string(getDistNewID(state)))
-        loop_div_var = symbol("__hps_loop_"*string(getDistNewID(state)))
+        loop_start_var = symbol("__hps_loop_start_"*string(getDistNewID(state)))
+        loop_end_var = symbol("__hps_loop_end_"*string(getDistNewID(state)))
+        loop_div_var = symbol("__hps_loop_div_"*string(getDistNewID(state)))
 
         CompilerTools.LambdaHandling.addLocalVar(loop_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
         loop_div_expr = :($loop_div_var = $(loopnest.upper)/__hps_num_pes)
-        loop_start_expr = :($loop_start_var = __hps_node_id*$loop_div_var)
-        loop_end_expr = :($loop_end_var = min($(loopnest.upper), (__hps_node_id+1)*$loop_div_var))
+        loop_start_expr = :($loop_start_var = __hps_node_id*$loop_div_var+1)
+        loop_end_expr = :($loop_end_var = __hps_node_id==__hps_num_pes-1 ?$(loopnest.upper):(__hps_node_id+1)*$loop_div_var)
 
         loopnest.lower = loop_start_var
         loopnest.upper = loop_end_var
+
+        for stmt in parfor.body
+            adjust_arrayrefs(stmt, loop_start_var)
+        end
 
         return [loop_div_expr; loop_start_expr; loop_end_expr; node]
     end
@@ -353,5 +357,35 @@ function getDistNewID(state)
     return state.uniqueId
 end
 
+function adjust_arrayrefs(stmt::Expr, loop_start_var::Symbol)
+    if stmt.head==:(=) && isCall(stmt.args[2]) && isTopNode(stmt.args[2].args[1])
+        topCall = stmt.args[2].args[1]
+        #ref_args = stmt.args[2].args[2:end]
+        if topCall.name==:unsafe_arrayref || topCall.name==:unsafe_arrayset
+            @assert length(stmt.args[2].args)==3 "DistIR only 1D parfor array access supported for now"
+            index_arg = stmt.args[2].args[3]
+            stmt.args[2].args[3] = :($(index_arg.name)-$loop_start_var+1)
+        end
+    end
+end
+
+function adjust_arrayrefs(stmt::Any, loop_start_var::Symbol)
+end
+
+function isCall(node::Expr)
+    return node.head==:call
+end
+
+function isCall(node::Any)
+    return false
+end
+
+function isTopNode(node::TopNode)
+    return true
+end
+
+function isTopNode(node::Any)
+    return false
+end
 
 end # DistributedIR
