@@ -78,9 +78,10 @@ type DistIrState
     lambdaInfo::LambdaInfo
     seq_parfors::Array{Int,1}
     dist_arrays::Array{SymGen,1}
+    uniqueId::Int
     
     function DistIrState(linfo)
-        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[])
+        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[],0)
     end
 end
 
@@ -134,8 +135,8 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         parfor = getParforNode(node)
         rws = parfor.rws
         
-        readArrs = [k for k in keys(rws.readSet.arrays)]
-        writeArrs = [k for k in keys(rws.writeSet.arrays)]
+        readArrs = collect(keys(rws.readSet.arrays))
+        writeArrs = collect(keys(rws.writeSet.arrays))
         allArrs = [readArrs;writeArrs]
         # keep mapping from parfors to arrays
         state.parfor_info[parfor.unique_id] = allArrs
@@ -169,8 +170,8 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
         rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
-        readArrs = [k for k in keys(rws.readSet.arrays)]
-        writeArrs = [k for k in keys(rws.writeSet.arrays)]
+        readArrs = collect(keys(rws.readSet.arrays))
+        writeArrs = collect(keys(rws.writeSet.arrays))
         allArrs = [readArrs;writeArrs]
         for arr in allArrs
             dprintln(2,"DistIR arr info walk arr in sequential code: ", arr, " ", node)
@@ -280,5 +281,48 @@ function genDistributedInit(state)
 
     return [initCall; num_pes_assign; node_id_assign]
 end
+
+function from_assignment(node::Expr, state)
+    @assert node.head==:(=) "DistributedIR invalid assignment head"
+
+    if isAllocation(node.args[2])
+        arr = node.args[1]
+        if in(arr, state.dist_arrays)
+            # generate array division
+            old_size = node.args[2].args[7]
+
+            div_size_var = symbol("__hps_size_"*getDistNewID(state))
+            new_size_var = symbol("__hps_size_"*getDistNewID(state))
+
+            CompilerTools.LambdaHandling.addLocalVar(div_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+            CompilerTools.LambdaHandling.addLocalVar(new_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+
+            div_size_expr = :($div_size_var = $old_size/__hps_num_pes)
+            new_size_expr = :($new_size_var = __hps_node_id==__hps_num_pes-1 ? $old_size-__hps_node_id*$div_size_var : $div_size_var)
+
+            node.args[2].args[7] = new_size_var
+
+            return [div_size_expr; new_size_expr; node] 
+        end
+    end
+    return [node]
+end
+
+function from_parfor(node::Expr, state)
+    @assert node.head==:parfor "DistributedIR invalid parfor head"
+
+    parfor = node.args[1]
+
+    if !in(state.seq_parfors, parfor.unique_id)
+        #parfor.loopNests[1]
+    end
+    return [node]
+end
+
+function getDistNewID(state)
+    state.uniqueId+=1
+    return state.uniqueId
+end
+
 
 end # DistributedIR
