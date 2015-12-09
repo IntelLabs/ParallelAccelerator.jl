@@ -34,6 +34,7 @@ import CompilerTools.DebugMsg
 import CompilerTools.LambdaHandling.SymAllGen
 DebugMsg.init()
 
+using ..ParallelAccelerator
 import ..ParallelIR
 import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
@@ -291,7 +292,9 @@ function from_includes()
     if include_rand==true 
         s *= "#include <random>\n"
     end
-
+    if isDistributedMode()
+        s *= "#include <mpi.h>\n"
+    end
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
@@ -2631,18 +2634,26 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 
   Opts = ["-O3"]
   if backend_compiler == USE_ICC
+    comp = "icpc"
+    if isDistributedMode()
+        comp = "mpiicpc"
+    end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
         push!(Opts, "-qopenmp")
     end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `$comp $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
+    comp = "g++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -2685,16 +2696,24 @@ function getLinkCommand(outfile_name, lib)
       end
   end
   if backend_compiler == USE_ICC
-      if USE_OMP==1
-          push!(Opts,"-qopenmp")
-      end
-      linkCommand = `icpc -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+    comp = "icpc"
+    if isDistributedMode()
+        comp = "mpiicpc"
+    end
+    if USE_OMP==1
+        push!(Opts,"-qopenmp")
+    end
+    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
-      if USE_OMP==1
-          push!(Opts,"-fopenmp")
-      end
-      push!(Opts, "-std=c++11")
-      linkCommand = `g++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+    comp = "g++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
+    if USE_OMP==1
+        push!(Opts,"-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
+    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand
