@@ -416,20 +416,15 @@ function generate_instr_count(function_name, signature)
         return call_costs[(function_name, signature)]
     end
 
+    function_name = process_function_name(function_name)
+
     ftyp = typeof(function_name)
 
     if ftyp != Function
         dprintln(3,"generate_instr_count: instead of Function, got ", ftyp, " ", function_name)
     end
 
-    if ftyp == Expr
-        dprintln(3,"eval'ing Expr to Function")
-        function_name = eval(function_name)
-    elseif ftyp == GlobalRef
-        #dprintln(3,"Calling getfield")
-        function_name = eval(function_name)
-        #function_name = getfield(function_name.mod, function_name.name)
-    elseif ftyp == IntrinsicFunction
+    if ftyp == IntrinsicFunction
         dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
         call_costs[(function_name, signature)] = nothing
         return call_costs[(function_name, signature)]
@@ -461,6 +456,23 @@ function generate_instr_count(function_name, signature)
         call_costs[(function_name, signature)] = nothing
     end
     return call_costs[(function_name, signature)]
+end
+
+function process_function_name(function_name::Expr)
+    dprintln(3,"eval'ing Expr to Function")
+    function_name = eval(function_name)
+    return function_name
+end
+
+function process_function_name(function_name::GlobalRef)
+    #dprintln(3,"Calling getfield")
+    function_name = eval(function_name)
+    #function_name = getfield(function_name.mod, function_name.name)
+    return function_name
+end
+
+function process_function_name(function_name::Any)
+    return function_name
 end
 
 @doc """

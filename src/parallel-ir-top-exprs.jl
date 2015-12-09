@@ -406,107 +406,8 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
             for j = 1:length(rr[i].tasks)
                 cur_task = rr[i].tasks[j]
                 dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
-                if typeof(cur_task) == TaskInfo
-                    range_var = string(cur_task.task_func,"_range_var")
-                    range_sym = symbol(range_var)
 
-                    dprintln(3,"Inserting call to jl_threading_run ", range_sym)
-                    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
-
-                    in_len  = length(cur_task.input_symbols)
-                    mod_len = length(cur_task.modified_inputs)
-                    io_len  = length(cur_task.io_symbols)
-                    red_len = length(cur_task.reduction_vars)
-                    dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
-
-                    dims = length(cur_task.loopNests)
-                    if dims > 0
-                        dprintln(3,"dims > 0")
-                        assert(dims <= 3)
-                        #whole_iteration_range = pir_range_actual()
-                        #whole_iteration_range.dim = dims
-                        cstr_params = Any[]
-                        for l = 1:dims
-                            # Note that loopNest is outer-dimension first
-                            # Should this still be outer-dimension first?  FIX FIX FIX
-                            push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
-                            push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
-                            #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
-                            #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
-                        end
-                        dprintln(3, "cstr_params = ", cstr_params)
-                        cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-                        whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
-                        dprintln(3,"whole_range_expr = ", whole_range_expr)
-                        push!(new_body, whole_range_expr) 
-
-                        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
-
-                        real_args_build = Any[]
-                        args_type = Expr(:tuple)
-
-                        # Fill in the arg metadata.
-                        for l = 1:in_len
-                            push!(real_args_build, cur_task.input_symbols[l].name)
-                            push!(args_type.args,  cur_task.input_symbols[l].typ)
-                        end
-                        for l = 1:mod_len
-                            push!(real_args_build, cur_task.modified_inputs[l].name)
-                            push!(args_type.args,  cur_task.modified_inputs[l].typ)
-                        end
-                        for l = 1:io_len
-                            push!(real_args_build, cur_task.io_symbols[l].name)
-                            push!(args_type.args,  cur_task.io_symbols[l].typ)
-                        end
-                        for l = 1:red_len
-                            push!(real_args_build, cur_task.reduction_vars[l].name)
-                            push!(args_type.args,  cur_task.reduction_vars[l].typ)
-                        end
-
-                        dprintln(3,"task_func = ", cur_task.task_func)
-                        #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
-                        dprintln(3,"real_args_build = ", real_args_build)
-
-                        tup_var = string(cur_task.task_func,"_tup_var")
-                        tup_sym = symbol(tup_var)
-
-                        if false
-                            real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
-                            call_tup = (Function,pir_range_actual,Any)
-                            push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_tuple_expr), state))
-                        else
-                            call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
-                            call_tup = eval(call_tup_expr)
-                            dprintln(3, "call_tup = ", call_tup)
-                            #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-                            push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
-                        end
-
-                        if false
-                            insert_task_expr = TypedExpr(Any,
-                            :call,
-                            cur_task.task_func,
-                            SymbolNode(range_sym, pir_range_actual),
-                            real_args_build...)
-                        else
-                            # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any), 
-                            svec_args = mk_svec_expr(Any, Any)
-                            insert_task_expr = TypedExpr(Any, 
-                            :call, 
-                            TopNode(:ccall), 
-                            QuoteNode(:jl_threading_run), 
-                            GlobalRef(Main,:Void), 
-                            svec_args,
-                            mk_parallelir_ref(:isf), 0, 
-                            tup_sym, 0)
-                        end
-                        push!(new_body, insert_task_expr)
-                    else
-                        throw(string("insert sequential task not implemented yet"))
-                    end
-                else
-                    push!(new_body, cur_task)
-                end
+                process_cur_task(cur_task, new_body)
             end
 
             # Insert call to wait on the scheduler to complete all tasks.
@@ -768,6 +669,109 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     return next_available_label + 3
 end
 
+function process_cur_task(cur_task::TaskInfo, new_body)
+    range_var = string(cur_task.task_func,"_range_var")
+    range_sym = symbol(range_var)
+
+    dprintln(3,"Inserting call to jl_threading_run ", range_sym)
+    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+
+    in_len  = length(cur_task.input_symbols)
+    mod_len = length(cur_task.modified_inputs)
+    io_len  = length(cur_task.io_symbols)
+    red_len = length(cur_task.reduction_vars)
+    dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
+
+    dims = length(cur_task.loopNests)
+    if dims > 0
+        dprintln(3,"dims > 0")
+        assert(dims <= 3)
+        #whole_iteration_range = pir_range_actual()
+        #whole_iteration_range.dim = dims
+        cstr_params = Any[]
+        for l = 1:dims
+            # Note that loopNest is outer-dimension first
+            # Should this still be outer-dimension first?  FIX FIX FIX
+            push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
+            push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
+            #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
+            #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
+        end
+        dprintln(3, "cstr_params = ", cstr_params)
+        cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
+        whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
+        dprintln(3,"whole_range_expr = ", whole_range_expr)
+        push!(new_body, whole_range_expr)
+
+        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
+
+        real_args_build = Any[]
+        args_type = Expr(:tuple)
+
+        # Fill in the arg metadata.
+        for l = 1:in_len
+            push!(real_args_build, cur_task.input_symbols[l].name)
+            push!(args_type.args,  cur_task.input_symbols[l].typ)
+        end
+        for l = 1:mod_len
+            push!(real_args_build, cur_task.modified_inputs[l].name)
+            push!(args_type.args,  cur_task.modified_inputs[l].typ)
+        end
+        for l = 1:io_len
+            push!(real_args_build, cur_task.io_symbols[l].name)
+            push!(args_type.args,  cur_task.io_symbols[l].typ)
+        end
+        for l = 1:red_len
+            push!(real_args_build, cur_task.reduction_vars[l].name)
+            push!(args_type.args,  cur_task.reduction_vars[l].typ)
+        end
+
+        dprintln(3,"task_func = ", cur_task.task_func)
+        #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
+        dprintln(3,"real_args_build = ", real_args_build)
+
+        tup_var = string(cur_task.task_func,"_tup_var")
+        tup_sym = symbol(tup_var)
+
+        if false
+            real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
+            call_tup = (Function,pir_range_actual,Any)
+            push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_tuple_expr), state))
+        else
+            call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
+            call_tup = eval(call_tup_expr)
+            dprintln(3, "call_tup = ", call_tup)
+            #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+            push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
+        end
+
+        if false
+            insert_task_expr = TypedExpr(Any,
+                                         :call,
+                                         cur_task.task_func,
+                                         SymbolNode(range_sym, pir_range_actual),
+                                         real_args_build...)
+        else
+            # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any),
+            svec_args = mk_svec_expr(Any, Any)
+            insert_task_expr = TypedExpr(Any,
+                                         :call,
+                                         TopNode(:ccall),
+                                         QuoteNode(:jl_threading_run),
+                                         GlobalRef(Main,:Void),
+                                         svec_args,
+                                         mk_parallelir_ref(:isf), 0,
+                                         tup_sym, 0)
+        end
+        push!(new_body, insert_task_expr)
+    else
+        throw(string("insert sequential task not implemented yet"))
+    end
+end
+
+function process_cur_task(cur_task::Any, new_body)
+    push!(new_body, cur_task)
+end
 
 # TOP_LEVEL
 # sequence of expressions
