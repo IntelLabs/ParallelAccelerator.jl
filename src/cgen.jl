@@ -1745,6 +1745,27 @@ function from_goto(exp, labelId)
 end
 =#
 
+function from_if(args)
+    exp = args[1]
+    true_exp = args[2]
+    false_exp = args[3]
+    s = ""
+    dprintln(3,"Compiling if: ", exp, " ", true_exp," ", false_exp)
+    s *= from_expr(exp) * "?" * from_expr(true_exp) * ":" * from_expr(false_exp)
+    s
+end
+
+function from_comparison(args)
+    @assert length(args)==3 "CGen: invalid comparison"
+    left = args[1]
+    comp = args[2]
+    right = args[3]
+    s = ""
+    dprintln(3,"Compiling comparison: ", left, " ", comp," ", right)
+    s *= from_expr(left) * "$comp" * from_expr(right)
+    s
+end
+
 function from_globalref(ast)
     mod = ast.mod
     name = ast.name
@@ -2044,6 +2065,14 @@ function from_expr(ast::Expr)
     elseif head == :gotoifnot
         dprintln(3,"Compiling gotoifnot : ", args)
         s *= from_gotoifnot(args)
+    # :if and :comparison should only come from ?: expressions we generate
+    # normal ifs should be inlined to gotoifnot
+    elseif head == :if
+        dprintln(3,"Compiling if : ", args)
+        s *= from_if(args)
+    elseif head == :comparison
+        dprintln(3,"Compiling comparison : ", args)
+        s *= from_comparison(args)
 
     elseif head == :parfor_start
     if USE_OMP==1
