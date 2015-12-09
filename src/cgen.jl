@@ -189,7 +189,11 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "safe_arrayref", "safe_arrayset", "tupleref",
             "call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
             "_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
-            ":jl_array_ptr", "sizeof", "pointer"
+            ":jl_array_ptr", "sizeof", "pointer", 
+            # We also consider type casting here
+            "Float32", "Float64", 
+            "Int8", "Int16", "Int32", "Int64",
+            "UInt8", "UInt16", "UInt32", "UInt64"
 ]
 
 # Intrinsics
@@ -1044,13 +1048,24 @@ function from_builtins(f, args)
         return from_nfields(args[1])
     elseif tgt == "sizeof"
         return from_sizeof(args)
-  elseif tgt =="steprange_last"
-    return from_steprange_last(args)
+    elseif tgt =="steprange_last"
+        return from_steprange_last(args)
+    elseif isdefined(Base, f) 
+        fval = getfield(Base, f)
+        if isa(fval, DataType)
+            # handle type casting
+            dprintln(3, "found a typecast: ", fval, "(", args, ")")
+            return from_typecast(fval, args)
+        end
     end
-
 
     dprintln(3,"Compiling ", string(f))
     throw("Unimplemented builtin")
+end
+
+function from_typecast(typ, args)
+    @assert (length(args) == 1) "Expect only one argument in " * typ * "(" * args * ")"
+    return "(" * toCtype(typ) * ")" * "(" * from_expr(args[1]) * ")"
 end
 
 function from_box(args)

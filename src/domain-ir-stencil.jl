@@ -116,6 +116,13 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
       # local idx1D = nDimTo1Dim(expr.args[(idxOffset+1):end], stat.strideSym)
       expr.args = isGet ? [ TopNode(:unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
                           [ TopNode(:unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
+      # fix numerical coercion when converting setindex! into unsafe_arrayset
+      if is(expr.args[1].name, :unsafe_arrayset)
+          if typeOfOpr(state, expr.args[3]) != elmTyp 
+            expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, symbol(string(elmTyp))), expr.args[3])
+          end
+      end
+
       if !isGet
         v = expr.args[2]
         if isa(v, SymbolNode) v = v.name end
