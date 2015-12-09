@@ -63,7 +63,7 @@ function from_root(function_name, ast :: Expr)
     
     # transform body
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
-    body = Expr(:body, from_toplevel_body(ast.args[3].args, state))
+    body = Expr(:body, from_toplevel_body(ast.args[3].args, state)...)
     new_ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
     # ast = from_expr(ast)
     return new_ast
