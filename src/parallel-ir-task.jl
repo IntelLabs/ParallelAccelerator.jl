@@ -458,16 +458,9 @@ function generate_instr_count(function_name, signature)
     return call_costs[(function_name, signature)]
 end
 
-function process_function_name(function_name::Expr)
-    dprintln(3,"eval'ing Expr to Function")
+function process_function_name(function_name::Union{Expr,GlobalRef})
+    dprintln(3,"eval'ing", typeof(function_name), "to Function")
     function_name = eval(function_name)
-    return function_name
-end
-
-function process_function_name(function_name::GlobalRef)
-    #dprintln(3,"Calling getfield")
-    function_name = eval(function_name)
-    #function_name = getfield(function_name.mod, function_name.name)
     return function_name
 end
 

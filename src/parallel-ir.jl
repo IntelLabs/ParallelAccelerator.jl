@@ -515,16 +515,12 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        0)
 end
 
-function get_length_expr(length::SymbolNode)
+function get_length_expr(length::Union{SymbolNode,Int64})
     return length
 end
 
 function get_length_expr(length::Symbol)
     return SymbolNode(length, Int)
-end
-
-function get_length_expr(length::Int64)
-    return length
 end
 
 function get_length_expr(length::Any)
