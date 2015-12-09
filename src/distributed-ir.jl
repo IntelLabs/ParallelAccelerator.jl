@@ -38,6 +38,13 @@ import ..ParallelIR.isArrayType
 import ..ParallelIR.getParforNode
 import ..ParallelIR.isAllocation
 
+import ..ParallelIR.ISCAPTURED
+import ..ParallelIR.ISASSIGNED
+import ..ParallelIR.ISASSIGNEDBYINNERFUNCTION
+import ..ParallelIR.ISCONST
+import ..ParallelIR.ISASSIGNEDONCE
+import ..ParallelIR.ISPRIVATEPARFORLOOP
+
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
@@ -56,7 +63,7 @@ function from_root(function_name, ast :: Expr)
     
     # transform body
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
-    body = from_toplevel_body(ast.args[3], state)
+    body = from_toplevel_body(ast.args[3].args, state)
     # ast = from_expr(ast)
     return ast
 end
@@ -241,7 +248,7 @@ end
 
 # nodes are :body of AST
 function from_toplevel_body(nodes::Array{Any,1}, state)
-    res = genDistributedInit(state)
+    res::Array{Any,1} = genDistributedInit(state)
     for node in nodes
         new_exprs = from_expr(node, state)
         append!(res, new_exprs)
@@ -253,10 +260,10 @@ end
 function from_expr(node::Expr, state)
     head = node.head
     if head==:(=)
-        return from_assignment(node)
+        return from_assignment(node, state)
     elseif head==:parfor
-        return from_parfor(node)
-    elseif head==:block
+        return from_parfor(node, state)
+    #elseif head==:block
     else
         return [node]
     end
@@ -279,7 +286,7 @@ function genDistributedInit(state)
     num_pes_assign = Expr(:(=), :__hps_num_pes, numPesCall)
     node_id_assign = Expr(:(=), :__hps_node_id, nodeIdCall)
 
-    return [initCall; num_pes_assign; node_id_assign]
+    return Any[initCall; num_pes_assign; node_id_assign]
 end
 
 function from_assignment(node::Expr, state)
@@ -291,8 +298,8 @@ function from_assignment(node::Expr, state)
             # generate array division
             old_size = node.args[2].args[7]
 
-            div_size_var = symbol("__hps_size_"*getDistNewID(state))
-            new_size_var = symbol("__hps_size_"*getDistNewID(state))
+            div_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
+            new_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
 
             CompilerTools.LambdaHandling.addLocalVar(div_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
             CompilerTools.LambdaHandling.addLocalVar(new_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
@@ -314,7 +321,27 @@ function from_parfor(node::Expr, state)
     parfor = node.args[1]
 
     if !in(state.seq_parfors, parfor.unique_id)
-        #parfor.loopNests[1]
+        @assert length(parfor.loopNests)==1 "DistIR only 1D PIR loop supported now"
+
+        loopnest = parfor.loopNests[1]
+        @assert loopnest.lower==1 && loopnest.step==1 "DistIR only simple PIR loops supported now"
+
+        loop_start_var = symbol("__hps_loop_"*string(getDistNewID(state)))
+        loop_end_var = symbol("__hps_loop_"*string(getDistNewID(state)))
+        loop_div_var = symbol("__hps_loop_"*string(getDistNewID(state)))
+
+        CompilerTools.LambdaHandling.addLocalVar(loop_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+
+        loop_div_expr = :($loop_div_var = $(loopnest.upper)/__hps_num_pes)
+        loop_start_expr = :($loop_start_var = __hps_node_id*$loop_div_var)
+        loop_end_expr = :($loop_end_var = min($(loopnest.upper), (__hps_node_id+1)*$loop_div_var))
+
+        loopnest.lower = loop_start_var
+        loopnest.upper = loop_end_var
+
+        return [loop_div_expr; loop_start_expr; loop_end_expr; node]
     end
     return [node]
 end
