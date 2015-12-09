@@ -628,7 +628,7 @@ function from_assignment(args::Array{Any,1})
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
 
-  if !typeAvailable(lhs)
+  if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
         if typeAvailable(rhs)
             lstate.symboltable[lhs] = rhs.typ
         elseif haskey(lstate.symboltable, rhs)
