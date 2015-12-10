@@ -312,7 +312,11 @@ function from_assignment(node::Expr, state)
 
             node.args[2].args[7] = new_size_var
 
-            return [div_size_expr; new_size_expr; node] 
+            res = [div_size_expr; new_size_expr; node]
+
+            #debug_size_print = :(println("size ",$new_size_var))
+            #push!(res,debug_size_print)
+            return res 
         end
     end
     return [node]
@@ -337,9 +341,14 @@ function from_parfor(node::Expr, state)
         CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
-        loop_div_expr = :($loop_div_var = $(loopnest.upper)/__hps_num_pes)
+        first_arr = state.parfor_info[parfor.unique_id][1];
+        
+        dprintln(3,"DistIR parfor first array ", first_arr)
+        global_size = state.arrs_dist_info[first_arr].dim_sizes[1]
+
+        loop_div_expr = :($loop_div_var = $(global_size)/__hps_num_pes)
         loop_start_expr = :($loop_start_var = __hps_node_id*$loop_div_var+1)
-        loop_end_expr = :($loop_end_var = __hps_node_id==__hps_num_pes-1 ?$(loopnest.upper):(__hps_node_id+1)*$loop_div_var)
+        loop_end_expr = :($loop_end_var = __hps_node_id==__hps_num_pes-1 ?$(global_size):(__hps_node_id+1)*$loop_div_var)
 
         loopnest.lower = loop_start_var
         loopnest.upper = loop_end_var
@@ -352,6 +361,17 @@ function from_parfor(node::Expr, state)
         dist_reductions = gen_dist_reductions(parfor.reductions, state)
         append!(res, dist_reductions)
 
+        #debug_start_print = :(println("parfor start", $loop_start_var))
+        #debug_end_print = :(println("parfor end", $loop_end_var))
+        #push!(res,debug_start_print)
+        #push!(res,debug_end_print)
+
+        #debug_div_print = :(println("parfor div ", $loop_div_var))
+        #push!(res,debug_div_print)
+        #debug_pes_print = :(println("parfor pes ", __hps_num_pes))
+        #push!(res,debug_pes_print)
+        #debug_rank_print = :(println("parfor rank ", __hps_node_id))
+        #push!(res,debug_rank_print)
         return res
     end
     return [node]
