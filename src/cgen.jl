@@ -1545,6 +1545,41 @@ function pattern_match_call_dist_init(f::Any)
     return ""
 end
 
+
+function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFunc::Symbol, output::Symbol)
+    if f.name==:hps_dist_reduce
+        mpi_type = ""
+        if var.typ==Float64
+            mpi_type = "MPI_DOUBLE"
+        elseif var.typ==Float32
+            mpi_type = "MPI_FLOAT"
+        elseif var.typ==Int32
+            mpi_type = "MPI_INT"
+        elseif var.typ==Int64
+            mpi_type = "MPI_LONG_LONG_INT"
+        else
+            throw("CGen unsupported MPI reduction type")
+        end
+
+        mpi_func = ""
+        if reductionFunc==:+
+            mpi_func = "MPI_SUM"
+        else
+            throw("CGen unsupported MPI reduction function")
+        end
+                
+        s="MPI_Reduce(&$(var.name), &$output, 1, $mpi_type, $mpi_func, 0, MPI_COMM_WORLD);"
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Symbol)
+    return ""
+end
+
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
@@ -1557,7 +1592,8 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     # rand! call has 4 args
     if(length(ast)==4)
-        s = pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
+        s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
+        s *= pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
     # randn! call has 3 args
     if(length(ast)==3)
