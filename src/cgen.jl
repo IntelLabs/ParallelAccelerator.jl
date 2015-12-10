@@ -134,7 +134,7 @@ begin
 const USE_OMP = 1
 end
 )
-
+#const USE_OMP = 0
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -1575,7 +1575,7 @@ function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFu
     end
 end
 
-function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Symbol)
+function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
