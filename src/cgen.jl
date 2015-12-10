@@ -1535,7 +1535,7 @@ end
 
 function pattern_match_call_dist_init(f::TopNode)
     if f.name==:hps_dist_init
-        return "MPI_Init(0,0);"
+        return ";"#"MPI_Init(0,0);"
     else
         return ""
     end
