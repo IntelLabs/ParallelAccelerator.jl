@@ -349,7 +349,7 @@ function from_parfor(node::Expr, state)
         end
         res = [loop_div_expr; loop_start_expr; loop_end_expr; node]
 
-        dist_reductions = gen_dist_reductions(parfor.reductions)
+        dist_reductions = gen_dist_reductions(parfor.reductions, state)
         append!(res, dist_reductions)
 
         return res
@@ -393,11 +393,16 @@ function isTopNode(node::Any)
     return false
 end
 
-function gen_dist_reductions(reductions::Array{PIRReduction,1})
+function gen_dist_reductions(reductions::Array{PIRReduction,1}, state)
     res = Any[]
     for reduce in reductions
-        reduceCall = Expr(:call,TopNode(:hps_dist_reduce),reduce.reductionVar,reduce.reductionFunc)
-        push!(res,reduceCall)
+        reduce_var = symbol("__hps_reduce_"*string(getDistNewID(state)))
+        CompilerTools.LambdaHandling.addLocalVar(reduce_var, reduce.reductionVar.typ, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+
+        reduce_var_init = Expr(:(=), reduce_var, 0)
+        reduceCall = Expr(:call,TopNode(:hps_dist_reduce),reduce.reductionVar,reduce.reductionFunc, reduce_var)
+        rootCopy = Expr(:(=), reduce.reductionVar, reduce_var)
+        append!(res,[reduce_var_init; reduceCall; rootCopy])
     end
     return res
 end
