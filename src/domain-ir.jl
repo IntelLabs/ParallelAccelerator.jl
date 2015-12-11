@@ -852,6 +852,7 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     fun = from_expr(state, env_, fun)
     dprintln(env,"from_call: new fun=", fun)
     (fun_, args_) = normalize_callname(state, env, fun, args)
+    dprintln(env,"normalized callname: ", fun_)
     result = translate_call(state, env, typ, :call, fun, args, fun_, args_)
     result
 end
@@ -886,7 +887,17 @@ end
 
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun::GlobalRef, args)
-    return normalize_callname(state, env, fun.name, args)
+    fun = Base.resolve(fun, force=true)
+    if is(fun.mod, API) || is(fun.mod, API.Stencil)
+      return normalize_callname(state, env, fun.name, args)
+    elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
+        if is(fun.name, :rand!) 
+            splice!(args,3)
+        end
+        return (fun.name, args)
+    else
+        return (fun, args)
+    end
 end
 
 function normalize_callname(state::IRState, env, fun::Symbol, args)
@@ -930,10 +941,6 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
         if haskey(liftOps, fun) # lift operation to array level
             fun = liftOps[fun]
         end
-    elseif fun==:rand!
-        # remove third argument. 
-        # it is Base.arraylen that we can't handle well and don't need for translation
-        splice!(args,3)
     end
     return (fun, args)
 end
@@ -1005,7 +1012,13 @@ function inline_select(env, state, arr)
     return arr
 end
 
-# translate a function call to domain IR if it matches
+# translate a function call to domain IR if it matches Symbol.
+# things handled as Symbols are: 
+#    those captured in ParallelAPI, or
+#    those that can be TopNode, or
+#    those from Core.Intrinsics, or
+#    those that are DomainIR specific, such as :alloc, or
+#    a few exceptions.
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
     expr = nothing
@@ -1018,39 +1031,18 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
     if verifyMapOps(state, fun, args) && (isarray(typ) || isbitarray(typ)) 
         return translate_call_map(state,env_,typ, fun, args)
-    elseif is(fun, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
-        opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
-        dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
-        expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
-        dprintln(env, "translated expr = ", expr)
     elseif is(fun, :cartesianarray)
         return translate_call_cartesianarray(state,env_,typ, args)
     elseif is(fun, :runStencil)
         return translate_call_runstencil(state,env_,args)
     elseif is(fun, :parallel_for)
         return translate_call_parallel_for(state,env_,args)
-    elseif is(fun, :copy)
-        args = normalize_args(state, env_, args[1:1])
-        dprintln(env,"got copy, args=", args)
-        expr = mk_copy(args[1])
-        expr.typ = typ
     elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
         typ = translate_call_typefix(state, env, typ, fun, args) 
-    elseif is(fun, :getfield) && length(args) == 2 && isa(args[1], GenSym) && 
-        (args[2] == QuoteNode(:stop) || args[2] == QuoteNode(:start) || args[2] == QuoteNode(:step))
-        # Shortcut range object access
-        rTyp = getType(args[1], state.linfo)
-        rExpr = lookupConstDefForArg(state, args[1])
-        if isrange(rTyp) && isa(rExpr, Expr)
-            (start, step, final) = from_range(rExpr)
-            fname = args[2].value
-            if is(fname, :stop) 
-                return final
-            elseif is(fname, :start)
-                return start
-            else
-                return step
-            end
+    elseif haskey(reduceOps, fun)
+        args = normalize_args(state, env_, args)
+        if length(args)==1
+            return translate_call_reduce(state, env_, typ, fun, args)
         end
     elseif is(fun, :arraysize)
         args = normalize_args(state, env_, args)
@@ -1072,34 +1064,25 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         assert(isa(elemTyp, DataType))
         expr = mk_alloc(state, elemTyp, args)
         expr.typ = typ
-    elseif is(fun, :broadcast_shape)
-        dprintln(env, "got ", fun)
-        args = normalize_args(state, env_, args)
-        expr = mk_expr(typ, :assertEqShape, args...)
-    elseif is(fun, :checkbounds)
-        dprintln(env, "got ", fun, " args = ", args)
-        if length(args) == 2
-            return translate_call_checkbounds(state,env_,args) 
-        end
     elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
         typ = isa(args[1], Type) ? args[1] : eval(args[1]) 
     elseif is(fun, :getindex) || is(fun, :setindex!) 
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
-    elseif is(fun, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
-        is(fun, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
-        return translate_call_assign_bool(state,env_,typ,fun, args) 
-    elseif is(fun, :fill!)
-        return translate_call_fill!(state, env_, typ, args)
-    elseif is(fun, :_getindex!) # see if we can turn getindex! back into getindex
-        if isa(args[1], Expr) && args[1].head == :call && args[1].args[1] == TopNode(:ccall) && 
-            (args[1].args[2] == :jl_new_array ||
-            (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
-            expr = mk_expr(typ, :call, :getindex, args[2:end]...)
-        end
-    elseif haskey(reduceOps, fun)
-        args = normalize_args(state, env_, args)
-        if length(args)==1
-            return translate_call_reduce(state, env_, typ, fun, args)
+    elseif is(fun, :getfield) && length(args) == 2 && isa(args[1], GenSym) && 
+        (args[2] == QuoteNode(:stop) || args[2] == QuoteNode(:start) || args[2] == QuoteNode(:step))
+        # Shortcut range object access
+        rTyp = getType(args[1], state.linfo)
+        rExpr = lookupConstDefForArg(state, args[1])
+        if isrange(rTyp) && isa(rExpr, Expr)
+            (start, step, final) = from_range(rExpr)
+            fname = args[2].value
+            if is(fname, :stop) 
+                return final
+            elseif is(fname, :start)
+                return start
+            else
+                return step
+            end
         end
     elseif in(fun, ignoreSet)
     else
@@ -1577,7 +1560,7 @@ function translate_call_parallel_for(state, env, args::Array{Any,1})
     return mk_parallel_for(loopvars, ranges, domF)
 end
 
-# translate a function call to domain IR if it matches
+# translate a function call to domain IR if it matches GlobalRef.
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
@@ -1586,7 +1569,53 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
     #if isa(fun, GlobalRef) && fun.mod == Main
     #   fun = fun.name
     # end
-    if is(fun.mod, Base.Math)
+    if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
+       (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
+        expr = translate_call(state, env, typ, head, fun, oldargs, fun.name, args)
+    elseif is(fun.mod, Base) 
+        if is(fun.name, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
+            opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
+            dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
+            expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
+            dprintln(env, "translated expr = ", expr)
+        elseif is(fun.name, :copy)
+            args = normalize_args(state, env_, args[1:1])
+            dprintln(env,"got copy, args=", args)
+            expr = mk_copy(args[1])
+            expr.typ = typ
+        elseif is(fun.name, :broadcast_shape)
+            dprintln(env, "got ", fun.name)
+            args = normalize_args(state, env_, args)
+            expr = mk_expr(typ, :assertEqShape, args...)
+        elseif is(fun.name, :checkbounds)
+            dprintln(env, "got ", fun.name, " args = ", args)
+            if length(args) == 2
+                expr = translate_call_checkbounds(state,env_,args) 
+            end
+        elseif is(fun.name, :getindex) || is(fun.name, :setindex!) # not a domain operator, but still, sometimes need to shortcut it
+            expr = translate_call_getsetindex(state,env_,typ,fun,args)
+        elseif is(fun.name, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
+               is(fun.name, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
+            expr = translate_call_assign_bool(state,env_,typ,fun.name, args) 
+        elseif is(fun.name, :fill!)
+            return translate_call_fill!(state, env_, typ, args)
+        elseif is(fun.name, :_getindex!) # see if we can turn getindex! back into getindex
+            if isa(args[1], Expr) && args[1].head == :call && args[1].args[1] == TopNode(:ccall) && 
+                (args[1].args[2] == :jl_new_array ||
+                (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
+                expr = mk_expr(typ, :call, :getindex, args[2:end]...)
+            end
+#-
+        elseif haskey(reduceOps, fun.name)
+            args = normalize_args(state, env_, args)
+            if length(args)==1
+                expr = translate_call_reduce(state, env_, typ, fun, args)
+            end
+-#
+        end
+    elseif is(fun.mod, Base.Random) #skip, let cgen handle it
+    elseif is(fun.mod, Base.LinAlg) #skip, let cgen handle it
+    elseif is(fun.mod, Base.Math)
         # NOTE: we simply bypass all math functions for now
         dprintln(env,"by pass math function ", fun, ", typ=", typ)
         # Fix return type of math functions
@@ -1662,7 +1691,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     def = lookupDefInAllScopes(state, name)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
-        if isbits(def)
+        if isbits(def) && isa(def, IntrinsicFunction)
             return def
         end
     end

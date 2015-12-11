@@ -26,12 +26,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-function cndf2(in::Array{Float64,1})
+@acc begin
+
+@inline function cndf2(in::Array{Float64,1})
     out = 0.5 .+ 0.5 .* erf(0.707106781 .* in)
     return out
 end
 
-@acc function blackscholes(sptprice::Array{Float64,1},
+function blackscholes(sptprice::Array{Float64,1},
                            strike::Array{Float64,1},
                            rate::Array{Float64,1},
                            volatility::Array{Float64,1},
@@ -47,6 +49,8 @@ end
     c1 = futureValue .* NofXd2
     call = sptprice .* NofXd1 .- c1
     put  = call .- futureValue .+ sptprice
+end
+
 end
 
 function run(iterations)

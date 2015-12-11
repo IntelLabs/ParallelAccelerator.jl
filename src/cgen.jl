@@ -230,7 +230,8 @@ tokenXlate = Dict(
     '^' => "hat",
     '|' => "bar",
     '&' => "amp",
-    '=' => "eq"
+    '=' => "eq",
+    '\\' => "backslash"
 )
 
 replacedTokens = Set("#")
@@ -750,12 +751,12 @@ function canonicalize(tok)
     global scrubbedTokens
     s = string(tok)
     s = replace(s, scrubbedTokens, "")
-    s = replace(s, r"^[^a-zA-Z]", "_")
     s = replace(s, replacedTokens, "p")
     s = replace(s, "∇", "del")
     for (k,v) in tokenXlate
        s = replace(s, k, v)
     end
+    s = replace(s, r"[^a-zA-Z0-9]", "_")
     s
 end
 
