@@ -28,7 +28,7 @@ script:
   - julia --code-coverage=user test/runtests.jl
   # Run examples.
   - julia examples/black-scholes/black-scholes.jl
-  - julia --code-coverage=user --inline=no examples/black-scholes/black-scholes.jl
+  - julia --code-coverage=user examples/black-scholes/black-scholes.jl
   - julia --code-coverage=user examples/boltzmann/boltzmann.jl
   - julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl
   - julia --code-coverage=user examples/harris/harris.jl
