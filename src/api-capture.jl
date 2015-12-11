@@ -49,12 +49,19 @@ function process_node(node, state, top_level_number, is_top_level, read)
       tmpvar = gensym()
       node.head = :block
       node.args = Any[
-           Expr(:(=), tmpvar, Expr(:call, ref_assign_map[head],
+           Expr(:(=), tmpvar, Expr(:call, GlobalRef(API, ref_assign_map[head]),
                                           Expr(:call, GlobalRef(API, :getindex), lhs, idx...),
                                           rhs)),
            Expr(:call, GlobalRef(API, :setindex!), lhs, tmpvar, idx...),
            tmpvar]
 
+    elseif haskey(ref_assign_map, head) 
+      # x += ...
+      lhs = node.args[1]
+      rhs = node.args[2]
+      tmpvar = gensym()
+      node.head = :(=)
+      node.args = Any[ lhs, Expr(:call, GlobalRef(API, ref_assign_map[head]), lhs, rhs) ]
     elseif node.head == :ref
       node.head = :call
       node.args = Any[GlobalRef(API, :getindex), node.args...]

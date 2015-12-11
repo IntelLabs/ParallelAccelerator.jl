@@ -34,7 +34,7 @@ eval(x) = Core.eval(API, x)
   Base.setindex!(A, args...)
 end
 
-function setindex!(A, args...) 
+@inline function setindex!(A, args...) 
   Base.setindex!(A, args...)
 end
 
@@ -42,7 +42,7 @@ end
   Base.getindex(A, args...)
 end
 
-function getindex(A, args...) 
+@inline function getindex(A, args...) 
   Base.getindex(A, args...)
 end
 
@@ -62,7 +62,7 @@ for f in unary_operators
         @noinline function ($f){T<:Number}(A::DenseArray{T})
             (Base.$f)(A)
         end
-        function ($f)(A...)
+        @inline function ($f)(A...)
             (Base.$f)(A...)
         end
     end
@@ -73,14 +73,14 @@ for f in unary_map_operators
         @noinline function ($f){T<:Number}(A::T)
             (Base.$f)(A)
         end
-        function ($f)(A...)
+        @inline function ($f)(A...)
             (Base.$f)(A...)
         end
     end
 end
 
 # Binary operators/functions
-const binary_map_operators = Symbol[
+const binary_map_operators = Symbol[ :*,
     :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, 
     :div, :mod, :rem, :&, :|, :$, :min, :max]
 
@@ -94,11 +94,15 @@ for f in binary_operators
         @noinline function ($f){T}(B::DenseArray{T}, A::T)
             (Base.$f)(B, A)
         end
-        @noinline function ($f){T}(A::DenseArray{T}, B::DenseArray{T})
+    end
+    if f != :*
+        @eval @noinline function ($f){T}(A::DenseArray{T}, B::DenseArray{T})
             (Base.$f)(A, B)
         end
-        function ($f)(A, B)
-            (Base.$f)(A, B)
+    end
+    @eval begin
+        @inline function ($f)(args...)
+            (Base.$f)(args...)
         end
     end
 end
