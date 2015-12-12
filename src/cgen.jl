@@ -132,16 +132,20 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
-@osx? (
-begin
+
+if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
     const USE_OMP = 0
+else
+    @osx? (
+    begin
+        const USE_OMP = 0
+    end
+    :
+    begin
+        const USE_OMP = 1
+    end
+    )
 end
-:
-begin
-const USE_OMP = 1
-end
-)
-#const USE_OMP = 0
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -2716,6 +2720,14 @@ function compile(outfile_name)
   packageroot = getPackageRoot()
 
   cgenOutput = "$generated_file_dir/$outfile_name.cpp"
+
+  if isDistributedMode()
+      println("Distributed-memory MPI mode.")
+  end
+
+  if USE_OMP==0
+      println("OpenMP is not used.")
+  end
 
   if use_bcpp == 1
     cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
