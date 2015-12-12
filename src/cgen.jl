@@ -1833,7 +1833,7 @@ function from_globalref(ast)
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
         if isbits(def) && !isa(def, IntrinsicFunction)
-          return from_exp(def)
+          return from_expr(def)
         end
     end
  
