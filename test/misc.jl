@@ -40,10 +40,37 @@ function test1()
     return for_ret()
 end
 
+@acc function for_ret1(n)
+    for f = 1:n
+    end
+end
+
+function test2()
+    return for_ret1(10)
+end
+
+@acc function opt_At_mul_B!(X, W)
+     X' * W
+end
+
+function test_At_mul_B(m::Int, k::Int, n::Int)
+    W = Array(Float64, m, k)   
+    X = Array(Float64, m, n)
+    fill!(W, 3)
+    fill!(X, 5)
+    opt_At_mul_B!(X, W)
+end
+
+function test3()
+  all(Bool[ x == 150.0 for x in MiscTest.test_At_mul_B(10,10,10) ])
+end
+
 end
 
 using Base.Test
 println("Testing miscellaneous features...")
 @test MiscTest.test1() == nothing
+@test MiscTest.test2() == nothing
+@test MiscTest.test3() 
 println("Done testing miscellaneous features...")
 
