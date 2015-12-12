@@ -1691,7 +1691,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     def = lookupDefInAllScopes(state, name)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
-        if isbits(def) && isa(def, IntrinsicFunction)
+        if isbits(def) && !isa(def, IntrinsicFunction)
             return def
         end
     end
