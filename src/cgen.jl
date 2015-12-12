@@ -2377,13 +2377,16 @@ end
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
     dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
-        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
+        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
         params = ""
     end
     # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
-    actualParams = params * (length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
-        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)]))
+    retParams = length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
+        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
+    dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
+    actualParams = params * ((length(params) > 0 && length(retParams) > 0) ? ", " : "") * retParams
+    dprintln(3, " actualParams = (", actualParams, ")")
     wrapperParams = "int run_where"
     if length(args) > 0
         wrapperParams *= ", $args"
@@ -2549,16 +2552,13 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
             retargs = ""
         end
 
-        if length(args) > 0
-            args *= ", " * retargs
-            argsunal *= ", "*retargs
-        else
-            args = retargs
-            argsunal = retargs
-        end
+        comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
+        args *= comma * retargs
+        argsunal *= comma * retargs
     else
         rtyp = toCtype(typ)
     end
+    dprintln(3, "args = (", args, ")")
     s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
