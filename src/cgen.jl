@@ -2350,7 +2350,10 @@ end
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
     dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
-        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
+        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
+        if length(jtyp) > 0
+            params *= ", "
+        end
     else
         params = ""
     end
@@ -2523,8 +2526,10 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
         end
 
         if length(args) > 0
-            args *= ", " * retargs
-            argsunal *= ", "*retargs
+            if retargs != ""
+                args *= ", " * retargs
+                argsunal *= ", " * retargs
+            end
         else
             args = retargs
             argsunal = retargs
