@@ -39,6 +39,13 @@ import ..ParallelIR
 import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
+import ParallelAccelerator.isDistributedMode
+
+
+if isDistributedMode()
+    using MPI
+    MPI.Init()
+end
 
 # uncomment this line for using Debug.jl
 #using Debug
@@ -125,16 +132,20 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
-@osx? (
-begin
+
+if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
     const USE_OMP = 0
+else
+    @osx? (
+    begin
+        const USE_OMP = 0
+    end
+    :
+    begin
+        const USE_OMP = 1
+    end
+    )
 end
-:
-begin
-const USE_OMP = 1
-end
-)
-#const USE_OMP = 0
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -237,7 +248,12 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+if isDistributedMode()
+    package_root = getPackageRoot()
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    generated_file_dir = "$package_root/deps/generated$rank"
+    mkdir(generated_file_dir)
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -254,13 +270,16 @@ function generate_new_file_name()
     return "cgen_output$file_counter"
 end
 
-function cleanup_generated_files()
+function CGen_finalize()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         rm(generated_file_dir; recursive=true)
     end
+    if isDistributedMode()
+        MPI.Finalize()
+    end
 end
 
-atexit(cleanup_generated_files)
+atexit(CGen_finalize)
 
 function __init__()
     packageroot = joinpath(dirname(@__FILE__), "..")
@@ -2706,6 +2725,14 @@ function compile(outfile_name)
   packageroot = getPackageRoot()
 
   cgenOutput = "$generated_file_dir/$outfile_name.cpp"
+
+  if isDistributedMode()
+      println("Distributed-memory MPI mode.")
+  end
+
+  if USE_OMP==0
+      println("OpenMP is not used.")
+  end
 
   if use_bcpp == 1
     cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
