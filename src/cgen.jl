@@ -2378,9 +2378,6 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
         params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
-        if length(jtyp) > 0
-            params *= ", "
-        end
     else
         params = ""
     end
