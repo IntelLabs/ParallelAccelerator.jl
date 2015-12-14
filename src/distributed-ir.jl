@@ -27,6 +27,8 @@ module DistributedIR
 
 #using Debug
 
+import Base.show
+import ..ParallelAccelerator
 using CompilerTools
 import CompilerTools.DebugMsg
 DebugMsg.init()
@@ -80,6 +82,10 @@ type ArrDistInfo
     end
 end
 
+function show(io::IO, pnode::ParallelAccelerator.DistributedIR.ArrDistInfo)
+    print(io,"seq:",pnode.isSequential," sizes:", pnode.dim_sizes)
+end
+
 # information about AST gathered and used in DistributedIR
 type DistIrState
     # information about all arrays
@@ -93,6 +99,27 @@ type DistIrState
     function DistIrState(linfo)
         new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[],0)
     end
+end
+
+function show(io::IO, pnode::ParallelAccelerator.DistributedIR.DistIrState)
+    println(io,"DistIrState arrs_dist_info:")
+    for i in pnode.arrs_dist_info
+        println(io,"  ", i)
+    end
+    println(io,"DistIrState parfor_info:")
+    for i in pnode.parfor_info
+        println(io,"  ", i)
+    end
+    println(io,"DistIrState seq_parfors:")
+    for i in pnode.seq_parfors
+        print(io," ", i)
+    end
+    println(io,"")
+    println(io,"DistIrState dist_arrays:")
+    for i in pnode.dist_arrays
+        print(io," ", i)
+    end
+    println(io,"")
 end
 
 function initDistState(linfo)
