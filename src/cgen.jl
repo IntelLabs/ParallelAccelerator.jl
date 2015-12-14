@@ -1013,8 +1013,18 @@ function get_alloc_shape(args, dims)
         return res
     end
     shp = AbstractString[]
-    for i in 1:dims
-        push!(shp, from_expr(args[6+(i-1)*2]))
+    arg = args[6]
+    if (isa(arg, Expr) && isa(arg.typ, Tuple)) ||
+       ((isa(arg, SymbolNode) || isa(arg, Symbol) || isa(arg, GenSym)) &&
+        istupletyp(getSymType(arg))) # in case where the argument is a tuple
+        arg_str = from_expr(arg)
+        for i in 1:dims
+            push!(shp, arg_str * ".f" * string(i))
+        end
+    else
+        for i in 1:dims
+            push!(shp, from_expr(args[6+(i-1)*2]))
+        end 
     end
     res = foldl((a, b) -> "$a, $b", shp)
     return res
@@ -1361,6 +1371,8 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
             s = f.args[3].value
             if isa(f.args[2],Module)
                 M = f.args[2]
+            elseif isa(f.args[2],GlobalRef)
+                M = eval(f.args[2])
             end
         end
         dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
@@ -1656,6 +1668,7 @@ function from_call(ast::Array{Any, 1})
     end
 
     args = ast[2:end]
+    dprintln(3,"mod is: ", mod)
     dprintln(3,"fun is: ", fun)
     dprintln(3,"call Args are: ", args)
 
