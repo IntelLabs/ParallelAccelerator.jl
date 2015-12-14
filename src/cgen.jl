@@ -252,7 +252,9 @@ if isDistributedMode()
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
-    mkdir(generated_file_dir)
+    if !isdir(generated_file_dir)
+        mkdir(generated_file_dir)
+    end
 elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
