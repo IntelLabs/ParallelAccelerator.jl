@@ -34,10 +34,18 @@ import CompilerTools.DebugMsg
 import CompilerTools.LambdaHandling.SymAllGen
 DebugMsg.init()
 
+using ..ParallelAccelerator
 import ..ParallelIR
 import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
+import ParallelAccelerator.isDistributedMode
+
+
+if isDistributedMode()
+    using MPI
+    MPI.Init()
+end
 
 # uncomment this line for using Debug.jl
 #using Debug
@@ -124,16 +132,20 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
-@osx? (
-begin
-    const USE_OMP = 0
-end
-:
-begin
-const USE_OMP = 1
-end
-)
 
+if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
+    const USE_OMP = 0
+else
+    @osx? (
+    begin
+        const USE_OMP = 0
+    end
+    :
+    begin
+        const USE_OMP = 1
+    end
+    )
+end
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -189,7 +201,11 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "safe_arrayref", "safe_arrayset", "tupleref",
             "call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
             "_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
-            ":jl_array_ptr", "sizeof", "pointer"
+            ":jl_array_ptr", "sizeof", "pointer", 
+            # We also consider type casting here
+            "Float32", "Float64", 
+            "Int8", "Int16", "Int32", "Int64",
+            "UInt8", "UInt16", "UInt32", "UInt64"
 ]
 
 # Intrinsics
@@ -225,13 +241,19 @@ tokenXlate = Dict(
     '^' => "hat",
     '|' => "bar",
     '&' => "amp",
-    '=' => "eq"
+    '=' => "eq",
+    '\\' => "backslash"
 )
 
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+if isDistributedMode()
+    package_root = getPackageRoot()
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    generated_file_dir = "$package_root/deps/generated$rank"
+    mkdir(generated_file_dir)
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -248,13 +270,16 @@ function generate_new_file_name()
     return "cgen_output$file_counter"
 end
 
-function cleanup_generated_files()
+function CGen_finalize()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         rm(generated_file_dir; recursive=true)
     end
+    if isDistributedMode()
+        MPI.Finalize()
+    end
 end
 
-atexit(cleanup_generated_files)
+atexit(CGen_finalize)
 
 function __init__()
     packageroot = joinpath(dirname(@__FILE__), "..")
@@ -287,7 +312,9 @@ function from_includes()
     if include_rand==true 
         s *= "#include <random>\n"
     end
-
+    if isDistributedMode()
+        s *= "#include <mpi.h>\n"
+    end
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
@@ -573,6 +600,31 @@ function from_assignment_match_cat_t(lhs, rhs::ANY)
     return ""
 end
 
+function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
+    if rhs.head==:call && length(rhs.args)==1 && isTopNode(rhs.args[1])
+        dist_call = rhs.args[1].name
+        if dist_call ==:hps_dist_num_pes
+            return "MPI_Comm_size(MPI_COMM_WORLD,&$lhs);"
+        elseif dist_call ==:hps_dist_node_id
+            return "MPI_Comm_rank(MPI_COMM_WORLD,&$lhs);"
+        end
+    end
+    return ""
+end
+
+function isTopNode(a::TopNode)
+    return true
+end
+
+function isTopNode(a::Any)
+    return false
+end
+
+function from_assignment_match_dist(lhs::Any, rhs::Any)
+    return ""
+end
+
+
 function from_assignment(args::Array{Any,1})
     global lstate
     lhs = args[1]
@@ -580,6 +632,10 @@ function from_assignment(args::Array{Any,1})
 
     from_assignment_fix_tupple(lhs, rhs)
 
+    match_hps_dist = from_assignment_match_dist(lhs, rhs)
+    if match_hps_dist!=""
+        return match_hps_dist
+    end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
     if match_hvcat!=""
@@ -595,7 +651,7 @@ function from_assignment(args::Array{Any,1})
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
 
-  if !typeAvailable(lhs)
+  if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
         if typeAvailable(rhs)
             lstate.symboltable[lhs] = rhs.typ
         elseif haskey(lstate.symboltable, rhs)
@@ -714,12 +770,12 @@ function canonicalize(tok)
     global scrubbedTokens
     s = string(tok)
     s = replace(s, scrubbedTokens, "")
-    s = replace(s, r"^[^a-zA-Z]", "_")
     s = replace(s, replacedTokens, "p")
     s = replace(s, "∇", "del")
     for (k,v) in tokenXlate
        s = replace(s, k, v)
     end
+    s = replace(s, r"[^a-zA-Z0-9]", "_")
     s
 end
 
@@ -1044,13 +1100,24 @@ function from_builtins(f, args)
         return from_nfields(args[1])
     elseif tgt == "sizeof"
         return from_sizeof(args)
-  elseif tgt =="steprange_last"
-    return from_steprange_last(args)
+    elseif tgt =="steprange_last"
+        return from_steprange_last(args)
+    elseif isdefined(Base, f) 
+        fval = getfield(Base, f)
+        if isa(fval, DataType)
+            # handle type casting
+            dprintln(3, "found a typecast: ", fval, "(", args, ")")
+            return from_typecast(fval, args)
+        end
     end
-
 
     dprintln(3,"Compiling ", string(f))
     throw("Unimplemented builtin")
+end
+
+function from_typecast(typ, args)
+    @assert (length(args) == 1) "Expect only one argument in " * typ * "(" * args * ")"
+    return "(" * toCtype(typ) * ")" * "(" * from_expr(args[1]) * ")"
 end
 
 function from_box(args)
@@ -1486,16 +1553,67 @@ function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::
     return ""
 end
 
+function pattern_match_call_dist_init(f::TopNode)
+    if f.name==:hps_dist_init
+        return ";"#"MPI_Init(0,0);"
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_init(f::Any)
+    return ""
+end
+
+
+function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFunc::Symbol, output::Symbol)
+    if f.name==:hps_dist_reduce
+        mpi_type = ""
+        if var.typ==Float64
+            mpi_type = "MPI_DOUBLE"
+        elseif var.typ==Float32
+            mpi_type = "MPI_FLOAT"
+        elseif var.typ==Int32
+            mpi_type = "MPI_INT"
+        elseif var.typ==Int64
+            mpi_type = "MPI_LONG_LONG_INT"
+        else
+            throw("CGen unsupported MPI reduction type")
+        end
+
+        mpi_func = ""
+        if reductionFunc==:+
+            mpi_func = "MPI_SUM"
+        else
+            throw("CGen unsupported MPI reduction function")
+        end
+                
+        s="MPI_Reduce(&$(var.name), &$output, 1, $mpi_type, $mpi_func, 0, MPI_COMM_WORLD);"
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
+    return ""
+end
+
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
+    if length(ast)==1
+         s = pattern_match_call_dist_init(ast[1])
+    end
     if(length(ast)==2)
         s = pattern_match_call_throw(ast[1],ast[2])
         s *= pattern_match_call_math(ast[1],ast[2])
     end
     # rand! call has 4 args
     if(length(ast)==4)
-        s = pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
+        s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
+        s *= pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
     # randn! call has 3 args
     if(length(ast)==3)
@@ -1686,10 +1804,39 @@ function from_goto(exp, labelId)
 end
 =#
 
+function from_if(args)
+    exp = args[1]
+    true_exp = args[2]
+    false_exp = args[3]
+    s = ""
+    dprintln(3,"Compiling if: ", exp, " ", true_exp," ", false_exp)
+    s *= from_expr(exp) * "?" * from_expr(true_exp) * ":" * from_expr(false_exp)
+    s
+end
+
+function from_comparison(args)
+    @assert length(args)==3 "CGen: invalid comparison"
+    left = args[1]
+    comp = args[2]
+    right = args[3]
+    s = ""
+    dprintln(3,"Compiling comparison: ", left, " ", comp," ", right)
+    s *= from_expr(left) * "$comp" * from_expr(right)
+    s
+end
+
 function from_globalref(ast)
     mod = ast.mod
     name = ast.name
     dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
+    # handle global constant
+    if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
+        def = getfield(mod, name)
+        if isbits(def) && !isa(def, IntrinsicFunction)
+          return from_expr(def)
+        end
+    end
+ 
     from_expr(name)
 end
 
@@ -1985,6 +2132,14 @@ function from_expr(ast::Expr)
     elseif head == :gotoifnot
         dprintln(3,"Compiling gotoifnot : ", args)
         s *= from_gotoifnot(args)
+    # :if and :comparison should only come from ?: expressions we generate
+    # normal ifs should be inlined to gotoifnot
+    elseif head == :if
+        dprintln(3,"Compiling if : ", args)
+        s *= from_if(args)
+    elseif head == :comparison
+        dprintln(3,"Compiling comparison : ", args)
+        s *= from_comparison(args)
 
     elseif head == :parfor_start
     if USE_OMP==1
@@ -2222,13 +2377,16 @@ end
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
     dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
-        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
+        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
         params = ""
     end
     # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
-    actualParams = params * (length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
-        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)]))
+    retParams = length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
+        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
+    dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
+    actualParams = params * ((length(params) > 0 && length(retParams) > 0) ? ", " : "") * retParams
+    dprintln(3, " actualParams = (", actualParams, ")")
     wrapperParams = "int run_where"
     if length(args) > 0
         wrapperParams *= ", $args"
@@ -2291,7 +2449,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     end
     dprintln(3,"vectorizationlevel = ", vectorizationlevel)
     dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
-    dprintln(3,"Ast = ", ast)
+    dprintln(1,"Ast = ", ast)
     dprintln(3,"functionName = ", functionName)
     dprintln(3,"Starting processing for $ast")
     params  =   ast.args[1]
@@ -2394,16 +2552,13 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
             retargs = ""
         end
 
-        if length(args) > 0
-            args *= ", " * retargs
-            argsunal *= ", "*retargs
-        else
-            args = retargs
-            argsunal = retargs
-        end
+        comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
+        args *= comma * retargs
+        argsunal *= comma * retargs
     else
         rtyp = toCtype(typ)
     end
+    dprintln(3, "args = (", args, ")")
     s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
@@ -2543,18 +2698,26 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 
   Opts = ["-O3"]
   if backend_compiler == USE_ICC
+    comp = "icpc"
+    if isDistributedMode()
+        comp = "mpiicpc"
+    end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
         push!(Opts, "-qopenmp")
     end
     # Generate dyn_lib
-    compileCommand = `icpc $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `$comp $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
+    comp = "g++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
     if USE_OMP == 1
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    compileCommand = `g++ $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -2565,6 +2728,14 @@ function compile(outfile_name)
   packageroot = getPackageRoot()
 
   cgenOutput = "$generated_file_dir/$outfile_name.cpp"
+
+  if isDistributedMode()
+      println("Distributed-memory MPI mode.")
+  end
+
+  if USE_OMP==0
+      println("OpenMP is not used.")
+  end
 
   if use_bcpp == 1
     cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
@@ -2597,16 +2768,24 @@ function getLinkCommand(outfile_name, lib)
       end
   end
   if backend_compiler == USE_ICC
-      if USE_OMP==1
-          push!(Opts,"-qopenmp")
-      end
-      linkCommand = `icpc -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+    comp = "icpc"
+    if isDistributedMode()
+        comp = "mpiicpc"
+    end
+    if USE_OMP==1
+        push!(Opts,"-qopenmp")
+    end
+    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
-      if USE_OMP==1
-          push!(Opts,"-fopenmp")
-      end
-      push!(Opts, "-std=c++11")
-      linkCommand = `g++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+    comp = "g++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
+    if USE_OMP==1
+        push!(Opts,"-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
+    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand

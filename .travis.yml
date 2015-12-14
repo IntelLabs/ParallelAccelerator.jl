@@ -28,13 +28,14 @@ script:
   - julia --code-coverage=user test/runtests.jl
   # Run examples.
   - julia examples/black-scholes/black-scholes.jl
-  - julia examples/boltzmann/boltzmann.jl
-  - julia examples/gaussian-blur/gaussian-blur.jl
-  - julia examples/harris/harris.jl
-  - julia examples/juliaset/juliaset.jl
-  - julia examples/laplace-3d/laplace-3d.jl
-  - julia examples/opt-flow/opt-flow.jl
-  - julia examples/quant/quant.jl
-  - julia examples/wave-2d/wave-2d.jl
+  - julia --code-coverage=user examples/black-scholes/black-scholes.jl
+  - julia --code-coverage=user examples/boltzmann/boltzmann.jl
+  - julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl
+  - julia --code-coverage=user examples/harris/harris.jl
+  - julia --code-coverage=user examples/juliaset/juliaset.jl
+  - julia --code-coverage=user examples/laplace-3d/laplace-3d.jl
+  - julia --code-coverage=user examples/opt-flow/opt-flow.jl
+  - julia --code-coverage=user examples/quant/quant.jl
+  - julia --code-coverage=user examples/wave-2d/wave-2d.jl
 after_success:
       - julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
