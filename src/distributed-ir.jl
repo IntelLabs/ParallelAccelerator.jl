@@ -205,11 +205,15 @@ function checkParforsForDistribution(state::DistIrState)
     while changed
         changed = false
         for parfor_id in keys(state.parfor_info)
+            if parfor_id in state.seq_parfors
+                continue
+            end
             arrays = state.parfor_info[parfor_id]
             for arr in arrays
                 # all parfor arrays should have same size
                 if state.arrs_dist_info[arr].isSequential ||
                         !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[arrays[1]].dim_sizes)
+                    dprintln(2,"DistIR check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
                     changed = true
                     push!(state.seq_parfors, parfor_id)
                     for a in arrays
