@@ -957,10 +957,14 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
             atype = args[4]
             elemtyp = elmTypOf(atype)
             push!(realArgs, elemtyp)
+            dprintln(env, "normalize_callname: fun = :ccall args = ", args)
             for i = 6:2:length(args)
                 if istupletyp(typeOfOpr(state, args[i]))
+                    dprintln(env, "found tuple arg: ", args[i])
                     def = lookupConstDefForArg(state, args[i])
+                    dprintln(env, "definition: ", def)
                     if isa(def, Expr) && is(def.head, :call) && is(def.args[1], TopNode(:tuple))
+                        dprintln(env, "definition is inlined")
                         for j = 1:length(def.args) - 1
                             push!(realArgs, def.args[j + 1])
                         end
@@ -973,6 +977,7 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
             end
             fun  = :alloc
             args = realArgs
+            dprintln(env, "alloc call becomes: ", fun, " ", args)
         end
     end
     return (fun, args)
@@ -1175,10 +1180,11 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             return mk_expr(typ, :call, GlobalRef(Base, :add_int), start, mk_expr(typ, :call, GlobalRef(Base, :mul_int), mk_expr(typ, :call, GlobalRef(Base, :sub_int), args[2], 1), step))
         end
     elseif isarray(arrTyp) || isbitarray(arrTyp)
-        ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-        atyp = typeOfOpr(state, arr)
-        expr = nothing
-        dprintln(env, "ranges = ", ranges)
+      ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
+      atyp = typeOfOpr(state, arr)
+      expr = nothing
+      dprintln(env, "ranges = ", ranges)
+      try 
         if any(Bool[ ismask(state, range) for range in ranges])
             dprintln(env, "args is ", args)
             dprintln(env, "ranges is ", ranges)
@@ -1206,6 +1212,9 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             expr.typ = typ
         end
         return expr
+      catch err
+        dprintln(env, "Exception caught during range conversion: ", err)
+      end
     end
     return mk_expr(typ, :call, fun, args...)
 end
@@ -1587,10 +1596,6 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             dprintln(env,"got copy, args=", args)
             expr = mk_copy(args[1])
             expr.typ = typ
-        elseif is(fun.name, :broadcast_shape)
-            dprintln(env, "got ", fun.name)
-            args = normalize_args(state, env_, args)
-            expr = mk_expr(typ, :assertEqShape, args...)
         elseif is(fun.name, :checkbounds)
             dprintln(env, "got ", fun.name, " args = ", args)
             if length(args) == 2
@@ -1617,8 +1622,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             end
 -#
         end
+    elseif is(fun.mod, Base.Broadcast)
+        if is(fun.name, :broadcast_shape)
+            dprintln(env, "got ", fun.name)
+            args = normalize_args(state, env_, args)
+            expr = mk_expr(typ, :assertEqShape, args...)
+        end
     elseif is(fun.mod, Base.Random) #skip, let cgen handle it
-    elseif is(fun.mod, Base.LinAlg) #skip, let cgen handle it
+    elseif is(fun.mod, Base.LinAlg) || is(fun.mod, Base.LinAlg.BLAS) #skip, let cgen handle it
     elseif is(fun.mod, Base.Math)
         # NOTE: we simply bypass all math functions for now
         dprintln(env,"by pass math function ", fun, ", typ=", typ)
@@ -2092,18 +2103,6 @@ function dir_alias_cb(ast, state, cbdata)
             return AliasAnalysis.next_node(state)
         elseif is(head, :copy)
             return AliasAnalysis.next_node(state)
-        elseif is(head, :call) || is(head, :call1)
-            local fun  = ast.args[1]
-            local args = ast.args[2:end]
-            (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
-            dprintln(2, "AA from_call: normalized fun=", fun_)
-            if(haskey(DomainIR.mapOps, fun_))
-                return AliasAnalysis.NotArray
-            elseif is(fun_, :alloc)
-                return AliasAnalysis.next_node(state)
-            elseif is(fun_, :fill!)
-                return args[1]
-            end
         end
 
         return nothing

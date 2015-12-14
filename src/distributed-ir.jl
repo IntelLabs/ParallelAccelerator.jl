@@ -73,7 +73,7 @@ end
 
 type ArrDistInfo
     isSequential::Bool      # can't be distributed; e.g. it is used in sequential code
-    dim_sizes::Array{Union{SymAllGen,Int},1}      # sizes of array dimensions
+    dim_sizes::Array{Union{SymAllGen,Int,Expr},1}      # sizes of array dimensions
     
     function ArrDistInfo(num_dims::Int)
         new(false, zeros(Int64,num_dims))
@@ -138,7 +138,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
     dprintln(3,"DistIR arr info walk Expr node: ", node)
     # length==8 since 1D only is supported for now
     if head==:(=) && isAllocation(node.args[2]) && length(node.args[2].args)==8
-        arr = node.args[1]
+        arr = toSymGen(node.args[1])
         state.arrs_dist_info[arr].dim_sizes = [node.args[2].args[7]] # 1D hack
         dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
     elseif head==:parfor
@@ -205,11 +205,15 @@ function checkParforsForDistribution(state::DistIrState)
     while changed
         changed = false
         for parfor_id in keys(state.parfor_info)
+            if parfor_id in state.seq_parfors
+                continue
+            end
             arrays = state.parfor_info[parfor_id]
             for arr in arrays
                 # all parfor arrays should have same size
                 if state.arrs_dist_info[arr].isSequential ||
                         !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[arrays[1]].dim_sizes)
+                    dprintln(2,"DistIR check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
                     changed = true
                     push!(state.seq_parfors, parfor_id)
                     for a in arrays
@@ -229,7 +233,7 @@ function checkParforsForDistribution(state::DistIrState)
     end
 end
 
-function isEqualDimSize(sizes1::Array{Union{SymAllGen,Int},1} , sizes2::Array{Union{SymAllGen,Int},1})
+function isEqualDimSize(sizes1::Array{Union{SymAllGen,Int,Expr},1} , sizes2::Array{Union{SymAllGen,Int,Expr},1})
     if length(sizes1)!=length(sizes2)
         return false
     end
@@ -239,6 +243,18 @@ function isEqualDimSize(sizes1::Array{Union{SymAllGen,Int},1} , sizes2::Array{Un
         end
     end
     return true
+end
+
+function eqSize(a::Expr, b::Expr)
+    if a.head!=b.head || length(a.args)!=length(b.args)
+        return false
+    end
+    for i in 1:length(a.args)
+        if !eqSize(a.args[i],b.args[i])
+            return false
+        end
+    end
+    return true 
 end
 
 function eqSize(a::SymbolNode, b::SymbolNode)
@@ -411,6 +427,14 @@ end
 
 function isTopNode(node::Any)
     return false
+end
+
+function toSymGen(a::SymbolNode)
+    return a.name
+end
+
+function toSymGen(a::Any)
+    return a
 end
 
 function gen_dist_reductions(reductions::Array{PIRReduction,1}, state)
