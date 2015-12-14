@@ -558,8 +558,11 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
         typ = "double"
 
         if is_typed
-            @assert isa(rhs.args[2], GlobalRef) "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
-            typ = toCtype(eval(rhs.args[2].name))
+            if isa(rhs.args[2], GlobalRef)
+                typ = toCtype(eval(rhs.args[2].name))
+            else
+                typ = toCtype(rhs.args[2])
+            end
             rows = lstate.tupleTable[rhs.args[3]]
             values = rhs.args[4:end]
         else
@@ -2570,7 +2573,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     if isEntryPoint
         resetLambdaState(lstate)
 
-        if length(array_types_in_sig) > 0
+#        if length(array_types_in_sig) > 0
             gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
             for (key, value) in array_types_in_sig
                 atyp = toCtype(key)
@@ -2579,6 +2582,10 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
             end
             gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
             c *= gen_j2c_array_new   
+#        end
+    else
+        if length(array_types_in_sig) > 0
+           dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
         end
     end
     c
