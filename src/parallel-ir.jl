@@ -1731,8 +1731,6 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
 
     if is_multi
         last_post = the_parfor.postParFor[end]
-Counting objects: 16, done.
-
         assert(isa(last_post, Array)) 
         dprintln(3,"multi postParFor = ", the_parfor.postParFor, " last_post = ", last_post)
 
