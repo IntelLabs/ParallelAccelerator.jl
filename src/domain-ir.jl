@@ -1625,7 +1625,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             expr = mk_expr(typ, :assertEqShape, args...)
         end
     elseif is(fun.mod, Base.Random) #skip, let cgen handle it
-    elseif is(fun.mod, Base.LinAlg) #skip, let cgen handle it
+    elseif is(fun.mod, Base.LinAlg) || is(fun.mod, Base.LinAlg.BLAS) #skip, let cgen handle it
     elseif is(fun.mod, Base.Math)
         # NOTE: we simply bypass all math functions for now
         dprintln(env,"by pass math function ", fun, ", typ=", typ)
