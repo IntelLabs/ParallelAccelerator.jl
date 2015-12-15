@@ -1400,8 +1400,10 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         s = args[2].value
         if isa(args[1], Module)
             M = args[1]
-        elseif args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re) 
-            func = args[2] == QuoteNode(:im) ? "creal" : "cimag";
+        elseif (args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re)) &&
+               (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
+                (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
+            func = args[2] == QuoteNode(:re) ? "creal" : "cimag";
             t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
@@ -2050,7 +2052,7 @@ function from_new(args)
     typ = args[1] #type of the object
     dprintln(3,"from_new args = ", args)
     if isa(typ, DataType)
-        if typ <: Complex
+        if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
             dprintln(3, "new complex number")
             s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
@@ -2268,8 +2270,16 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
-function from_expr(ast::Complex)
+function from_expr(ast::Complex64)
     "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+end
+
+function from_expr(ast::Complex128)
+    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+end
+
+function from_expr(ast::Complex)
+    toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
 end
 
 function from_expr(ast::ANY)
