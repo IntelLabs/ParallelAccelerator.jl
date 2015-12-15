@@ -32,24 +32,7 @@ include("BitArray.jl")
 include("range.jl")
 include("seq.jl")
 include("cat.jl")
-
-using CatTest 
-println("Testing cat...")
-@test_approx_eq CatTest.test1() [3.0; 1.0]
-@test_approx_eq CatTest.test2() [2.0 2.5; 1.5 11.0]
-@test_approx_eq CatTest.test3() [2.0 2.5; 1.5 11.0]
-println("Done testing cat.")
-
 include("ranges.jl")
-using RangeTest
-println("Testing range related features.")
-rt1 = RangeTest.test1()
-@test ndims(rt1) == 1
-@test rt1 == [2.2; 6.6]
-rt2 = RangeTest.test2()
-@test ndims(rt2) == 2
-@test rt2 == reshape([2.2 6.6], 2, 1)
-
 include("misc.jl")
 include("aug_assign.jl")
 

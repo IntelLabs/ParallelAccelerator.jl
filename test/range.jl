@@ -58,8 +58,11 @@ end
 
 end
 
+using RangeTest
 println("Testing ranges...")
+
 @test RangeTest.test1() > 1.66e3
 @test RangeTest.test2() > 1.66e3
+
 println("Done testing ranges.")
 

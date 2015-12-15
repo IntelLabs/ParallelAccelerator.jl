@@ -28,7 +28,7 @@ using ParallelAccelerator
 
 ParallelAccelerator.DomainIR.set_debug_level(4)
 ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.cgen.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
 
@@ -40,13 +40,44 @@ end
     return A[:,1:1] .* 2.0
 end
 
+@acc function reduce_col(col::Int)
+    A = rand(10^5,10);
+    x = rand(10^5);
+    sum((A[:, col] .- x[:]) .* (A[:, col] .- x[:]))
+end
+
+@acc function reduce_col2(col::Int)
+    A = rand(10^5,10);
+    x = rand(10^5);
+    r = 1:size(A, 1)
+    sum((A[r, col] .- x[r]) .* (A[r, col] .- x[r]))
+end
 
 function test1()
-    return singulartest1([1.1 2.2; 3.3 4.4])
+    return reduce_col(3)
 end
 
 function test2()
+    return reduce_col2(3)
+end
+
+function test3()
+    return singulartest1([1.1 2.2; 3.3 4.4])
+end
+
+function test4()
     return rangetest1([1.1 2.2; 3.3 4.4])
 end
 
 end
+
+using RangeTest
+println("Testing ranges...")
+
+@test RangeTest.test1() > 1.66e3
+@test RangeTest.test2() > 1.66e3
+@test RangeTest.test3() == [2.2; 6.6]
+@test ndims(RangeTest.test4()) == 2
+
+println("Done testing ranges.")
+
