@@ -54,7 +54,7 @@ function test1()
 end
 
 function test2()
-    return complex_test2(Complex{Float64}[2. + 1.im]) == (Complex{Float64}[3. + 3.im])
+    return complex_test2(Complex{Float64}[1. + 2.im, 2. + 1.im]) == (Complex{Float64}[2. + 4.im, 3. + 3.im])
 end
 
 function test3()
@@ -67,6 +67,7 @@ end
 println("Testing complex number support...")
 @test ComplexTest.test1() 
 @test ComplexTest.test2()
-@test ComplexTest.test3()
+# test3 is no longer supported by OpenMP after we switch from C's _Complex to C++'s std::complex
+#@test ComplexTest.test3()
 println("Done testing ranges.")
 

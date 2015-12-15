@@ -132,7 +132,6 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
-const USE_CLANG = 2
 
 if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
     const USE_OMP = 0
@@ -326,7 +325,7 @@ function from_includes()
     "#include <stdint.h>\n",
     "#include <float.h>\n",
     "#include <limits.h>\n",
-    "#include <complex.h>\n",
+    "#include <complex>\n",
     "#include <math.h>\n",
     "#include <stdio.h>\n",
     "#include <iostream>\n",
@@ -740,9 +739,9 @@ function toCtype(typ::DataType)
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
     elseif typ == Complex64
-        return "float _Complex"
+        return "std::complex<float>"
     elseif typ == Complex128
-        return "double _Complex"
+        return "std::complex<double>"
     elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
@@ -1404,7 +1403,7 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         elseif (args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re)) &&
                (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
                 (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
-            func = args[2] == QuoteNode(:re) ? "creal" : "cimag";
+            func = args[2] == QuoteNode(:re) ? "real" : "imag";
             t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
@@ -1432,18 +1431,19 @@ end
 
 function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
-    isFloat = typ == Float64 || typ == Float32
+    isDouble = typ == Float64 
+    isFloat = typ == Float32
     isComplex = typ <: Complex
     isInt = typ <: Integer
-    if in(fun.name,libm_math_functions) && (isFloat || isComplex)
+    if in(fun.name,libm_math_functions) && (isFloat || isDouble || isComplex)
         dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (isFloat || isComplex || isInt)
+    if is(fun.name,:abs) && (isFloat || isDouble || isComplex || isInt)
       dprintln(3,"FOUND ", fun.name)
-      fname = isInt ? "abs" : (isFloat ? "fabs" : (typ == Complex64 ? "cabsf" : "cabs"))
+      fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"
     end
     return s
@@ -2056,7 +2056,7 @@ function from_new(args)
         if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
             dprintln(3, "new complex number")
-            s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+            s = toCtype(typ) * "(" * from_expr(args[2]) * ", " * from_expr(args[3]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
@@ -2272,11 +2272,11 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
 end
 
 function from_expr(ast::Complex64)
-    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+    "std::complex<float>(" * from_expr(ast.re) * " + " * from_expr(ast.im) * ")"
 end
 
 function from_expr(ast::Complex128)
-    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+    "std::complex<double>(" * from_expr(ast.re) * ", " * from_expr(ast.im) * ")"
 end
 
 function from_expr(ast::Complex)
@@ -2743,17 +2743,6 @@ function getCompileCommand(full_outfile_name, cgenOutput)
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    push!(Opts, "-fext-numeric-literals")
-    compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
-  elseif backend_compiler == USE_CLANG
-    comp = "clang++"
-    if isDistributedMode()
-        comp = "mpic++"
-    end
-    if USE_OMP == 1
-        push!(Opts, "-fopenmp")
-    end
-    push!(Opts, "-std=c++11")
     compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
@@ -2815,16 +2804,6 @@ function getLinkCommand(outfile_name, lib)
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
     comp = "g++"
-    if isDistributedMode()
-        comp = "mpic++"
-    end
-    if USE_OMP==1
-        push!(Opts,"-fopenmp")
-    end
-    push!(Opts, "-std=c++11")
-    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
-   elseif backend_compiler == USE_CLANG
-    comp = "clang++"
     if isDistributedMode()
         comp = "mpic++"
     end
