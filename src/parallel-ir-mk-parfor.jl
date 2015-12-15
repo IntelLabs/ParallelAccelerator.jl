@@ -273,9 +273,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             end
             op = temp_body.args[1]
 
-            if op == TopNode(:add_float) || op == TopNode(:add_int)
+            if op == TopNode(:add_float) || op == TopNode(:add_int) || op == TopNode(:+)
                 reduce_func = :+
-            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
+            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int) || op == TopNode(:*)
                 reduce_func = :*
             elseif op == TopNode(:max) || op == TopNode(:min)
                 reduce_func = op.name
