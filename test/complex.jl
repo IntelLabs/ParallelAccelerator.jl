@@ -23,27 +23,50 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module ComplexTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
+# test input, constant, and output
+@acc function complex_test1(x::Complex{Float64})
+    x + (1. + 2.im)
+end
 
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
+# test array input, constant, and output
+@acc function complex_test2(x::Array{Complex{Float64}, 1})
+    x .+ (1. + 2.im)
+end
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+# test rand and reduction
+@acc function complex_test3(n::Int)
+    x = rand(Complex128, n)
+    sum(x)
+end
+
+function test1()
+    x = complex_test1(2. + 1.im) 
+    println(" test1 returns: ", x)
+    return x == (3. + 3.im)
+end
+
+function test2()
+    return complex_test2(Complex{Float64}[2. + 1.im]) == (Complex{Float64}[3. + 3.im])
+end
+
+function test3()
+    x = complex_test3(10)
+    return true
+end
+
+end
+
+println("Testing complex number support...")
+@test ComplexTest.test1() 
+@test ComplexTest.test2()
+@test ComplexTest.test3()
+println("Done testing ranges.")
+
