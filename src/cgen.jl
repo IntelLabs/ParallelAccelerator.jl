@@ -2823,6 +2823,16 @@ function getLinkCommand(outfile_name, lib)
     end
     push!(Opts, "-std=c++11")
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+   elseif backend_compiler == USE_CLANG
+    comp = "clang++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
+    if USE_OMP==1
+        push!(Opts,"-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
+    linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand
