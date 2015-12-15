@@ -892,7 +892,7 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
       return normalize_callname(state, env, fun.name, args)
     elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
         if is(fun.name, :rand!) 
-            splice!(args,3)
+            # splice!(args,3)
         end
         return (fun.name, args)
     else

@@ -1487,7 +1487,7 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY)
     return ""
 end
 
-function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
+function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
         res = "cgen_distribution(cgen_rand_generator);\n"
@@ -1495,7 +1495,7 @@ function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     return res 
 end
 
-function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
+function pattern_match_call_rand(fun::ANY, RNG::ANY, args...)
     return ""
 end
 
@@ -1624,15 +1624,15 @@ function pattern_match_call(ast::Array{Any, 1})
         s = pattern_match_call_throw(ast[1],ast[2])
         s *= pattern_match_call_math(ast[1],ast[2])
     end
-    # rand! call has 4 args
     if(length(ast)==4)
         s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
-        s *= pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
-    # randn! call has 3 args
-    if(length(ast)==3)
+    if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
-        #s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+    end
+    if(length(ast)>=2) # rand! has 2 or more args
+        s *= pattern_match_call_rand(ast...)
     end
     # gemm calls have 6 args
     if(length(ast)==6)
