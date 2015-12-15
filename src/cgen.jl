@@ -132,6 +132,7 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+const USE_CLANG = 2
 
 if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
     const USE_OMP = 0
@@ -2743,6 +2744,16 @@ function getCompileCommand(full_outfile_name, cgenOutput)
     end
     push!(Opts, "-std=c++11")
     push!(Opts, "-fext-numeric-literals")
+    compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+  elseif backend_compiler == USE_CLANG
+    comp = "clang++"
+    if isDistributedMode()
+        comp = "mpic++"
+    end
+    if USE_OMP == 1
+        push!(Opts, "-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
     compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 

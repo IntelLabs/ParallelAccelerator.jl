@@ -40,6 +40,9 @@ fi
 if type "icpc" >/dev/null 2>&1; then
     CC=icpc
     echo "backend_compiler = USE_ICC" >> "$CONF_FILE"
+elif type "clang++" >/dev/null 2>&1; then
+    CC=clang++
+    echo "backend_compiler = USE_CLANG" >> "$CONF_FILE"
 elif type "g++" >/dev/null 2>&1; then
     CC=g++
     echo "backend_compiler = USE_GCC" >> "$CONF_FILE"
