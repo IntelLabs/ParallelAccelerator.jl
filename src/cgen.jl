@@ -2742,6 +2742,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
+    push!(Opts, "-fext-numeric-literals")
     compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
