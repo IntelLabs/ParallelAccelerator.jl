@@ -398,16 +398,16 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         dprintln(2, rr[i])
 
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
-            # new body starts with the pre-task graph portion
+            # New body starts with the pre-task graph portion
             new_body = body[1:rr[i].start_index-1]
             copy_back = Any[]
 
-            # then adds calls for each task
+            # Then adds calls for each task
             for j = 1:length(rr[i].tasks)
                 cur_task = rr[i].tasks[j]
                 dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
 
-                process_cur_task(cur_task, new_body)
+                process_cur_task(cur_task, new_body, state)
             end
 
             # Insert call to wait on the scheduler to complete all tasks.
@@ -669,7 +669,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     return next_available_label + 3
 end
 
-function process_cur_task(cur_task::TaskInfo, new_body)
+function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_var = string(cur_task.task_func,"_range_var")
     range_sym = symbol(range_var)
 
@@ -769,7 +769,7 @@ function process_cur_task(cur_task::TaskInfo, new_body)
     end
 end
 
-function process_cur_task(cur_task::Any, new_body)
+function process_cur_task(cur_task::Any, new_body, state)
     push!(new_body, cur_task)
 end
 
