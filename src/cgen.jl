@@ -1924,9 +1924,9 @@ function from_parforstart(args)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
 
-    dprintln(3,"args: ",args);
+    dprintln(3,"from_parforstart args: ",args);
 
-    parfor = args[1]
+    parfor  = args[1]
     lpNests = parfor.loopNests
     private_vars = parfor.private_vars
 
@@ -1959,16 +1959,12 @@ function from_parforstart(args)
     # Generate the actual loop nest
     loopheaders = from_loopnest(ivs, starts, stops, steps)
 
-    lstate.ompdepth += 1
-    if lstate.ompdepth > 1
-        return loopheaders
-    end
-
     s = ""
 
     # Generate initializers and OpenMP clauses for reductions
     rds = parfor.reductions
     rdvars = rdinis = rdops = ""
+    dprintln(3,"reductions = ", rds);
     if !isempty(rds)
         rdvars = map((a)->from_expr(a.reductionVar), rds)
         rdinis = map((a)->from_expr(a.reductionVarInit), rds)
@@ -1980,6 +1976,12 @@ function from_parforstart(args)
         rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) "
     end
 
+    lstate.ompdepth += 1
+    # Don't put openmp pragmas on nested parfors.
+    if lstate.ompdepth > 1
+        # Still need to prepend reduction variable initialization for non-openmp loops.
+        return rdsprolog * loopheaders
+    end
 
     # Check if there are private vars and emit the |private| clause
     dprintln(3,"Private Vars: ")
