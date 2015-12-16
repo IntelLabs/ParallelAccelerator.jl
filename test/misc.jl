@@ -81,6 +81,6 @@ println("Testing miscellaneous features...")
 @test MiscTest.test1() == nothing
 @test MiscTest.test2() == nothing
 @test MiscTest.test3() 
-@test MiscTest.test4() == [0.0, 0.0, 0.0, 0.0, 0.0]
+@test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
 println("Done testing miscellaneous features...")
 
