@@ -475,6 +475,7 @@ function from_exprs(args::Array)
     s = ""
     for a in args
         se = from_expr(a)
+        dprintln(3, "from_exprs se = ", se)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -2105,6 +2106,7 @@ function from_expr(ast::Expr)
     args = ast.args
     typ = ast.typ
 
+    dprintln(4, "from_expr = ", ast)
     if head == :block
         dprintln(3,"Compiling block")
         s *= from_exprs(args)
