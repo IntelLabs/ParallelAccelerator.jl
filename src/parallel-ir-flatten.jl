@@ -36,16 +36,7 @@ function flattenParfors(function_name, ast::Expr)
 
     args = body.args
     expanded_args = Any[]
-
-    for i = 1:length(args)
-        dprintln(3,"Flatten index ", i, " ", args[i], " type = ", typeof(args[i]))
-        if isBareParfor(args[i])
-            flattenParfor(expanded_args, args[i].args[1])
-        else
-            push!(expanded_args, args[i])
-        end
-    end
-
+    flattenParfors(expanded_args, args)
     args = expanded_args
 
     dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
@@ -83,6 +74,16 @@ function flattenParfors(function_name, ast::Expr)
     return lambda
 end
 
+function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1})
+    for i = 1:length(in_body)
+        dprintln(3,"Flatten index ", i, " ", in_body[i], " type = ", typeof(in_body[i]))
+        if isBareParfor(in_body[i])
+            flattenParfor(out_body, in_body[i].args[1])
+        else
+            push!(out_body, in_body[i])
+        end
+    end
+end
 
 @doc """
 Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that
@@ -98,8 +99,8 @@ function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
 
     # Output to the new body that this is the start of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
-    # Output the body of the parfor as top-level statements in the new function body.
-    append!(new_body, the_parfor.body)
+    # Output the body of the parfor as top-level statements in the new function body and convert any other parfors we may find.
+    flattenParfors(new_body, the_parfor.body)
     # Output to the new body that this is the end of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
     nothing
