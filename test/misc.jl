@@ -65,6 +65,15 @@ function test3()
   all(Bool[ x == 150.0 for x in MiscTest.test_At_mul_B(10,10,10) ])
 end
 
+@acc function f()
+    W  = zeros(5, 5)
+    s = [sum(W[:,j]) for j in 1:5]
+end
+
+function test4()
+    f()
+end
+
 end
 
 using Base.Test
@@ -72,5 +81,6 @@ println("Testing miscellaneous features...")
 @test MiscTest.test1() == nothing
 @test MiscTest.test2() == nothing
 @test MiscTest.test3() 
+@test MiscTest.test4()
 println("Done testing miscellaneous features...")
 
