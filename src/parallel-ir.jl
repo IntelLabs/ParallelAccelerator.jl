@@ -2107,7 +2107,7 @@ function fuse(body, body_index, cur, state)
         push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
 
         # rws
-        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_live_cb, state.lambdaInfo)
+        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.lambdaInfo)
 
         dprintln(3,"New lhs = ", new_lhs)
         if prev_assignment
@@ -2307,6 +2307,43 @@ function printLambda(dlvl, node :: Expr)
     if body.typ == Any
         dprintln(1,"Body type is Any.")
     end
+end
+
+function pir_rws_cb(ast :: ANY, cbdata :: ANY)
+    dprintln(4,"pir_live_cb")
+    asttyp = typeof(ast)
+    if asttyp == Expr
+        head = ast.head
+        args = ast.args
+        if head == :parfor
+            dprintln(4,"pir_rws_cb for :parfor")
+            dprintln(4,"ast = ", ast)
+            expr_to_process = Any[]
+
+            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+            this_parfor = args[1]
+
+            append!(expr_to_process, this_parfor.preParFor)
+            for i = 1:length(this_parfor.loopNests)
+                # force the indexVariable to be treated as an rvalue
+                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+                push!(expr_to_process, this_parfor.loopNests[i].lower)
+                push!(expr_to_process, this_parfor.loopNests[i].upper)
+                push!(expr_to_process, this_parfor.loopNests[i].step)
+            end
+            assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
+            fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+            dprintln(3,"fake_body = ", fake_body)
+
+            body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
+            push!(expr_to_process, body_rws)
+            append!(expr_to_process, this_parfor.postParFor)
+
+            return expr_to_process
+        end
+    end
+    # Aside from parfor nodes, the ReadWriteSet callback is the same as the liveness callback.
+    return pir_live_cb(ast, cbdata)
 end
 
 @doc """
