@@ -40,7 +40,8 @@ end
 function __init__()
   package_root = getPackageRoot()
   dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
-  ENV["LD_LIBRARY_PATH"] = "$dyn_lib:$(ENV["LD_LIBRARY_PATH"])"
+  ld_lib_key = @osx ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH"
+  ENV[ld_lib_key] = "$dyn_lib:$(ENV[ld_lib_key])"
 
   @eval begin
     # Create a new j2c array object with element size in bytes and given dimension.

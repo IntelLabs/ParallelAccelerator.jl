@@ -126,7 +126,7 @@ const USE_ICC = 0
 const USE_GCC = 1
 @osx? (
 begin
-    const USE_OMP = 0
+    const USE_OMP = 1
 end
 :
 begin
@@ -224,7 +224,8 @@ if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     generated_file_dir = "$package_root/deps/generated"
 else
     generated_file_dir = mktempdir()
-    ENV["LD_LIBRARY_PATH"] = "$generated_file_dir:$(ENV["LD_LIBRARY_PATH"])"
+    ld_lib_key = @osx ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH"
+    ENV[ld_lib_key] = "$generated_file_dir:$(ENV[ld_lib_key])"
 end
 
 file_counter = -1
@@ -2221,9 +2222,9 @@ function from_root(ast::Expr, functionName::ASCIIString, isEntryPoint = true)
     # If emitting unaliased versions, get "restrict"ed decls for arguments
     argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
     argsaligned = ""
-    for p in params
-        argsaligned *= "\n__assume_aligned($(canonicalize(p)), 64);"
-    end
+    # for p in params
+    #     argsaligned *= "\n__assume_aligned($(canonicalize(p)), 64);"
+    # end
 
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
@@ -2408,7 +2409,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags; offload=false)
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    compileCommand = `g++ $flags $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+    compileCommand = `g++-5 $flags $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -2445,8 +2446,8 @@ function getLinkCommand(outfile_name, lib)
   linkLibs = []
   if include_blas==true
       if mkl_lib!=""
-          # push!(linkLibs,"-lmkl_rt")
-          push!(linkLibs,"-mkl")
+          push!(linkLibs,"-lmkl_rt")
+          # push!(linkLibs,"-mkl")
           push!(linkLibs,"-DMKL_ILP64")
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
@@ -2462,7 +2463,7 @@ function getLinkCommand(outfile_name, lib)
           push!(Opts,"-fopenmp")
       end
       push!(Opts, "-std=c++11")
-      linkCommand = `g++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+      linkCommand = `g++-5 -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand

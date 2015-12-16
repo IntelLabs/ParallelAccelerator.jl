@@ -74,4 +74,4 @@ echo "openblas_lib = \"$OPENBLAS_LIB\"" >> "$CONF_FILE"
 
 
 echo "Using $CC to build ParallelAccelerator array runtime.";
-$CC -std=c++11 -fPIC -shared -qoffload-attribute-target=mic -o libj2carray.so.1.0 j2c-array.cpp
+$CC -std=c++11 -fPIC -shared -o libj2carray.so.1.0 j2c-array.cpp

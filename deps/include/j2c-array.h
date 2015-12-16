@@ -98,7 +98,7 @@ class j2c_array_copy {
 PRINTF("scala copy to mic data = %x start = %d len = %d\n", data, start, len);
         data += start;
         dst  += sizeof(ELEMENT_TYPE) * start;
-#pragma offload target(mic:run_where) in(data:length(len)) in(dst) in(len)
+// #pragma offload target(mic:run_where) in(data:length(len)) in(dst) in(len)
         {
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }
@@ -115,7 +115,7 @@ PRINTF("scala copy from mic data = %x dst = %x\n", data, dst);
 //         {
 //             tmp = (ELEMENT_TYPE*)data;
 //         }
-#pragma offload target(mic:run_where) out(dst:length(len)) in(data) in(len)
+// #pragma offload target(mic:run_where) out(dst:length(len)) in(data) in(len)
         {
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }
@@ -177,7 +177,7 @@ PRINTF("nested copy to mic data = %x start = %d len = %d\n", data, start, len);
             else
                 tmp[i] = 0;
         }
-#pragma offload target(mic:run_where) in(tmp:length(len))
+// #pragma offload target(mic:run_where) in(tmp:length(len))
         {
             j2c_array<ELEMENT_TYPE> *arr = (j2c_array<ELEMENT_TYPE>*)dst;
             for (int64_t i = 0; i < len; i++)
@@ -195,7 +195,7 @@ PRINTF("nested copy to mic data = %x start = %d len = %d\n", data, start, len);
    static inline void copy_from_mic(int run_where, j2c_array<ELEMENT_TYPE> *dst, uintptr_t data, int64_t start, int64_t len) {
         uintptr_t _data[len];
 //#pragma offload target(mic:run_where) out(tmpdata[0:len]:into(_data[0:len]) preallocated targetptr alloc_if(1))
-        #pragma offload target(mic:run_where) inout(_data:length(len))
+        // #pragma offload target(mic:run_where) inout(_data:length(len))
         {
             for (int i = 0; i < len; i++)
             {
@@ -449,7 +449,7 @@ PRINTF("to_mic start = %d end = %d len=%d\n", start, end, ARRAYLEN());
 
     uintptr_t inline to_mic(const int run_where) {
         uintptr_t _arr, _data;
-#pragma offload target(mic:run_where) in(dims, num_dim) out(_arr) out(_data)
+// #pragma offload target(mic:run_where) in(dims, num_dim) out(_arr) out(_data)
         {
             j2c_array<ELEMENT_TYPE> *tmp = new j2c_array<ELEMENT_TYPE>(NULL, num_dim, dims);
             _arr = (uintptr_t)tmp;
@@ -844,7 +844,7 @@ void j2c_array_to_mic(int run_where, int elem_bytes, void *data, uintptr_t mic_d
     switch (elem_bytes)
     {
     case 0:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<j2c_array<uintptr_t> > *tmp = (j2c_array<j2c_array<uintptr_t> > *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -852,7 +852,7 @@ void j2c_array_to_mic(int run_where, int elem_bytes, void *data, uintptr_t mic_d
         j2c_array_copy<j2c_array<uintptr_t> >::copy_to_mic(run_where, _mic_data, (j2c_array<uintptr_t>  *)data, 0, length);
         break;
     case 1:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int8_t> *tmp = (j2c_array<int8_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -860,7 +860,7 @@ void j2c_array_to_mic(int run_where, int elem_bytes, void *data, uintptr_t mic_d
         j2c_array_copy<int8_t>::copy_to_mic(run_where, _mic_data, (int8_t *)data, 0, length);
         break;
     case 2:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int16_t> *tmp = (j2c_array<int16_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -868,7 +868,7 @@ void j2c_array_to_mic(int run_where, int elem_bytes, void *data, uintptr_t mic_d
         j2c_array_copy<int16_t>::copy_to_mic(run_where, _mic_data, (int16_t *)data, 0, length);
         break;
     case 4:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int32_t> *tmp = (j2c_array<int32_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -876,7 +876,7 @@ void j2c_array_to_mic(int run_where, int elem_bytes, void *data, uintptr_t mic_d
         j2c_array_copy<int32_t>::copy_to_mic(run_where, _mic_data, (int32_t *)data, 0, length);
         break;
     case 8:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int64_t> *tmp = (j2c_array<int64_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -896,7 +896,7 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
     switch (elem_bytes)
     {
     case 0:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<j2c_array<uintptr_t> > *tmp = (j2c_array<j2c_array<uintptr_t> > *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -904,7 +904,7 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
         j2c_array_copy<j2c_array<uintptr_t> >::copy_from_mic(run_where, (j2c_array<uintptr_t>  *)data, _mic_data, 0, length);
         break;
     case 1:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int8_t> *tmp = (j2c_array<int8_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -912,7 +912,7 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
         j2c_array_copy<int8_t>::copy_from_mic(run_where, (int8_t *)data, _mic_data, 0, length);
         break;
     case 2:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int16_t> *tmp = (j2c_array<int16_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -920,7 +920,7 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
         j2c_array_copy<int16_t>::copy_from_mic(run_where, (int16_t *)data, _mic_data, 0, length);
         break;
     case 4:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int32_t> *tmp = (j2c_array<int32_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -928,7 +928,7 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
         j2c_array_copy<int32_t>::copy_from_mic(run_where, (int32_t *)data, _mic_data, 0, length);
         break;
     case 8:
-#pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
+// #pragma offload target(mic:run_where) in(mic_data) out(_mic_data)
         {
             j2c_array<int64_t> *tmp = (j2c_array<int64_t> *) mic_data;
             _mic_data = (uintptr_t)tmp->data;
@@ -944,36 +944,36 @@ void j2c_array_from_mic(int run_where, int elem_bytes, uintptr_t mic_data, void 
 extern "C"
 void alloc_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
-    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(1) free_if(0) align(64))
+    // #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(1) free_if(0) align(64))
 }
 
 extern "C"
 void copy_to_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
-    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0))
+    // #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0))
 }
 
 extern "C"
 void async_copy_to_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
     uintptr_t sig = (uintptr_t) pointer;
-    #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0)) signal(sig)
+    // #pragma offload_transfer target(mic:run_where) in(tmp : length(nbytes) alloc_if(0) free_if(0)) signal(sig)
 }
 
 extern "C"
 void wait_async_copy_to_mic(void * pointer, int run_where) {
     uintptr_t sig = (uintptr_t) pointer;
-    #pragma offload_wait target(mic:run_where) wait(sig)
+    // #pragma offload_wait target(mic:run_where) wait(sig)
 }
 
 extern "C"
 void copy_from_mic(void * pointer, int nbytes, int run_where) {
     char *tmp = (char *) pointer;
-    #pragma offload_transfer target(mic:run_where) out(tmp : length(nbytes) alloc_if(0) free_if(0))
+    // #pragma offload_transfer target(mic:run_where) out(tmp : length(nbytes) alloc_if(0) free_if(0))
 }
 
 extern "C"
 void wait_for(int run_where, int* signal) {
-#pragma offload_wait target(mic:run_where) wait(signal)
+// #pragma offload_wait target(mic:run_where) wait(signal)
 }
 #endif /* PSE_ARRAY_H_ */
