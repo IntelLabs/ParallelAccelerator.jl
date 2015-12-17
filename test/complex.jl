@@ -69,5 +69,5 @@ println("Testing complex number support...")
 @test ComplexTest.test2()
 # test3 is no longer supported by OpenMP after we switch from C's _Complex to C++'s std::complex
 #@test ComplexTest.test3()
-println("Done testing ranges.")
+println("Done testing complex number support.")
 
