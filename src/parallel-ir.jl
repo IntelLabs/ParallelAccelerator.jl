@@ -2900,51 +2900,79 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
         end
     end
 
-    if isa(node, Symbol)
-        if haskey(data.copies, node)
-            dprintln(3,"Replacing ", node, " with ", data.copies[node])
-            return data.copies[node]
-        end
-    elseif isa(node, SymbolNode)
-        if haskey(data.copies, node.name)
-            dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
-            tmp_node = data.copies[node.name]
-            return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
-        end
-    elseif isa(node, GenSym)
-        if haskey(data.copies, node)
-            dprintln(3,"Replacing ", node, " with ", data.copies[node])
-            return data.copies[node]
-        end
-    elseif isa(node, DomainLambda)
-        dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-        intersection_dict = Dict{SymGen,Any}()
-        # For each statement in this basic block of the form "A = B".
-        for copy in data.copies
-            # If the DomainLambda has an escaping def of the left-hand side.
-            if haskey(node.linfo.escaping_defs, copy[1])
-                ed = node.linfo.escaping_defs[copy[1]]
-                dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
-                if typeof(copy[2]) == Symbol
-                    ed.name = copy[2]
-                    intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
-                    delete!(node.linfo.escaping_defs, copy[1])
-                    node.linfo.escaping_defs[copy[2]] = ed
-                else
-                    dprintln(3, "copy_progation didn't replace in DomainLambda since rhs is GenSym")
-                end
-            end
-        end 
-        dprintln(3,"Intersection dict = ", intersection_dict)
-        dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
-        if !isempty(intersection_dict)
-            origBody      = node.genBody
-            newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
-            node.genBody  = newBody
-            return node
-        end 
+    return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
+end
+
+function copy_propagate_helper(node::Union{Symbol,GenSym},
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
+
+    if haskey(data.copies, node)
+        dprintln(3,"Replacing ", node, " with ", data.copies[node])
+        return data.copies[node]
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function copy_propagate_helper(node::SymbolNode,
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
+
+    if haskey(data.copies, node.name)
+        dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
+        tmp_node = data.copies[node.name]
+        return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function copy_propagate_helper(node::DomainLambda,
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
+
+    dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
+    intersection_dict = Dict{SymGen,Any}()
+    # For each statement in this basic block of the form "A = B".
+    for copy in data.copies
+        # If the DomainLambda has an escaping def of the left-hand side.
+        if haskey(node.linfo.escaping_defs, copy[1])
+            ed = node.linfo.escaping_defs[copy[1]]
+            dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
+            if typeof(copy[2]) == Symbol
+                ed.name = copy[2]
+                intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
+                delete!(node.linfo.escaping_defs, copy[1])
+                node.linfo.escaping_defs[copy[2]] = ed
+            else
+                dprintln(3, "copy_progation didn't replace in DomainLambda since rhs is GenSym")
+            end
+        end
+    end
+    dprintln(3,"Intersection dict = ", intersection_dict)
+    dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
+    if !isempty(intersection_dict)
+        origBody      = node.genBody
+        newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
+        node.genBody  = newBody
+        return node
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function copy_propagate_helper(node::ANY,
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
