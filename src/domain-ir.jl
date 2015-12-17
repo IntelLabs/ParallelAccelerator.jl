@@ -665,7 +665,7 @@ function simplify(state, expr)
     return expr
 end
 
-isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Base, s))
+isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
 add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
 mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
 neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
@@ -895,7 +895,7 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
       return normalize_callname(state, env, fun.name, args)
     elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
         if is(fun.name, :rand!) 
-            splice!(args,3)
+            # splice!(args,3)
         end
         return (fun.name, args)
     else

@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module MiscTest
+module ComplexTest
 using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
@@ -31,56 +31,43 @@ using ParallelAccelerator
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-@acc function for_ret()
-    for f = 1:10
-    end
+# test input, constant, and output
+@acc function complex_test1(x::Complex{Float64})
+    x + (1. + 2.im)
+end
+
+# test array input, constant, and output
+@acc function complex_test2(x::Array{Complex{Float64}, 1})
+    x .+ (1. + 2.im)
+end
+
+# test rand and reduction
+@acc function complex_test3(n::Int)
+    x = rand(Complex128, n)
+    sum(x)
 end
 
 function test1()
-    return for_ret()
-end
-
-@acc function for_ret1(n)
-    for f = 1:n
-    end
+    x = complex_test1(2. + 1.im) 
+    println(" test1 returns: ", x)
+    return x == (3. + 3.im)
 end
 
 function test2()
-    return for_ret1(10)
-end
-
-@acc function opt_At_mul_B!(X, W)
-     X' * W
-end
-
-function test_At_mul_B(m::Int, k::Int, n::Int)
-    W = Array(Float64, m, k)   
-    X = Array(Float64, m, n)
-    fill!(W, 3)
-    fill!(X, 5)
-    opt_At_mul_B!(X, W)
+    return complex_test2(Complex{Float64}[1. + 2.im, 2. + 1.im]) == (Complex{Float64}[2. + 4.im, 3. + 3.im])
 end
 
 function test3()
-  all(Bool[ x == 150.0 for x in MiscTest.test_At_mul_B(10,10,10) ])
-end
-
-@acc function f()
-    W  = zeros(5, 5)
-    s = [sum(W[:,j]) for j in 1:5]
-end
-
-function test4()
-    f()
+    x = complex_test3(10)
+    return true
 end
 
 end
 
-using Base.Test
-println("Testing miscellaneous features...")
-@test MiscTest.test1() == nothing
-@test MiscTest.test2() == nothing
-@test MiscTest.test3() 
-@test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
-println("Done testing miscellaneous features...")
+println("Testing complex number support...")
+@test ComplexTest.test1() 
+@test ComplexTest.test2()
+# test3 is no longer supported by OpenMP after we switch from C's _Complex to C++'s std::complex
+#@test ComplexTest.test3()
+println("Done testing complex number support.")
 

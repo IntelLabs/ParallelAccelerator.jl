@@ -325,7 +325,7 @@ function from_includes()
     "#include <stdint.h>\n",
     "#include <float.h>\n",
     "#include <limits.h>\n",
-    "#include <complex.h>\n",
+    "#include <complex>\n",
     "#include <math.h>\n",
     "#include <stdio.h>\n",
     "#include <iostream>\n",
@@ -475,6 +475,7 @@ function from_exprs(args::Array)
     s = ""
     for a in args
         se = from_expr(a)
+        dprintln(3, "from_exprs se = ", se)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -742,9 +743,9 @@ function toCtype(typ::DataType)
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
     elseif typ == Complex64
-        return "float _Complex"
+        return "std::complex<float>"
     elseif typ == Complex128
-        return "double _Complex"
+        return "std::complex<double>"
     elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
@@ -1403,8 +1404,10 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         s = args[2].value
         if isa(args[1], Module)
             M = args[1]
-        elseif args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re) 
-            func = args[2] == QuoteNode(:im) ? "creal" : "cimag";
+        elseif (args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re)) &&
+               (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
+                (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
+            func = args[2] == QuoteNode(:re) ? "real" : "imag";
             t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
@@ -1432,18 +1435,19 @@ end
 
 function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
-    isFloat = typ == Float64 || typ == Float32
+    isDouble = typ == Float64 
+    isFloat = typ == Float32
     isComplex = typ <: Complex
     isInt = typ <: Integer
-    if in(fun.name,libm_math_functions) && (isFloat || isComplex)
+    if in(fun.name,libm_math_functions) && (isFloat || isDouble || isComplex)
         dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (isFloat || isComplex || isInt)
+    if is(fun.name,:abs) && (isFloat || isDouble || isComplex || isInt)
       dprintln(3,"FOUND ", fun.name)
-      fname = isInt ? "abs" : (isFloat ? "fabs" : (typ == Complex64 ? "cabsf" : "cabs"))
+      fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"
     end
     return s
@@ -1490,7 +1494,7 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY)
     return ""
 end
 
-function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
+function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
         res = "cgen_distribution(cgen_rand_generator);\n"
@@ -1498,7 +1502,7 @@ function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     return res 
 end
 
-function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
+function pattern_match_call_rand(fun::ANY, RNG::ANY, args...)
     return ""
 end
 
@@ -1627,15 +1631,15 @@ function pattern_match_call(ast::Array{Any, 1})
         s = pattern_match_call_throw(ast[1],ast[2])
         s *= pattern_match_call_math(ast[1],ast[2])
     end
-    # rand! call has 4 args
     if(length(ast)==4)
         s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
-        s *= pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
-    # randn! call has 3 args
-    if(length(ast)==3)
+    if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
-        #s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+    end
+    if(length(ast)>=2) # rand! has 2 or more args
+        s *= pattern_match_call_rand(ast...)
     end
     # gemm calls have 6 args
     if(length(ast)==6)
@@ -1924,9 +1928,9 @@ function from_parforstart(args)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
 
-    dprintln(3,"args: ",args);
+    dprintln(3,"from_parforstart args: ",args);
 
-    parfor = args[1]
+    parfor  = args[1]
     lpNests = parfor.loopNests
     private_vars = parfor.private_vars
 
@@ -1959,16 +1963,12 @@ function from_parforstart(args)
     # Generate the actual loop nest
     loopheaders = from_loopnest(ivs, starts, stops, steps)
 
-    lstate.ompdepth += 1
-    if lstate.ompdepth > 1
-        return loopheaders
-    end
-
     s = ""
 
     # Generate initializers and OpenMP clauses for reductions
     rds = parfor.reductions
     rdvars = rdinis = rdops = ""
+    dprintln(3,"reductions = ", rds);
     if !isempty(rds)
         rdvars = map((a)->from_expr(a.reductionVar), rds)
         rdinis = map((a)->from_expr(a.reductionVarInit), rds)
@@ -1980,6 +1980,12 @@ function from_parforstart(args)
         rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) "
     end
 
+    lstate.ompdepth += 1
+    # Don't put openmp pragmas on nested parfors.
+    if lstate.ompdepth > 1
+        # Still need to prepend reduction variable initialization for non-openmp loops.
+        return rdsprolog * loopheaders
+    end
 
     # Check if there are private vars and emit the |private| clause
     dprintln(3,"Private Vars: ")
@@ -2053,10 +2059,10 @@ function from_new(args)
     typ = args[1] #type of the object
     dprintln(3,"from_new args = ", args)
     if isa(typ, DataType)
-        if typ <: Complex
+        if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
             dprintln(3, "new complex number")
-            s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+            s = toCtype(typ) * "(" * from_expr(args[2]) * ", " * from_expr(args[3]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
@@ -2103,6 +2109,7 @@ function from_expr(ast::Expr)
     args = ast.args
     typ = ast.typ
 
+    dprintln(4, "from_expr = ", ast)
     if head == :block
         dprintln(3,"Compiling block")
         s *= from_exprs(args)
@@ -2271,8 +2278,16 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
+function from_expr(ast::Complex64)
+    "std::complex<float>(" * from_expr(ast.re) * " + " * from_expr(ast.im) * ")"
+end
+
+function from_expr(ast::Complex128)
+    "std::complex<double>(" * from_expr(ast.re) * ", " * from_expr(ast.im) * ")"
+end
+
 function from_expr(ast::Complex)
-    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+    toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
 end
 
 function from_expr(ast::ANY)

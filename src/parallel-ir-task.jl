@@ -471,150 +471,81 @@ end
 @doc """
 AstWalk callback for estimating the instruction count.
 """
-function estimateInstrCount(ast, state :: eic_state, top_level_number, is_top_level, read)
+function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_top_level, read)
     debug_level = 2
 
-    asttyp = typeof(ast)
-    if asttyp == Expr
-        if is_top_level
-            dprint(debug_level,"instruction count estimator: Expr ")
-        end
-        head = ast.head
-        args = ast.args
-        typ  = ast.typ
-        if is_top_level
-            dprintln(debug_level,head, " ", args)
-        end
-        if head == :lambda
-            state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-        elseif head == :body
-            # skip
-        elseif head == :block
-            # skip
-        elseif head == :(.)
-            #        args = from_exprs(args, depth+1, callback, cbdata, top_level_number, read)
-        elseif head == :(=)
-            state.non_calls = state.non_calls + ASSIGNMENT_COST
-        elseif head == :(::)
-            # skip
-        elseif head == :return
-            state.non_calls = state.non_calls + RETURN_COST
-        elseif head == :call
-            call_instruction_count(args, state, debug_level)
-        elseif head == :call1
-            dprintln(debug_level,head, " not handled in instruction counter")
-            #        args = from_call(args, depth, callback, cbdata, top_level_number, read)
-            # TODO?: tuple
-        elseif head == :line
-            # skip
-        elseif head == :copy
-            dprintln(debug_level,head, " not handled in instruction counter")
-            # turn array copy back to plain Julia call
-            #        head = :call
-            #        args = vcat(:copy, args)
-        elseif head == :copyast
-            #        dprintln(2,"copyast type")
-            # skip
-        elseif head == :gotoifnot
-            #        dprintln(debug_level,head, " not handled in instruction counter")
-            #        assert(length(args) == 2)
-            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-            #      state.fully_analyzed = false
-            state.non_calls = state.non_calls + 1
-        elseif head == :new
-            dprintln(debug_level,head, " not handled in instruction counter")
-            #        args = from_exprs(args,depth, callback, cbdata, top_level_number, read)
-        elseif head == :arraysize
-            dprintln(debug_level,head, " not handled in instruction counter")
-            #        assert(length(args) == 2)
-            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-            #        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
-        elseif head == :alloc
-            dprintln(debug_level,head, " not handled in instruction counter")
-            #        assert(length(args) == 2)
-            #        args[2] = from_exprs(args[2], depth, callback, cbdata, top_level_number, read)
-        elseif head == :boundscheck
-            dprintln(debug_level,head, " not handled in instruction counter")
-            # skip
-        elseif head == :type_goto
-            dprintln(debug_level,head, " not handled in instruction counter")
-            #        assert(length(args) == 2)
-            #        args[1] = get_one(from_expr(args[1], depth, callback, cbdata, top_level_number, false, read))
-            #        args[2] = get_one(from_expr(args[2], depth, callback, cbdata, top_level_number, false, read))
-            state.fully_analyzed = false
-        elseif head == :enter
-            dprintln(debug_level,head, " not handled in instruction counter")
-            # skip
-            state.fully_analyzed = false
-        elseif head == :leave
-            dprintln(debug_level,head, " not handled in instruction counter")
-            # skip
-            state.fully_analyzed = false
-        elseif head == :the_exception
-            # skip
-            state.fully_analyzed = false
-        elseif head == :&
-            # skip
-        else
-            dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
-        end
-    elseif asttyp == Symbol
-        #skip
-    elseif asttyp == SymbolNode # name, typ
-        #skip
-    elseif asttyp == TopNode    # name
-        #skip
-    elseif asttyp == GlobalRef
-        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #    mod = ast.mod
-        #    name = ast.name
-        #    typ = typeof(mod)
+    if is_top_level
+        dprint(debug_level,"instruction count estimator: Expr ")
+    end
+    head = ast.head
+    args = ast.args
+    typ  = ast.typ
+    if is_top_level
+        dprintln(debug_level,head, " ", args)
+    end
+    if head == :lambda
+        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    elseif head == :body || head == :block || head == :(::) || head == :line || head == :& || head == :(.) || head == :copyast
+        # skip
+    elseif head == :(=)
+        state.non_calls = state.non_calls + ASSIGNMENT_COST
+    elseif head == :return
+        state.non_calls = state.non_calls + RETURN_COST
+    elseif head == :call
+        call_instruction_count(args, state, debug_level)
+    elseif head == :call1
+        dprintln(debug_level,head, " not handled in instruction counter")
+        # TODO?: tuple
+    elseif head == :gotoifnot
         state.non_calls = state.non_calls + 1
-    elseif asttyp == QuoteNode
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #    value = ast.value
-        #TODO: fields: value
-    elseif asttyp == LineNumberNode
-        #skip
-    elseif asttyp == LabelNode
-        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
-    elseif asttyp == GotoNode
-        #dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
-        #state.fully_analyzed = false
-        state.non_calls = state.non_calls + 1
-    elseif asttyp == DataType
-        #skip
-    elseif asttyp == ()
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
-    elseif asttyp == ASCIIString
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
-    elseif asttyp == NewvarNode
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
-    elseif asttyp == Void
-        #skip
-        #elseif asttyp == Int64 || asttyp == Int32 || asttyp == Float64 || asttyp == Float32
-    elseif isbits(asttyp)
-        #skip
-    elseif isa(ast,Tuple)
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #    new_tt = Expr(:tuple)
-        #    for i = 1:length(ast)
-        #      push!(new_tt.args, get_one(from_expr(ast[i], depth, callback, cbdata, top_level_number, false, read)))
-        #    end
-        #    new_tt.typ = asttyp
-        #    ast = eval(new_tt)
-    elseif asttyp == Module
-        #skip
-    elseif asttyp == NewvarNode
-        dprintln(debug_level,asttyp, " not handled in instruction counter ", ast)
-        #skip
+    elseif head == :copy || head == :new || head == :arraysize || head == :alloc || head == :boundscheck
+        dprintln(debug_level, head, " not handled in instruction counter")
+    elseif head == :type_goto || head == :enter || head == :leave
+        dprintln(debug_level, head, " not handled in instruction counter")
+        state.fully_analyzed = false
+    elseif head == :the_exception
+        state.fully_analyzed = false
     else
-        dprintln(1,"instruction count estimator: unknown AST (", typeof(ast), ",", ast, ")")
+        dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function estimateInstrCount(ast::Union{Symbol,SymbolNode,TopNode,LineNumberNode,LabelNode,DataType,Void,Module},
+                            state :: eic_state,
+                            top_level_number,
+                            is_top_level,
+                            read)
+    # skip
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function estimateInstrCount(ast::Union{GlobalRef,GotoNode},
+                            state :: eic_state,
+                            top_level_number,
+                            is_top_level,
+                            read)
+    state.non_calls = state.non_calls + 1
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function estimateInstrCount(ast::Union{QuoteNode,ASCIIString,Tuple,NewvarNode},
+                            state :: eic_state,
+                            top_level_number,
+                            is_top_level,
+                            read)
+    debug_level = 2
+    dprintln(debug_level, typeof(ast), " not handled in instruction counter ", ast)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function estimateInstrCount(ast::Any, state :: eic_state, top_level_number, is_top_level, read)
+    asttyp = typeof(ast)
+    if isbits(asttyp)
+        # skip
+    else
+        dprintln(1,"instruction count estimator: unknown AST (", asttyp, ",", ast, ")")
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -984,25 +915,30 @@ The AstWalk callback to find unsafe arrayset and arrayref variants and
 replace them with the regular Julia versions.  Sets the "found" flag
 in the state when such a replacement is performed.
 """
-function convertUnsafeWalk(x, state, top_level_number, is_top_level, read)
+function convertUnsafeWalk(x::Expr, state, top_level_number, is_top_level, read)
     use_dbg_level = 3
     dprintln(use_dbg_level,"convertUnsafeWalk ", x)
 
-    if typeof(x) == Expr
-        dprintln(use_dbg_level,"convertUnsafeWalk is Expr")
-        if x.head == :call
-            dprintln(use_dbg_level,"convertUnsafeWalk is :call")
-            if x.args[1] == TopNode(:unsafe_arrayset)
-                x.args[1] = TopNode(:arrayset)
-                state.found = true
-                return x
-            elseif x.args[1] == TopNode(:unsafe_arrayref)
-                x.args[1] = TopNode(:arrayref)
-                state.found = true
-                return x
-            end
+    dprintln(use_dbg_level,"convertUnsafeWalk is Expr")
+    if x.head == :call
+        dprintln(use_dbg_level,"convertUnsafeWalk is :call")
+        if x.args[1] == TopNode(:unsafe_arrayset)
+            x.args[1] = TopNode(:arrayset)
+            state.found = true
+            return x
+        elseif x.args[1] == TopNode(:unsafe_arrayref)
+            x.args[1] = TopNode(:arrayref)
+            state.found = true
+            return x
         end
     end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function convertUnsafeWalk(x::ANY, state, top_level_number, is_top_level, read)
+    use_dbg_level = 3
+    dprintln(use_dbg_level,"convertUnsafeWalk ", x)
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end

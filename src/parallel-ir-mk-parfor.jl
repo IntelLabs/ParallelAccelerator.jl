@@ -265,7 +265,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for reduce that the array indices are all of the simple variety
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
@@ -288,9 +288,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             end
             op = temp_body.args[1]
 
-            if op == TopNode(:add_float) || op == TopNode(:add_int)
+            if op == TopNode(:add_float) || op == TopNode(:add_int) || op == TopNode(:+)
                 reduce_func = :+
-            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int)
+            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int) || op == TopNode(:*)
                 reduce_func = :*
             elseif op == TopNode(:max) || op == TopNode(:min)
                 reduce_func = op.name
@@ -641,8 +641,9 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
     end
 
+    dprintln(3, "out_body = ", out_body)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for mmap! that the array indices are all of the simple variety
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
@@ -720,7 +721,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         push!(rearray, RangeExprs(1,1,:(length($range_name))))
     end
 
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
         rearray,
@@ -972,7 +973,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     end
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_live_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for mmap that the array indices are all of the simple variety
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
