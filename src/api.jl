@@ -88,15 +88,15 @@ const binary_operators = binary_map_operators
 
 for f in binary_operators
     @eval begin
-        @noinline function ($f){T}(A::T, B::DenseArray{T})
+        @noinline function ($f){T1<:Number,T2<:Number}(A::T1, B::DenseArray{T2})
             (Base.$f)(A, B)
         end
-        @noinline function ($f){T}(B::DenseArray{T}, A::T)
+        @noinline function ($f){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
             (Base.$f)(B, A)
         end
     end
     if f != :*
-        @eval @noinline function ($f){T}(A::DenseArray{T}, B::DenseArray{T})
+        @eval @noinline function ($f){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
             (Base.$f)(A, B)
         end
     end
