@@ -474,8 +474,8 @@ end
 function from_exprs(args::Array)
     s = ""
     for a in args
+        dprintln(3, "from_exprs working on = ", a)
         se = from_expr(a)
-        dprintln(3, "from_exprs se = ", se)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -2654,6 +2654,7 @@ function insert(func::Function, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
+        dprintln(3, "Adding function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end
@@ -2663,6 +2664,7 @@ function insert(func::IntrinsicFunction, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
+        dprintln(3, "Adding intrinsic function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end
