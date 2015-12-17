@@ -1469,57 +1469,96 @@ end
 @doc """
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
-function sub_cur_body_walk(x :: ANY, cbd :: cur_body_data, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function sub_cur_body_walk(x::Expr,
+                           cbd::cur_body_data,
+                           top_level_number::Int64,
+                           is_top_level::Bool,
+                           read::Bool)
     dbglvl = 3
     dprintln(dbglvl,"sub_cur_body_walk ", x)
-    xtype = typeof(x)
 
-    if xtype == Expr
-        dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
-        if x.head == :call
-            dprintln(dbglvl,"sub_cur_body_walk xtype is call")
-            # Found a call to arrayref.
-            if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
-                dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
-                array_name = x.args[2]
-                index      = x.args[3]
-                assert(isa(array_name, SymNodeGen))
-                lowered_array_name = toSymGen(array_name)
-                assert(isa(lowered_array_name, SymGen))
-                dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
-                # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
-                if haskey(cbd.temp_map, lowered_array_name)
-                    dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
-                    return cbd.temp_map[lowered_array_name]
-                end
-            elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
-                array_name = x.args[2]
-                assert(isa(array_name, SymNodeGen))
-                push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
-                if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
-                    new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
-                    x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
-                end
+    dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
+    if x.head == :call
+        dprintln(dbglvl,"sub_cur_body_walk xtype is call")
+        # Found a call to arrayref.
+        if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
+            dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
+            array_name = x.args[2]
+            index      = x.args[3]
+            assert(isa(array_name, SymNodeGen))
+            lowered_array_name = toSymGen(array_name)
+            assert(isa(lowered_array_name, SymGen))
+            dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
+            # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
+            if haskey(cbd.temp_map, lowered_array_name)
+                dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
+                return cbd.temp_map[lowered_array_name]
+            end
+        elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+            array_name = x.args[2]
+            assert(isa(array_name, SymNodeGen))
+            push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
+            if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
+                new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
+                x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
             end
         end
-    elseif xtype == Symbol
-        dprintln(dbglvl,"sub_cur_body_walk xtype is Symbol")
-        if haskey(cbd.index_map, x)
-            # Detected the use of an index variable.  Change it to the first parfor's index variable.
-            dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
-            return cbd.index_map[x]
-        end
-    elseif xtype == SymbolNode
-        dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
-        if haskey(cbd.index_map, x.name)
-            # Detected the use of an index variable.  Change it to the first parfor's index variable.
-            dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
-            x.name = cbd.index_map[x.name]
-            return x
-        end
     end
-    dprintln(dbglvl,"sub_cur_body_walk not substituting")
 
+    dprintln(dbglvl,"sub_cur_body_walk not substituting")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function sub_cur_body_walk(x::Symbol,
+                           cbd::cur_body_data,
+                           top_level_number::Int64,
+                           is_top_level::Bool,
+                           read::Bool)
+    dbglvl = 3
+    dprintln(dbglvl,"sub_cur_body_walk ", x)
+
+    dprintln(dbglvl,"sub_cur_body_walk xtype is Symbol")
+    if haskey(cbd.index_map, x)
+        # Detected the use of an index variable.  Change it to the first parfor's index variable.
+        dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x])
+        return cbd.index_map[x]
+    end
+
+    dprintln(dbglvl,"sub_cur_body_walk not substituting")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function sub_cur_body_walk(x::SymbolNode,
+                           cbd::cur_body_data,
+                           top_level_number::Int64,
+                           is_top_level::Bool,
+                           read::Bool)
+    dbglvl = 3
+    dprintln(dbglvl,"sub_cur_body_walk ", x)
+
+    dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
+    if haskey(cbd.index_map, x.name)
+        # Detected the use of an index variable.  Change it to the first parfor's index variable.
+        dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
+        x.name = cbd.index_map[x.name]
+        return x
+    end
+
+    dprintln(dbglvl,"sub_cur_body_walk not substituting")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
+function sub_cur_body_walk(x::ANY,
+                           cbd::cur_body_data,
+                           top_level_number::Int64,
+                           is_top_level::Bool,
+                           read::Bool)
+
+    dbglvl = 3
+    dprintln(dbglvl,"sub_cur_body_walk ", x)
+
+    dprintln(dbglvl,"sub_cur_body_walk not substituting")
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -1548,22 +1587,27 @@ end
 @doc """
 Returns true if the input node is an assignment node where the right-hand side is a call to arraysize.
 """
-function is_eliminated_arraylen(x)
+function is_eliminated_arraylen(x::Expr)
     dprintln(3,"is_eliminated_arraylen ", x)
-    if typeof(x) == Expr
-        dprintln(3,"is_eliminated_arraylen is Expr")
-        if x.head == symbol('=')
-            assert(typeof(x.args[1]) == SymbolNode)
-            rhs = x.args[2]
-            if isa(rhs, Expr) && rhs.head == :call
-                dprintln(3,"is_eliminated_arraylen is :call")
-                if rhs.args[1] == TopNode(:arraysize)
-                    dprintln(3,"is_eliminated_arraylen is :arraysize")
-                    return true
-                end
+
+    dprintln(3,"is_eliminated_arraylen is Expr")
+    if x.head == symbol('=')
+        assert(typeof(x.args[1]) == SymbolNode)
+        rhs = x.args[2]
+        if isa(rhs, Expr) && rhs.head == :call
+            dprintln(3,"is_eliminated_arraylen is :call")
+            if rhs.args[1] == TopNode(:arraysize)
+                dprintln(3,"is_eliminated_arraylen is :arraysize")
+                return true
             end
         end
     end
+
+    return false
+end
+
+function is_eliminated_arraylen(x::ANY)
+    dprintln(3,"is_eliminated_arraylen ", x)
     return false
 end
 
@@ -1572,23 +1616,30 @@ AstWalk callback that does the work of substitute_arraylen on a node-by-node bas
 replacement is an array containing the length of the dimensions of the arrays a part of this parfor.
 If we see a call to create an array, replace the length params with those in the common set in "replacement".
 """
-function sub_arraylen_walk(x, replacement, top_level_number, is_top_level, read)
+function sub_arraylen_walk(x::Expr, replacement, top_level_number, is_top_level, read)
     dprintln(4,"sub_arraylen_walk ", x)
-    if typeof(x) == Expr
-        if x.head == symbol('=')
-            rhs = x.args[2]
-            if isa(rhs, Expr) && rhs.head == :call
-                if rhs.args[1] == TopNode(:ccall)
-                    if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                        rhs.args[7] = replacement[1]
-                    elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                        rhs.args[7] = replacement[1]
-                        rhs.args[9] = replacement[2]
-                    end
+
+    if x.head == symbol('=')
+        rhs = x.args[2]
+        if isa(rhs, Expr) && rhs.head == :call
+            if rhs.args[1] == TopNode(:ccall)
+                if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
+                    rhs.args[7] = replacement[1]
+                elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
+                    rhs.args[7] = replacement[1]
+                    rhs.args[9] = replacement[2]
                 end
             end
         end
     end
+
+    dprintln(4,"sub_arraylen_walk not substituting")
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function sub_arraylen_walk(x::ANY, replacement, top_level_number, is_top_level, read)
+    dprintln(4,"sub_arraylen_walk ", x)
     dprintln(4,"sub_arraylen_walk not substituting")
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -2193,6 +2244,7 @@ function getSName(ssn :: SymbolNode)
 end
 
 function getSName(ssn :: Expr)
+    dprintln(0, "ssn.head = ", ssn.head)
     assert(ssn.head == :(::))
     return ssn.args[1]
 end
@@ -2202,12 +2254,7 @@ function getSName(ssn :: GenSym)
 end
 
 function getSName(ssn)
-    stype = typeof(ssn)
-
     dprintln(0, "getSName ssn = ", ssn, " stype = ", stype)
-    if stype == Expr
-        dprintln(0, "ssn.head = ", ssn.head)
-    end
     throw(string("getSName called with something of type ", stype))
 end
 
@@ -2309,39 +2356,45 @@ function printLambda(dlvl, node :: Expr)
     end
 end
 
+function pir_rws_cb(ast :: Expr, cbdata :: ANY)
+    dprintln(4,"pir_rws_cb")
+
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+        dprintln(4,"pir_rws_cb for :parfor")
+        dprintln(4,"ast = ", ast)
+        expr_to_process = Any[]
+
+        assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+        this_parfor = args[1]
+
+        append!(expr_to_process, this_parfor.preParFor)
+        for i = 1:length(this_parfor.loopNests)
+            # force the indexVariable to be treated as an rvalue
+            push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+            push!(expr_to_process, this_parfor.loopNests[i].lower)
+            push!(expr_to_process, this_parfor.loopNests[i].upper)
+            push!(expr_to_process, this_parfor.loopNests[i].step)
+        end
+        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
+        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        dprintln(3,"fake_body = ", fake_body)
+
+        body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
+        push!(expr_to_process, body_rws)
+        append!(expr_to_process, this_parfor.postParFor)
+
+        return expr_to_process
+    end
+
+    # Aside from parfor nodes, the ReadWriteSet callback is the same as the liveness callback.
+    return pir_live_cb(ast, cbdata)
+end
+
 function pir_rws_cb(ast :: ANY, cbdata :: ANY)
     dprintln(4,"pir_live_cb")
-    asttyp = typeof(ast)
-    if asttyp == Expr
-        head = ast.head
-        args = ast.args
-        if head == :parfor
-            dprintln(4,"pir_rws_cb for :parfor")
-            dprintln(4,"ast = ", ast)
-            expr_to_process = Any[]
 
-            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-            this_parfor = args[1]
-
-            append!(expr_to_process, this_parfor.preParFor)
-            for i = 1:length(this_parfor.loopNests)
-                # force the indexVariable to be treated as an rvalue
-                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
-                push!(expr_to_process, this_parfor.loopNests[i].lower)
-                push!(expr_to_process, this_parfor.loopNests[i].upper)
-                push!(expr_to_process, this_parfor.loopNests[i].step)
-            end
-            assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
-            fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
-            dprintln(3,"fake_body = ", fake_body)
-
-            body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
-            push!(expr_to_process, body_rws)
-            append!(expr_to_process, this_parfor.postParFor)
-
-            return expr_to_process
-        end
-    end
     # Aside from parfor nodes, the ReadWriteSet callback is the same as the liveness callback.
     return pir_live_cb(ast, cbdata)
 end
@@ -2353,129 +2406,133 @@ can analysis to reflect the read/write set of the given AST node.
 If we read a symbol it is sufficient to just return that symbol as one of the expressions.
 If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.
 """
-function pir_live_cb(ast :: ANY, cbdata :: ANY)
+function pir_live_cb(ast :: Expr, cbdata :: ANY)
     dprintln(4,"pir_live_cb")
-    asttyp = typeof(ast)
-    if asttyp == Expr
-        head = ast.head
-        args = ast.args
-        if head == :parfor
-            dprintln(4,"pir_live_cb for :parfor")
-            expr_to_process = Any[]
 
-            assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
-            this_parfor = args[1]
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+        dprintln(4,"pir_live_cb for :parfor")
+        expr_to_process = Any[]
 
-            append!(expr_to_process, this_parfor.preParFor)
-            for i = 1:length(this_parfor.loopNests)
-                # force the indexVariable to be treated as an rvalue
-                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
-                push!(expr_to_process, this_parfor.loopNests[i].lower)
-                push!(expr_to_process, this_parfor.loopNests[i].upper)
-                push!(expr_to_process, this_parfor.loopNests[i].step)
-            end
-            #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-            #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
-            assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
-            fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
-            dprintln(3,"fake_body = ", fake_body)
+        assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+        this_parfor = args[1]
 
-            body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
-            live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
-            all_defs = Set()
-            for bb in body_lives.basic_blocks
-                all_defs = union(all_defs, bb[2].def)
-            end 
-            as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
+        append!(expr_to_process, this_parfor.preParFor)
+        for i = 1:length(this_parfor.loopNests)
+            # force the indexVariable to be treated as an rvalue
+            push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+            push!(expr_to_process, this_parfor.loopNests[i].lower)
+            push!(expr_to_process, this_parfor.loopNests[i].upper)
+            push!(expr_to_process, this_parfor.loopNests[i].step)
+        end
+        #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
+        #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
+        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
+        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        dprintln(3,"fake_body = ", fake_body)
 
-            push!(expr_to_process, as)
+        body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
+        live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
+        all_defs = Set()
+        for bb in body_lives.basic_blocks
+            all_defs = union(all_defs, bb[2].def)
+        end
+        as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
 
-            append!(expr_to_process, this_parfor.postParFor)
+        push!(expr_to_process, as)
 
-            return expr_to_process
-        elseif head == :parfor_start
-            dprintln(4,"pir_live_cb for :parfor_start")
-            expr_to_process = Any[]
+        append!(expr_to_process, this_parfor.postParFor)
 
-            assert(typeof(args[1]) == PIRParForStartEnd)
-            this_parfor = args[1]
+        return expr_to_process
+    elseif head == :parfor_start
+        dprintln(4,"pir_live_cb for :parfor_start")
+        expr_to_process = Any[]
 
-            for i = 1:length(this_parfor.loopNests)
-                # Force the indexVariable to be treated as an rvalue
-                push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
-                push!(expr_to_process, this_parfor.loopNests[i].lower)
-                push!(expr_to_process, this_parfor.loopNests[i].upper)
-                push!(expr_to_process, this_parfor.loopNests[i].step)
-            end
+        assert(typeof(args[1]) == PIRParForStartEnd)
+        this_parfor = args[1]
 
-            return expr_to_process
-        elseif head == :parfor_end
-            # Intentionally do nothing
-            return Any[]
-        elseif head == :insert_divisible_task
-            # Is this right?  Do I need pir_range stuff here too?
-            dprintln(4,"pir_live_cb for :insert_divisible_task")
-            expr_to_process = Any[]
+        for i = 1:length(this_parfor.loopNests)
+            # Force the indexVariable to be treated as an rvalue
+            push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
+            push!(expr_to_process, this_parfor.loopNests[i].lower)
+            push!(expr_to_process, this_parfor.loopNests[i].upper)
+            push!(expr_to_process, this_parfor.loopNests[i].step)
+        end
 
-            cur_task = args[1]
-            assert(typeof(cur_task) == InsertTaskNode)
+        return expr_to_process
+    elseif head == :parfor_end
+        # Intentionally do nothing
+        return Any[]
+    elseif head == :insert_divisible_task
+        # Is this right?  Do I need pir_range stuff here too?
+        dprintln(4,"pir_live_cb for :insert_divisible_task")
+        expr_to_process = Any[]
 
-            for i = 1:length(cur_task.args)
-                if cur_task.args[i].options == ARG_OPT_IN
-                    push!(expr_to_process, cur_task.args[i].value)
-                else
-                    push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
-                end
-            end
+        cur_task = args[1]
+        assert(typeof(cur_task) == InsertTaskNode)
 
-            return expr_to_process
-        elseif head == :loophead
-            dprintln(4,"pir_live_cb for :loophead")
-            assert(length(args) == 3)
-
-            expr_to_process = Any[]
-            push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
-            push!(expr_to_process, args[2])
-            push!(expr_to_process, args[3])
-
-            return expr_to_process
-        elseif head == :loopend
-            # There is nothing really interesting in the loopend node to signify something being read or written.
-            assert(length(args) == 1)
-            return Any[]
-        elseif head == :call
-            if args[1] == TopNode(:unsafe_arrayref)
-                expr_to_process = Any[]
-                new_expr = deepcopy(ast)
-                new_expr.args[1] = TopNode(:arrayref)
-                push!(expr_to_process, new_expr)
-                return expr_to_process
-            elseif args[1] == TopNode(:safe_arrayref)
-                expr_to_process = Any[]
-                new_expr = deepcopy(ast)
-                new_expr.args[1] = TopNode(:arrayref)
-                push!(expr_to_process, new_expr)
-                return expr_to_process
-            elseif args[1] == TopNode(:unsafe_arrayset)
-                expr_to_process = Any[]
-                new_expr = deepcopy(ast)
-                new_expr.args[1] = TopNode(:arrayset)
-                push!(expr_to_process, new_expr)
-                return expr_to_process
-            end
-        elseif head == :(=)
-            dprintln(4,"pir_live_cb for :(=)")
-            if length(args) > 2
-                expr_to_process = Any[]
-                push!(expr_to_process, args[1])
-                push!(expr_to_process, args[2])
-                for i = 4:length(args)
-                    push!(expr_to_process, args[i])
-                end
-                return expr_to_process
+        for i = 1:length(cur_task.args)
+            if cur_task.args[i].options == ARG_OPT_IN
+                push!(expr_to_process, cur_task.args[i].value)
+            else
+                push!(expr_to_process, mk_untyped_assignment(cur_task.args[i].value, 1))
             end
         end
+
+        return expr_to_process
+    elseif head == :loophead
+        dprintln(4,"pir_live_cb for :loophead")
+        assert(length(args) == 3)
+
+        expr_to_process = Any[]
+        push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
+        push!(expr_to_process, args[2])
+        push!(expr_to_process, args[3])
+
+        return expr_to_process
+    elseif head == :loopend
+        # There is nothing really interesting in the loopend node to signify something being read or written.
+        assert(length(args) == 1)
+        return Any[]
+    elseif head == :call
+        if args[1] == TopNode(:unsafe_arrayref)
+            expr_to_process = Any[]
+            new_expr = deepcopy(ast)
+            new_expr.args[1] = TopNode(:arrayref)
+            push!(expr_to_process, new_expr)
+            return expr_to_process
+        elseif args[1] == TopNode(:safe_arrayref)
+            expr_to_process = Any[]
+            new_expr = deepcopy(ast)
+            new_expr.args[1] = TopNode(:arrayref)
+            push!(expr_to_process, new_expr)
+            return expr_to_process
+        elseif args[1] == TopNode(:unsafe_arrayset)
+            expr_to_process = Any[]
+            new_expr = deepcopy(ast)
+            new_expr.args[1] = TopNode(:arrayset)
+            push!(expr_to_process, new_expr)
+            return expr_to_process
+        end
+    elseif head == :(=)
+        dprintln(4,"pir_live_cb for :(=)")
+        if length(args) > 2
+            expr_to_process = Any[]
+            push!(expr_to_process, args[1])
+            push!(expr_to_process, args[2])
+            for i = 4:length(args)
+                push!(expr_to_process, args[i])
+            end
+            return expr_to_process
+        end
     end
+
+    return DomainIR.dir_live_cb(ast, cbdata)
+end
+
+function pir_live_cb(ast :: ANY, cbdata :: ANY)
+    dprintln(4,"pir_live_cb")
     return DomainIR.dir_live_cb(ast, cbdata)
 end
 
