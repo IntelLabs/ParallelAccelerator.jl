@@ -44,8 +44,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef DEBUG_J2C_ARRAY
 #define PRINTF printf
+#define FLUSH(...) fflush(stdout)
 #else
 #define PRINTF(...)
+#define FLUSH(...)
 #endif
 
 #define MAX_DIM 5
@@ -82,6 +84,7 @@ public:
 
     ~RefcountStats() {
         PRINTF("Refcount stats: decrements = %d, increments = %d\n", num_decrements, num_increments);
+        FLUSH();
     }
 
     void dec() {
@@ -115,6 +118,7 @@ class j2c_array_copy {
    static inline void copy_to_mic(int run_where, uintptr_t dst, ELEMENT_TYPE *data, uint64_t start, uint64_t len) {
    // FIXME: use into syntax if someone knows how to make it work
 PRINTF("scalar copy to mic data = %x start = %d len = %d\n", data, start, len);
+FLUSH();
         data += start;
         dst  += sizeof(ELEMENT_TYPE) * start;
 // #pragma offload target(mic:run_where) in(data:length(len))
@@ -122,14 +126,17 @@ PRINTF("scalar copy to mic data = %x start = %d len = %d\n", data, start, len);
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }
 PRINTF("scalar copy to mic data => %x\n", data);
+FLUSH();
     }
 
     static inline void copy_from_mic(int run_where, ELEMENT_TYPE *dst, uintptr_t data, uint64_t start, uint64_t len) {
 PRINTF("scalar copy from mic data = %x start = %d len = %d\n", data, start, len);
+FLUSH();
         ELEMENT_TYPE *tmp;
         data += sizeof(ELEMENT_TYPE) * start;
         dst  += start;
 PRINTF("scalar copy from mic data = %x dst = %x\n", data, dst);
+FLUSH();
 // #pragma offload target(mic:run_where) out(tmp[0:len]:into(dst[0:len]) preallocated alloc_if(1))
         {
             tmp = (ELEMENT_TYPE*)data;
@@ -166,11 +173,13 @@ PRINTF("scalar copy from mic data = %x dst = %x\n", data, dst);
         //ELEMENT_TYPE *x = (ELEMENT_TYPE*)malloc(sizeof(ELEMENT_TYPE) * len);
         ELEMENT_TYPE *x = new ELEMENT_TYPE[len];
 PRINTF("alloc scalar elements %x\n", x);
+FLUSH();
         return x;
     }
 
     static void free_elements(ELEMENT_TYPE* a, uint64_t len) {
 PRINTF("free scalar elements %x\n", a);
+FLUSH();
 #ifdef ALIAS_ANA
         pert_unregister_data((void*)a);
 #endif
@@ -186,6 +195,7 @@ class j2c_array_copy<j2c_array<ELEMENT_TYPE> > {
    static inline void copy_to_mic(int run_where, uintptr_t dst, j2c_array<ELEMENT_TYPE> *data, int64_t start, int64_t len) {
         uintptr_t tmp[len];
 PRINTF("nested copy to mic data = %x start = %d len = %d\n", data, start, len);
+FLUSH();
         for (int64_t i = 0; i < len; i++)
         {
             if (data[start + i].data != NULL)
@@ -223,9 +233,11 @@ PRINTF("nested copy to mic data = %x start = %d len = %d\n", data, start, len);
             }
         }
 PRINTF("copy_from_mic called on array of array\n");
+FLUSH();
         for (int i = 0; i < len; i++)
         {
 PRINTF("copy_from_mic copy %x\n", _data[i]);
+FLUSH();
             if (_data[i] != 0)
                 dst[i] = j2c_array<ELEMENT_TYPE>::from_mic(run_where, _data[i]);
         }
@@ -265,6 +277,7 @@ PRINTF("copy_from_mic copy %x\n", _data[i]);
 
     static void free_elements(j2c_array<ELEMENT_TYPE>* a, uint64_t len) {
 PRINTF("delete array elements %x\n", a);
+FLUSH();
 #ifdef ALIAS_ANA
         pert_unregister_data((void*)a);
 #endif
@@ -399,6 +412,7 @@ public:
     void decrement(void) {
         if (refcount) {
 PRINTF("decrement %x => %d - 1\n", data, *refcount);
+FLUSH();
 #ifdef DEBUGJ2C
             g_refcount_stats.dec();
 #endif
@@ -413,12 +427,14 @@ PRINTF("decrement %x => %d - 1\n", data, *refcount);
               refcount = NULL;
             }
 PRINTF("decrement done\n");
+FLUSH();
         }
     }
 
     void increment(void) {
       if (refcount) {
 PRINTF("increment %x => %d + 1\n", data, *refcount);
+FLUSH();
 #ifdef DEBUGJ2C
         g_refcount_stats.inc();
 #endif
@@ -428,6 +444,7 @@ PRINTF("increment %x => %d + 1\n", data, *refcount);
 
     j2c_array() : data(NULL), refcount(NULL), offsets(global_zero), max_size(dims) {
 PRINTF("default constructor called on %x\n", this);
+FLUSH();
 }
 
     j2c_array(const j2c_array<ELEMENT_TYPE> &rhs) :
@@ -445,6 +462,7 @@ PRINTF("default constructor called on %x\n", this);
 
     j2c_array<ELEMENT_TYPE> & operator=(const j2c_array<ELEMENT_TYPE> &rhs) {
 PRINTF("j2c_array assignment to %x refcount = %x\n", this, refcount);
+FLUSH();
         decrement();
         data = rhs.data;
         num_dim = rhs.num_dim;
@@ -461,6 +479,7 @@ PRINTF("j2c_array assignment to %x refcount = %x\n", this, refcount);
     // Used in the source if we have something of the form "a = b;" where we know that "b" is not used afterwards.
     j2c_array<ELEMENT_TYPE> & assign_from_dead_rhs(j2c_array<ELEMENT_TYPE> &rhs) {
 PRINTF("j2c_array assignment to %x refcount = %x\n", this, refcount);
+FLUSH();
         decrement();
         data = rhs.data;
         num_dim = rhs.num_dim;
@@ -568,8 +587,10 @@ PRINTF("j2c_array assignment to %x refcount = %x\n", this, refcount);
             start += lower[i];
             end += upper[i];
 PRINTF("to_mic lower[%d]=%d upper[%d]=%d\n", i, lower[i], i, upper[i]);
+FLUSH();
         }
 PRINTF("to_mic start = %d end = %d len=%d\n", start, end, ARRAYLEN());
+FLUSH();
         j2c_array_copy<ELEMENT_TYPE>::copy_to_mic(run_where, _data, data, 0, ARRAYLEN()); //start, 1 + end - start);
         return _arr;
     }
@@ -640,8 +661,10 @@ PRINTF("to_mic start = %d end = %d len=%d\n", start, end, ARRAYLEN());
             start += lower[i];
             end += upper[i];
 PRINTF("from_mic lower[%d]=%d upper[%d]=%d\n", i, lower[i], i, upper[i]);
+FLUSH();
         }
 PRINTF("from_mic start = %d end = %d len=%d\n", start, end, ARRAYLEN());
+FLUSH();
         j2c_array_copy<ELEMENT_TYPE>::copy_from_mic(run_where, data, _data, start, 1 + end - start);
         //j2c_array_copy<ELEMENT_TYPE>::copy_from_mic(run_where, data, _data, 0, ARRAYLEN());
     }
@@ -659,13 +682,15 @@ PRINTF("from_mic start = %d end = %d len=%d\n", start, end, ARRAYLEN());
             len = tmp->ARRAYLEN();
         }
 PRINTF("dims[0] = %d\n", dims[0]);
+FLUSH();
         j2c_array<ELEMENT_TYPE> arr = j2c_array<ELEMENT_TYPE>(NULL, num_dim, dims);
         j2c_array_copy<ELEMENT_TYPE>::copy_from_mic(run_where, arr.data, data, 0, len);
         return arr;
     }
 
    ~j2c_array(void) {
-PRINTF("j2c_array destructor %x decrement data = %x\n", this, data);
+PRINTF("j2c_array destructor %x data = %x refcount = %p\n", this, data, refcount);
+FLUSH();
         decrement();
     }
 
