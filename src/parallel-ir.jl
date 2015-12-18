@@ -287,7 +287,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, 0, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{Any,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{Any,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
     end
 end
 
@@ -752,6 +752,7 @@ end
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
 function addUnknownArray(x :: SymGen, state :: expr_state)
+    dprintln(3, "addUnknownArray x = ", x, " next = ", state.next_eq_class)
     m = state.next_eq_class
     state.next_eq_class += 1
     state.array_length_correlation[x] = m + 1
@@ -3286,6 +3287,7 @@ Extract just the dimension variables names into dim_names and then register the 
 """
 function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
     dim_names = SymGen[]
+
     for i = 1:length(dim_array)
         if typeof(dim_array[i]) != SymbolNode
             return false
@@ -3418,6 +3420,9 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
     dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
     dprintln(3,"node.head = ", node.head)
+    dprintln(4,"array_length_correlations = ", state.array_length_correlation)
+    dprintln(4,"symbol_array_correlations = ", state.symbol_array_correlation)
+    dprintln(4,"range_correlations = ", state.range_correlation)
 
     if node.head == :lambda
         save_lambdaInfo  = state.lambdaInfo
