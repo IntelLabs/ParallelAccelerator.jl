@@ -622,7 +622,7 @@ end
 # 2. normalize into sums, with variables and constants.
 # 3. statically evaluate arithmetic operations on constants. 
 # Note that no sharing is preserved due to flattening, so use it with caution.
-function simplify(state, expr::Expr)
+function simplify(state, expr::Expr, default::Any)
     if isAddExpr(expr)
         x = simplify(state, expr.args[2])
         y = simplify(state, expr.args[3])
@@ -640,18 +640,22 @@ function simplify(state, expr::Expr)
     elseif isBoxExpr(expr)
         simplify(state, expr.args[3])
     else
-        expr
+        default
     end
 end
 
+function simplify(state, expr::Expr)
+    simplify(state, expr, expr)
+end 
+
 function simplify(state, expr::SymbolNode)
     def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
 end
 
 function simplify(state, expr::GenSym)
     def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
 end
 
 function simplify(state, expr::Array)
