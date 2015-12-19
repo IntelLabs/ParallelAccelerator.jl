@@ -13,14 +13,17 @@
 # serve to show the default.
 
 import sys
-import os
+import os, re
 import shlex
 
 import juliadoc
+import sphinx_rtd_theme
 
-extensions = ['juliadoc.julia', 'juliadoc.jlhelp']
-html_theme_path = [juliadoc.get_theme_dir()]
-html_sidebars = juliadoc.default_sidebars()
+extensions = ['sphinx.ext.mathjax',
+              'juliadoc.julia',
+              'juliadoc.jldoctest',
+              'juliadoc.jlhelp']
+
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -60,7 +63,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'ParallelAccelerator'
-copyright = u'2015, Intel Labs'
+#copyright = u'2015, Intel Labs'
 author = u'Intel Labs'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -98,7 +101,7 @@ exclude_patterns = ['_build']
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
-#add_module_names = True
+add_module_names = False 
 
 # If true, sectionauthor and moduleauthor directives will be shown in the
 # output. They are ignored by default.
@@ -116,12 +119,14 @@ pygments_style = 'sphinx'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
+primary_domain = 'jl'
+highlight_language = 'julia'
 
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'alabaster'
+html_theme = 'julia'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -130,6 +135,10 @@ html_theme = 'alabaster'
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
+
+html_theme_path = [juliadoc.get_theme_dir(),
+			sphinx_rtd_theme.get_html_theme_path()]
+#html_sidebars = juliadoc.default_sidebars()
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -151,6 +160,7 @@ html_theme = 'alabaster'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 #html_static_path = ['_static']
+html_static_path = []
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -174,6 +184,7 @@ html_theme = 'alabaster'
 
 # If false, no module index is generated.
 #html_domain_indices = True
+html_domain_indices = False 
 
 # If false, no index is generated.
 #html_use_index = True
@@ -185,10 +196,10 @@ html_theme = 'alabaster'
 #html_show_sourcelink = True
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
-#html_show_sphinx = True
+html_show_sphinx = False 
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
-#html_show_copyright = True
+html_show_copyright = False 
 
 # If true, an OpenSearch description file will be output, and all pages will
 # contain a <link> tag referring to it.  The value of this option must be the
@@ -229,6 +240,47 @@ latex_elements = {
 
 # Latex figure (float) alignment
 #'figure_align': 'htbp',
+    'utf8extra': r'''
+        \usepackage{CJKutf8}
+        \usepackage{amssymb}
+        \DeclareUnicodeCharacter{00B9}{\ensuremath{^{1}}}
+        \DeclareUnicodeCharacter{00A0}{\nobreakspace}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{00F7}{\ensuremath{\div}}
+        \DeclareUnicodeCharacter{0127}{\ensuremath{\hbar}}
+        \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
+        \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
+        \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
+        \DeclareUnicodeCharacter{1D34}{\ensuremath{^{\mathrm{H}}}}
+        \DeclareUnicodeCharacter{1D40}{\ensuremath{^{\mathrm{T}}}}
+        \DeclareUnicodeCharacter{2081}{\ensuremath{_{1}}}
+        \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
+        \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
+        \DeclareUnicodeCharacter{2208}{\ensuremath{\in}}
+        \DeclareUnicodeCharacter{220B}{\ensuremath{\ni}}
+        \DeclareUnicodeCharacter{2209}{\ensuremath{\notin}}
+        \DeclareUnicodeCharacter{220C}{\ensuremath{\not\ni}}
+        \DeclareUnicodeCharacter{2211}{\ensuremath{\sum}}
+        \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
+        \DeclareUnicodeCharacter{221B}{\ensuremath{\sqrt[3]{}}}
+        \DeclareUnicodeCharacter{222A}{\ensuremath{\cup}}
+        \DeclareUnicodeCharacter{2229}{\ensuremath{\cap}}
+        \DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
+        \DeclareUnicodeCharacter{2249}{\ensuremath{\not\approx}}
+        \DeclareUnicodeCharacter{2260}{\ensuremath{\ne}}
+        \DeclareUnicodeCharacter{2261}{\ensuremath{\equiv}}
+        \DeclareUnicodeCharacter{2262}{\ensuremath{\not\equiv}}
+        \DeclareUnicodeCharacter{2264}{\ensuremath{\le}}
+        \DeclareUnicodeCharacter{2265}{\ensuremath{\ge}}
+        \DeclareUnicodeCharacter{2286}{\ensuremath{\subseteq}}
+        \DeclareUnicodeCharacter{2288}{\ensuremath{\nsubseteq}}
+        \DeclareUnicodeCharacter{228A}{\ensuremath{\subsetneq}}
+        \DeclareUnicodeCharacter{2295}{\ensuremath{\oplus}}
+        \DeclareUnicodeCharacter{2297}{\ensuremath{\otimes}}
+        \DeclareUnicodeCharacter{22C5}{\ensuremath{\cdot}}
+        \DeclareUnicodeCharacter{2713}{x}
+        \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
+    ''',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -298,4 +350,4 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None}
+#intersphinx_mapping = {'https://docs.python.org/': None}
