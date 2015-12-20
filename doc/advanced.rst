@@ -104,7 +104,7 @@ does not provide such an API, ParallelAccelerator exports a general
                                      
 
 As an example, the following (taken from
-`our Gaussian blur example <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl)>`_
+`our Gaussian blur example <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl>`_
 performs a 5x5 stencil computation (note the use of Julia's `do` syntax that lets
 the user write a lambda function)::
 
