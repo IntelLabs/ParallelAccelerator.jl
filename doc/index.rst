@@ -9,8 +9,9 @@ Welcome to ParallelAccelerator's documentation!
 Contents:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
+   prerequisites
 
 
 Indices and tables
