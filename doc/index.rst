@@ -12,7 +12,13 @@ Contents:
    :maxdepth: 1
 
    prerequisites
-
+   install
+   examples
+   basic
+   howitworks
+   advanced
+   limits
+   comments
 
 Indices and tables
 ==================
