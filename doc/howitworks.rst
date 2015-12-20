@@ -14,10 +14,10 @@ elements of input arrays.  For the most part, these patterns are already
 present in standard Julia, so programmers can use ParallelAccelerator to run
 the same Julia program without (significantly) modifying the source code. 
 
-The `@acc` macro provided by ParallelAccelerator first intercepts Julia
+The ``@acc`` macro provided by ParallelAccelerator first intercepts Julia
 functions at the macro level and substitutes the set of implicitly parallel
-operations that we are targeting. `@acc` points them to those supplied in the
-`ParallelAccelerator.API` module. It then creates a proxy function that when
+operations that we are targeting. ``@acc`` points them to those supplied in the
+``ParallelAccelerator.API`` module. It then creates a proxy function that when
 called with concrete arguments (and known types) will try to compile the
 original function to an optimized form. Therefore, there is some compilation
 time the first time an accelerated function is called. The subsequent
@@ -26,7 +26,7 @@ calls to the same function will not have compilation time overhead.
 ParallelAccelerator performs aggressive optimizations when they are safe depending on the program structure.
 For example, it will automatically infer size equivalence relations among array
 variables and skip array bounds check whenever it can safely do so.   Eventually all
-parallel patterns are lowered into explicit parallel `for` loops which are internally
+parallel patterns are lowered into explicit parallel *for* loops which are internally
 represented at the level of Julia's typed AST. Aggressive loop fusion will
 try to combine adjacent loops into one and eliminate temporary array objects
 that store intermediate results.
