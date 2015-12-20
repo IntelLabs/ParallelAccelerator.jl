@@ -1,3 +1,5 @@
+.. _install
+
 ## Installation
 
 At the `julia>` prompt, run these commands:
