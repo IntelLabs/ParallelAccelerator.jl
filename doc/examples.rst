@@ -1,4 +1,8 @@
-## Examples
+.. _examples:
+
+*********
+Examples
+*********
 
 The `examples/` subdirectory has a few example programs demonstrating
 how to use ParallelAccelerator. You can run them at the command line.

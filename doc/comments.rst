@@ -1,4 +1,8 @@
-## Comments, Suggestions, and Bug Reports
+.. _comments:
+
+*********
+Comments, Suggestions, and Bug Reports
+*********
 
 Performance tuning is a hard problem, especially in 
 high-performance scientific programs. ParallelAccelerator

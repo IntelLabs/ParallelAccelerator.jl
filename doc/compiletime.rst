@@ -1,4 +1,8 @@
-### Faster compilation via userimg.jl
+.. _compiletime:
+
+*********
+Faster compilation via userimg.jl
+*********
 
 It is possible to embed a binary/compiled version of the ParallelAccelerator
 compiler and CompilerTools into a Julia executable. This has the potential to

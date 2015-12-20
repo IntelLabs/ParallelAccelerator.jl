@@ -1,4 +1,8 @@
-## Advanced Usage
+.. _advanced:
+
+*********
+Advanced Usage
+*********
 
 As mentioned above, ParallelAccelerator aims to optimize implicitly parallel
 Julia programs that are safe to parallelize. It also tries to be non-invasive,

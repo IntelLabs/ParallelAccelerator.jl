@@ -1,4 +1,8 @@
-## How It Works
+.. _howitworks:
+
+*********
+How It Works
+*********
 
 ParallelAccelerator is essentially a domain-specific compiler written in Julia.
 It performs additional analysis and optimization on top of the Julia compiler.

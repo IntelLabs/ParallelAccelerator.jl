@@ -1,4 +1,8 @@
-## Basic Usage
+.. _basic:
+
+*********
+Basic Usage
+*********
 
 To start using ParallelAccelerator in your own program, first import
 the package with `using ParallelAccelerator`, and then put the `@acc`

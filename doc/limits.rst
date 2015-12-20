@@ -1,4 +1,8 @@
-## Limitations 
+.. _limits:
+
+*********
+Limitations 
+*********
 
 Currently, ParallelAccelerator tries to compile Julia to C, which puts some constraints on what
 can be successfully compiled and run:
