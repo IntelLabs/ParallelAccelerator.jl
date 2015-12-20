@@ -97,13 +97,14 @@ Stencils are commonly found in scientific computing and image processing. A sten
 computation is one that computes new values for all elements of an array based
 on the current values of their neighboring elements. Since Julia's base library
 does not provide such an API, ParallelAccelerator exports a general
-`runStencil` interface to help with stencil programming::
+``runStencil`` interface to help with stencil programming::
                           
     runStencil(kernel :: Function, buffer1, buffer2, ..., 
                    iteration :: Int, boundaryHandling :: Symbol)
                                      
 
-As an example, the following (taken from [our Gaussian blur example](https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl))
+As an example, the following (taken from
+`our Gaussian blur example <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl)>`_
 performs a 5x5 stencil computation (note the use of Julia's `do` syntax that lets
 the user write a lambda function)::
 
