@@ -198,7 +198,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = oob_skip ? Any[] : Any[TypedExpr(Void, head,
-        PIRParForAst(toSymGen(buf),
+        PIRParForAst(InputInfo(toSymGen(buf)),
             vcat(lowerGotos, upperGotos, borderExpr),
             [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
