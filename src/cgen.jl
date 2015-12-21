@@ -1693,21 +1693,10 @@ function from_call(ast::Array{Any, 1})
     # TODO: This needs to specialize on types
     skipCompilation = has(lstate.compiledfunctions, funStr) ||
         isPendingCompilation(lstate.worklist, funStr)
-    if(fun == :println)
+    if fun==:println
         s =  "std::cout << "
-        argTyps = []
         for a in 2:length(args)
             s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
-            if !skipCompilation
-                # Attempt to find type
-                if typeAvailable(args[a])
-                    push!(argTyps, args[a].typ)
-                elseif isPrimitiveJuliaType(typeof(args[a]))
-                    push!(argTyps, typeof(args[a]))
-                elseif haskey(lstate.symboltable, args[a])
-                    push!(argTyps, lstate.symboltable[args[a]])
-                end
-            end
         end
         s *= "<< std::endl;"
         return s

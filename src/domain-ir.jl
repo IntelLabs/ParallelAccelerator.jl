@@ -25,6 +25,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DomainIR
 
+#using Debug
+
 import CompilerTools.DebugMsg
 DebugMsg.init()
 
@@ -121,6 +123,7 @@ mk_arraysize(arr, dim) = TypedExpr(Int64, :call, TopNode(:arraysize), arr, dim)
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)
+mk_call(fun,args) = Expr(:call, fun, args...)
 mk_copy(arr) = Expr(:copy, arr)
 mk_generate(range, f) = Expr(:generate, range, f)
 mk_reshape(arr, shape) = Expr(:reshape, arr, shape)
@@ -221,10 +224,11 @@ type IRState
     defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
+    data_source_counter::Int64 # a unique counter for data sources in program
 end
 
-emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
-newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
+emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
+newState(linfo, defs, state::IRState) = IRState(linfo, defs, Any[], state, state.data_source_counter)
 
 @doc """
 Update the definition of a variable.
@@ -820,7 +824,7 @@ function mmapRemoveDupArg!(expr)
 end
 
 # :(=) assignment (:(=), lhs, rhs)
-function from_assignment(state, env, expr::Any)
+function from_assignment(state, env, expr::Expr)
     local env_ = nextEnv(env)
     local head = expr.head
     local ast  = expr.args
@@ -832,6 +836,45 @@ function from_assignment(state, env, expr::Any)
         lhs = lhs.name
     end
     assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+    # example of data source call: 
+    # :((top(typeassert))((top(convert))(Array{Float64,1},(ParallelAccelerator.API.__hps_data_source_HDF5)("/labels","./test.hdf5")),Array{Float64,1})::Array{Float64,1})
+    if isa(rhs,Expr) && rhs.head==:call && length(rhs.args)>=2 && isa(rhs.args[2],Expr) && rhs.args[2].head==:call
+        in_call = rhs.args[2]
+        if length(in_call.args)>=3 && isa(in_call.args[3],Expr) && in_call.args[3].head==:call 
+            inner_call = in_call.args[3]
+            if isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_data_source_HDF5
+                dprintln(env,"data source found ", inner_call)
+                hdf5_var = inner_call.args[2]
+                hdf5_file = inner_call.args[3]
+                # update counter and get data source number
+                state.data_source_counter += 1
+                dsrc_num = state.data_source_counter
+                dsrc_id_var = addGenSym(Int64, state.linfo)
+                updateDef(state, dsrc_id_var, dsrc_num)
+                emitStmt(state, mk_expr(Int64, :(=), dsrc_id_var, dsrc_num))
+                # get array type
+                arr_typ = getType(lhs, state.linfo)
+                dims = ndims(arr_typ)
+                elem_typ = eltype(arr_typ)
+                # generate open call
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file])
+                emitStmt(state, open_call)
+                # generate array size call
+                arr_size_var = addGenSym(Tuple, state.linfo)
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var])
+                updateDef(state, arr_size_var, size_call)
+                emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
+                # generate array allocation
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, Any[arr_size_var]))
+                updateDef(state, lhs, arrdef)
+                emitStmt(state, mk_expr(arr_typ, :(=), lhs, arrdef))
+                # generate read call
+                read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_id_var, lhs])
+                return read_call
+            end
+        end
+    end
+    #@bp
     rhs = from_expr(state, env_, rhs)
     dprintln(env, "from_assignment lhs=", lhs, " typ=", typ)
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)

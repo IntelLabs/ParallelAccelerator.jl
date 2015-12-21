@@ -143,7 +143,7 @@ function parallel_for(loopvar, range, body)
   throw("Not Implemented")
 end
 
-const operators = Set(vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex]))
+const operators = Set(vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex,:__hps_data_source_HDF5]))
 
 for opr in operators
   @eval export $opr
