@@ -69,6 +69,7 @@ function from_root(function_name, ast :: Expr)
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
     body = TypedExpr(ast.args[3].typ, :body, from_toplevel_body(ast.args[3].args, state)...)
     new_ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    dprintln(1,"DistributedIR.from_root returns function = ", function_name, " ast = ", new_ast)
     # ast = from_expr(ast)
     return new_ast
 end
@@ -204,6 +205,8 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
              end
         end
         return node
+    elseif head==:call && node.args[1]==:__hps_data_source_HDF5_read
+        # will be parallel IO
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
         rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
@@ -310,6 +313,8 @@ function from_expr(node::Expr, state)
     elseif head==:parfor
         return from_parfor(node, state)
     #elseif head==:block
+    elseif head==:call
+        return from_call(node, state)
     else
         return [node]
     end
@@ -374,7 +379,8 @@ function from_parfor(node::Expr, state)
         @assert length(parfor.loopNests)==1 "DistIR only 1D PIR loop supported now"
 
         loopnest = parfor.loopNests[1]
-        @assert loopnest.lower==1 && loopnest.step==1 "DistIR only simple PIR loops supported now"
+        # TODO: build a constant table and check the loop variables at this stage
+        # @assert loopnest.lower==1 && loopnest.step==1 "DistIR only simple PIR loops supported now"
 
         loop_start_var = symbol("__hps_loop_start_"*string(getDistNewID(state)))
         loop_end_var = symbol("__hps_loop_end_"*string(getDistNewID(state)))
@@ -416,6 +422,37 @@ function from_parfor(node::Expr, state)
         #debug_rank_print = :(println("parfor rank ", __hps_node_id))
         #push!(res,debug_rank_print)
         return res
+    end
+    return [node]
+end
+
+function from_call(node::Expr, state)
+    @assert node.head==:call "Invalid call node"
+    
+    if node.args[1]==:__hps_data_source_HDF5_read && in(node.args[3], state.dist_arrays)
+        arr = node.args[3]
+        dprintln(3,"DistIR data source for array: ", arr)
+        
+        dim_sizes = state.arrs_dist_info[arr].dim_sizes
+        @assert length(dim_sizes)==1 "Only 1D data source supported"
+        arr_tot_size = dim_sizes[1]
+        
+        dsrc_start_var = symbol("__hps_data_source_start_"*string(getDistNewID(state)))
+        dsrc_div_var = symbol("__hps_data_source_div_"*string(getDistNewID(state)))
+        dsrc_count_var = symbol("__hps_data_source_count_"*string(getDistNewID(state)))
+
+        CompilerTools.LambdaHandling.addLocalVar(dsrc_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(dsrc_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(dsrc_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+
+
+        dsrc_div_expr = :($dsrc_div_var = $(arr_tot_size)/__hps_num_pes)
+        # zero-based index to match C interface of HDF5
+        dsrc_start_expr = :($dsrc_start_var = __hps_node_id*$dsrc_div_var) 
+        dsrc_count_expr = :($dsrc_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$dsrc_div_var : $dsrc_div_var)
+        
+        push!(node.args, dsrc_start_var, dsrc_count_var)
+        return [dsrc_div_expr;dsrc_start_expr;dsrc_count_expr;node]
     end
     return [node]
 end
