@@ -25,6 +25,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DomainIR
 
+#using Debug
+
 import CompilerTools.DebugMsg
 DebugMsg.init()
 
@@ -829,6 +831,25 @@ function from_assignment(state, env, expr::Expr)
         lhs = lhs.name
     end
     assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+    # example of data source call: 
+    # :((top(typeassert))((top(convert))(Array{Float64,1},(ParallelAccelerator.API.__hps_data_source_HDF5)("/labels","./test.hdf5")),Array{Float64,1})::Array{Float64,1})
+    if isa(rhs,Expr) && rhs.head==:call && length(rhs.args)>=2 && isa(rhs.args[2],Expr) && rhs.args[2].head==:call
+        in_call = rhs.args[2]
+        if length(in_call.args)>=3 && isa(in_call.args[3],Expr) && in_call.args[3].head==:call 
+            inner_call = in_call.args[3]
+            if isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_data_source_HDF5
+                dprintln(env,"data source found ", inner_call)
+                arr_typ = getType(lhs, state.linfo)
+                dims = ndims(arr_typ)
+                elem_typ = eltype(arr_typ)
+              #  newVar = addGenSym(typ, state.linfo)
+                # set flag [is assigned once][is const][is assigned by inner function][is assigned][is captured]
+              #  updateDef(state, newVar, arg)
+              #  emitStmt(state, mk_expr(typ, :(=), newVar, arg))
+            end
+        end
+    end
+    #@bp
     rhs = from_expr(state, env_, rhs)
     dprintln(env, "from_assignment lhs=", lhs, " typ=", typ)
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
