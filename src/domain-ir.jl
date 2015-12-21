@@ -223,10 +223,11 @@ type IRState
     defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
+    data_source_counter::Int64 # a unique counter for data sources in program
 end
 
-emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
-newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
+emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
+newState(linfo, defs, state::IRState) = IRState(linfo, defs, Any[], state, state.data_source_counter)
 
 @doc """
 Update the definition of a variable.
@@ -839,9 +840,21 @@ function from_assignment(state, env, expr::Expr)
             inner_call = in_call.args[3]
             if isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_data_source_HDF5
                 dprintln(env,"data source found ", inner_call)
+                # update counter and get data source number
+             #=   state.data_source_counter += 1
+                dsrc_num = state.data_source_counter
+                # get array type
                 arr_typ = getType(lhs, state.linfo)
                 dims = ndims(arr_typ)
                 elem_typ = eltype(arr_typ)
+                # generate array size call
+                arr_dim_var = addGenSym(Tuple, state.linfo)
+                
+                
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, arr_dim_var))
+        tmparr = addGenSym(arrtyps[i], state.linfo)
+        updateDef(state, tmparr, arrdef)
+        emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef)) =#
               #  newVar = addGenSym(typ, state.linfo)
                 # set flag [is assigned once][is const][is assigned by inner function][is assigned][is captured]
               #  updateDef(state, newVar, arg)
