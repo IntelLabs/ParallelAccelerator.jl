@@ -123,6 +123,7 @@ mk_arraysize(arr, dim) = TypedExpr(Int64, :call, TopNode(:arraysize), arr, dim)
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)
+mk_call(fun,args) = Expr(:call, fun, args...)
 mk_copy(arr) = Expr(:copy, arr)
 mk_generate(range, f) = Expr(:generate, range, f)
 mk_reshape(arr, shape) = Expr(:reshape, arr, shape)
@@ -840,25 +841,30 @@ function from_assignment(state, env, expr::Expr)
             inner_call = in_call.args[3]
             if isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_data_source_HDF5
                 dprintln(env,"data source found ", inner_call)
+                hdf5_var = inner_call.args[2]
+                hdf5_file = inner_call.args[3]
                 # update counter and get data source number
-             #=   state.data_source_counter += 1
+                state.data_source_counter += 1
                 dsrc_num = state.data_source_counter
                 # get array type
                 arr_typ = getType(lhs, state.linfo)
                 dims = ndims(arr_typ)
                 elem_typ = eltype(arr_typ)
+                # generate open call
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_num, hdf5_var, hdf5_file])
+                emitStmt(state, open_call)
                 # generate array size call
-                arr_dim_var = addGenSym(Tuple, state.linfo)
-                
-                
-                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, arr_dim_var))
-        tmparr = addGenSym(arrtyps[i], state.linfo)
-        updateDef(state, tmparr, arrdef)
-        emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef)) =#
-              #  newVar = addGenSym(typ, state.linfo)
-                # set flag [is assigned once][is const][is assigned by inner function][is assigned][is captured]
-              #  updateDef(state, newVar, arg)
-              #  emitStmt(state, mk_expr(typ, :(=), newVar, arg))
+                arr_size_var = addGenSym(Tuple, state.linfo)
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_num])
+                updateDef(state, arr_size_var, size_call)
+                emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
+                # generate array allocation
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, arr_size_var))
+                updateDef(state, lhs, arrdef)
+                emitStmt(state, mk_expr(arr_typ, :(=), lhs, arrdef))
+                # generate read call
+                read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_num, lhs])
+                return read_call
             end
         end
     end
