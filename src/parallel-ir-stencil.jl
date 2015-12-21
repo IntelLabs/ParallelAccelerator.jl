@@ -214,7 +214,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
   expr = PIRParForAst(
-    buf,
+    InputInfo(buf),
     bodyExpr,
     [],
     loopNest,

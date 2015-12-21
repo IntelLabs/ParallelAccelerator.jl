@@ -270,6 +270,9 @@ type InputInfo
     function InputInfo()
         new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
     end
+    function InputInfo(arr)
+        new(arr, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
+    end
 end
 
 @doc """
