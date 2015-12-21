@@ -817,7 +817,7 @@ function mmapRemoveDupArg!(expr)
 end
 
 # :(=) assignment (:(=), lhs, rhs)
-function from_assignment(state, env, expr::Any)
+function from_assignment(state, env, expr::Expr)
     local env_ = nextEnv(env)
     local head = expr.head
     local ast  = expr.args
