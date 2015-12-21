@@ -310,7 +310,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     # The parfor node that will go into the AST.
     new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-        getRangeOrArray(inputInfo, num_dim_inputs),
+        inputInfo,
         out_body,
         pre_statements,
         loopNests,
@@ -652,7 +652,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     post_statements = create_mmap!_post_statements(input_arrays, dl, state)
 
     new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-        getRangeOrArray(inputInfo, num_dim_inputs),
+        inputInfo[1],
         out_body,
         pre_statements,
         loopNests,
@@ -720,11 +720,13 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
         push!(rearray, RangeExprs(1,1,:(length($range_name))))
     end
+    inputInfo = InputInfo()
+    inputInfo.range = [RangeData(i) for i in rearray]
 
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
     simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-        rearray,
+        inputInfo,
         out_body,
         pre_statements,
         loopNests,
@@ -982,7 +984,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
 
     new_parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
-        getRangeOrArray(inputInfo, num_dim_inputs),
+        inputInfo[1],
         out_body,
         pre_statements,
         loopNests,
