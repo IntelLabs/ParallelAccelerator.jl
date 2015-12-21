@@ -846,24 +846,27 @@ function from_assignment(state, env, expr::Expr)
                 # update counter and get data source number
                 state.data_source_counter += 1
                 dsrc_num = state.data_source_counter
+                dsrc_id_var = addGenSym(Int64, state.linfo)
+                updateDef(state, dsrc_id_var, dsrc_num)
+                emitStmt(state, mk_expr(Int64, :(=), dsrc_id_var, dsrc_num))
                 # get array type
                 arr_typ = getType(lhs, state.linfo)
                 dims = ndims(arr_typ)
                 elem_typ = eltype(arr_typ)
                 # generate open call
-                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_num, hdf5_var, hdf5_file])
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file])
                 emitStmt(state, open_call)
                 # generate array size call
                 arr_size_var = addGenSym(Tuple, state.linfo)
-                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_num])
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var])
                 updateDef(state, arr_size_var, size_call)
                 emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
                 # generate array allocation
-                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, arr_size_var))
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, Any[arr_size_var]))
                 updateDef(state, lhs, arrdef)
                 emitStmt(state, mk_expr(arr_typ, :(=), lhs, arrdef))
                 # generate read call
-                read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_num, lhs])
+                read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_id_var, lhs])
                 return read_call
             end
         end
