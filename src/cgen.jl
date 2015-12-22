@@ -151,6 +151,7 @@ inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
 use_bcpp = 0
+USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
@@ -316,6 +317,9 @@ function from_includes()
     end
     if isDistributedMode()
         s *= "#include <mpi.h>\n"
+    end
+    if USE_HDF5==1 
+        s *= "#include \"hdf5.h\"\n"
     end
     if USE_OMP==1
         s *= "#include <omp.h>\n"
@@ -2559,6 +2563,9 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
 
     if contains(string(ast),"rand!") || contains(string(ast),"randn!")
         global include_rand = true
+    end
+    if contains(string(ast),"HDF5") 
+        global USE_HDF5 = 1
     end
 
     # Translate the body
