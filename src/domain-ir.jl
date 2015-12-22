@@ -854,11 +854,14 @@ function from_assignment(state, env, expr::Expr)
                 dims = ndims(arr_typ)
                 elem_typ = eltype(arr_typ)
                 # generate open call
-                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file])
+                # lhs is dummy argument so ParallelIR wouldn't reorder
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file, lhs])
                 emitStmt(state, open_call)
                 # generate array size call
-                arr_size_var = addGenSym(Tuple, state.linfo)
-                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var])
+                # arr_size_var = addGenSym(Tuple, state.linfo)
+                # assume 1D for now
+                arr_size_var = addGenSym(Int64, state.linfo)
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var, lhs])
                 updateDef(state, arr_size_var, size_call)
                 emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
                 # generate array allocation
