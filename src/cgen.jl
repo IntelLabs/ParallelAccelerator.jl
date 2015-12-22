@@ -621,13 +621,13 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
     if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size
         num::AbstractString = from_expr(rhs.args[2])
         
-        s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);"    
-        s *= "assert(space_id_$num != -1);"    
-        s *= "data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);"
+        s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
+        s *= "assert(space_id_$num != -1);\n"    
+        s *= "data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
         # only 1D for now    
-        s *= "assert(data_ndim_$num == 1);"
-        s *= "hsize_t space_dims_$num[data_ndim_$num];"    
-        s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);"
+        s *= "assert(data_ndim_$num == 1);\n"
+        s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
+        s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);\n"
         # only 1D for now
         s *= from_expr(lhs)*" = space_dims_$num[0];"
         return s
@@ -1641,19 +1641,19 @@ function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Abstr
     if f==:__hps_data_source_HDF5_open
         num::AbstractString = from_expr(id)
     
-        s = "hid_t plist_id_$num = H5Pcreate(H5P_FILE_ACCESS);"
-        s *= "assert(plist_id_$num != -1);"
-        s *= "herr_t ret_$num;"
-        s *= "hid_t file_id_$num;"
-        s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);"
-        s *= "assert(ret_$num != -1);"
-        s *= "file_id_$num = H5Fopen($file_name, H5F_ACC_RDONLY, plist_id_$num);"
-        s *= "assert(file_id_$num != -1);"
-        s *= "ret_$num = H5Pclose(plist_id_$num);"
-        s *= "assert(ret_$num != -1);"
-        s *= "hid_t dataset_id_$num;"
-        s *= "dataset_id_$num = H5Dopen2(file_id_$num, $data_var, H5P_DEFAULT);"
-        s *= "assert(dataset_id_$num != -1);"
+        s = "hid_t plist_id_$num = H5Pcreate(H5P_FILE_ACCESS);\n"
+        s *= "assert(plist_id_$num != -1);\n"
+        s *= "herr_t ret_$num;\n"
+        s *= "hid_t file_id_$num;\n"
+        s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "file_id_$num = H5Fopen(\"$file_name\", H5F_ACC_RDONLY, plist_id_$num);\n"
+        s *= "assert(file_id_$num != -1);\n"
+        s *= "ret_$num = H5Pclose(plist_id_$num);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t dataset_id_$num;\n"
+        s *= "dataset_id_$num = H5Dopen2(file_id_$num, \"$data_var\", H5P_DEFAULT);\n"
+        s *= "assert(dataset_id_$num != -1);\n"
 
         return s
     else
@@ -1669,14 +1669,14 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
     if f==:__hps_data_source_HDF5_read
         num::AbstractString = from_expr(id)
     
-        s = "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &$start, NULL, &$count, NULL);"
-        s *= "assert(ret_$num != -1);"
-        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &$count, NULL);"
-        s *= "assert (mem_dataspace_$num != -1);"
-        s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);"
-        s *= "assert(xfer_plist_$num != -1);"
-        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr);"
-        s *= "assert(ret_$num != -1);"
+        s = "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &$start, NULL, &$count, NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &$count, NULL);\n"
+        s *= "assert (mem_dataspace_$num != -1);\n"
+        s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
+        s *= "assert(xfer_plist_$num != -1);\n"
+        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr);\n"
+        s *= "assert(ret_$num != -1);\n"
 
         return s
     else
@@ -1703,7 +1703,7 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     if(length(ast)==5)
         s = pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4], ast[5])
-        s = pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
+        s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
     end
     if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
