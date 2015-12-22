@@ -627,7 +627,7 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
         
         s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
         s *= "assert(space_id_$num != -1);\n"    
-        s *= "data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
+        s *= "hsize_t data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
         # only 1D for now    
         s *= "assert(data_ndim_$num == 1);\n"
         s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
@@ -1672,14 +1672,15 @@ end
 function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
     if f==:__hps_data_source_HDF5_read
         num::AbstractString = from_expr(id)
-    
-        s = "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &$start, NULL, &$count, NULL);\n"
+        s =  "hsize_t CGen_HDF5_start_$num = $start;\n"
+        s *= "hsize_t CGen_HDF5_count_$num = $count;\n"
+        s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &CGen_HDF5_start_$num, NULL, &CGen_HDF5_count_$num, NULL);\n"
         s *= "assert(ret_$num != -1);\n"
-        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &$count, NULL);\n"
+        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &CGen_HDF5_count_$num, NULL);\n"
         s *= "assert (mem_dataspace_$num != -1);\n"
         s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
         s *= "assert(xfer_plist_$num != -1);\n"
-        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr);\n"
+        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr.getData());\n"
         s *= "assert(ret_$num != -1);\n"
 
         return s
