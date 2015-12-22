@@ -313,10 +313,12 @@ type PIRParForAst
 end
 
 function parforArrayInput(parfor :: PIRParForAst)
-    return isa(parfor.first_input, SymAllGen)
+    return !parforRangeInput(parfor)
+#    return isa(parfor.first_input, SymAllGen)
 end
 function parforRangeInput(parfor :: PIRParForAst)
-    return isa(parfor.first_input, Array{DimensionSelector,1})
+    return isRange(parfor.first_input)
+#    return isa(parfor.first_input, Array{DimensionSelector,1})
 end
 
 @doc """
@@ -488,19 +490,6 @@ end
 
 function isRange(inputInfo :: InputInfo)
     return length(inputInfo.range) > 0
-end 
-
-function getRangeOrArray(inputInfo :: InputInfo, num_dims)
-    if isRange(inputInfo)
-        #return inputInfo.range[1:num_dims]
-        return inputInfo
-    else
-        return inputInfo.array
-    end
-end
-
-function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
-    return getRangeOrArray(inputInfo[1], num_dims)
 end
 
 @doc """
@@ -1846,23 +1835,14 @@ function getCorrelation(array :: SymAllGen, are :: Array{DimensionSelector,1}, s
     return getOrAddRangeCorrelation(array, are, state)
 end
 
-function getCorrelation(ii :: InputInfo, num_dims, state :: expr_state)
-    if isRange(ii)
-        return getCorrelation(ii.array, ii.range[1:num_dims], state)
+function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
+    num_dim_inputs = findSelectedDimensions([inputInfo], state)
+    if isRange(inputInfo)
+        return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
     else
-        return getCorrelation(ii.array, state)
+        return getCorrelation(inputInfo.array, state)
     end
 end
-
-function getCorrelation(ii :: InputInfo, state :: expr_state)
-    num_dims = findSelectedDimensions([ii], state)
-    if isRange(ii)
-        return getCorrelation(ii.array, ii.range[1:num_dims], state)
-    else
-        return getCorrelation(ii.array, state)
-    end
-end
-
 
 @doc """
 Creates a mapping between variables on the left-hand side of an assignment where the right-hand side is a parfor
@@ -3355,10 +3335,9 @@ function extractArrayEquivalencies(node :: Expr, state)
     for i = 1 : length(input_arrays)
         push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
-    num_dim_inputs = findSelectedDimensions(inputInfo, state)
-    dprintln(3, "inputInfo = ", inputInfo, " num_dim_inputs = ", num_dim_inputs)
+#    num_dim_inputs = findSelectedDimensions(inputInfo, state)
 
-    main_length_correlation = getCorrelation(inputInfo[1], num_dim_inputs, state)
+    main_length_correlation = getCorrelation(inputInfo[1], state)
     # Get the correlation set of the first input array.
     #main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
@@ -3366,7 +3345,7 @@ function extractArrayEquivalencies(node :: Expr, state)
     # Also, create indexed versions of those symbols for the loop body
     for i = 2:length(inputInfo)
         dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
-        this_correlation = getCorrelation(inputInfo[i], num_dim_inputs, state)
+        this_correlation = getCorrelation(inputInfo[i], state)
         # Verify that all the inputs are the same size by verifying they are in the same correlation set.
         if this_correlation != main_length_correlation
             merge_correlations(state, main_length_correlation, this_correlation)
