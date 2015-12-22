@@ -1,6 +1,6 @@
-importall ParallelAccelerator
+using ParallelAccelerator
 
-function opt_At_mul_B!(U, X, W)
+@acc function opt_At_mul_B!(U, X, W)
 	 #At_mul_B!(U, X, W)  # u <- w'x
 	 U = X' * W
 end
