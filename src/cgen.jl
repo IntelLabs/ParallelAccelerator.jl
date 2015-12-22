@@ -151,6 +151,7 @@ inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
 use_bcpp = 0
+USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
@@ -252,7 +253,9 @@ if isDistributedMode()
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
-    mkdir(generated_file_dir)
+    if !isdir(generated_file_dir)
+        mkdir(generated_file_dir)
+    end
 elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
@@ -315,6 +318,9 @@ function from_includes()
     if isDistributedMode()
         s *= "#include <mpi.h>\n"
     end
+    if USE_HDF5==1 
+        s *= "#include \"hdf5.h\"\n"
+    end
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
@@ -323,7 +329,7 @@ function from_includes()
     "#include <stdint.h>\n",
     "#include <float.h>\n",
     "#include <limits.h>\n",
-    "#include <complex.h>\n",
+    "#include <complex>\n",
     "#include <math.h>\n",
     "#include <stdio.h>\n",
     "#include <iostream>\n",
@@ -473,6 +479,7 @@ function from_exprs(args::Array)
     s = ""
     for a in args
         se = from_expr(a)
+        dprintln(3, "from_exprs se = ", se)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -601,6 +608,7 @@ function from_assignment_match_cat_t(lhs, rhs::ANY)
 end
 
 function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
+    dprintln(3, "assignment pattern match dist ",lhs," = ",rhs)
     if rhs.head==:call && length(rhs.args)==1 && isTopNode(rhs.args[1])
         dist_call = rhs.args[1].name
         if dist_call ==:hps_dist_num_pes
@@ -608,6 +616,25 @@ function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
         elseif dist_call ==:hps_dist_node_id
             return "MPI_Comm_rank(MPI_COMM_WORLD,&$lhs);"
         end
+    end
+    return ""
+end
+
+function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
+    dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
+    if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size
+        num::AbstractString = from_expr(rhs.args[2])
+        
+        s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
+        s *= "assert(space_id_$num != -1);\n"    
+        s *= "hsize_t data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
+        # only 1D for now    
+        s *= "assert(data_ndim_$num == 1);\n"
+        s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
+        s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);\n"
+        # only 1D for now
+        s *= from_expr(lhs)*" = space_dims_$num[0];"
+        return s
     end
     return ""
 end
@@ -737,9 +764,9 @@ function toCtype(typ::DataType)
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
     elseif typ == Complex64
-        return "float _Complex"
+        return "std::complex<float>"
     elseif typ == Complex128
-        return "double _Complex"
+        return "std::complex<double>"
     elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
@@ -1011,8 +1038,18 @@ function get_alloc_shape(args, dims)
         return res
     end
     shp = AbstractString[]
-    for i in 1:dims
-        push!(shp, from_expr(args[6+(i-1)*2]))
+    arg = args[6]
+    if (isa(arg, Expr) && isa(arg.typ, Tuple)) ||
+       ((isa(arg, SymbolNode) || isa(arg, Symbol) || isa(arg, GenSym)) &&
+        istupletyp(getSymType(arg))) # in case where the argument is a tuple
+        arg_str = from_expr(arg)
+        for i in 1:dims
+            push!(shp, arg_str * ".f" * string(i))
+        end
+    else
+        for i in 1:dims
+            push!(shp, from_expr(args[6+(i-1)*2]))
+        end 
     end
     res = foldl((a, b) -> "$a, $b", shp)
     return res
@@ -1359,6 +1396,8 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
             s = f.args[3].value
             if isa(f.args[2],Module)
                 M = f.args[2]
+            elseif isa(f.args[2],GlobalRef)
+                M = eval(f.args[2])
             end
         end
         dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
@@ -1386,8 +1425,10 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         s = args[2].value
         if isa(args[1], Module)
             M = args[1]
-        elseif args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re) 
-            func = args[2] == QuoteNode(:im) ? "creal" : "cimag";
+        elseif (args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re)) &&
+               (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
+                (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
+            func = args[2] == QuoteNode(:re) ? "real" : "imag";
             t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
@@ -1415,18 +1456,19 @@ end
 
 function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
-    isFloat = typ == Float64 || typ == Float32
+    isDouble = typ == Float64 
+    isFloat = typ == Float32
     isComplex = typ <: Complex
     isInt = typ <: Integer
-    if in(fun.name,libm_math_functions) && (isFloat || isComplex)
+    if in(fun.name,libm_math_functions) && (isFloat || isDouble || isComplex)
         dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (isFloat || isComplex || isInt)
+    if is(fun.name,:abs) && (isFloat || isDouble || isComplex || isInt)
       dprintln(3,"FOUND ", fun.name)
-      fname = isInt ? "abs" : (isFloat ? "fabs" : (typ == Complex64 ? "cabsf" : "cabs"))
+      fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"
     end
     return s
@@ -1473,7 +1515,7 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY)
     return ""
 end
 
-function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
+function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
         res = "cgen_distribution(cgen_rand_generator);\n"
@@ -1481,7 +1523,7 @@ function pattern_match_call_rand(fun::TopNode, RNG::Any, IN::Any, TYP::Any)
     return res 
 end
 
-function pattern_match_call_rand(fun::ANY, RNG::ANY, IN::ANY, TYP::ANY)
+function pattern_match_call_rand(fun::ANY, RNG::ANY, args...)
     return ""
 end
 
@@ -1599,6 +1641,57 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
+function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::AbstractString, file_name::AbstractString, arr::Symbol)
+    if f==:__hps_data_source_HDF5_open
+        num::AbstractString = from_expr(id)
+    
+        s = "hid_t plist_id_$num = H5Pcreate(H5P_FILE_ACCESS);\n"
+        s *= "assert(plist_id_$num != -1);\n"
+        s *= "herr_t ret_$num;\n"
+        s *= "hid_t file_id_$num;\n"
+        s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "file_id_$num = H5Fopen(\"$file_name\", H5F_ACC_RDONLY, plist_id_$num);\n"
+        s *= "assert(file_id_$num != -1);\n"
+        s *= "ret_$num = H5Pclose(plist_id_$num);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t dataset_id_$num;\n"
+        s *= "dataset_id_$num = H5Dopen2(file_id_$num, \"$data_var\", H5P_DEFAULT);\n"
+        s *= "assert(dataset_id_$num != -1);\n"
+
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_data_src_open(f::Any, v::Any, rf::Any, o::Any, arr::Any)
+    return ""
+end
+
+function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
+    if f==:__hps_data_source_HDF5_read
+        num::AbstractString = from_expr(id)
+        s =  "hsize_t CGen_HDF5_start_$num = $start;\n"
+        s *= "hsize_t CGen_HDF5_count_$num = $count;\n"
+        s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &CGen_HDF5_start_$num, NULL, &CGen_HDF5_count_$num, NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &CGen_HDF5_count_$num, NULL);\n"
+        s *= "assert (mem_dataspace_$num != -1);\n"
+        s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
+        s *= "assert(xfer_plist_$num != -1);\n"
+        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr.getData());\n"
+        s *= "assert(ret_$num != -1);\n"
+
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_data_src_read(f::Any, v::Any, rf::Any, o::Any, arr::Any)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
@@ -1610,15 +1703,19 @@ function pattern_match_call(ast::Array{Any, 1})
         s = pattern_match_call_throw(ast[1],ast[2])
         s *= pattern_match_call_math(ast[1],ast[2])
     end
-    # rand! call has 4 args
     if(length(ast)==4)
         s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
-        s *= pattern_match_call_rand(ast[1],ast[2],ast[3], ast[4])
     end
-    # randn! call has 3 args
-    if(length(ast)==3)
+    if(length(ast)==5)
+        s = pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4], ast[5])
+        s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
+    end
+    if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
-        #s *= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+    end
+    if(length(ast)>=2) # rand! has 2 or more args
+        s *= pattern_match_call_rand(ast...)
     end
     # gemm calls have 6 args
     if(length(ast)==6)
@@ -1654,6 +1751,7 @@ function from_call(ast::Array{Any, 1})
     end
 
     args = ast[2:end]
+    dprintln(3,"mod is: ", mod)
     dprintln(3,"fun is: ", fun)
     dprintln(3,"call Args are: ", args)
 
@@ -1671,21 +1769,10 @@ function from_call(ast::Array{Any, 1})
     # TODO: This needs to specialize on types
     skipCompilation = has(lstate.compiledfunctions, funStr) ||
         isPendingCompilation(lstate.worklist, funStr)
-    if(fun == :println)
+    if fun==:println
         s =  "std::cout << "
-        argTyps = []
         for a in 2:length(args)
             s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
-            if !skipCompilation
-                # Attempt to find type
-                if typeAvailable(args[a])
-                    push!(argTyps, args[a].typ)
-                elseif isPrimitiveJuliaType(typeof(args[a]))
-                    push!(argTyps, typeof(args[a]))
-                elseif haskey(lstate.symboltable, args[a])
-                    push!(argTyps, lstate.symboltable[args[a]])
-                end
-            end
         end
         s *= "<< std::endl;"
         return s
@@ -1829,6 +1916,14 @@ function from_globalref(ast)
     mod = ast.mod
     name = ast.name
     dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
+    # handle global constant
+    if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
+        def = getfield(mod, name)
+        if isbits(def) && !isa(def, IntrinsicFunction)
+          return from_expr(def)
+        end
+    end
+ 
     from_expr(name)
 end
 
@@ -1898,9 +1993,9 @@ function from_parforstart(args)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
 
-    dprintln(3,"args: ",args);
+    dprintln(3,"from_parforstart args: ",args);
 
-    parfor = args[1]
+    parfor  = args[1]
     lpNests = parfor.loopNests
     private_vars = parfor.private_vars
 
@@ -1933,16 +2028,12 @@ function from_parforstart(args)
     # Generate the actual loop nest
     loopheaders = from_loopnest(ivs, starts, stops, steps)
 
-    lstate.ompdepth += 1
-    if lstate.ompdepth > 1
-        return loopheaders
-    end
-
     s = ""
 
     # Generate initializers and OpenMP clauses for reductions
     rds = parfor.reductions
     rdvars = rdinis = rdops = ""
+    dprintln(3,"reductions = ", rds);
     if !isempty(rds)
         rdvars = map((a)->from_expr(a.reductionVar), rds)
         rdinis = map((a)->from_expr(a.reductionVarInit), rds)
@@ -1954,6 +2045,12 @@ function from_parforstart(args)
         rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) "
     end
 
+    lstate.ompdepth += 1
+    # Don't put openmp pragmas on nested parfors.
+    if lstate.ompdepth > 1
+        # Still need to prepend reduction variable initialization for non-openmp loops.
+        return rdsprolog * loopheaders
+    end
 
     # Check if there are private vars and emit the |private| clause
     dprintln(3,"Private Vars: ")
@@ -2027,10 +2124,10 @@ function from_new(args)
     typ = args[1] #type of the object
     dprintln(3,"from_new args = ", args)
     if isa(typ, DataType)
-        if typ <: Complex
+        if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
             dprintln(3, "new complex number")
-            s = "(" * from_expr(args[2]) * ") + (" * from_expr(args[3]) * ") * I";
+            s = toCtype(typ) * "(" * from_expr(args[2]) * ", " * from_expr(args[3]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
@@ -2077,6 +2174,7 @@ function from_expr(ast::Expr)
     args = ast.args
     typ = ast.typ
 
+    dprintln(4, "from_expr = ", ast)
     if head == :block
         dprintln(3,"Compiling block")
         s *= from_exprs(args)
@@ -2099,7 +2197,7 @@ function from_expr(ast::Expr)
         s *= from_lambda(ast, args)
 
     elseif head == :(=)
-        dprintln(3,"Compiling assignment")
+        dprintln(3,"Compiling assignment ", ast)
         s *= from_assignment(args)
 
     elseif head == :(&)
@@ -2245,8 +2343,16 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
+function from_expr(ast::Complex64)
+    "std::complex<float>(" * from_expr(ast.re) * " + " * from_expr(ast.im) * ")"
+end
+
+function from_expr(ast::Complex128)
+    "std::complex<double>(" * from_expr(ast.re) * ", " * from_expr(ast.im) * ")"
+end
+
 function from_expr(ast::Complex)
-    "(" * from_expr(ast.re) * " + " * from_expr(ast.im) * " * I)"
+    toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
 end
 
 function from_expr(ast::ANY)
@@ -2369,13 +2475,16 @@ end
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
     dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
-        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) * ", "
+        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
         params = ""
     end
     # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
-    actualParams = params * (length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
-        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)]))
+    retParams = length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
+        [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
+    dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
+    actualParams = params * ((length(params) > 0 && length(retParams) > 0) ? ", " : "") * retParams
+    dprintln(3, " actualParams = (", actualParams, ")")
     wrapperParams = "int run_where"
     if length(args) > 0
         wrapperParams *= ", $args"
@@ -2455,6 +2564,9 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
 
     if contains(string(ast),"rand!") || contains(string(ast),"randn!")
         global include_rand = true
+    end
+    if contains(string(ast),"HDF5") 
+        global USE_HDF5 = 1
     end
 
     # Translate the body
@@ -2541,16 +2653,13 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
             retargs = ""
         end
 
-        if length(args) > 0
-            args *= ", " * retargs
-            argsunal *= ", "*retargs
-        else
-            args = retargs
-            argsunal = retargs
-        end
+        comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
+        args *= comma * retargs
+        argsunal *= comma * retargs
     else
         rtyp = toCtype(typ)
     end
+    dprintln(3, "args = (", args, ")")
     s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"

@@ -25,6 +25,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module DomainIR
 
+#using Debug
+
 import CompilerTools.DebugMsg
 DebugMsg.init()
 
@@ -121,6 +123,7 @@ mk_arraysize(arr, dim) = TypedExpr(Int64, :call, TopNode(:arraysize), arr, dim)
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)
+mk_call(fun,args) = Expr(:call, fun, args...)
 mk_copy(arr) = Expr(:copy, arr)
 mk_generate(range, f) = Expr(:generate, range, f)
 mk_reshape(arr, shape) = Expr(:reshape, arr, shape)
@@ -221,10 +224,11 @@ type IRState
     defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
+    data_source_counter::Int64 # a unique counter for data sources in program
 end
 
-emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
-newState(linfo, defs, state::IRState)=IRState(linfo, defs, Any[], state)
+emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
+newState(linfo, defs, state::IRState) = IRState(linfo, defs, Any[], state, state.data_source_counter)
 
 @doc """
 Update the definition of a variable.
@@ -622,7 +626,7 @@ end
 # 2. normalize into sums, with variables and constants.
 # 3. statically evaluate arithmetic operations on constants. 
 # Note that no sharing is preserved due to flattening, so use it with caution.
-function simplify(state, expr::Expr)
+function simplify(state, expr::Expr, default::Any)
     if isAddExpr(expr)
         x = simplify(state, expr.args[2])
         y = simplify(state, expr.args[3])
@@ -640,18 +644,22 @@ function simplify(state, expr::Expr)
     elseif isBoxExpr(expr)
         simplify(state, expr.args[3])
     else
-        expr
+        default
     end
 end
 
+function simplify(state, expr::Expr)
+    simplify(state, expr, expr)
+end 
+
 function simplify(state, expr::SymbolNode)
     def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
 end
 
 function simplify(state, expr::GenSym)
     def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def) : def)
+    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
 end
 
 function simplify(state, expr::Array)
@@ -662,7 +670,7 @@ function simplify(state, expr)
     return expr
 end
 
-isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Base, s))
+isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
 add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
 mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
 neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
@@ -813,7 +821,7 @@ function mmapRemoveDupArg!(expr)
 end
 
 # :(=) assignment (:(=), lhs, rhs)
-function from_assignment(state, env, expr::Any)
+function from_assignment(state, env, expr::Expr)
     local env_ = nextEnv(env)
     local head = expr.head
     local ast  = expr.args
@@ -825,6 +833,48 @@ function from_assignment(state, env, expr::Any)
         lhs = lhs.name
     end
     assert(isa(lhs, Symbol) || isa(lhs, GenSym))
+    # example of data source call: 
+    # :((top(typeassert))((top(convert))(Array{Float64,1},(ParallelAccelerator.API.__hps_data_source_HDF5)("/labels","./test.hdf5")),Array{Float64,1})::Array{Float64,1})
+    if isa(rhs,Expr) && rhs.head==:call && length(rhs.args)>=2 && isa(rhs.args[2],Expr) && rhs.args[2].head==:call
+        in_call = rhs.args[2]
+        if length(in_call.args)>=3 && isa(in_call.args[3],Expr) && in_call.args[3].head==:call 
+            inner_call = in_call.args[3]
+            if isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_data_source_HDF5
+                dprintln(env,"data source found ", inner_call)
+                hdf5_var = inner_call.args[2]
+                hdf5_file = inner_call.args[3]
+                # update counter and get data source number
+                state.data_source_counter += 1
+                dsrc_num = state.data_source_counter
+                dsrc_id_var = addGenSym(Int64, state.linfo)
+                updateDef(state, dsrc_id_var, dsrc_num)
+                emitStmt(state, mk_expr(Int64, :(=), dsrc_id_var, dsrc_num))
+                # get array type
+                arr_typ = getType(lhs, state.linfo)
+                dims = ndims(arr_typ)
+                elem_typ = eltype(arr_typ)
+                # generate open call
+                # lhs is dummy argument so ParallelIR wouldn't reorder
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file, lhs])
+                emitStmt(state, open_call)
+                # generate array size call
+                # arr_size_var = addGenSym(Tuple, state.linfo)
+                # assume 1D for now
+                arr_size_var = addGenSym(Int64, state.linfo)
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var, lhs])
+                updateDef(state, arr_size_var, size_call)
+                emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
+                # generate array allocation
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, Any[arr_size_var]))
+                updateDef(state, lhs, arrdef)
+                emitStmt(state, mk_expr(arr_typ, :(=), lhs, arrdef))
+                # generate read call
+                read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_id_var, lhs])
+                return read_call
+            end
+        end
+    end
+    #@bp
     rhs = from_expr(state, env_, rhs)
     dprintln(env, "from_assignment lhs=", lhs, " typ=", typ)
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
@@ -892,7 +942,7 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
       return normalize_callname(state, env, fun.name, args)
     elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
         if is(fun.name, :rand!) 
-            splice!(args,3)
+            # splice!(args,3)
         end
         return (fun.name, args)
     else
@@ -954,10 +1004,14 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
             atype = args[4]
             elemtyp = elmTypOf(atype)
             push!(realArgs, elemtyp)
+            dprintln(env, "normalize_callname: fun = :ccall args = ", args)
             for i = 6:2:length(args)
                 if istupletyp(typeOfOpr(state, args[i]))
+                    dprintln(env, "found tuple arg: ", args[i])
                     def = lookupConstDefForArg(state, args[i])
+                    dprintln(env, "definition: ", def)
                     if isa(def, Expr) && is(def.head, :call) && is(def.args[1], TopNode(:tuple))
+                        dprintln(env, "definition is inlined")
                         for j = 1:length(def.args) - 1
                             push!(realArgs, def.args[j + 1])
                         end
@@ -970,6 +1024,7 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
             end
             fun  = :alloc
             args = realArgs
+            dprintln(env, "alloc call becomes: ", fun, " ", args)
         end
     end
     return (fun, args)
@@ -1172,10 +1227,11 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             return mk_expr(typ, :call, GlobalRef(Base, :add_int), start, mk_expr(typ, :call, GlobalRef(Base, :mul_int), mk_expr(typ, :call, GlobalRef(Base, :sub_int), args[2], 1), step))
         end
     elseif isarray(arrTyp) || isbitarray(arrTyp)
-        ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
-        atyp = typeOfOpr(state, arr)
-        expr = nothing
-        dprintln(env, "ranges = ", ranges)
+      ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
+      atyp = typeOfOpr(state, arr)
+      expr = nothing
+      dprintln(env, "ranges = ", ranges)
+      try 
         if any(Bool[ ismask(state, range) for range in ranges])
             dprintln(env, "args is ", args)
             dprintln(env, "ranges is ", ranges)
@@ -1202,6 +1258,9 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             expr.typ = typ
         end
         return expr
+      catch err
+        dprintln(env, "Exception caught during range conversion: ", err)
+      end
     end
     return mk_expr(typ, :call, fun, args...)
 end
@@ -1583,10 +1642,6 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             dprintln(env,"got copy, args=", args)
             expr = mk_copy(args[1])
             expr.typ = typ
-        elseif is(fun.name, :broadcast_shape)
-            dprintln(env, "got ", fun.name)
-            args = normalize_args(state, env_, args)
-            expr = mk_expr(typ, :assertEqShape, args...)
         elseif is(fun.name, :checkbounds)
             dprintln(env, "got ", fun.name, " args = ", args)
             if length(args) == 2
@@ -1613,8 +1668,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             end
 -#
         end
+    elseif is(fun.mod, Base.Broadcast)
+        if is(fun.name, :broadcast_shape)
+            dprintln(env, "got ", fun.name)
+            args = normalize_args(state, env_, args)
+            expr = mk_expr(typ, :assertEqShape, args...)
+        end
     elseif is(fun.mod, Base.Random) #skip, let cgen handle it
-    elseif is(fun.mod, Base.LinAlg) #skip, let cgen handle it
+    elseif is(fun.mod, Base.LinAlg) || is(fun.mod, Base.LinAlg.BLAS) #skip, let cgen handle it
     elseif is(fun.mod, Base.Math)
         # NOTE: we simply bypass all math functions for now
         dprintln(env,"by pass math function ", fun, ", typ=", typ)
@@ -1691,7 +1752,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     def = lookupDefInAllScopes(state, name)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
-        if isbits(def) && isa(def, IntrinsicFunction)
+        if isbits(def) && !isa(def, IntrinsicFunction)
             return def
         end
     end
@@ -2074,18 +2135,6 @@ function dir_alias_cb(ast, state, cbdata)
             return AliasAnalysis.next_node(state)
         elseif is(head, :copy)
             return AliasAnalysis.next_node(state)
-        elseif is(head, :call) || is(head, :call1)
-            local fun  = ast.args[1]
-            local args = ast.args[2:end]
-            (fun_, args) = DomainIR.normalize_callname(DomainIR.emptyState(), DomainIR.newEnv(nothing), fun, args)
-            dprintln(2, "AA from_call: normalized fun=", fun_)
-            if(haskey(DomainIR.mapOps, fun_))
-                return AliasAnalysis.NotArray
-            elseif is(fun_, :alloc)
-                return AliasAnalysis.next_node(state)
-            elseif is(fun_, :fill!)
-                return args[1]
-            end
         end
 
         return nothing

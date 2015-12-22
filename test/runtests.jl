@@ -34,6 +34,7 @@ include("seq.jl")
 include("cat.jl")
 include("misc.jl")
 include("aug_assign.jl")
+include("complex.jl")
 
 # Examples.  We're not including them all here, because it would take
 # too long, but just including black-scholes and opt-flow seems like a
