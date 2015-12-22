@@ -1,4 +1,4 @@
-importall ParallelAccelerator
+using ParallelAccelerator
 
 @acc function opt_update_w( k, m, W, Y, E1 )
 	 for j = 1:k

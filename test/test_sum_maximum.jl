@@ -1,4 +1,4 @@
-importall ParallelAccelerator
+using ParallelAccelerator
 
 @acc function find_chg(k,m,W,Wp)	 
 	W_tmp = [abs(W[i,j] - Wp[i,j]) for i in 1:m, j in 1:k]

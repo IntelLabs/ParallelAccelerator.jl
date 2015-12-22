@@ -1,4 +1,4 @@
-importall ParallelAccelerator
+using ParallelAccelerator
 
 @acc function normalizeW(W::DenseMatrix{Float64}, k::Int)
 # normalize each column
