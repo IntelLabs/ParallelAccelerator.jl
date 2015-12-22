@@ -2868,6 +2868,10 @@ function getLinkCommand(outfile_name, lib)
           push!(linkLibs,"-lopenblas")
       end
   end
+  if USE_HDF5==1
+      #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5")
+      push!(linkLibs,"-lhdf5")
+  end
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
