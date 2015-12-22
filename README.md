@@ -22,6 +22,7 @@ Pkg.add("ParallelAccelerator")
 ## Resources
 
 - **Documentation:** <http://parallelacceleratorjl.readthedocs.org/>
+- **Presentation:** [Slides](http://www.slideshare.net/ChristianPeel/ehsan-parallel-acceleratordec2015), [Audio](https://soundcloud.com/christian-peel/ehsan-totoni-on-parallelacceleratorjl)
 - **Mailing List:** <http://groups.google.com/group/julia-hps/>
 - **Chat Room:** <https://gitter.im/IntelLabs/ParallelAccelerator.jl>
 - **GitHub Issues:** <https://github.com/IntelLabs/ParallelAccelerator.jl/issues>
