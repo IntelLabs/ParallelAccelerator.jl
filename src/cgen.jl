@@ -155,6 +155,7 @@ USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
+NERSC = 0
 #config file overrides backend_compiler variable
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
@@ -2801,7 +2802,11 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
-        comp = "mpiicpc"
+        if NERSC==1
+            comp = "CC"
+        else
+            comp = "mpiicpc"
+        end
     end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
     if USE_OMP == 1
@@ -2875,7 +2880,11 @@ function getLinkCommand(outfile_name, lib)
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
-        comp = "mpiicpc"
+        if NERSC==1
+            comp = "CC"
+        else
+            comp = "mpiicpc"
+        end
     end
     if USE_OMP==1
         push!(Opts,"-qopenmp")
