@@ -2803,12 +2803,14 @@ function getCompileCommand(full_outfile_name, cgenOutput)
     comp = "icpc"
     if isDistributedMode()
         if NERSC==1
+            HDF5_DIR=ENV["HDF5_DIR"]
             comp = "CC"
+            push!(Opts, "-I$HDF5_DIR/include")
         else
             comp = "mpiicpc"
         end
     end
-    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
+    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
     if USE_OMP == 1
         push!(Opts, "-qopenmp")
     end
@@ -2874,6 +2876,10 @@ function getLinkCommand(outfile_name, lib)
       end
   end
   if USE_HDF5==1
+      if NERSC==1
+          HDF5_DIR=ENV["HDF5_DIR"]
+          push!(linkLibs,"-L$HDF5_DIR/lib")
+      end
       #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5")
       push!(linkLibs,"-lhdf5")
   end
