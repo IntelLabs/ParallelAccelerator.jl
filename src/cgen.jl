@@ -41,12 +41,6 @@ export setvectorizationlevel, generate, from_root, writec, compile, link, set_in
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.isDistributedMode
 
-
-if isDistributedMode()
-    using MPI
-    MPI.Init()
-end
-
 # uncomment this line for using Debug.jl
 #using Debug
 
@@ -161,6 +155,12 @@ if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
 
+if isDistributedMode() && NERSC==0
+    using MPI
+    MPI.Init()
+end
+
+
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
 vectorizationlevel = VECDEFAULT
@@ -250,7 +250,7 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if isDistributedMode()
+if isDistributedMode() && NERSC==0
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
@@ -278,7 +278,7 @@ function CGen_finalize()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         rm(generated_file_dir; recursive=true)
     end
-    if isDistributedMode()
+    if isDistributedMode() && NERSC==0
         MPI.Finalize()
     end
 end
