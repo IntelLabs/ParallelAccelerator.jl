@@ -24,6 +24,33 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
 @doc """
+Look at the arrays that are accessed and see if they use a forward index, i.e.,
+an index that could be greater than 1.
+"""
+function getPastIndex(arrays :: Dict{SymGen, Array{Array{Any,1},1}})
+    dprintln(3, "getPastIndex ", arrays)
+    ret = Set{SymGen}()
+    for entry in arrays
+        array = entry[1]
+        index_locations = entry[2]
+        for location in index_locations
+            for subscript in location
+                # If the indexing expression isn't simple then return false.
+                if (!isa(subscript, Number) &&
+                    !isa(subscript, SymAllGen) &&
+                    (typeof(subscript) != Expr ||
+                    subscript.head != :(::)   ||
+                    typeof(subscript.args[1]) != Symbol))
+                    push!(ret, array)
+                end
+
+            end
+        end 
+    end
+    return ret
+end
+
+@doc """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1})
@@ -268,7 +295,9 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for reduce that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    #simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    simply_indexed = simpleIndex(rws.writeSet.arrays)
+    arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     dprintln(2,rws)
 
     reduce_func = nothing
@@ -320,7 +349,8 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         state.top_level_number,
         rws,
         unique_node_id,
-        simply_indexed)
+        simply_indexed,
+        arrays_read_past_index)
 
     dprintln(3,"Lowered parallel IR = ", new_parfor)
 
@@ -522,6 +552,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
         save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+        dprintln(3, "Creating expr for ", save_array_len)
         array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_len)
@@ -646,7 +677,9 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for mmap! that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    #simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    simply_indexed = simpleIndex(rws.writeSet.arrays)
+    arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     dprintln(2,rws)
 
     post_statements = create_mmap!_post_statements(input_arrays, dl, state)
@@ -662,7 +695,8 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         state.top_level_number,
         rws,
         unique_node_id,
-        simply_indexed)
+        simply_indexed,
+        arrays_read_past_index)
 
     dprintln(3,"Lowered parallel IR = ", new_parfor)
 
@@ -724,7 +758,9 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     inputInfo.range = [RangeData(i) for i in rearray]
 
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    #simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    simply_indexed = simpleIndex(rws.writeSet.arrays)
+    arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
         inputInfo,
         out_body,
@@ -736,7 +772,8 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         state.top_level_number,
         rws,
         unique_node_id,
-        simply_indexed)
+        simply_indexed,
+        arrays_read_past_index)
     [parfor]
 end
 
@@ -978,7 +1015,9 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
 
     # Make sure that for mmap that the array indices are all of the simple variety
-    simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    #simply_indexed = simpleIndex(rws.readSet.arrays) && simpleIndex(rws.writeSet.arrays)
+    simply_indexed = simpleIndex(rws.writeSet.arrays)
+    arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     dprintln(2,rws)
 
     post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs) 
@@ -994,7 +1033,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         state.top_level_number,
         rws,
         unique_node_id,
-        simply_indexed)
+        simply_indexed,
+        arrays_read_past_index)
 
     dprintln(3,"Lowered parallel IR = ", new_parfor)
     [new_parfor]
