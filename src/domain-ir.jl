@@ -675,7 +675,9 @@ end
 
 isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
 add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
+sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_ssub), x, y)
 mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
+sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, TopNode(:sdiv_int), x, y)
 neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
 isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
 isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
@@ -684,6 +686,8 @@ isSubExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sub_
 isMulExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :mul_int) || isTopNodeOrGlobalRef(x.args[1], :checked_smul))
 isAddExprInt(x::Expr) = isAddExpr(x) && isa(x.args[3], Int)
 isMulExprInt(x::Expr) = isMulExpr(x) && isa(x.args[3], Int)
+isAddExpr(x::ANY) = false
+isSubExpr(x::ANY) = false
 sub(x, y) = add(x, neg(y))
 add(x::Int,  y::Int) = x + y
 add(x::Int,  y::Expr)= add(y, x)
