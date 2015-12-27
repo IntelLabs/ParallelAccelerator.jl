@@ -6,11 +6,23 @@
 ParallelAccelerator's Documentation
 ===============================================
 
+ParallelAccelerator package is a compiler framework that 
+aggressively optimizes compute-intensive Julia programs 
+on top of the Julia compiler. 
+
+ParallelAccelerator is part of the 
+High Performance Scripting (HPS) project at Intel Labs.
+
+Quick install (requires Julia 0.4)::
+
+        Pkg.add("ParallelAccelerator") 
+
 Contents:
 
 .. toctree::
    :maxdepth: 1
 
+   introduction
    prerequisites
    install
    examples
