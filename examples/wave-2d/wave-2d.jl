@@ -44,6 +44,34 @@ end
     return 0
 end
 
+function prime_wave2d()
+    speed = 10         # Propagation speed
+    s = 16             # Array size (spatial resolution of the simulation)
+
+    s2 = div(s, 2)
+    s4 = div(s, 4)
+    s8 = div(s, 8)
+    s16 = div(s, 16)
+
+    p = zeros(s, s) # past
+    c = zeros(s, s) # current
+    f = zeros(s, s) # future
+
+    dt = 0.0001     # Time resolution of the simulation
+    dx = 0.01       # Distance between elements
+    r = speed * dt / dx 
+
+    n = 300
+
+    for i = s2 - s16 : s2 + s16
+        # Initial conditions
+        c[i, s2 - s16 : s2 + s16] = - 2 * cos(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos(0.5 * 2 * pi / (s8) * i)
+        p[i, 1:s] = c[i, 1:s]
+    end
+
+    runWaveStencil(p, c, f, r, 0.0, n, s2, s4, s)
+end
+
 function wave2d(demo::Bool)
 
     speed = 10         # Propagation speed
@@ -129,9 +157,9 @@ Options:
     arguments = docopt(doc)
     demo = arguments["--demo"]
 
+    # Run some small example just to get everything compiled.
     tic()
-    empty=Array(Float64,0,0)
-    runWaveStencil(empty, empty, empty, 0.0)
+    prime_wave2d()
     println("SELFPRIMED ", toq())
     
     tic()
