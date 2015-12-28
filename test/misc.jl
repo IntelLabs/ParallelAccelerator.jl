@@ -74,6 +74,14 @@ function test4()
     f()
 end
 
+@acc function const_array_init()
+    Int[1,2,3] .+ Int[4,5,6]
+end
+
+function test5()
+    const_array_init() == [5,7,9]
+end
+
 end
 
 using Base.Test
@@ -82,5 +90,6 @@ println("Testing miscellaneous features...")
 @test MiscTest.test2() == nothing
 @test MiscTest.test3() 
 @test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
+@test MiscTest.test5() 
 println("Done testing miscellaneous features...")
 
