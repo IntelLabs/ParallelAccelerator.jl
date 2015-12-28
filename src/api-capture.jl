@@ -5,6 +5,9 @@ module Capture
 import CompilerTools
 import ..API
 import ..operators
+import ..binary_operators
+
+const binary_operator_set = Set(binary_operators)
 
 #data_source_num = 0
 
@@ -30,8 +33,16 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
     elseif head == :call
         # f(...)
         opr = node.args[1]
-        if isa(opr, Symbol) && in(opr, operators)
-            node.args[1] = GlobalRef(API, opr)
+        if isa(opr, Symbol) 
+            api_opr = GlobalRef(API, opr)
+            if in(opr, operators)
+                node.args[1] = api_opr
+            end
+            if in(opr, binary_operator_set) && length(node.args) > 3
+            # we'll turn multiple arguments into pairwise
+                expr = foldl((a, b) -> Expr(:call, api_opr, a, b), node.args[2:end])
+                node.args = expr.args
+            end
         end
     elseif head == :(=) && isa(node.args[1], Symbol) && isa(node.args[2], Expr) && node.args[2].head ==:call && node.args[2].args[1]==:DataSource
         arr_var_expr = node.args[2].args[2]
