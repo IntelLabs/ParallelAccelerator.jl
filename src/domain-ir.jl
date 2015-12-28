@@ -1298,7 +1298,7 @@ function translate_call_map(state, env, typ, fun, args::Array{Any,1})
         end
         args[i] = arg_
     end
-    expr = endswith(string(fun), '!') ? mk_mmap(args, domF) : mk_mmap!(args, domF)
+    expr = endswith(string(fun), '!') ? mk_mmap!(args, domF) : mk_mmap(args, domF)
     expr = mmapRemoveDupArg!(expr)
     expr.typ = typ
     return expr
