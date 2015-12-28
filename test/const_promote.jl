@@ -23,29 +23,26 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module ConstPromoteTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
+@acc function example(x::Array{Float64,1})
+    #println("in ",x)
+    return x.^2
+end
 
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
+function test1()
+    return example([-3.0,2.6,0.2])
+end
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+end
+
+
+println("Testing constant promotion for pointwise operations...")
+@test_approx_eq ConstPromoteTest.test1() [9.0,6.76,0.04]
+println("Done testing constant promotion.")
