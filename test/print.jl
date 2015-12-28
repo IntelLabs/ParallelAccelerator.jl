@@ -23,28 +23,25 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module PrintTest
 using ParallelAccelerator
-using Base.Test
 
-include("abs.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
+@acc function example(x)
+    println("in ",x)
+end
 
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
+function test1()
+    return example(-3)
+end
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+end
+
+
+println("Testing println()...")
+PrintTest.test1()
+println("Done testing println().")

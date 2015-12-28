@@ -444,7 +444,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
             dprintln(1, "Variable with Any type: ", v)
         end
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
-        @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
+        #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -453,7 +453,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     for k in 1:length(gensyms)
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
-        @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
+        #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
@@ -624,7 +624,7 @@ end
 function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
     dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
     if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size
-        num::AbstractString = from_expr(rhs.args[2])
+        num::AbstractString = from_expr(rhs.args[2].id)
         
         s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
         s *= "assert(space_id_$num != -1);\n"    
@@ -1644,7 +1644,7 @@ end
 
 function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::AbstractString, file_name::AbstractString, arr::Symbol)
     if f==:__hps_data_source_HDF5_open
-        num::AbstractString = from_expr(id)
+        num::AbstractString = from_expr(id.id)
     
         s = "hid_t plist_id_$num = H5Pcreate(H5P_FILE_ACCESS);\n"
         s *= "assert(plist_id_$num != -1);\n"
@@ -1672,7 +1672,7 @@ end
 
 function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
     if f==:__hps_data_source_HDF5_read
-        num::AbstractString = from_expr(id)
+        num::AbstractString = from_expr(id.id)
         s =  "hsize_t CGen_HDF5_start_$num = $start;\n"
         s *= "hsize_t CGen_HDF5_count_$num = $count;\n"
         s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &CGen_HDF5_start_$num, NULL, &CGen_HDF5_count_$num, NULL);\n"
@@ -1770,12 +1770,17 @@ function from_call(ast::Array{Any, 1})
     # TODO: This needs to specialize on types
     skipCompilation = has(lstate.compiledfunctions, funStr) ||
         isPendingCompilation(lstate.worklist, funStr)
-    if fun==:println
+
+    if fun==:println || fun==:print
         s =  "std::cout << "
         for a in 2:length(args)
             s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
         end
-        s *= "<< std::endl;"
+        if fun==:println
+            s *= "<< std::endl;"
+        else 
+            s *= ";"
+        end
         return s
     end
 
@@ -2354,6 +2359,10 @@ end
 
 function from_expr(ast::Complex)
     toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
+end
+
+function from_expr(ast::AbstractString)
+    return "\"$ast\""
 end
 
 function from_expr(ast::ANY)

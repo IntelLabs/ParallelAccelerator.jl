@@ -1660,6 +1660,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
                 (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
                 expr = mk_expr(typ, :call, :getindex, args[2:end]...)
             end
+        elseif fun.name==:println || fun.name==:print # fix type for println
+            typ = Void
 #-
         elseif haskey(reduceOps, fun.name)
             args = normalize_args(state, env_, args)
