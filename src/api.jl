@@ -80,7 +80,7 @@ for f in unary_map_operators
 end
 
 # Binary operators/functions
-const binary_map_operators = Symbol[ :*,
+const binary_map_operators = Symbol[ :*, :/,
     :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, 
     :div, :mod, :rem, :&, :|, :$, :min, :max]
 
@@ -95,7 +95,7 @@ for f in binary_operators
             (Base.$f)(B, A)
         end
     end
-    if f != :*
+    if f != :* && f != :/
         @eval @noinline function ($f){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
             (Base.$f)(A, B)
         end
