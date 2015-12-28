@@ -461,14 +461,14 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     dumpSymbolTable(lstate.symboltable)
 
     for k in keys(lstate.symboltable)
-        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-            # If we have user defined types, record them
-            #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-            if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
-                if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-                    lstate.globalUDTs[lstate.symboltable[k]] = 1
-                end
+        # If we have user defined types, record them
+        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+        if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
+            if !haskey(lstate.globalUDTs, lstate.symboltable[k])
+                lstate.globalUDTs[lstate.symboltable[k]] = 1
             end
+        end
+        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
             decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
         end
     end
