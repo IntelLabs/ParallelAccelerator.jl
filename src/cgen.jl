@@ -566,8 +566,12 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
         typ = "double"
 
         if is_typed
-            @assert isa(rhs.args[2], GlobalRef) "Cgen expects hvcat with simple types in GlobalRef form, e.g. Main.Float64"
-            typ = toCtype(eval(rhs.args[2].name))
+            atyp = rhs.args[2]
+            if isa(atyp, GlobalRef) 
+                atyp = eval(rhs.args[2].name)
+            end
+            @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * rhs.args[2])
+            typ = toCtype(atyp)
             rows = lstate.tupleTable[rhs.args[3]]
             values = rhs.args[4:end]
         else
