@@ -4564,7 +4564,6 @@ function from_root(function_name, ast :: Expr)
 
     changed = true
     while changed
-#    for i = 1:rearrange_passes
         dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         ast = AstWalk(ast, remove_no_deps, rnd_state)
