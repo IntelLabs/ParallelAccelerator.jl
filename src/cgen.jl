@@ -41,12 +41,6 @@ export setvectorizationlevel, generate, from_root, writec, compile, link, set_in
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.isDistributedMode
 
-
-if isDistributedMode()
-    using MPI
-    MPI.Init()
-end
-
 # uncomment this line for using Debug.jl
 #using Debug
 
@@ -151,13 +145,21 @@ inEntryPoint = false
 lstate = nothing
 backend_compiler = USE_ICC
 use_bcpp = 0
+USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
+NERSC = 0
 #config file overrides backend_compiler variable
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
+
+if isDistributedMode() && NERSC==0
+    using MPI
+    MPI.Init()
+end
+
 
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
@@ -248,7 +250,7 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if isDistributedMode()
+if isDistributedMode() && NERSC==0
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
@@ -276,7 +278,7 @@ function CGen_finalize()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         rm(generated_file_dir; recursive=true)
     end
-    if isDistributedMode()
+    if isDistributedMode() && NERSC==0
         MPI.Finalize()
     end
 end
@@ -316,6 +318,9 @@ function from_includes()
     end
     if isDistributedMode()
         s *= "#include <mpi.h>\n"
+    end
+    if USE_HDF5==1 
+        s *= "#include \"hdf5.h\"\n"
     end
     if USE_OMP==1
         s *= "#include <omp.h>\n"
@@ -439,7 +444,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
             dprintln(1, "Variable with Any type: ", v)
         end
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
-        @assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
+        #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
         if !in(k, params) && (v.desc & 32 != 0)
             push!(lstate.ompprivatelist, k)
         end
@@ -448,7 +453,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     for k in 1:length(gensyms)
         lstate.symboltable[GenSym(k-1)] = gensyms[k]
         @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
-        @assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
+        #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
     end
     bod = from_expr(args[3])
     dprintln(3,"lambda params = ", params)
@@ -456,14 +461,14 @@ function from_lambda(ast::Expr, args::Array{Any,1})
     dumpSymbolTable(lstate.symboltable)
 
     for k in keys(lstate.symboltable)
-        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-            # If we have user defined types, record them
-            #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-            if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
-                if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-                    lstate.globalUDTs[lstate.symboltable[k]] = 1
-                end
+        # If we have user defined types, record them
+        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+        if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
+            if !haskey(lstate.globalUDTs, lstate.symboltable[k])
+                lstate.globalUDTs[lstate.symboltable[k]] = 1
             end
+        end
+        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
             decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
         end
     end
@@ -561,11 +566,12 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
         typ = "double"
 
         if is_typed
-            if isa(rhs.args[2], GlobalRef)
-                typ = toCtype(eval(rhs.args[2].name))
-            else
-                typ = toCtype(rhs.args[2])
+            atyp = rhs.args[2]
+            if isa(atyp, GlobalRef) 
+                atyp = eval(rhs.args[2].name)
             end
+            @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * rhs.args[2])
+            typ = toCtype(atyp)
             rows = lstate.tupleTable[rhs.args[3]]
             values = rhs.args[4:end]
         else
@@ -607,6 +613,7 @@ function from_assignment_match_cat_t(lhs, rhs::ANY)
 end
 
 function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
+    dprintln(3, "assignment pattern match dist ",lhs," = ",rhs)
     if rhs.head==:call && length(rhs.args)==1 && isTopNode(rhs.args[1])
         dist_call = rhs.args[1].name
         if dist_call ==:hps_dist_num_pes
@@ -614,6 +621,25 @@ function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
         elseif dist_call ==:hps_dist_node_id
             return "MPI_Comm_rank(MPI_COMM_WORLD,&$lhs);"
         end
+    end
+    return ""
+end
+
+function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
+    dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
+    if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size
+        num::AbstractString = from_expr(rhs.args[2].id)
+        
+        s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
+        s *= "assert(space_id_$num != -1);\n"    
+        s *= "hsize_t data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
+        # only 1D for now    
+        s *= "assert(data_ndim_$num == 1);\n"
+        s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
+        s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);\n"
+        # only 1D for now
+        s *= from_expr(lhs)*" = space_dims_$num[0];"
+        return s
     end
     return ""
 end
@@ -1620,6 +1646,57 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
+function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::AbstractString, file_name::AbstractString, arr::Symbol)
+    if f==:__hps_data_source_HDF5_open
+        num::AbstractString = from_expr(id.id)
+    
+        s = "hid_t plist_id_$num = H5Pcreate(H5P_FILE_ACCESS);\n"
+        s *= "assert(plist_id_$num != -1);\n"
+        s *= "herr_t ret_$num;\n"
+        s *= "hid_t file_id_$num;\n"
+        s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "file_id_$num = H5Fopen(\"$file_name\", H5F_ACC_RDONLY, plist_id_$num);\n"
+        s *= "assert(file_id_$num != -1);\n"
+        s *= "ret_$num = H5Pclose(plist_id_$num);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t dataset_id_$num;\n"
+        s *= "dataset_id_$num = H5Dopen2(file_id_$num, \"$data_var\", H5P_DEFAULT);\n"
+        s *= "assert(dataset_id_$num != -1);\n"
+
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_data_src_open(f::Any, v::Any, rf::Any, o::Any, arr::Any)
+    return ""
+end
+
+function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
+    if f==:__hps_data_source_HDF5_read
+        num::AbstractString = from_expr(id.id)
+        s =  "hsize_t CGen_HDF5_start_$num = $start;\n"
+        s *= "hsize_t CGen_HDF5_count_$num = $count;\n"
+        s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &CGen_HDF5_start_$num, NULL, &CGen_HDF5_count_$num, NULL);\n"
+        s *= "assert(ret_$num != -1);\n"
+        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &CGen_HDF5_count_$num, NULL);\n"
+        s *= "assert (mem_dataspace_$num != -1);\n"
+        s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
+        s *= "assert(xfer_plist_$num != -1);\n"
+        s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr.getData());\n"
+        s *= "assert(ret_$num != -1);\n"
+
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_data_src_read(f::Any, v::Any, rf::Any, o::Any, arr::Any)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
@@ -1633,6 +1710,10 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     if(length(ast)==4)
         s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
+    end
+    if(length(ast)==5)
+        s = pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4], ast[5])
+        s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
     end
     if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
@@ -1693,12 +1774,17 @@ function from_call(ast::Array{Any, 1})
     # TODO: This needs to specialize on types
     skipCompilation = has(lstate.compiledfunctions, funStr) ||
         isPendingCompilation(lstate.worklist, funStr)
-    if fun==:println
+
+    if fun==:println || fun==:print
         s =  "std::cout << "
         for a in 2:length(args)
             s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
         end
-        s *= "<< std::endl;"
+        if fun==:println
+            s *= "<< std::endl;"
+        else 
+            s *= ";"
+        end
         return s
     end
 
@@ -2121,7 +2207,7 @@ function from_expr(ast::Expr)
         s *= from_lambda(ast, args)
 
     elseif head == :(=)
-        dprintln(3,"Compiling assignment")
+        dprintln(3,"Compiling assignment ", ast)
         s *= from_assignment(args)
 
     elseif head == :(&)
@@ -2277,6 +2363,10 @@ end
 
 function from_expr(ast::Complex)
     toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
+end
+
+function from_expr(ast::AbstractString)
+    return "\"$ast\""
 end
 
 function from_expr(ast::ANY)
@@ -2488,6 +2578,9 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
 
     if contains(string(ast),"rand!") || contains(string(ast),"randn!")
         global include_rand = true
+    end
+    if contains(string(ast),"HDF5") 
+        global USE_HDF5 = 1
     end
 
     # Translate the body
@@ -2728,9 +2821,15 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
-        comp = "mpiicpc"
+        if NERSC==1
+            HDF5_DIR=ENV["HDF5_DIR"]
+            comp = "CC"
+            push!(Opts, "-I$HDF5_DIR/include")
+        else
+            comp = "mpiicpc"
+        end
     end
-    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : "")
+    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
     if USE_OMP == 1
         push!(Opts, "-qopenmp")
     end
@@ -2795,10 +2894,22 @@ function getLinkCommand(outfile_name, lib)
           push!(linkLibs,"-lopenblas")
       end
   end
+  if USE_HDF5==1
+      if NERSC==1
+          HDF5_DIR=ENV["HDF5_DIR"]
+          push!(linkLibs,"-L$HDF5_DIR/lib")
+      end
+      #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5")
+      push!(linkLibs,"-lhdf5")
+  end
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
-        comp = "mpiicpc"
+        if NERSC==1
+            comp = "CC"
+        else
+            comp = "mpiicpc"
+        end
     end
     if USE_OMP==1
         push!(Opts,"-qopenmp")

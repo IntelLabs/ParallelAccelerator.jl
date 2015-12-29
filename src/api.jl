@@ -42,6 +42,10 @@ end
   Base.getindex(A, args...)
 end
 
+@inline function getindex(A::DataType, args...)
+  A[ x for x in args ]
+end
+
 @inline function getindex(A, args...) 
   Base.getindex(A, args...)
 end

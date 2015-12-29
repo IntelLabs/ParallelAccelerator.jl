@@ -709,9 +709,9 @@ end
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: SymbolNode, state :: expr_state)
-    assert(array.typ.name == Array.name)
-    dprintln(3, "getArrayNumDims from SymbolNode array = ", array, " ", array.typ, " ", array.typ.parameters[2])
-    array.typ.parameters[2]
+    @assert array.typ.name == Array.name || array.typ.name == BitArray.name "Array expected"
+    dprintln(3, "getArrayNumDims from SymbolNode array = ", array, " ", array.typ, " ", ndims(array.typ))
+    ndims(array.typ)
 end
 
 @doc """
@@ -719,8 +719,8 @@ Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: GenSym, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
-    assert(gstyp.name == Array.name)
-    gstyp.parameters[2]
+    @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
+    ndims(gstyp)
 end
 
 @doc """

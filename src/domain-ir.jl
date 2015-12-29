@@ -861,11 +861,14 @@ function from_assignment(state, env, expr::Expr)
                 dims = ndims(arr_typ)
                 elem_typ = eltype(arr_typ)
                 # generate open call
-                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file])
+                # lhs is dummy argument so ParallelIR wouldn't reorder
+                open_call = mk_call(:__hps_data_source_HDF5_open, [dsrc_id_var, hdf5_var, hdf5_file, lhs])
                 emitStmt(state, open_call)
                 # generate array size call
-                arr_size_var = addGenSym(Tuple, state.linfo)
-                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var])
+                # arr_size_var = addGenSym(Tuple, state.linfo)
+                # assume 1D for now
+                arr_size_var = addGenSym(Int64, state.linfo)
+                size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var, lhs])
                 updateDef(state, arr_size_var, size_call)
                 emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
                 # generate array allocation
@@ -1303,7 +1306,8 @@ function translate_call_map(state, env, typ, fun, args::Array{Any,1})
         end
         args[i] = arg_
     end
-    expr = mmapRemoveDupArg!(mk_mmap(args, domF))
+    expr = endswith(string(fun), '!') ? mk_mmap!(args, domF) : mk_mmap(args, domF)
+    expr = mmapRemoveDupArg!(expr)
     expr.typ = typ
     return expr
 end
@@ -1665,6 +1669,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
                 (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
                 expr = mk_expr(typ, :call, :getindex, args[2:end]...)
             end
+        elseif fun.name==:println || fun.name==:print # fix type for println
+            typ = Void
 #-
         elseif haskey(reduceOps, fun.name)
             args = normalize_args(state, env_, args)

@@ -69,6 +69,11 @@ if [ -z "$OPENBLAS_LIB" ]; then
     echo "OpenBlas not detected (optional)"
 fi
 
+if [ -n "$NERSC_HOST" ]; then
+    echo "Configuring for LBL NERSC machines"
+     echo "NERSC = 1" >> "$CONF_FILE"
+fi
+
 echo "mkl_lib = \"$MKL_LIB\"" >> "$CONF_FILE"
 echo "openblas_lib = \"$OPENBLAS_LIB\"" >> "$CONF_FILE"
 

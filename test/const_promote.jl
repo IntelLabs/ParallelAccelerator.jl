@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module MiscTest
+module ConstPromoteTest
 using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
@@ -31,65 +31,18 @@ using ParallelAccelerator
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-@acc function for_ret()
-    for f = 1:10
-    end
+@acc function example(x::Array{Float64,1})
+    #println("in ",x)
+    return x.^2
 end
 
 function test1()
-    return for_ret()
-end
-
-@acc function for_ret1(n)
-    for f = 1:n
-    end
-end
-
-function test2()
-    return for_ret1(10)
-end
-
-@acc function opt_At_mul_B!(X, W)
-     X' * W
-end
-
-function test_At_mul_B(m::Int, k::Int, n::Int)
-    W = Array(Float64, m, k)   
-    X = Array(Float64, m, n)
-    fill!(W, 3)
-    fill!(X, 5)
-    opt_At_mul_B!(X, W)
-end
-
-function test3()
-  all(Bool[ x == 150.0 for x in MiscTest.test_At_mul_B(10,10,10) ])
-end
-
-@acc function f()
-    W  = zeros(5, 5)
-    s = [sum(W[:,j]) for j in 1:5]
-end
-
-function test4()
-    f()
-end
-
-@acc function const_array_init()
-    Int[1,2,3] .+ Int[4,5,6]
-end
-
-function test5()
-    const_array_init() == [5,7,9]
+    return example([-3.0,2.6,0.2])
 end
 
 end
 
-using Base.Test
-println("Testing miscellaneous features...")
-@test MiscTest.test1() == nothing
-@test MiscTest.test2() == nothing
-@test MiscTest.test3() 
-@test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
-@test MiscTest.test5() 
-println("Done testing miscellaneous features...")
 
+println("Testing constant promotion for pointwise operations...")
+@test_approx_eq ConstPromoteTest.test1() [9.0,6.76,0.04]
+println("Done testing constant promotion.")

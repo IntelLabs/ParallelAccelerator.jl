@@ -27,6 +27,7 @@ using ParallelAccelerator
 using Base.Test
 
 include("abs.jl")
+include("const_promote.jl")
 include("rand.jl")
 include("BitArray.jl")
 include("range.jl")
@@ -36,6 +37,7 @@ include("ranges.jl")
 include("misc.jl")
 include("aug_assign.jl")
 include("complex.jl")
+include("print.jl")
 
 # Examples.  We're not including them all here, because it would take
 # too long, but just including black-scholes and opt-flow seems like a
