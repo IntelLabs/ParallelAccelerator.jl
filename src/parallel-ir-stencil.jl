@@ -203,7 +203,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
             [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
             PIRReduction[],
-            [], [], irState.top_level_number, get_unique_num(), true, Set{SymGen}([toSymGen(x) for x in bufs])))]
+            [], [], irState.top_level_number, get_unique_num(), Set{SymGen}(), Set{SymGen}([toSymGen(x) for x in bufs])))]
 
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
@@ -223,7 +223,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
     get_unique_num(), 
-    true, 
+    Set{SymGen}(), 
     Set{SymGen}([toSymGen(x) for x in bufs]))
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

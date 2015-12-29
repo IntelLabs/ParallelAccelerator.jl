@@ -323,16 +323,16 @@ type PIRParForAst
     # This will be "nothing" if we don't know how to estimate.  If not "nothing" then it is an expression which may
     # include calls.
     instruction_count_expr
-    simply_indexed :: Bool
+    arrays_written_past_index :: Set{SymGen}
     arrays_read_past_index :: Set{SymGen}
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, si, read_past_index)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
         r = CompilerTools.ReadWriteSet.from_exprs(b)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si, read_past_index)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, si, read_past_index)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si, read_past_index)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, wrote_past_index, read_past_index)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 end
 
@@ -2197,21 +2197,26 @@ function fuse(body, body_index, cur, state)
     cur_iei  = iterations_equals_inputs(cur_parfor)
     dprintln(3, "iterations_equals_inputs prev and cur = ", prev_iei, " ", cur_iei)
     dprintln(3, "loweredAliasMap = ", loweredAliasMap)
-    dprintln(3, "prev_parfor.simply_indexed = ", prev_parfor.simply_indexed)
-    dprintln(3, "cur_parfor.simply_indexed = ", cur_parfor.simply_indexed)
+    dprintln(3, "cur_parfor.arrays_read_past_index = ", cur_parfor.arrays_read_past_index)
     arrays_non_simply_indexed_in_cur_that_access_prev_output = intersect(cur_parfor.arrays_read_past_index, prev_output_arrays)
     dprintln(3, "arrays_non_simply_indexed_in_cur_that_access_prev_output = ", arrays_non_simply_indexed_in_cur_that_access_prev_output)
+    dprintln(3, "prev_parfor.arrays_written_past_index = ", prev_parfor.arrays_written_past_index)
+    cur_accessed = CompilerTools.ReadWriteSet.getArraysAccessed(cur_parfor.rws)
+    arrays_non_simply_indexed_in_prev_that_are_read_in_cur = intersect(prev_parfor.arrays_written_past_index, cur_accessed)
+    dprintln(3, "arrays_non_simply_indexed_in_prev_that_are_read_in_cur = ", arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
     if !isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output)
         dprintln(1, "Fusion won't happen because the second parfor accesses some array created by the first parfor in a non-simple way.")
+    end
+    if !isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
+        dprintln(1, "Fusion won't happen because the first parfor wrote to some array index in a non-simple way that the second parfor needs to access.")
     end
 
     if  prev_iei &&
         cur_iei  &&
         out_correlation == in_correlation &&
         !reduction_var_used &&
-        prev_parfor.simply_indexed &&
-        cur_parfor.simply_indexed  &&
-        isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output)
+        isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) &&
+        isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
         assert(prev_num_dims == cur_num_dims)
 
         dprintln(3, "Fusion will happen here.")
@@ -3338,7 +3343,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
     dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
     if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
+        dprintln(3,"node.head: ", node.head)
     end
     ntype = typeof(node)
 
