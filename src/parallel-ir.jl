@@ -1535,7 +1535,7 @@ end
 function isAllocation(expr :: Expr)
     return expr.head == :call && 
     expr.args[1] == TopNode(:ccall) && 
-    (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d))
+    (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d) || expr.args[2] == QuoteNode(:jl_new_array))
 end
 
 function isAllocation(expr)

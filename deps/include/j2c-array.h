@@ -789,6 +789,38 @@ FLUSH();
                 data[(((k - 1 - offsets[2]) * max_size[1] + j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]] : d);
     }
 
+    j2c_array<ELEMENT_TYPE> reshape(uint64_t i) {
+        assert(i == ARRAYLEN());
+        j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>::new_j2c_array_1d(data, i);
+        x.refcount = refcount;
+        increment();
+        return x;
+    }
+
+    j2c_array<ELEMENT_TYPE> reshape(uint64_t i, uint64_t j) {
+        assert(i * j == ARRAYLEN());
+        j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>::new_j2c_array_2d(data, i, j);
+        x.refcount = refcount;
+        increment();
+        return x;
+    }
+
+    j2c_array<ELEMENT_TYPE> reshape(uint64_t i, uint64_t j, uint64_t k) {
+        assert(i * j * k == ARRAYLEN());
+        j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>::new_j2c_array_3d(data, i, j, k);
+        x.refcount = refcount;
+        increment();
+        return x;
+    }
+
+    j2c_array<ELEMENT_TYPE> reshape(uint64_t i, uint64_t j, uint64_t k, uint64_t l) {
+        assert(i * j * k * l == ARRAYLEN());
+        j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>::new_j2c_array_4d(data, i, j, k, l);
+        x.refcount = refcount;
+        increment();
+        return x;
+    }
+
     uint64_t ARRAYLEN(void) const {
         uint64_t ret = dims[0];
         int i;

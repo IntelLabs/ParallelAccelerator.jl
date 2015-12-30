@@ -1544,6 +1544,26 @@ function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY)
     return ""
 end
 
+function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::Union{SymbolNode,Symbol,GenSym})
+    res = ""
+    if(fun.mod == Base && fun.name==:reshape)
+        typ = getSymType(shape)
+        if istupletyp(typ)
+            dim = length(typ.parameters)
+            sh = from_expr(shape)
+            shapes = mapfoldl(i->sh*".f"*string(i-1), (a,b) -> a*","*b, 1:dim)
+            res = from_expr(inp) * ".reshape(" * shapes * ");\n"
+        else
+            error("call to reshape expects a tuple, but got ", typ)
+        end
+    end
+    return res 
+end
+
+function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY)
+    return ""
+end
+
 function getSymType(a::Union{Symbol,GenSym})
     return lstate.symboltable[a]
 end
@@ -1718,6 +1738,7 @@ function pattern_match_call(ast::Array{Any, 1})
     if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_randn(ast[1],ast[2],ast[3])
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        s *= pattern_match_call_reshape(ast[1],ast[2],ast[3])
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(ast...)
