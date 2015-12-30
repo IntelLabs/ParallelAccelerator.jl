@@ -4342,11 +4342,97 @@ function from_root(function_name, ast :: Expr)
 
     dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
     printLambda(1, ast)
+
+    # ast = remove_extra_allocs(ast)
+
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     end
     ast
 end
+
+type rm_allocs_state
+    defs::Set{SymGen}
+    removed_arrs::Set{SymGen}
+end
+
+
+@doc """
+removes extra allocations
+"""
+function remove_extra_allocs(ast)
+    dprintln(3,"starting remove")
+    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, lambdaInfo)
+    dprintln(3,"remove extra allocations lives ", lives)
+    defs = Set{SymGen}()
+    for i in values(lives.basic_blocks)
+        defs = union(defs, i.def)
+    end
+    dprintln(3, "remove extra allocations defs ",defs)
+    rm_state = rm_allocs_state(defs, Set{SymGen}())
+    AstWalk(ast, rm_allocs_cb, rm_state)
+    #@bp
+    return ast
+end
+
+function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
+    head = ast.head
+    args = ast.args
+    if head == :(=) && isAllocation(args[2])
+        arr = toSymGen(args[1])
+        if in(arr, state.defs)
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        alloc_args = args[2].args[2:end]
+        shape = get_alloc_shape(alloc_args)
+        ast.args[2] = :($shape)
+        #@bp
+        return ast
+    elseif head==:call
+        ast
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function get_alloc_shape(args)
+    # tuple
+    #@bp
+    if args[1]==:jl_new_array && length(args)==7
+        return args[6]
+    else
+        shape_arr = Any[]
+        i = 1
+        while 6+(i-1)*2 <= length(args)
+            push!(shape_arr, args[6+(i-1)*2])
+            i+=1
+        end
+        return tuple(shape_arr...)
+    end
+    return tuple()
+end
+
+function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
+    head = ast.head
+    args = ast.args
+#@bp
+    #println(ast)
+    if head == :(=) && isAllocation(args[2])
+        println(ast)
+        return Any[]
+    end
+    return pir_live_cb(ast,cbdata)
+end
+
+function rm_allocs_live_cb(ast :: ANY, cbdata :: ANY)
+    return pir_live_cb(ast,cbdata)
+end
+
+
 
 @doc """
 Returns true if input "a" is a tuple and each element of the tuple of isbits type.
