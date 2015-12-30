@@ -2070,7 +2070,6 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
     # arrayref only add read access
     elseif head == :call
         if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
-            println("DIR Arrayref ", args)
             expr_to_process = Any[]
             for i = 2:length(args)
                 push!(expr_to_process, args[i])
