@@ -966,7 +966,7 @@ function from_getfield(args)
     tgt = from_expr(args[1])
     if isa(args[1], SymbolNode)
       args1typ = args[1].typ
-    elseif isa(args[1], GenSym)
+    elseif isa(args[1], GenSym) || isa(args[1], Symbol)
       args1typ = lstate.symboltable[args[1]]
     else
       throw("Unhandled argument 1 type to getfield")
