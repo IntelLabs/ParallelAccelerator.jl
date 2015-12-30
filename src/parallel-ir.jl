@@ -4343,7 +4343,7 @@ function from_root(function_name, ast :: Expr)
     dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
     printLambda(1, ast)
 
-    # ast = remove_extra_allocs(ast)
+   #  ast = remove_extra_allocs(ast)
 
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
@@ -4354,6 +4354,7 @@ end
 type rm_allocs_state
     defs::Set{SymGen}
     removed_arrs::Set{SymGen}
+    lambdaInfo
 end
 
 
@@ -4370,7 +4371,7 @@ function remove_extra_allocs(ast)
         defs = union(defs, i.def)
     end
     dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Set{SymGen}())
+    rm_state = rm_allocs_state(defs, Set{SymGen}(), lambdaInfo)
     AstWalk(ast, rm_allocs_cb, rm_state)
     #@bp
     return ast
@@ -4385,14 +4386,26 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
         alloc_args = args[2].args[2:end]
-        shape = get_alloc_shape(alloc_args)
-        ast.args[2] = :($shape)
-        #@bp
+        shape::Array{Any,1} = get_alloc_shape(alloc_args)
+        println("rm alloc shape ", shape)
+        ast.args[2] = Expr(:call,TopNode(:tuple), shape...)
+        updateLambdaType(arr, length(shape), state.lambdaInfo)
+#        @bp
         return ast
     elseif head==:call
         ast
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function updateLambdaType(arr::Symbol, dim::Int, lambdaInfo)
+    typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    lambdaInfo.var_defs[arr] = eval(parse(typ));
+end
+
+function updateLambdaType(arr::GenSym, dim::Int, lambdaInfo)
+    typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    lambdaInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
 end
 
 function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
@@ -4401,9 +4414,9 @@ end
 
 function get_alloc_shape(args)
     # tuple
-    #@bp
-    if args[1]==:jl_new_array && length(args)==7
-        return args[6]
+ #   @bp
+    if args[1]==:(:jl_new_array) && length(args)==7
+        return args[6].args[2:end]
     else
         shape_arr = Any[]
         i = 1
@@ -4411,9 +4424,9 @@ function get_alloc_shape(args)
             push!(shape_arr, args[6+(i-1)*2])
             i+=1
         end
-        return tuple(shape_arr...)
+        return shape_arr
     end
-    return tuple()
+    return Any[]
 end
 
 function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
