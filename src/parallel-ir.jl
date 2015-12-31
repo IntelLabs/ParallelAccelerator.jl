@@ -4343,7 +4343,7 @@ function from_root(function_name, ast :: Expr)
     dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
     printLambda(1, ast)
 
-   #  ast = remove_extra_allocs(ast)
+    #remove_extra_allocs(ast)
 
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
@@ -4353,7 +4353,7 @@ end
 
 type rm_allocs_state
     defs::Set{SymGen}
-    removed_arrs::Set{SymGen}
+    removed_arrs::Dict{SymGen,Array{Any,1}}
     lambdaInfo
 end
 
@@ -4362,7 +4362,7 @@ end
 removes extra allocations
 """
 function remove_extra_allocs(ast)
-    dprintln(3,"starting remove")
+    dprintln(3,"starting remove extra allocs")
     lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, lambdaInfo)
     dprintln(3,"remove extra allocations lives ", lives)
@@ -4371,11 +4371,20 @@ function remove_extra_allocs(ast)
         defs = union(defs, i.def)
     end
     dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Set{SymGen}(), lambdaInfo)
+    rm_state = rm_allocs_state(defs, Dict{SymGen,Array{Any,1}}(), lambdaInfo)
     AstWalk(ast, rm_allocs_cb, rm_state)
-    #@bp
-    return ast
+
+    return;
 end
+
+function toSynGemOrInt(a::SymbolNode)
+    return a.name
+end
+
+function toSynGemOrInt(a::Union{Int,SymGen})
+    return a
+end
+
 
 function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
     head = ast.head
@@ -4386,26 +4395,45 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
         alloc_args = args[2].args[2:end]
-        shape::Array{Any,1} = get_alloc_shape(alloc_args)
-        println("rm alloc shape ", shape)
-        ast.args[2] = Expr(:call,TopNode(:tuple), shape...)
+        sh::Array{Any,1} = get_alloc_shape(alloc_args)
+        shape = map(toSynGemOrInt,sh)
+        dprintln(3,"rm alloc shape ", shape)
+        ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         updateLambdaType(arr, length(shape), state.lambdaInfo)
-#        @bp
+        state.removed_arrs[arr] = shape
         return ast
     elseif head==:call
-        ast
+        if args[1]==TopNode(:arraysize) && in(args[2], keys(state.removed_arrs))
+            shape = state.removed_arrs[args[2]]
+            return shape[args[3]]
+        elseif args[1]==GlobalRef(Base,:arraylen) && in(args[2], keys(state.removed_arrs))
+            shape = state.removed_arrs[args[2]]
+            dim = length(shape)
+            dprintln(3, "arraylen found")
+            if dim==1
+                ast = shape[1]
+            else
+                mul = foldl((a,b)->"$a*$b", "", shape)
+                ast = eval(parse(mul))
+            end
+            return ast
+        elseif args[1]==TopNode(:unsafe_arrayref) && in(args[2], keys(state.removed_arrs))
+            return 0
+        end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function updateLambdaType(arr::Symbol, dim::Int, lambdaInfo)
-    typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
-    lambdaInfo.var_defs[arr] = eval(parse(typ));
+    #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    #lambdaInfo.var_defs[arr] = eval(parse(typ));
+    lambdaInfo.var_defs[arr].typ = Int64; 
 end
 
 function updateLambdaType(arr::GenSym, dim::Int, lambdaInfo)
-    typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
-    lambdaInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
+    #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    #lambdaInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
+    lambdaInfo.gen_sym_typs[arr.id+1] = Int64;
 end
 
 function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
@@ -4414,7 +4442,6 @@ end
 
 function get_alloc_shape(args)
     # tuple
- #   @bp
     if args[1]==:(:jl_new_array) && length(args)==7
         return args[6].args[2:end]
     else
@@ -4432,10 +4459,7 @@ end
 function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
     head = ast.head
     args = ast.args
-#@bp
-    #println(ast)
     if head == :(=) && isAllocation(args[2])
-        println(ast)
         return Any[]
     end
     return pir_live_cb(ast,cbdata)
