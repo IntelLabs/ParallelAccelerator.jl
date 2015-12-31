@@ -4365,6 +4365,7 @@ function remove_extra_allocs(ast)
     dprintln(3,"starting remove extra allocs")
     lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, lambdaInfo)
+    #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, lambdaInfo)
     dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{SymGen}()
     for i in values(lives.basic_blocks)
@@ -4419,6 +4420,22 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
             return ast
         elseif args[1]==TopNode(:unsafe_arrayref) && in(args[2], keys(state.removed_arrs))
             return 0
+        end
+    # remove extra arrays from parfor data structures
+    elseif head==:parfor
+        parfor = ast.args[1]
+        if in(parfor.first_input, keys(state.removed_arrs))
+            #TODO parfor.first_input = NoArrayInput
+        end
+        for arr in keys(parfor.rws.readSet.arrays)
+            if in(arr, keys(state.removed_arrs))
+                delete!(parfor.rws.readSet.arrays, arr)
+            end
+        end
+        for arr in keys(parfor.rws.writeSet.arrays)
+            if in(arr, keys(state.removed_arrs))
+                delete!(parfor.rws.writeSet.arrays, arr)
+            end
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
