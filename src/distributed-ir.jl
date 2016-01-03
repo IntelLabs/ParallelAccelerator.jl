@@ -156,7 +156,7 @@ end
 end
 =#
 
-@doc """
+"""
 mark sequential arrays
 """
 function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, read)
@@ -226,7 +226,7 @@ end
 function get_arr_dist_info(ast::Any, state, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
-@doc """
+"""
 All arrays of a parfor should distributable for it to be distributable.
 If an array is used in any sequential parfor, it is not distributable.
 """

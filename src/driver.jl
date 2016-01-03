@@ -91,7 +91,7 @@ end
 
 alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
 
-@doc """
+"""
 A pass that translates supported operators and function calls to
 those defined in ParallelAccelerator.API.
 """
@@ -100,7 +100,7 @@ function captureOperators(func, ast, sig)
   return ast
 end
 
-@doc """
+"""
 Pass that translates runStencil call in the same way as a macro would do.
 This is only used when PROSPECT_MODE is off.
 """
@@ -109,7 +109,7 @@ function runStencilMacro(func, ast, sig)
   return ast
 end
 
-@doc """
+"""
 Pass for comprehension to cartesianarray translation.
 """
 function toCartesianArray(func, ast, sig)

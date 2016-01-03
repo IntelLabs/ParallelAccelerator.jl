@@ -1,5 +1,5 @@
 
-@doc """
+"""
 Find the basic block before the entry to a loop.
 """
 function getNonBlock(head_preds, back_edge)
@@ -15,7 +15,7 @@ function getNonBlock(head_preds, back_edge)
     throw(string("All entries in head preds list were back edges."))
 end
 
-@doc """
+"""
 Store information about a section of a body that will be translated into a task.
 """
 type ReplacedRegion
@@ -30,7 +30,7 @@ type EntityType
     typ
 end
 
-@doc """
+"""
 Structure for storing information about task formation.
 """
 type TaskInfo
@@ -45,7 +45,7 @@ type TaskInfo
     loopNests       :: Array{PIRLoopNest,1}      # holds information about the loop nests
 end
 
-@doc """
+"""
 Translated to pert_range_Nd_t in the task runtime.
 This represents an iteration space.
 dim is the number of dimensions in the iteration space.
@@ -62,7 +62,7 @@ type pir_range
     end
 end
 
-@doc """
+"""
 Similar to pir_range but used in circumstances where the expressions must have already been evaluated.
 Therefore the arrays are typed as Int64.
 Up to 3 dimensional iteration space constructors are supported to make it easier to do code generation later.
@@ -103,7 +103,7 @@ type pir_aad_dim
     u_b
 end
 
-@doc """
+"""
 Describes an array.
 row_major is true if the array is stored in row major format.
 dim_info describes which portion of the array is accessed for a given point in the iteration space.
@@ -117,7 +117,7 @@ type pir_array_access_desc
     end
 end
 
-@doc """
+"""
 Create an array access descriptor for "array".
 Presumes that for point "i" in the iteration space that only index "i" is accessed.
 """
@@ -127,7 +127,7 @@ function create1D_array_access_desc(array :: SymbolNode)
     ret
 end
 
-@doc """
+"""
 Create an array access descriptor for "array".
 Presumes that for points "(i,j)" in the iteration space that only indices "(i,j)" is accessed.
 """
@@ -138,7 +138,7 @@ function create2D_array_access_desc(array :: SymbolNode)
     ret
 end
 
-@doc """
+"""
 Create an array access descriptor for "array".
 """
 function create_array_access_desc(array :: SymbolNode)
@@ -151,7 +151,7 @@ function create_array_access_desc(array :: SymbolNode)
     end
 end
 
-@doc """
+"""
 A Julia representation of the argument metadata that will be passed to the runtime.
 """
 type pir_arg_metadata
@@ -172,7 +172,7 @@ type pir_arg_metadata
     end
 end
 
-@doc """
+"""
 A Julia representation of the grain size that will be passed to the runtime.
 """
 type pir_grain_size
@@ -191,7 +191,7 @@ TASK_AFFINITY_XEON = 1 << 13    # 0x02000
 TASK_AFFINITY_PHI = 1 << 12     # 0x01000
 TASK_STATIC_SCHEDULER = 1 << 11 # 0x00800
 
-@doc """
+"""
 A data type containing the information that CGen uses to generate a call to pert_insert_divisible_task.
 """
 type InsertTaskNode
@@ -208,7 +208,7 @@ type InsertTaskNode
     end
 end
 
-@doc """
+"""
 If run_as_tasks is positive then convert this parfor to a task and decrement the count so that only the
 original number run_as_tasks if the number of tasks created.
 """
@@ -223,7 +223,7 @@ function run_as_task_decrement()
     return true
 end
 
-@doc """
+"""
 Return true if run_as_task_decrement would return true but don't update the run_as_tasks count.
 """
 function run_as_task()
@@ -271,7 +271,7 @@ function PIRReduceTasks(x)
     global reduce_tasks = x
 end
 
-@doc """
+"""
 Returns true if the "node" is a parfor and the task limit hasn't been exceeded.
 Also controls whether stencils or reduction can become tasks.
 """
@@ -337,7 +337,7 @@ call_costs[(TopNode(:sitofp),(DataType,Int64))] = 1.0
 call_costs[(:log10,(Float64,))] = 160.0
 call_costs[(:erf,(Float64,))] = 75.0
 
-@doc """
+"""
 A sentinel in the instruction count estimation process.
 Before recursively processing a call, we add a sentinel for that function so that if we see that
 sentinel later we know we've tried to recursively process it and so can bail out by setting
@@ -346,7 +346,7 @@ fully_analyzed to false.
 type InProgress
 end
 
-@doc """
+"""
 Generate an instruction count estimate for a call instruction.
 """
 function call_instruction_count(args, state :: eic_state, debug_level)
@@ -392,7 +392,7 @@ function call_instruction_count(args, state :: eic_state, debug_level)
     return nothing
 end
 
-@doc """
+"""
 Try to figure out the instruction count for a given call.
 """
 function generate_instr_count(function_name, signature)
@@ -468,7 +468,7 @@ function process_function_name(function_name::Any)
     return function_name
 end
 
-@doc """
+"""
 AstWalk callback for estimating the instruction count.
 """
 function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_top_level, read)
@@ -551,7 +551,7 @@ function estimateInstrCount(ast::Any, state :: eic_state, top_level_number, is_t
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.
 """
 function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state :: expr_state)
@@ -571,7 +571,7 @@ function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.Parall
     end
 end
 
-@doc """
+"""
 Marks an assignment statement where the left-hand side can take over the storage from the right-hand side.
 """
 type RhsDead
@@ -583,7 +583,7 @@ ONE_AT_A_TIME = 2       # Just forms tasks out of one parfor at a time.
 MULTI_PARFOR_SEQ_NO = 3 # Forms tasks from multiple parfor in sequence but not sequential tasks.
 
 task_graph_mode = ONE_AT_A_TIME
-@doc """
+"""
 Control how blocks of code are made into tasks.
 """
 function PIRTaskGraphMode(x)
@@ -678,7 +678,7 @@ function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_r
     return assignments
 end
 
-@doc """
+"""
 An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
 """
@@ -753,7 +753,7 @@ end # end if THREADS_MODE
 
 
 
-@doc """
+"""
 For a given start and stop index in some body and liveness information, form a set of tasks.
 """
 function makeTasks(start_index, stop_index, body, bb_live_info, state, task_graph_mode)
@@ -833,7 +833,7 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
     task_list
 end
 
-@doc """
+"""
 Given a set of statement IDs and liveness information for the statements of the function, determine
 which symbols are needed at input and which symbols are purely local to the functio.
 """
@@ -872,21 +872,21 @@ function getIO(stmt_ids, bb_statements)
     cur_inputs, outputs, setdiff(cur_defs, union(cur_inputs, outputs))
 end
 
-@doc """
+"""
 Returns an expression to construct a :colon object that contains the start of a range, the end and the skip expression.
 """
 function mk_colon_expr(start_expr, skip_expr, end_expr)
     TypedExpr(Any, :call, :colon, start_expr, skip_expr, end_expr)
 end
 
-@doc """
+"""
 Returns an expression to get the start of an iteration range from a :colon object.
 """
 function mk_start_expr(colon_sym)
     TypedExpr(Any, :call, TopNode(:start), colon_sym)
 end
 
-@doc """
+"""
 Returns a :next call Expr that gets the next element of an iteration range from a :colon object.
 """
 function mk_next_expr(colon_sym, start_sym)
@@ -894,14 +894,14 @@ function mk_next_expr(colon_sym, start_sym)
 end
 
 
-@doc """
+"""
 Returns a :gotoifnot Expr given a condition "cond" and a label "goto_label".
 """
 function mk_gotoifnot_expr(cond, goto_label)
     TypedExpr(Any, :gotoifnot, cond, goto_label)
 end
 
-@doc """
+"""
 Just to hold the "found" Bool that says whether a unsafe variant was replaced with a regular version.
 """
 type cuw_state
@@ -911,7 +911,7 @@ type cuw_state
     end
 end
 
-@doc """
+"""
 The AstWalk callback to find unsafe arrayset and arrayref variants and
 replace them with the regular Julia versions.  Sets the "found" flag
 in the state when such a replacement is performed.
@@ -944,7 +944,7 @@ function convertUnsafeWalk(x::ANY, state, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Remove unsafe array access Symbols from the incoming "stmt".
 Returns the updated statement if something was modifed, else returns "nothing".
 """
@@ -963,7 +963,7 @@ function convertUnsafe(stmt)
     end
 end
 
-@doc """
+"""
 Try to remove unsafe array access Symbols from the incoming "stmt".  If successful, then return the updated
 statement, else return the unmodified statement.
 """
@@ -1011,7 +1011,7 @@ precompile(first_unless, (StepRange{Int64,Int64}, Int64))
 precompile(assign_gs4, (StepRange{Int64,Int64}, Int64))
 precompile(second_unless, (StepRange{Int64,Int64}, Int64))
 
-@doc """
+"""
 This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
 One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
@@ -1148,7 +1148,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
     end
 end
 
-@doc """
+"""
 In threads mode, we can't have parfor_start and parfor_end in the code since Julia has to compile the code itself and so
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
@@ -1184,7 +1184,7 @@ function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaH
     gsmap[x]
 end
 
-@doc """
+"""
 Given a parfor statement index in "parfor_index" in the "body"'s statements, create a TaskInfo node for this parfor.
 """
 function parforToTask(parfor_index, bb_statements, body, state)
@@ -1531,7 +1531,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     return ret
 end
 
-@doc """
+"""
 Form a task out of a range of sequential statements.
 This is not currently implemented.
 """

@@ -30,7 +30,7 @@ export @comprehend
 import CompilerTools
 import ..API
 
-@doc """
+"""
 Translate an ast whose head is :comprehension into equivalent code that uses cartesianarray call.
 """
 function comprehension_to_cartesianarray(ast)
@@ -59,7 +59,7 @@ function comprehension_to_cartesianarray(ast)
   Expr(:block, typetest, ast) 
 end
 
-@doc """
+"""
 This function is a AstWalker callback.
 """
 function process_node(node, state, top_level_number, is_top_level, read)
@@ -77,7 +77,7 @@ function process_node(node, state, top_level_number, is_top_level, read)
 end
 
 
-@doc """
+"""
 Translate all comprehension in an AST into equivalent code that uses cartesianarray call.
 """
 macro comprehend(ast)

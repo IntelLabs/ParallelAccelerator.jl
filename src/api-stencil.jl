@@ -75,7 +75,7 @@ function setindex!(asa::AbstractStencilArray, value, idx...)
   end
 end
 
-@doc """
+"""
 "runStencil" takes arguments in the form of "(kernel_function, A, B, C, ...,
 iteration, border_style)" where "kernel_function" is a lambda that represent
 stencil kernel, and "A", "B", "C", ... are arrays (of same dimension and size)
@@ -372,7 +372,7 @@ function translateStencil(krn, args::Array, esc)
   return expr
 end
 
-@doc """
+"""
 This function is a AstWalker callback.
 """
 function process_node(node, state, top_level_number, is_top_level, read)
@@ -387,7 +387,7 @@ function process_node(node, state, top_level_number, is_top_level, read)
 end
 
 
-@doc """
+"""
 Translate all comprehension in an AST into equivalent code that uses cartesianarray call.
 """
 macro comprehend(ast)

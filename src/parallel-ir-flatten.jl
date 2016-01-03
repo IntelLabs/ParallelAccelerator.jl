@@ -85,7 +85,7 @@ function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1})
     end
 end
 
-@doc """
+"""
 Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that
 body.  This parfor is in the nested (parfor code is in the parfor node itself) temporary form we use for fusion although 
 pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested

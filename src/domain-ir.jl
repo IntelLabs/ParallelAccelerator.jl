@@ -230,7 +230,7 @@ end
 emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
 newState(linfo, defs, state::IRState) = IRState(linfo, defs, Any[], state, state.data_source_counter)
 
-@doc """
+"""
 Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
@@ -243,7 +243,7 @@ function updateDef(state::IRState, s::SymAllGen, rhs)
     state.defs[s] = rhs
 end
 
-@doc """
+"""
 Look up a definition of a variable.
 Return nothing If none is found.
 """
@@ -252,7 +252,7 @@ function lookupDef(state::IRState, s::SymAllGen)
     get(state.defs, s, nothing)
 end
 
-@doc """
+"""
 Look up a definition of a variable only when it is const or assigned once.
 Return nothing If none is found.
 """
@@ -266,7 +266,7 @@ function lookupConstDef(state::IRState, s::SymAllGen)
     return nothing
 end
 
-@doc """
+"""
 Look up a definition of a variable recursively until the RHS is no-longer just a variable.
 Return the last rhs If found, or the input variable itself otherwise.
 """
@@ -279,7 +279,7 @@ function lookupConstDefForArg(state::IRState, s::Any)
     is(s, nothing) ? s1 : s
 end
 
-@doc """
+"""
 Look up a definition of a variable throughout nested states until a definition is found.
 Return nothing If none is found.
 """
