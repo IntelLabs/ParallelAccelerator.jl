@@ -390,10 +390,12 @@ function from_parfor(node::Expr, state)
         CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
-        first_arr = state.parfor_info[parfor.unique_id][1];
-        
-        dprintln(3,"DistIR parfor first array ", first_arr)
-        global_size = state.arrs_dist_info[first_arr].dim_sizes[1]
+        #first_arr = state.parfor_info[parfor.unique_id][1]; 
+        #dprintln(3,"DistIR parfor first array ", first_arr)
+        #global_size = state.arrs_dist_info[first_arr].dim_sizes[1]
+
+        # some parfors have no arrays
+        global_size = loopnest.upper
 
         loop_div_expr = :($loop_div_var = $(global_size)/__hps_num_pes)
         loop_start_expr = :($loop_start_var = __hps_node_id*$loop_div_var+1)
