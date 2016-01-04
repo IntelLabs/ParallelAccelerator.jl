@@ -1,429 +1,465 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
-        
-        
-        <link rel="shortcut icon" href="../img/favicon.ico">
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>ParallelAccelerator.ParallelIR - ParallelAccelerator.jl API</title>
+  
 
-	<title>ParallelAccelerator.ParallelIR - ParallelAccelerator.jl API</title>
+  <link rel="shortcut icon" href="../img/favicon.ico">
 
-        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
-        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
-        <link href="../css/base.css" rel="stylesheet">
-        <link rel="stylesheet" href="../css/highlight.css">
-        <link href="../site/css/base.css" rel="stylesheet">
-        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
-        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
-        <link href="../site/css/highlight.css" rel="stylesheet">
-        <link href="../site/site/css/base.css" rel="stylesheet">
-        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
-        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
-        <link href="../site/site/css/highlight.css" rel="stylesheet">
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
-        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-        <!--[if lt IE 9]>
-            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
-            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
-        <![endif]-->
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../css/highlight.css">
+  <link href="../site/css/base.css" rel="stylesheet">
+  <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+  <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+  <link href="../site/css/highlight.css" rel="stylesheet">
+  <link href="../site/site/css/base.css" rel="stylesheet">
+  <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+  <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+  <link href="../site/site/css/highlight.css" rel="stylesheet">
 
-        
-    </head>
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "ParallelAccelerator.ParallelIR";
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js"></script>
+  <script src="../js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="../js/highlight.pack.js"></script>
+  <script src="../js/theme.js"></script> 
+  <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+  <script src="../site/mkdocs/js/mustache.min.js"></script>
+  <script src="../site/mkdocs/js/require.js"></script>
+  <script src="../site/mkdocs/js/search.js"></script>
+  <script src="../site/mkdocs/js/text.js"></script>
+  <script src="../site/js/base.js"></script>
+  <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+  <script src="../site/js/highlight.pack.js"></script>
+  <script src="../site/js/jquery-1.10.2.min.js"></script>
+  <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+  <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+  <script src="../site/site/mkdocs/js/require.js"></script>
+  <script src="../site/site/mkdocs/js/search.js"></script>
+  <script src="../site/site/mkdocs/js/text.js"></script>
+  <script src="../site/site/js/base.js"></script>
+  <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+  <script src="../site/site/js/highlight.pack.js"></script>
+  <script src="../site/site/js/jquery-1.10.2.min.js"></script>
 
-    <body>
+  
+</head>
 
-        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
-    <div class="container">
+<body class="wy-body-for-nav" role="document">
 
-        <!-- Collapsed navigation -->
-        <div class="navbar-header">
-            
-            <!-- Expander button -->
-            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                <span class="sr-only">Toggle navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-            
+  <div class="wy-grid-for-nav">
 
-            <!-- Main title -->
-            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
-        </div>
-
-        <!-- Expanded navigation -->
-        <div class="navbar-collapse collapse">
-            
-                <!-- Main navigation -->
-                <ul class="nav navbar-nav">
-                
-                
-                    <li >
-                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../CompilerTools/">CompilerTools</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../DomainIR/">DomainIR</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
-                    </li>
-                
-                
-                
-                    <li class="active">
-                        <a href="./">ParallelAccelerator.ParallelIR</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../ParallelIR/">ParallelIR</a>
-                    </li>
-                
-                
-                
-                    <li >
-                        <a href="../api-index/">Api index</a>
-                    </li>
-                
-                
-                </ul>
-            
-
-            <ul class="nav navbar-nav navbar-right">
-                <li>
-                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
-                        <i class="fa fa-search"></i> Search
-                    </a>
-                </li>
-                
-                    <li >
-                        <a rel="next" href="../ParallelAccelerator.J2CArray/">
-                            <i class="fa fa-arrow-left"></i> Previous
-                        </a>
-                    </li>
-                    <li >
-                        <a rel="prev" href="../ParallelAccelerator/">
-                            Next <i class="fa fa-arrow-right"></i>
-                        </a>
-                    </li>
-                
-                
-                    <li>
-                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
-                            
-                                <i class="fa fa-github"></i>
-                            
-                            GitHub
-                        </a>
-                    </li>
-                
-            </ul>
-        </div>
-    </div>
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../CompilerTools.AliasAnalysis/" class="icon icon-home"> ParallelAccelerator.jl API</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
 </div>
+      </div>
 
-        <div class="container">
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        <ul class="current">
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../CompilerTools/">CompilerTools</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../DomainIR/">DomainIR</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 current">
+        <a class="current" href="./">ParallelAccelerator.ParallelIR</a>
+        
+            <ul>
             
-                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
-    <ul class="nav bs-sidenav">
-    
-        <li class="main active"><a href="#parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</a></li>
-        
-            <li><a href="#exported">Exported</a></li>
-        
-            <li><a href="#internal">Internal</a></li>
-        
-    
-        <li class="main "><a href="#if-a-definition-of-a-mmap-is-only-used-once-and-not-aliased-it-can-be-inlined-into-its">If a definition of a mmap is only used once and not aliased, it can be inlined into its</a></li>
-        
-    
-        <li class="main "><a href="#use-side-as-long-as-its-dependencies-have-not-been-changed">use side as long as its dependencies have not been changed.</a></li>
-        
-    
-        <li class="main "><a href="#fixme-is-the-implementation-still-correct-when-branches-are-present">FIXME: is the implementation still correct when branches are present?</a></li>
-        
-            <li><a href="#mmaptommapast-lives-uniqset">mmapToMmap!(ast,  lives,  uniqSet) ¶</a></li>
-        
-            <li><a href="#mustremainlaststatementinblocknodegotonode">mustRemainLastStatementInBlock(node::GotoNode) ¶</a></li>
-        
-            <li><a href="#nametosymbolnodenamesymbol-sym_to_type">nameToSymbolNode(name::Symbol,  sym_to_type) ¶</a></li>
-        
-            <li><a href="#nested_function_exprsmax_label-domain_lambda-dl_inputs">nested_function_exprs(max_label,  domain_lambda,  dl_inputs) ¶</a></li>
-        
-            <li><a href="#next_labelstateparallelacceleratorparallelirexpr_state">next_label(state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
-        
-            <li><a href="#oneifonlyx">oneIfOnly(x) ¶</a></li>
-        
-            <li><a href="#parfortotaskparfor_index-bb_statements-body-state">parforToTask(parfor_index,  bb_statements,  body,  state) ¶</a></li>
-        
-            <li><a href="#pirprintdldbg_level-dl">pirPrintDl(dbg_level,  dl) ¶</a></li>
-        
-            <li><a href="#pir_alias_cbastexpr-state-cbdata">pir_alias_cb(ast::Expr,  state,  cbdata) ¶</a></li>
-        
-            <li><a href="#pir_live_cbastexpr-cbdataany">pir_live_cb(ast::Expr,  cbdata::ANY) ¶</a></li>
-        
-            <li><a href="#pir_live_cb_defx">pir_live_cb_def(x) ¶</a></li>
-        
-            <li><a href="#printbodydlvl-bodyarrayany-1">printBody(dlvl,  body::Array{Any, 1}) ¶</a></li>
-        
-            <li><a href="#printlambdadlvl-nodeexpr">printLambda(dlvl,  node::Expr) ¶</a></li>
-        
-            <li><a href="#processandupdatebodylambdaexpr-ffunction-state">processAndUpdateBody(lambda::Expr,  f::Function,  state) ¶</a></li>
-        
-            <li><a href="#rangesizestart-skip-last">rangeSize(start,  skip,  last) ¶</a></li>
-        
-            <li><a href="#rangetorangedatarangeexpr-pre_offsetsarrayexpr-1-arr-range_numint64-state">rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state) ¶</a></li>
-        
-            <li><a href="#recreateloopsnew_body-the_parforparallelacceleratorparallelirpirparforast-state-newlambdainfo">recreateLoops(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state,  newLambdaInfo) ¶</a></li>
-        
-            <li><a href="#recreateloopsinternalnew_body-the_parforparallelacceleratorparallelirpirparforast-loop_nest_level-next_available_label-state-newlambdainfo">recreateLoopsInternal(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  loop_nest_level,  next_available_label,  state,  newLambdaInfo) ¶</a></li>
-        
-            <li><a href="#remembertypeforsymsym_to_typedictuniongensym-symbol-datatype-symuniongensym-symbol-typdatatype">rememberTypeForSym(sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  sym::Union{GenSym, Symbol},  typ::DataType) ¶</a></li>
-        
-            <li><a href="#removeasserteqshapeargsarrayany-1-state">removeAssertEqShape(args::Array{Any, 1},  state) ¶</a></li>
-        
-            <li><a href="#removenothingstmtsargsarrayany-1-state">removeNothingStmts(args::Array{Any, 1},  state) ¶</a></li>
-        
-            <li><a href="#remove_deadnode-dataparallelacceleratorparallelirremovedeadstate-top_level_number-is_top_level-read">remove_dead(node,  data::ParallelAccelerator.ParallelIR.RemoveDeadState,  top_level_number,  is_top_level,  read) ¶</a></li>
-        
-            <li><a href="#remove_extra_allocsast">remove_extra_allocs(ast) ¶</a></li>
-        
-            <li><a href="#remove_no_depsnodeany-dataparallelacceleratorparallelirremovenodepsstate-top_level_number-is_top_level-read">remove_no_deps(node::ANY,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read) ¶</a></li>
-        
-    
-        <li class="main "><a href="#this-routine-gathers-up-nodes-that-do-not-use">This routine gathers up nodes that do not use</a></li>
-        
-    
-        <li class="main "><a href="#any-variable-and-removes-them-from-the-ast-into-top_level_no_deps-this-works-in-conjunction-with">any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with</a></li>
-        
-    
-        <li class="main "><a href="#insert_no_deps_beginning-above-to-move-these-statements-with-no-dependencies-to-the-beginning-of-the-ast">insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST</a></li>
-        
-    
-        <li class="main "><a href="#where-they-cant-prevent-fusion">where they can't prevent fusion.</a></li>
-        
-            <li><a href="#replaceparforwithdictparforparallelacceleratorparallelirpirparforast-gensym_map">replaceParforWithDict(parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  gensym_map) ¶</a></li>
-        
-            <li><a href="#run_as_task">run_as_task() ¶</a></li>
-        
-            <li><a href="#run_as_task_decrement">run_as_task_decrement() ¶</a></li>
-        
-            <li><a href="#selecttorangedataselectexpr-pre_offsetsarrayexpr-1-state">selectToRangeData(select::Expr,  pre_offsets::Array{Expr, 1},  state) ¶</a></li>
-        
-            <li><a href="#seqtaskbody_indices-bb_statements-body-state">seqTask(body_indices,  bb_statements,  body,  state) ¶</a></li>
-        
-            <li><a href="#showioio-pnodeparallelacceleratorparallelirpirparforast">show(io::IO,  pnode::ParallelAccelerator.ParallelIR.PIRParForAst) ¶</a></li>
-        
-            <li><a href="#simpleindexdict">simpleIndex(dict) ¶</a></li>
-        
-            <li><a href="#sub_arraylen_walkxexpr-replacement-top_level_number-is_top_level-read">sub_arraylen_walk(x::Expr,  replacement,  top_level_number,  is_top_level,  read) ¶</a></li>
-        
-            <li><a href="#sub_arrayset_walkxexpr-cbd-top_level_number-is_top_level-read">sub_arrayset_walk(x::Expr,  cbd,  top_level_number,  is_top_level,  read) ¶</a></li>
-        
-            <li><a href="#sub_cur_body_walkxexpr-cbdparallelacceleratorparallelircur_body_data-top_level_numberint64-is_top_levelbool-readbool">sub_cur_body_walk(x::Expr,  cbd::ParallelAccelerator.ParallelIR.cur_body_data,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) ¶</a></li>
-        
-            <li><a href="#substitute_arraylenx-replacement">substitute_arraylen(x,  replacement) ¶</a></li>
-        
-            <li><a href="#substitute_arraysetx-arrays_set_in_cur_body-output_items_with_aliases">substitute_arrayset(x,  arrays_set_in_cur_body,  output_items_with_aliases) ¶</a></li>
-        
-            <li><a href="#substitute_cur_bodyx-temp_mapdictuniongensym-symbol-uniongensym-symbolnode-index_mapdictuniongensym-symbol-uniongensym-symbol-arrays_set_in_cur_bodysetuniongensym-symbol-replace_array_name_in_arraysetdictuniongensym-symbol-uniongensym-symbol-stateparallelacceleratorparallelirexpr_state">substitute_cur_body(x,  temp_map::Dict{Union{GenSym, Symbol}, Union{GenSym, SymbolNode}},  index_map::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  arrays_set_in_cur_body::Set{Union{GenSym, Symbol}},  replace_array_name_in_arrayset::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
-        
-            <li><a href="#taskableparfornode">taskableParfor(node) ¶</a></li>
-        
-            <li><a href="#tosngenxsymbol-typ">toSNGen(x::Symbol,  typ) ¶</a></li>
-        
-            <li><a href="#tosymgenxsymbol">toSymGen(x::Symbol) ¶</a></li>
-        
-            <li><a href="#tosymnodegenxsymbol-typ">toSymNodeGen(x::Symbol,  typ) ¶</a></li>
-        
-            <li><a href="#uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelircopypropagatestate">ParallelAccelerator.ParallelIR.CopyPropagateState ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirdirwalk">ParallelAccelerator.ParallelIR.DirWalk ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirdomainoperation">ParallelAccelerator.ParallelIR.DomainOperation ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirequivalenceclasses">ParallelAccelerator.ParallelIR.EquivalenceClasses ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirfusionsentinel">ParallelAccelerator.ParallelIR.FusionSentinel ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirinprogress">ParallelAccelerator.ParallelIR.InProgress ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirinputinfo">ParallelAccelerator.ParallelIR.InputInfo ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirinserttasknode">ParallelAccelerator.ParallelIR.InsertTaskNode ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpirparforstartend">ParallelAccelerator.ParallelIR.PIRParForStartEnd ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirrangedata">ParallelAccelerator.ParallelIR.RangeData ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirremovedeadstate">ParallelAccelerator.ParallelIR.RemoveDeadState ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirremovenodepsstate">ParallelAccelerator.ParallelIR.RemoveNoDepsState ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirreplacedregion">ParallelAccelerator.ParallelIR.ReplacedRegion ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirrhsdead">ParallelAccelerator.ParallelIR.RhsDead ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirstatementwithdeps">ParallelAccelerator.ParallelIR.StatementWithDeps ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirtaskinfo">ParallelAccelerator.ParallelIR.TaskInfo ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelircur_body_data">ParallelAccelerator.ParallelIR.cur_body_data ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelircuw_state">ParallelAccelerator.ParallelIR.cuw_state ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirexpr_state">ParallelAccelerator.ParallelIR.expr_state ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpir_arg_metadata">ParallelAccelerator.ParallelIR.pir_arg_metadata ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpir_array_access_desc">ParallelAccelerator.ParallelIR.pir_array_access_desc ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpir_grain_size">ParallelAccelerator.ParallelIR.pir_grain_size ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpir_range">ParallelAccelerator.ParallelIR.pir_range ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirpir_range_actual">ParallelAccelerator.ParallelIR.pir_range_actual ¶</a></li>
-        
-            <li><a href="#parallelacceleratorparallelirsub_arrayset_data">ParallelAccelerator.ParallelIR.sub_arrayset_data ¶</a></li>
-        
-    
-    </ul>
-</div></div>
-                <div class="col-md-9" role="main">
+                <li class="toctree-l3"><a href="#parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</a></li>
+                
+                    <li><a class="toctree-l4" href="#exported">Exported</a></li>
+                
+                    <li><a class="toctree-l4" href="#internal">Internal</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#if-a-definition-of-a-mmap-is-only-used-once-and-not-aliased-it-can-be-inlined-into-its">If a definition of a mmap is only used once and not aliased, it can be inlined into its</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#use-side-as-long-as-its-dependencies-have-not-been-changed">use side as long as its dependencies have not been changed.</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#fixme-is-the-implementation-still-correct-when-branches-are-present">FIXME: is the implementation still correct when branches are present?</a></li>
+                
+                    <li><a class="toctree-l4" href="#mmaptommapast-lives-uniqset">mmapToMmap!(ast,  lives,  uniqSet) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#mustremainlaststatementinblocknodegotonode">mustRemainLastStatementInBlock(node::GotoNode) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#nametosymbolnodenamesymbol-sym_to_type">nameToSymbolNode(name::Symbol,  sym_to_type) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#nested_function_exprsmax_label-domain_lambda-dl_inputs">nested_function_exprs(max_label,  domain_lambda,  dl_inputs) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#next_labelstateparallelacceleratorparallelirexpr_state">next_label(state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#oneifonlyx">oneIfOnly(x) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parfortotaskparfor_index-bb_statements-body-state">parforToTask(parfor_index,  bb_statements,  body,  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#pirprintdldbg_level-dl">pirPrintDl(dbg_level,  dl) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#pir_alias_cbastexpr-state-cbdata">pir_alias_cb(ast::Expr,  state,  cbdata) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#pir_live_cbastexpr-cbdataany">pir_live_cb(ast::Expr,  cbdata::ANY) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#pir_live_cb_defx">pir_live_cb_def(x) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#printbodydlvl-bodyarrayany-1">printBody(dlvl,  body::Array{Any, 1}) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#printlambdadlvl-nodeexpr">printLambda(dlvl,  node::Expr) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#processandupdatebodylambdaexpr-ffunction-state">processAndUpdateBody(lambda::Expr,  f::Function,  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#rangesizestart-skip-last">rangeSize(start,  skip,  last) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#rangetorangedatarangeexpr-pre_offsetsarrayexpr-1-arr-range_numint64-state">rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#recreateloopsnew_body-the_parforparallelacceleratorparallelirpirparforast-state-newlambdainfo">recreateLoops(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state,  newLambdaInfo) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#recreateloopsinternalnew_body-the_parforparallelacceleratorparallelirpirparforast-loop_nest_level-next_available_label-state-newlambdainfo">recreateLoopsInternal(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  loop_nest_level,  next_available_label,  state,  newLambdaInfo) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#remembertypeforsymsym_to_typedictuniongensym-symbol-datatype-symuniongensym-symbol-typdatatype">rememberTypeForSym(sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  sym::Union{GenSym, Symbol},  typ::DataType) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#removeasserteqshapeargsarrayany-1-state">removeAssertEqShape(args::Array{Any, 1},  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#removenothingstmtsargsarrayany-1-state">removeNothingStmts(args::Array{Any, 1},  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#remove_deadnode-dataparallelacceleratorparallelirremovedeadstate-top_level_number-is_top_level-read">remove_dead(node,  data::ParallelAccelerator.ParallelIR.RemoveDeadState,  top_level_number,  is_top_level,  read) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#remove_extra_allocsast">remove_extra_allocs(ast) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#remove_no_depsnodeany-dataparallelacceleratorparallelirremovenodepsstate-top_level_number-is_top_level-read">remove_no_deps(node::ANY,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read) ¶</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#this-routine-gathers-up-nodes-that-do-not-use">This routine gathers up nodes that do not use</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#any-variable-and-removes-them-from-the-ast-into-top_level_no_deps-this-works-in-conjunction-with">any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#insert_no_deps_beginning-above-to-move-these-statements-with-no-dependencies-to-the-beginning-of-the-ast">insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#where-they-cant-prevent-fusion">where they can't prevent fusion.</a></li>
+                
+                    <li><a class="toctree-l4" href="#replaceparforwithdictparforparallelacceleratorparallelirpirparforast-gensym_map">replaceParforWithDict(parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  gensym_map) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#run_as_task">run_as_task() ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#run_as_task_decrement">run_as_task_decrement() ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#selecttorangedataselectexpr-pre_offsetsarrayexpr-1-state">selectToRangeData(select::Expr,  pre_offsets::Array{Expr, 1},  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#seqtaskbody_indices-bb_statements-body-state">seqTask(body_indices,  bb_statements,  body,  state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#showioio-pnodeparallelacceleratorparallelirpirparforast">show(io::IO,  pnode::ParallelAccelerator.ParallelIR.PIRParForAst) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#simpleindexdict">simpleIndex(dict) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#sub_arraylen_walkxexpr-replacement-top_level_number-is_top_level-read">sub_arraylen_walk(x::Expr,  replacement,  top_level_number,  is_top_level,  read) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#sub_arrayset_walkxexpr-cbd-top_level_number-is_top_level-read">sub_arrayset_walk(x::Expr,  cbd,  top_level_number,  is_top_level,  read) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#sub_cur_body_walkxexpr-cbdparallelacceleratorparallelircur_body_data-top_level_numberint64-is_top_levelbool-readbool">sub_cur_body_walk(x::Expr,  cbd::ParallelAccelerator.ParallelIR.cur_body_data,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#substitute_arraylenx-replacement">substitute_arraylen(x,  replacement) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#substitute_arraysetx-arrays_set_in_cur_body-output_items_with_aliases">substitute_arrayset(x,  arrays_set_in_cur_body,  output_items_with_aliases) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#substitute_cur_bodyx-temp_mapdictuniongensym-symbol-uniongensym-symbolnode-index_mapdictuniongensym-symbol-uniongensym-symbol-arrays_set_in_cur_bodysetuniongensym-symbol-replace_array_name_in_arraysetdictuniongensym-symbol-uniongensym-symbol-stateparallelacceleratorparallelirexpr_state">substitute_cur_body(x,  temp_map::Dict{Union{GenSym, Symbol}, Union{GenSym, SymbolNode}},  index_map::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  arrays_set_in_cur_body::Set{Union{GenSym, Symbol}},  replace_array_name_in_arrayset::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#taskableparfornode">taskableParfor(node) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#tosngenxsymbol-typ">toSNGen(x::Symbol,  typ) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#tosymgenxsymbol">toSymGen(x::Symbol) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#tosymnodegenxsymbol-typ">toSymNodeGen(x::Symbol,  typ) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelircopypropagatestate">ParallelAccelerator.ParallelIR.CopyPropagateState ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirdirwalk">ParallelAccelerator.ParallelIR.DirWalk ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirdomainoperation">ParallelAccelerator.ParallelIR.DomainOperation ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirequivalenceclasses">ParallelAccelerator.ParallelIR.EquivalenceClasses ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirfusionsentinel">ParallelAccelerator.ParallelIR.FusionSentinel ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirinprogress">ParallelAccelerator.ParallelIR.InProgress ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirinputinfo">ParallelAccelerator.ParallelIR.InputInfo ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirinserttasknode">ParallelAccelerator.ParallelIR.InsertTaskNode ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpirparforstartend">ParallelAccelerator.ParallelIR.PIRParForStartEnd ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirrangedata">ParallelAccelerator.ParallelIR.RangeData ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirremovedeadstate">ParallelAccelerator.ParallelIR.RemoveDeadState ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirremovenodepsstate">ParallelAccelerator.ParallelIR.RemoveNoDepsState ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirreplacedregion">ParallelAccelerator.ParallelIR.ReplacedRegion ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirrhsdead">ParallelAccelerator.ParallelIR.RhsDead ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirstatementwithdeps">ParallelAccelerator.ParallelIR.StatementWithDeps ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirtaskinfo">ParallelAccelerator.ParallelIR.TaskInfo ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelircur_body_data">ParallelAccelerator.ParallelIR.cur_body_data ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelircuw_state">ParallelAccelerator.ParallelIR.cuw_state ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirexpr_state">ParallelAccelerator.ParallelIR.expr_state ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpir_arg_metadata">ParallelAccelerator.ParallelIR.pir_arg_metadata ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpir_array_access_desc">ParallelAccelerator.ParallelIR.pir_array_access_desc ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpir_grain_size">ParallelAccelerator.ParallelIR.pir_grain_size ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpir_range">ParallelAccelerator.ParallelIR.pir_range ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirpir_range_actual">ParallelAccelerator.ParallelIR.pir_range_actual ¶</a></li>
+                
+                    <li><a class="toctree-l4" href="#parallelacceleratorparallelirsub_arrayset_data">ParallelAccelerator.ParallelIR.sub_arrayset_data ¶</a></li>
+                
+            
+            </ul>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelAccelerator/">ParallelAccelerator</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../ParallelIR/">ParallelIR</a>
+        
+    </li>
+<li>
+          
+            <li>
+    <li class="toctree-l1 ">
+        <a class="" href="../api-index/">Api index</a>
+        
+    </li>
+<li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
 
-<h1 id="parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</h1>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../CompilerTools.AliasAnalysis/">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>ParallelAccelerator.ParallelIR</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        
+          <a href="https://github.com/IntelLabs/ParallelAccelerator.jl" class="icon icon-github"> Edit on GitHub</a>
+        
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</h1>
 <h2 id="exported">Exported</h2>
 <hr />
 <p><a id="method__astwalk.1" class="lexicon_definition"></a></p>
@@ -1789,65 +1825,52 @@ Up to 3 dimensional iteration space constructors are supported to make it easier
 <h4 id="parallelacceleratorparallelirsub_arrayset_data">ParallelAccelerator.ParallelIR.sub_arrayset_data <a href="#type__sub_arrayset_data.1">¶</a></h4>
 <p>Holds data for modifying arrayset calls.</p>
 <p><em>source:</em>
-<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1338</a></p></div>
-            
-        </div>
-
-        <footer class="col-md-12">
-            <hr>
-            
-            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
-        </footer>
-
-        <script src="../js/jquery-1.10.2.min.js"></script>
-        <script src="../js/bootstrap-3.0.3.min.js"></script>
-        <script src="../js/highlight.pack.js"></script>
-        <script>var base_url = '..';</script>
-        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
-        <script src="../js/base.js"></script>
-        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
-        <script src="../site/mkdocs/js/mustache.min.js"></script>
-        <script src="../site/mkdocs/js/require.js"></script>
-        <script src="../site/mkdocs/js/search.js"></script>
-        <script src="../site/mkdocs/js/text.js"></script>
-        <script src="../site/js/base.js"></script>
-        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
-        <script src="../site/js/highlight.pack.js"></script>
-        <script src="../site/js/jquery-1.10.2.min.js"></script>
-        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
-        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
-        <script src="../site/site/mkdocs/js/require.js"></script>
-        <script src="../site/site/mkdocs/js/search.js"></script>
-        <script src="../site/site/mkdocs/js/text.js"></script>
-        <script src="../site/site/js/base.js"></script>
-        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
-        <script src="../site/site/js/highlight.pack.js"></script>
-        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
-
-        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
-                    </div>
-                    <div class="modal-body">
-                        <p>
-                            From here you can search these documents. Enter
-                            your search terms below.
-                        </p>
-                        <form role="form">
-                            <div class="form-group">
-                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
-                            </div>
-                        </form>
-                        <div id="mkdocs-search-results"></div>
-                    </div>
-                    <div class="modal-footer">
-                    </div>
-                </div>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1338</a></p>
+              
             </div>
-        </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../ParallelAccelerator/" class="btn btn-neutral float-right" title="ParallelAccelerator"/>Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="../ParallelAccelerator.J2CArray/" class="btn btn-neutral" title="ParallelAccelerator.J2CArray"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
 
-    </body>
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+	  
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+<div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a class="icon icon-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+        <span><a href="../ParallelAccelerator.J2CArray/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="../ParallelAccelerator/" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+
+</body>
 </html>
