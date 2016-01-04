@@ -1,0 +1,13 @@
+site_name: ParallelAccelerator.jl API
+
+site_description: Full API of ParallelAccelerator package
+
+site_url: http://parallelaccelerator-api.readthedocs.org/
+
+repo_url: https://github.com/IntelLabs/ParallelAccelerator.jl
+
+docs_dir: doc/api
+
+site_dir: doc/api/site
+
+theme: readthedocs
