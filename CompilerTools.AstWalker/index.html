@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.AstWalker - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.AliasAnalysis/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.CFGs/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolsastwalker">CompilerTools.AstWalker</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolsastwalker">CompilerTools.AstWalker</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__astwalk.1" class="lexicon_definition"></a></p>
+<h4 id="astwalkastany-callback-cbdataany">AstWalk(ast::ANY,  callback,  cbdata::ANY) <a href="#method__astwalk.1">¶</a></h4>
+<p>Entry point into the code to perform an AST walk.
+You generally pass a lambda expression as the first argument.
+The third argument is an object that is opaque to AstWalk but that is passed to every callback.
+You can use this object to collect data about the AST as it is walked or to hold information on
+how to change the AST as you are walking over it.
+The second argument is a callback function.  For each AST node, AstWalk will invoke this callback.
+The signature of the callback must be (Any, Any, Int64, Bool, Bool).  The arguments to the callback
+are as follows:
+    1) The current node of the AST being walked.
+    2) The callback data object that you originally passed as the first argument to AstWalk.
+    3) Specifies the index of the body's statement that is currently being processed.
+    4) True if the current AST node being walked is the root of a top-level statement, false if the AST node is a sub-tree of a top-level statement.
+    5) True if the AST node is being read, false if it is being written.
+The callback should return an array of items.  It does this because in some cases it makes sense to return multiple things so
+all callbacks have to to keep the interface consistent.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:188</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__from_assignment.1" class="lexicon_definition"></a></p>
+<h4 id="from_assignmentastarrayany-1-depth-callback-cbdataany-top_level_number-read">from_assignment(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read) <a href="#method__from_assignment.1">¶</a></h4>
+<p>AstWalk through an assignment expression.
+Recursively process the left and right hand sides with AstWalk.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:128</a></p>
+<hr />
+<p><a id="method__from_body.1" class="lexicon_definition"></a></p>
+<h4 id="from_bodyastarrayany-1-depth-callback-cbdataany-top_level_number-read">from_body(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read) <a href="#method__from_body.1">¶</a></h4>
+<p>AstWalk through a function body.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:81</a></p>
+<hr />
+<p><a id="method__from_call.1" class="lexicon_definition"></a></p>
+<h4 id="from_callastarrayany-1-depth-callback-cbdataany-top_level_number-read">from_call(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read) <a href="#method__from_call.1">¶</a></h4>
+<p>AstWalk through a call expression.
+Recursively process the name of the function and each of its arguments.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:141</a></p>
+<hr />
+<p><a id="method__from_expr.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprastany-depth-callback-cbdataany-top_level_number-is_top_level-read">from_expr(ast::ANY,  depth,  callback,  cbdata::ANY,  top_level_number,  is_top_level,  read) <a href="#method__from_expr.1">¶</a></h4>
+<p>The main routine that switches on all the various AST node types.
+The internal nodes of the AST are of type Expr with various different Expr.head field values such as :lambda, :body, :block, etc.
+The leaf nodes of the AST all have different types.
+There are some node types we don't currently recurse into.  Maybe this needs to be extended.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:187</a></p>
+<hr />
+<p><a id="method__from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayany-1-depth-callback-cbdataany-top_level_number-read">from_exprs(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read) <a href="#method__from_exprs.1">¶</a></h4>
+<p>AstWalk through an array of expressions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:104</a></p>
+<hr />
+<p><a id="method__from_lambda.1" class="lexicon_definition"></a></p>
+<h4 id="from_lambdaastarrayany-1-depth-callback-cbdataany-top_level_number-read">from_lambda(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read) <a href="#method__from_lambda.1">¶</a></h4>
+<p>AstWalk through a lambda expression.
+Walk through each input parameters and the body of the lambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:50</a></p>
+<hr />
+<p><a id="method__uncompressed_ast.1" class="lexicon_definition"></a></p>
+<h4 id="uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) <a href="#method__uncompressed_ast.1">¶</a></h4>
+<p>Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/ast_walk.jl">CompilerTools/src/ast_walk.jl:42</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

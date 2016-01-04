@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>Api index - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../ParallelIR/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li class="disabled">
+                        <a rel="prev" >
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#api-index">API-INDEX</a></li>
+        
+            <li><a href="#module-parallelacceleratordriver">MODULE: ParallelAccelerator.Driver</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#module-parallelacceleratorapistencil">MODULE: ParallelAccelerator.API.Stencil</a></li>
+        
+            <li><a href="#exported_1">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsreadwriteset">MODULE: CompilerTools.ReadWriteSet</a></li>
+        
+            <li><a href="#exported_2">Exported</a></li>
+        
+            <li><a href="#internal_1">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsastwalker">MODULE: CompilerTools.AstWalker</a></li>
+        
+            <li><a href="#exported_3">Exported</a></li>
+        
+            <li><a href="#internal_2">Internal</a></li>
+        
+            <li><a href="#module-compilertoolscfgs">MODULE: CompilerTools.CFGs</a></li>
+        
+            <li><a href="#exported_4">Exported</a></li>
+        
+            <li><a href="#internal_3">Internal</a></li>
+        
+            <li><a href="#module-compilertoolslambdahandling">MODULE: CompilerTools.LambdaHandling</a></li>
+        
+            <li><a href="#exported_5">Exported</a></li>
+        
+            <li><a href="#internal_4">Internal</a></li>
+        
+            <li><a href="#module-compilertoolslivenessanalysis">MODULE: CompilerTools.LivenessAnalysis</a></li>
+        
+            <li><a href="#exported_6">Exported</a></li>
+        
+            <li><a href="#internal_5">Internal</a></li>
+        
+            <li><a href="#module-parallelacceleratorcomprehension">MODULE: ParallelAccelerator.Comprehension</a></li>
+        
+            <li><a href="#exported_7">Exported</a></li>
+        
+            <li><a href="#internal_6">Internal</a></li>
+        
+            <li><a href="#module-parallelacceleratordistributedir">MODULE: ParallelAccelerator.DistributedIR</a></li>
+        
+            <li><a href="#internal_7">Internal</a></li>
+        
+            <li><a href="#module-parallelacceleratorapicapture">MODULE: ParallelAccelerator.API.Capture</a></li>
+        
+            <li><a href="#internal_8">Internal</a></li>
+        
+            <li><a href="#module-parallelacceleratordomainir">MODULE: ParallelAccelerator.DomainIR</a></li>
+        
+            <li><a href="#internal_9">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsdebugmsg">MODULE: CompilerTools.DebugMsg</a></li>
+        
+            <li><a href="#exported_8">Exported</a></li>
+        
+            <li><a href="#internal_10">Internal</a></li>
+        
+            <li><a href="#module-parallelacceleratorparallelir">MODULE: ParallelAccelerator.ParallelIR</a></li>
+        
+            <li><a href="#exported_9">Exported</a></li>
+        
+            <li><a href="#internal_11">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsoptframework">MODULE: CompilerTools.OptFramework</a></li>
+        
+            <li><a href="#exported_10">Exported</a></li>
+        
+            <li><a href="#internal_12">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsudchains">MODULE: CompilerTools.UDChains</a></li>
+        
+            <li><a href="#internal_13">Internal</a></li>
+        
+            <li><a href="#module-compilertoolsloops">MODULE: CompilerTools.Loops</a></li>
+        
+            <li><a href="#exported_11">Exported</a></li>
+        
+            <li><a href="#internal_14">Internal</a></li>
+        
+            <li><a href="#module-parallelaccelerator">MODULE: ParallelAccelerator</a></li>
+        
+            <li><a href="#internal_15">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="api-index">API-INDEX</h1>
+<h2 id="module-parallelacceleratordriver">MODULE: ParallelAccelerator.Driver</h2>
+<hr />
+<h2 id="exported">Exported</h2>
+<p><a href="../ParallelAccelerator.Driver/#method__captureoperators.1">captureOperators(func,  ast,  sig)</a>  A pass that translates supported operators and function calls to</p>
+<p><a href="../ParallelAccelerator.Driver/#method__runstencilmacro.1">runStencilMacro(func,  ast,  sig)</a>  Pass that translates runStencil call in the same way as a macro would do.</p>
+<p><a href="../ParallelAccelerator.Driver/#method__tocartesianarray.1">toCartesianArray(func,  ast,  sig)</a>  Pass for comprehension to cartesianarray translation.</p>
+<h2 id="module-parallelacceleratorapistencil">MODULE: ParallelAccelerator.API.Stencil</h2>
+<hr />
+<h2 id="exported_1">Exported</h2>
+<p><a href="../ParallelAccelerator.API.Stencil/#method__runstencil.1">runStencil(inputs...)</a>  "runStencil" takes arguments in the form of "(kernel_function, A, B, C, ...,</p>
+<hr />
+<h2 id="internal">Internal</h2>
+<p><a href="../ParallelAccelerator.API.Stencil/#method__process_node.1">process_node(node,  state,  top_level_number,  is_top_level,  read)</a>  This function is a AstWalker callback.</p>
+<p><a href="../ParallelAccelerator.API.Stencil/#macro___comprehend.1">@comprehend(ast)</a>  Translate all comprehension in an AST into equivalent code that uses cartesianarray call.</p>
+<h2 id="module-compilertoolsreadwriteset">MODULE: CompilerTools.ReadWriteSet</h2>
+<hr />
+<h2 id="exported_2">Exported</h2>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_exprs.1">from_exprs(ast::Array{T, N})</a>  Walk through an array of expressions.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_exprs.2">from_exprs(ast::Array{T, N},  callback::Union{Function, Void},  cbdata::ANY)</a>  Walk through an array of expressions.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_exprs.3">from_exprs(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Walk through an array of expressions.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__isread.1">isRead(sym::Union{GenSym, Symbol},  rws::CompilerTools.ReadWriteSet.ReadWriteSetType)</a>  Return true if some symbol in "sym" is read either as a scalar or array within the computed ReadWriteSetType.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__iswritten.1">isWritten(sym::Union{GenSym, Symbol},  rws::CompilerTools.ReadWriteSet.ReadWriteSetType)</a>  Return true if some symbol in "sym" is written either as a scalar or array within the computed ReadWriteSetType.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#type__accessset.1">CompilerTools.ReadWriteSet.AccessSet</a>  Holds which scalars and which array are accessed and for array which index expressions are used.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#type__readwritesettype.1">CompilerTools.ReadWriteSet.ReadWriteSetType</a>  Stores which scalars and arrays are read or written in some code region.</p>
+<hr />
+<h2 id="internal_1">Internal</h2>
+<p><a href="../CompilerTools.ReadWriteSet/#method__addindexexpr.1">addIndexExpr!(this_dict,  array_name,  index_expr)</a>  Takes a dictionary of symbol to an array of index expression.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_assignment.1">from_assignment(ast::Array{Any, 1},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Process an assignment AST node.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_call.1">from_call(ast::Array{Any, 1},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Process :call Expr nodes to find arrayref and arrayset calls and adding the corresponding index expressions to the read and write sets respectively.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_coloncolon.1">from_coloncolon(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Process a :(::) AST node.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_expr.1">from_expr(ast::ANY)</a>  Walk through one AST node.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_expr.2">from_expr(ast::ANY,  callback::Union{Function, Void},  cbdata::ANY)</a>  Walk through one AST node.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_expr.3">from_expr(ast::LambdaStaticData,  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  The main routine that switches on all the various AST node types.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_lambda.1">from_lambda(ast::Expr,  depth,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Walk through a lambda expression.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__from_tuple.1">from_tuple(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY)</a>  Walk through a tuple.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__tosymgen.1">toSymGen(x::Union{GenSym, Symbol})</a>  In various places we need a SymGen type which is the union of Symbol and GenSym.</p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__trycallback.1">tryCallback(ast::ANY,  callback::Union{Function, Void},  cbdata::ANY,  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType)</a>  If an AST node is not recognized then we try the passing the node to the callback to see if </p>
+<p><a href="../CompilerTools.ReadWriteSet/#method__uncompressed_ast.1">uncompressed_ast(l::LambdaStaticData)</a>  Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<h2 id="module-compilertoolsastwalker">MODULE: CompilerTools.AstWalker</h2>
+<hr />
+<h2 id="exported_3">Exported</h2>
+<p><a href="../CompilerTools.AstWalker/#method__astwalk.1">AstWalk(ast::ANY,  callback,  cbdata::ANY)</a>  Entry point into the code to perform an AST walk.</p>
+<hr />
+<h2 id="internal_2">Internal</h2>
+<p><a href="../CompilerTools.AstWalker/#method__from_assignment.1">from_assignment(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read)</a>  AstWalk through an assignment expression.</p>
+<p><a href="../CompilerTools.AstWalker/#method__from_body.1">from_body(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read)</a>  AstWalk through a function body.</p>
+<p><a href="../CompilerTools.AstWalker/#method__from_call.1">from_call(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read)</a>  AstWalk through a call expression.</p>
+<p><a href="../CompilerTools.AstWalker/#method__from_expr.1">from_expr(ast::ANY,  depth,  callback,  cbdata::ANY,  top_level_number,  is_top_level,  read)</a>  The main routine that switches on all the various AST node types.</p>
+<p><a href="../CompilerTools.AstWalker/#method__from_exprs.1">from_exprs(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read)</a>  AstWalk through an array of expressions.</p>
+<p><a href="../CompilerTools.AstWalker/#method__from_lambda.1">from_lambda(ast::Array{Any, 1},  depth,  callback,  cbdata::ANY,  top_level_number,  read)</a>  AstWalk through a lambda expression.</p>
+<p><a href="../CompilerTools.AstWalker/#method__uncompressed_ast.1">uncompressed_ast(l::LambdaStaticData)</a>  Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<h2 id="module-compilertoolscfgs">MODULE: CompilerTools.CFGs</h2>
+<hr />
+<h2 id="exported_4">Exported</h2>
+<p><a href="../CompilerTools.CFGs/#method__find_bb_for_statement.1">find_bb_for_statement(top_number::Int64,  bl::CompilerTools.CFGs.CFG)</a>  Find the basic block that contains a given statement number.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_exprs.1">from_exprs(ast::Array{Any, 1},  depth,  state,  callback,  cbdata)</a>  Process an array of expressions.</p>
+<p><a href="../CompilerTools.CFGs/#method__show.1">show(io::IO,  bb::CompilerTools.CFGs.BasicBlock)</a>  Overload of Base.show to pretty-print a CFGS.BasicBlock object.</p>
+<p><a href="../CompilerTools.CFGs/#method__show.2">show(io::IO,  bl::CompilerTools.CFGs.CFG)</a>  Overload of Base.show to pretty-print a CFG object.</p>
+<p><a href="../CompilerTools.CFGs/#method__show.3">show(io::IO,  tls::CompilerTools.CFGs.TopLevelStatement)</a>  Overload of Base.show to pretty-print a TopLevelStatement.</p>
+<hr />
+<h2 id="internal_3">Internal</h2>
+<p><a href="../CompilerTools.CFGs/#method__typedexpr.1">TypedExpr(typ,  rest...)</a>  Creates a typed Expr AST node.</p>
+<p><a href="../CompilerTools.CFGs/#method__addstatement.1">addStatement(top_level,  state,  ast::ANY)</a>  Adds a top-level statement just encountered during a partial walk of the AST.</p>
+<p><a href="../CompilerTools.CFGs/#method__addstatementtoendofblock.1">addStatementToEndOfBlock(bl::CompilerTools.CFGs.CFG,  block,  stmt)</a>  Given a CFG "bl" and a basic "block", add statement "stmt" to the end of that block.</p>
+<p><a href="../CompilerTools.CFGs/#method__changeendinglabel.1">changeEndingLabel(bb,  after::CompilerTools.CFGs.BasicBlock,  new_bb::CompilerTools.CFGs.BasicBlock)</a>  BasicBlock bb currently is known to contain a jump to the BasicBlock after.</p>
+<p><a href="../CompilerTools.CFGs/#method__compute_dfn.1">compute_dfn(basic_blocks)</a>  Computes the depth first numbering of the basic block graph.</p>
+<p><a href="../CompilerTools.CFGs/#method__compute_dfn_internal.1">compute_dfn_internal(basic_blocks,  cur_bb,  cur_dfn,  visited,  bbs_df_order)</a>  The recursive heart of depth first numbering.</p>
+<p><a href="../CompilerTools.CFGs/#method__compute_dominators.1">compute_dominators(bl::CompilerTools.CFGs.CFG)</a>  Compute the dominators of the CFG.</p>
+<p><a href="../CompilerTools.CFGs/#method__compute_inverse_dominators.1">compute_inverse_dominators(bl::CompilerTools.CFGs.CFG)</a>  Compute the inverse dominators of the CFG.</p>
+<p><a href="../CompilerTools.CFGs/#method__connect.1">connect(from,  to,  fallthrough)</a>  Connect the "from" input argument basic block to the "to" input argument basic block.</p>
+<p><a href="../CompilerTools.CFGs/#method__connect_finish.1">connect_finish(state)</a>  Connect the current basic block as a fallthrough to the final invisible basic block (-2).</p>
+<p><a href="../CompilerTools.CFGs/#method__createfunctionbody.1">createFunctionBody(bl::CompilerTools.CFGs.CFG)</a>  Create the array of statements that go in a :body Expr given a CFG "bl".</p>
+<p><a href="../CompilerTools.CFGs/#method__dump_bb.1">dump_bb(bl::CompilerTools.CFGs.CFG)</a>  Prints a CFG "bl" with varying degrees of verbosity from debug level 2 up to 4.</p>
+<p><a href="../CompilerTools.CFGs/#method__findreachable.1">findReachable(reachable,  cur::Int64,  bbs::Dict{Int64, CompilerTools.CFGs.BasicBlock})</a>  Process a basic block and add its successors to the set of reachable blocks</p>
+<p><a href="../CompilerTools.CFGs/#method__find_top_number.1">find_top_number(top_number::Int64,  bl::CompilerTools.CFGs.CFG)</a>  Search for a statement with the given number in the CFG "bl".</p>
+<p><a href="../CompilerTools.CFGs/#method__from_ast.1">from_ast(ast)</a>  The main entry point to construct a control-flow graph.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_expr.1">from_expr(ast,  callback,  cbdata)</a>  Another entry point to construct a control-flow graph but one that allows you to pass a callback and some opaque object</p>
+<p><a href="../CompilerTools.CFGs/#method__from_expr.2">from_expr(ast::LambdaStaticData,  depth,  state,  top_level,  callback,  cbdata)</a>  The main routine that switches on all the various AST node types.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_goto.1">from_goto(label,  state,  callback,  cbdata)</a>  Process a GotoNode for CFG construction.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_if.1">from_if(args,  depth,  state,  callback,  cbdata)</a>  Process a :gotoifnot Expr not for CFG construction.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_label.1">from_label(label,  state,  callback,  cbdata)</a>  Process LabelNode for CFG construction.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_lambda.1">from_lambda(ast::Array{Any, 1},  depth,  state,  callback,  cbdata)</a>  To help construct the CFG given a lambda, we recursively process the body of the lambda.</p>
+<p><a href="../CompilerTools.CFGs/#method__from_return.1">from_return(args,  depth,  state,  callback,  cbdata)</a>  Process a :return Expr for CFG construction.</p>
+<p><a href="../CompilerTools.CFGs/#method__getbbbodyorder.1">getBbBodyOrder(bl::CompilerTools.CFGs.CFG)</a>  Determine a valid and reasonable order of basic blocks in which to reconstruct a :body Expr.</p>
+<p><a href="../CompilerTools.CFGs/#method__getdistinctstatementnum.1">getDistinctStatementNum(bl::CompilerTools.CFGs.CFG)</a>  Get a possible new statement number by finding the maximum statement value in any BasicBlock in the given CFG and adding 1.</p>
+<p><a href="../CompilerTools.CFGs/#method__getmaxbb.1">getMaxBB(bl::CompilerTools.CFGs.CFG)</a>  Returns the maximum basic block label for the given CFG.</p>
+<p><a href="../CompilerTools.CFGs/#method__getmaxstatementnum.1">getMaxStatementNum(bb::CompilerTools.CFGs.BasicBlock)</a>  Get the maximum statement index for a given BasicBlock.</p>
+<p><a href="../CompilerTools.CFGs/#method__getminbb.1">getMinBB(bl::CompilerTools.CFGs.CFG)</a>  Returns the minimum basic block label for the given CFG.</p>
+<p><a href="../CompilerTools.CFGs/#method__insertbefore.1">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64)</a>  Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,</p>
+<p><a href="../CompilerTools.CFGs/#method__insertbefore.2">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64,  excludeBackEdge::Bool)</a>  Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,</p>
+<p><a href="../CompilerTools.CFGs/#method__insertbefore.3">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64,  excludeBackEdge::Bool,  back_edge)</a>  Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,</p>
+<p><a href="../CompilerTools.CFGs/#method__insertbetween.1">insertBetween(bl::CompilerTools.CFGs.CFG,  before::Int64,  after::Int64)</a>  Insert a new basic block into the CFG "bl" between the basic blocks whose labels are "before" and "after".</p>
+<p><a href="../CompilerTools.CFGs/#method__insertstatementafter.1">insertStatementAfter(bl::CompilerTools.CFGs.CFG,  block,  stmt_idx,  new_stmt)</a>  For a given CFG "bl" and a "block" in that CFG, add a new statement "new_stmt" to the basic block</p>
+<p><a href="../CompilerTools.CFGs/#method__insertstatementbefore.1">insertStatementBefore(bl::CompilerTools.CFGs.CFG,  block,  stmt_idx,  new_stmt)</a>  For a given CFG "bl" and a "block" in that CFG, add a new statement "new_stmt" to the basic block</p>
+<p><a href="../CompilerTools.CFGs/#method__insertat.1">insertat!(a,  value,  idx)</a>  Insert into an array "a" with a given "value" at the specified index "idx".</p>
+<p><a href="../CompilerTools.CFGs/#method__not_handled.1">not_handled(a,  b)</a>  A default callback that handles no extra AST node types.</p>
+<p><a href="../CompilerTools.CFGs/#method__removeuselessblocks.1">removeUselessBlocks(bbs::Dict{Int64, CompilerTools.CFGs.BasicBlock})</a>  This function simplifies the dict of basic blocks "bbs".</p>
+<p><a href="../CompilerTools.CFGs/#method__replacesucc.1">replaceSucc(cur_bb::CompilerTools.CFGs.BasicBlock,  orig_succ::CompilerTools.CFGs.BasicBlock,  new_succ::CompilerTools.CFGs.BasicBlock)</a>  For a given basic block "cur_bb", replace one of its successors "orig_succ" with a different successor "new_succ".</p>
+<p><a href="../CompilerTools.CFGs/#method__uncompressed_ast.1">uncompressed_ast(l::LambdaStaticData)</a>  Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><a href="../CompilerTools.CFGs/#method__update_label.1">update_label(x::Expr,  state::CompilerTools.CFGs.UpdateLabelState,  top_level_number,  is_top_level,  read)</a>  An AstWalk callback that pattern matches GotoNode's and :gotoifnot Expr nodes and determines if the</p>
+<p><a href="../CompilerTools.CFGs/#method__wrapinconditional.1">wrapInConditional(bl::CompilerTools.CFGs.CFG,  cond_gotoifnot::Expr,  first::Int64,  merge::Int64)</a>  Modifies the CFG to create a conditional (i.e., if statement) that wraps a certain region of the CFG whose entry block is</p>
+<p><a href="../CompilerTools.CFGs/#method__wrapinconditional.2">wrapInConditional(bl::CompilerTools.CFGs.CFG,  cond_gotoifnot::Expr,  first::Int64,  merge::Int64,  back_edge::Union{CompilerTools.CFGs.BasicBlock, Void})</a>  Modifies the CFG to create a conditional (i.e., if statement) that wraps a certain region of the CFG whose entry block is</p>
+<p><a href="../CompilerTools.CFGs/#type__basicblock.1">CompilerTools.CFGs.BasicBlock</a>  Data structure to hold information about one basic block in the control-flow graph.</p>
+<p><a href="../CompilerTools.CFGs/#type__cfg.1">CompilerTools.CFGs.CFG</a>  The main data structure to hold information about the control flow graph.</p>
+<p><a href="../CompilerTools.CFGs/#type__toplevelstatement.1">CompilerTools.CFGs.TopLevelStatement</a>  Data structure to hold the index (relative to the beginning of the body of the function) of a top-level statement</p>
+<p><a href="../CompilerTools.CFGs/#type__updatelabelstate.1">CompilerTools.CFGs.UpdateLabelState</a>  The opaque callback data type for the update_label callback.</p>
+<p><a href="../CompilerTools.CFGs/#type__expr_state.1">CompilerTools.CFGs.expr_state</a>  Collects information about the CFG as it is being constructed.</p>
+<h2 id="module-compilertoolslambdahandling">MODULE: CompilerTools.LambdaHandling</h2>
+<hr />
+<h2 id="exported_5">Exported</h2>
+<p><a href="../CompilerTools.LambdaHandling/#method__addescapingvariable.1">addEscapingVariable(s::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Adds a new escaping variable with the given Symbol "s", type "typ", descriptor "desc" in LambdaInfo "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addescapingvariable.2">addEscapingVariable(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Adds a new escaping variable from a VarDef in parameter "vd" into LambdaInfo "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addgensym.1">addGenSym(typ,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add a new GenSym to the LambdaInfo in "li" with the given type in "typ".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addlocalvariable.1">addLocalVariable(s::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Adds a new local variable with the given Symbol "s", type "typ", descriptor "desc" in LambdaInfo "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addlocalvariable.2">addLocalVariable(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Adds a local variable from a VarDef to the given LambdaInfo.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getbody.1">getBody(lambda::Expr)</a>  Returns the body expression part of a lambda expression.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getdesc.1">getDesc(x::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns the descriptor for a local variable or input parameter "x" from LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getrefparams.1">getRefParams(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns an array of Symbols corresponding to those parameters to the method that are going to be passed by reference.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getreturntype.1">getReturnType(li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns the type of the lambda as stored in LambdaInfo "li" and as extracted during lambdaExprToLambdaInfo.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__gettype.1">getType(x::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns the type of a Symbol or GenSym in "x" from LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getvardef.1">getVarDef(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns the VarDef for a Symbol in LambdaInfo in "li"</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__isescapingvariable.1">isEscapingVariable(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns true if the Symbol in "s" is an escaping variable in LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__isinputparameter.1">isInputParameter(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns true if the Symbol in "s" is an input parameter in LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__islocalgensym.1">isLocalGenSym(s::GenSym,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns true if the GenSym in "s" is a GenSym in LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__islocalvariable.1">isLocalVariable(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns true if the Symbol in "s" is a local variable in LambdaInfo in "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__lambdaexprtolambdainfo.1">lambdaExprToLambdaInfo(lambda::Expr)</a>  Convert a lambda expression into our internal storage format, LambdaInfo.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__lambdainfotolambdaexpr.1">lambdaInfoToLambdaExpr(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo,  body)</a>  Convert our internal storage format, LambdaInfo, back into a lambda expression.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__lambdatypeinf.1">lambdaTypeinf(lambda::LambdaStaticData,  typs::Tuple)</a>  Force type inference on a LambdaStaticData object.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__replaceexprwithdict.1">replaceExprWithDict!(expr::ANY,  dict::Dict{Union{GenSym, Symbol}, Any})</a>  Replace the symbols in an expression "expr" with those defined in the</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__replaceexprwithdict.2">replaceExprWithDict!(expr::ANY,  dict::Dict{Union{GenSym, Symbol}, Any},  AstWalkFunc)</a>  Replace the symbols in an expression "expr" with those defined in the</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__replaceexprwithdict.3">replaceExprWithDict(expr,  dict::Dict{Union{GenSym, Symbol}, Any})</a>  Replace the symbols in an expression "expr" with those defined in the</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__updateassigneddesc.1">updateAssignedDesc(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo,  symbol_assigns::Dict{Symbol, Int64})</a>  Update the descriptor part of the VarDef dealing with whether the variable is assigned or not in the function.</p>
+<p><a href="../CompilerTools.LambdaHandling/#type__lambdainfo.1">CompilerTools.LambdaHandling.LambdaInfo</a>  An internal format for storing a lambda expression's args[1] and args[2].</p>
+<p><a href="../CompilerTools.LambdaHandling/#type__vardef.1">CompilerTools.LambdaHandling.VarDef</a>  Represents the triple stored in a lambda's args[2][1].</p>
+<p><a href="../CompilerTools.LambdaHandling/#typealias__symgen.1">SymGen</a>  Type aliases for different unions of Symbol, SymbolNode, and GenSym.</p>
+<hr />
+<h2 id="internal_4">Internal</h2>
+<p><a href="../CompilerTools.LambdaHandling/#method__adddescflag.1">addDescFlag(s::Symbol,  desc_flag::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add one or more bitfields in "desc_flag" to the descriptor for a variable.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addinputparameter.1">addInputParameter(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add Symbol "s" as input parameter to LambdaInfo "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addinputparameters.1">addInputParameters(collection,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add all variable in "collection" as input parameters to LambdaInfo "li".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addlocalvar.1">addLocalVar(name::AbstractString,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add a local variable to the function corresponding to LambdaInfo in "li" with name (as String), type and descriptor.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addlocalvar.2">addLocalVar(name::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add a local variable to the function corresponding to LambdaInfo in "li" with name (as Symbol), type and descriptor.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__addlocalvariables.1">addLocalVariables(collection,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Add multiple local variables from some collection type.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__count_symbols.1">count_symbols(x::Symbol,  state::CompilerTools.LambdaHandling.CountSymbolState,  top_level_number,  is_top_level,  read)</a>  Adds symbols and gensyms to their corresponding sets in CountSymbolState when they are seen in the AST.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__createmeta.1">createMeta(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo)</a>  Create the args[2] part of a lambda expression given an object of our internal storage format LambdaInfo.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__createvardict.1">createVarDict(x::Array{Any, 1})</a>  Convert the lambda expression's args[2][1] from Array{Array{Any,1},1} to a Dict{Symbol,VarDef}.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__dicttoarray.1">dictToArray(x::Dict{Symbol, CompilerTools.LambdaHandling.VarDef})</a>  Convert the Dict{Symbol,VarDef} internal storage format from a dictionary back into an array of Any triples.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__eliminateunusedlocals.1">eliminateUnusedLocals!(li::CompilerTools.LambdaHandling.LambdaInfo,  body::Expr)</a>  Eliminates unused symbols from the LambdaInfo var_defs.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__eliminateunusedlocals.2">eliminateUnusedLocals!(li::CompilerTools.LambdaHandling.LambdaInfo,  body::Expr,  AstWalkFunc)</a>  Eliminates unused symbols from the LambdaInfo var_defs.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__getlocalvariables.1">getLocalVariables(li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Returns an array of Symbols for local variables.</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__mergelambdainfo.1">mergeLambdaInfo(outer::CompilerTools.LambdaHandling.LambdaInfo,  inner::CompilerTools.LambdaHandling.LambdaInfo)</a>  Merge "inner" lambdaInfo into "outer", and "outer" is changed as result.  Note</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__removelocalvar.1">removeLocalVar(name::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Remove a local variable from lambda "li" given the variable's "name".</p>
+<p><a href="../CompilerTools.LambdaHandling/#method__show.1">show(io::IO,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Pretty print a LambdaInfo.</p>
+<p><a href="../CompilerTools.LambdaHandling/#type__countsymbolstate.1">CompilerTools.LambdaHandling.CountSymbolState</a>  Holds symbols and gensyms that are seen in a given AST when using the specified callback to handle non-standard Julia AST types.</p>
+<h2 id="module-compilertoolslivenessanalysis">MODULE: CompilerTools.LivenessAnalysis</h2>
+<hr />
+<h2 id="exported_6">Exported</h2>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__find_bb_for_statement.1">find_bb_for_statement(top_number::Int64,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Search for a basic block containing a statement with the given top-level number in the liveness information.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__show.1">show(io::IO,  bb::CompilerTools.LivenessAnalysis.BasicBlock)</a>  Overload of Base.show to pretty-print a LivenessAnalysis.BasicBlock.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__show.2">show(io::IO,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Overload of Base.show to pretty-print BlockLiveness type.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__show.3">show(io::IO,  tls::CompilerTools.LivenessAnalysis.TopLevelStatement)</a>  Overload of Base.show to pretty-print a LivenessAnalysis.TopLevelStatement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#type__blockliveness.1">CompilerTools.LivenessAnalysis.BlockLiveness</a>  The main return type from LivenessAnalysis.</p>
+<hr />
+<h2 id="internal_5">Internal</h2>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__typedexpr.1">TypedExpr(typ,  rest...)</a>  Convenience function to create an Expr and make sure the type is filled in as well.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__addunmodifiedparams.1">addUnmodifiedParams(func,  signature::Array{DataType, 1},  unmodifieds,  state::CompilerTools.LivenessAnalysis.expr_state)</a>  Add an entry the dictionary of which arguments can be modified by which functions.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__add_access.1">add_access(bb,  sym,  read)</a>  Called when AST traversal finds some Symbol "sym" in a basic block "bb".</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__compute_live_ranges.1">compute_live_ranges(state::CompilerTools.LivenessAnalysis.expr_state,  dfn)</a>  Compute the live_in and live_out information for each basic block and statement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__countsymboldefs.1">countSymbolDefs(s,  lives)</a>  Count the number of times that the symbol in "s" is defined in all the basic blocks.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__create_unmodified_args_dict.1">create_unmodified_args_dict()</a>  Convert the function_descriptions table into a dictionary that can be passed to</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__def.1">def(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Get the def information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__dump_bb.1">dump_bb(bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Dump a bunch of debugging information about BlockLiveness.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__find_top_number.1">find_top_number(top_number::Int64,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Search for a statement with the given top-level number in the liveness information.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__fromcfg.1">fromCFG(live_res,  cfg::CompilerTools.CFGs.CFG,  callback::Function,  cbdata::ANY)</a>  Extract liveness information from the CFG.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_assignment.1">from_assignment(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Walk through an assignment expression.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_call.1">from_call(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Walk through a call expression.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_expr.1">from_expr(ast::Expr)</a>  This function gives you the option of calling the ENTRY point from_expr with an ast and several optional named arguments.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_expr.2">from_expr(ast::Expr,  callback)</a>  ENTRY point to liveness analysis.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_expr.3">from_expr(ast::Expr,  callback,  cbdata::ANY)</a>  ENTRY point to liveness analysis.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_expr.4">from_expr(ast::Expr,  callback,  cbdata::ANY,  no_mod)</a>  ENTRY point to liveness analysis.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_expr.5">from_expr(ast::LambdaStaticData,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Generic routine for how to walk most AST node types.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_exprs.1">from_exprs(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Walk through an array of expressions.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_if.1">from_if(args,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Process a gotoifnot which is just a recursive processing of its first arg which is the conditional.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_lambda.1">from_lambda(ast::Expr,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Walk through a lambda expression.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__from_return.1">from_return(args,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY)</a>  Process a return Expr node which is just a recursive processing of all of its args.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__getunmodifiedargs.1">getUnmodifiedArgs(func::ANY,  args,  arg_type_tuple::Array{DataType, 1},  state::CompilerTools.LivenessAnalysis.expr_state)</a>  For a given function and signature, return which parameters can be modified by the function.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__get_function_from_string.1">get_function_from_string(mod::AbstractString,  func::AbstractString)</a>  Takes a module and a function both as Strings. Looks up the specified module as</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__get_info_internal.1">get_info_internal(x::Union{CompilerTools.LivenessAnalysis.BasicBlock, CompilerTools.LivenessAnalysis.TopLevelStatement},  bl::CompilerTools.LivenessAnalysis.BlockLiveness,  field)</a>  The live_in, live_out, def, and use routines are all effectively the same but just extract a different field name.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__isdef.1">isDef(x::Union{GenSym, Symbol},  live_info)</a>  Query if the symbol in argument "x" is defined in live_info which can be a BasicBlock or TopLevelStatement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__ispassedbyref.1">isPassedByRef(x,  state::CompilerTools.LivenessAnalysis.expr_state)</a>  Returns true if a parameter is passed by reference.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__live_in.1">live_in(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Get the live_in information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__live_out.1">live_out(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Get the live_out information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__not_handled.1">not_handled(a,  b)</a>  The default callback that processes no non-standard Julia AST nodes.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__recompute_live_ranges.1">recompute_live_ranges(state,  dfn)</a>  Clear the live_in and live_out data corresponding to all basic blocks and statements and then recompute liveness information.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__typeofopr.1">typeOfOpr(x::ANY,  li::CompilerTools.LambdaHandling.LambdaInfo)</a>  Get the type of some AST node.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__uncompressed_ast.1">uncompressed_ast(l::LambdaStaticData)</a>  Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#method__use.1">use(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Get the use information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#type__accesssummary.1">CompilerTools.LivenessAnalysis.AccessSummary</a>  Sometimes if new AST nodes are introduced then we need to ask for their def and use set as a whole</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#type__basicblock.1">CompilerTools.LivenessAnalysis.BasicBlock</a>  Liveness information for a BasicBlock.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#type__toplevelstatement.1">CompilerTools.LivenessAnalysis.TopLevelStatement</a>  Liveness information for a TopLevelStatement in the CFG.</p>
+<p><a href="../CompilerTools.LivenessAnalysis/#type__expr_state.1">CompilerTools.LivenessAnalysis.expr_state</a>  Holds the state during the AST traversal.</p>
+<h2 id="module-parallelacceleratorcomprehension">MODULE: ParallelAccelerator.Comprehension</h2>
+<hr />
+<h2 id="exported_7">Exported</h2>
+<p><a href="../ParallelAccelerator.Comprehension/#macro___comprehend.1">@comprehend(ast)</a>  Translate all comprehension in an AST into equivalent code that uses cartesianarray call.</p>
+<hr />
+<h2 id="internal_6">Internal</h2>
+<p><a href="../ParallelAccelerator.Comprehension/#method__comprehension_to_cartesianarray.1">comprehension_to_cartesianarray(ast)</a>  Translate an ast whose head is :comprehension into equivalent code that uses cartesianarray call.</p>
+<p><a href="../ParallelAccelerator.Comprehension/#method__process_node.1">process_node(node,  state,  top_level_number,  is_top_level,  read)</a>  This function is a AstWalker callback.</p>
+<h2 id="module-parallelacceleratordistributedir">MODULE: ParallelAccelerator.DistributedIR</h2>
+<hr />
+<h2 id="internal_7">Internal</h2>
+<p><a href="../ParallelAccelerator.DistributedIR/#method__checkparforsfordistribution.1">checkParforsForDistribution(state::ParallelAccelerator.DistributedIR.DistIrState)</a>  All arrays of a parfor should distributable for it to be distributable.</p>
+<p><a href="../ParallelAccelerator.DistributedIR/#method__get_arr_dist_info.1">get_arr_dist_info(node::Expr,  state,  top_level_number,  is_top_level,  read)</a>  mark sequential arrays</p>
+<h2 id="module-parallelacceleratorapicapture">MODULE: ParallelAccelerator.API.Capture</h2>
+<hr />
+<h2 id="internal_8">Internal</h2>
+<p><a href="../ParallelAccelerator.API.Capture/#method__process_node.1">process_node(node::Expr,  state,  top_level_number,  is_top_level,  read)</a>  At macro level, we translate function calls and operators that matches operator names</p>
+<h2 id="module-parallelacceleratordomainir">MODULE: ParallelAccelerator.DomainIR</h2>
+<hr />
+<h2 id="internal_9">Internal</h2>
+<p><a href="../ParallelAccelerator.DomainIR/#method__lookupconstdef.1">lookupConstDef(state::ParallelAccelerator.DomainIR.IRState,  s::Union{GenSym, Symbol, SymbolNode})</a>  Look up a definition of a variable only when it is const or assigned once.</p>
+<p><a href="../ParallelAccelerator.DomainIR/#method__lookupconstdefforarg.1">lookupConstDefForArg(state::ParallelAccelerator.DomainIR.IRState,  s)</a>  Look up a definition of a variable recursively until the RHS is no-longer just a variable.</p>
+<p><a href="../ParallelAccelerator.DomainIR/#method__lookupdef.1">lookupDef(state::ParallelAccelerator.DomainIR.IRState,  s::Union{GenSym, Symbol, SymbolNode})</a>  Look up a definition of a variable.</p>
+<p><a href="../ParallelAccelerator.DomainIR/#method__lookupdefinallscopes.1">lookupDefInAllScopes(state::ParallelAccelerator.DomainIR.IRState,  s::Union{GenSym, Symbol, SymbolNode})</a>  Look up a definition of a variable throughout nested states until a definition is found.</p>
+<p><a href="../ParallelAccelerator.DomainIR/#method__updatedef.1">updateDef(state::ParallelAccelerator.DomainIR.IRState,  s::Union{GenSym, Symbol, SymbolNode},  rhs)</a>  Update the definition of a variable.</p>
+<h2 id="module-compilertoolsdebugmsg">MODULE: CompilerTools.DebugMsg</h2>
+<hr />
+<h2 id="exported_8">Exported</h2>
+<p><a href="../CompilerTools.DebugMsg/#method__init.1">init()</a>  A module using DebugMsg must call DebugMsg.init(), which expands to several local definitions</p>
+<hr />
+<h2 id="internal_10">Internal</h2>
+<p><a href="../CompilerTools.DebugMsg/#global__prospect_dev_mode.1">PROSPECT_DEV_MODE</a>  When this module is first loaded, we check if PROSPECT_DEV_MODE is set in environment.</p>
+<h2 id="module-parallelacceleratorparallelir">MODULE: ParallelAccelerator.ParallelIR</h2>
+<hr />
+<h2 id="exported_9">Exported</h2>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__astwalk.1">AstWalk(ast,  callback,  cbdata)</a>  ParallelIR version of AstWalk.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirinplace.1">PIRInplace(x)</a>  If set to non-zero, perform the phase where non-inplace maps are converted to inplace maps to reduce allocations.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirnumsimplify.1">PIRNumSimplify(x)</a>  Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirrunastasks.1">PIRRunAsTasks(x)</a>  Debugging feature to specify the number of tasks to create and to stop thereafter.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirsetfuselimit.1">PIRSetFuseLimit(x)</a>  Control how many parfor can be fused for testing purposes.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirshortcutarrayassignment.1">PIRShortcutArrayAssignment(x)</a>  Enables an experimental mode where if there is a statement a = b and they are arrays and b is not live-out then </p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirtaskgraphmode.1">PIRTaskGraphMode(x)</a>  Control how blocks of code are made into tasks.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_exprs.1">from_exprs(ast::Array{Any, 1},  depth,  state)</a>  Process an array of expressions.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pirloopnest.1">ParallelAccelerator.ParallelIR.PIRLoopNest</a>  Holds the information about a loop in a parfor node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pirparforast.1">ParallelAccelerator.ParallelIR.PIRParForAst</a>  The parfor AST node type.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pirreduction.1">ParallelAccelerator.ParallelIR.PIRReduction</a>  Holds the information about a reduction in a parfor node.</p>
+<hr />
+<h2 id="internal_11">Internal</h2>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__astwalkcallback.1">AstWalkCallback(x::Expr,  dw::ParallelAccelerator.ParallelIR.DirWalk,  top_level_number::Int64,  is_top_level::Bool,  read::Bool)</a>  AstWalk callback that handles ParallelIR AST node types.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__equivalenceclassesadd.1">EquivalenceClassesAdd(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses,  sym::Symbol)</a>  Add a symbol as part of a new equivalence class if the symbol wasn't already in an equivalence class.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__equivalenceclassesclear.1">EquivalenceClassesClear(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses)</a>  Clear an equivalence class.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__equivalenceclassesmerge.1">EquivalenceClassesMerge(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses,  merge_to::Symbol,  merge_from::Symbol)</a>  At some point we realize that two arrays must have the same dimensions but up until that point</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirbbreorder.1">PIRBbReorder(x)</a>  If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirhoistallocation.1">PIRHoistAllocation(x)</a>  If set to non-zero, perform the rearrangement phase that tries to moves alllocations outside of loops.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__typedexpr.1">TypedExpr(typ,  rest...)</a>  This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__addunknownarray.1">addUnknownArray(x::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Given an array whose name is in "x", allocate a new equivalence class for this array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__addunknownrange.1">addUnknownRange(x::Array{Any, 1},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__add_merge_correlations.1">add_merge_correlations(old_sym::Union{GenSym, Symbol},  new_sym::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  If we somehow determine that two arrays must be the same length then </p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__asarray.1">asArray(x)</a>  Return one element array with element x.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__augment_sn.1">augment_sn(dim::Int64,  index_vars,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1})</a>  Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__call_instruction_count.1">call_instruction_count(args,  state::ParallelAccelerator.ParallelIR.eic_state,  debug_level)</a>  Generate an instruction count estimate for a call instruction.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__checkandaddsymbolcorrelation.1">checkAndAddSymbolCorrelation(lhs::Union{GenSym, Symbol},  state,  dim_array)</a>  Make sure all the dimensions are SymbolNodes.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__convertunsafe.1">convertUnsafe(stmt)</a>  Remove unsafe array access Symbols from the incoming "stmt".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__convertunsafeorelse.1">convertUnsafeOrElse(stmt)</a>  Try to remove unsafe array access Symbols from the incoming "stmt".  If successful, then return the updated</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__convertunsafewalk.1">convertUnsafeWalk(x::Expr,  state,  top_level_number,  is_top_level,  read)</a>  The AstWalk callback to find unsafe arrayset and arrayref variants and</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__copy_propagate.1">copy_propagate(node::ANY,  data::ParallelAccelerator.ParallelIR.CopyPropagateState,  top_level_number,  is_top_level,  read)</a>  In each basic block, if there is a "copy" (i.e., something of the form "a = b") then put</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__count_assignments.1">count_assignments(x,  symbol_assigns::Dict{Symbol, Int64},  top_level_number,  is_top_level,  read)</a>  AstWalk callback to count the number of static times that a symbol is assigne within a method.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__create1d_array_access_desc.1">create1D_array_access_desc(array::SymbolNode)</a>  Create an array access descriptor for "array".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__create2d_array_access_desc.1">create2D_array_access_desc(array::SymbolNode)</a>  Create an array access descriptor for "array".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createinstructioncountestimate.1">createInstructionCountEstimate(the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createloweredaliasmap.1">createLoweredAliasMap(dict1)</a>  Take a single-step alias map, e.g., a=&gt;b, b=&gt;c, and create a lowered dictionary, a=&gt;c, b=&gt;c, that</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createmaplhstoparfor.1">createMapLhsToParfor(parfor_assignment,  the_parfor,  is_multi::Bool,  sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Creates a mapping between variables on the left-hand side of an assignment where the right-hand side is a parfor</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createstatevar.1">createStateVar(state,  name,  typ,  access)</a>  Add a local variable to the current function's lambdaInfo.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createtempforarray.1">createTempForArray(array_sn::Union{GenSym, Symbol, SymbolNode},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Create a temporary variable that is parfor private to hold the value of an element of an array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createtempforrangeoffset.1">createTempForRangeOffset(num_used,  ranges::Array{ParallelAccelerator.ParallelIR.RangeData, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Create a variable to hold the offset of a range offset from the start of the array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__createtempforrangedarray.1">createTempForRangedArray(array_sn::Union{GenSym, Symbol, SymbolNode},  range::Array{Union{GenSym, SymbolNode}, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Create a temporary variable that is parfor private to hold the value of an element of an array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__create_array_access_desc.1">create_array_access_desc(array::SymbolNode)</a>  Create an array access descriptor for "array".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__create_equivalence_classes.1">create_equivalence_classes(node::Expr,  state::ParallelAccelerator.ParallelIR.expr_state,  top_level_number::Int64,  is_top_level::Bool,  read::Bool)</a>  AstWalk callback to determine the array equivalence classes.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__dfsvisit.1">dfsVisit(swd::ParallelAccelerator.ParallelIR.StatementWithDeps,  vtime::Int64,  topo_sort::Array{ParallelAccelerator.ParallelIR.StatementWithDeps, N})</a>  Construct a topological sort of the dependence graph.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__estimateinstrcount.1">estimateInstrCount(ast::Expr,  state::ParallelAccelerator.ParallelIR.eic_state,  top_level_number,  is_top_level,  read)</a>  AstWalk callback for estimating the instruction count.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__extractarrayequivalencies.1">extractArrayEquivalencies(node::Expr,  state)</a>  "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they </p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__findselecteddimensions.1">findSelectedDimensions(inputInfo::Array{ParallelAccelerator.ParallelIR.InputInfo, 1},  state)</a>  Given all the InputInfo for a Domain IR operation being lowered to Parallel IR,</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__flattenparfor.1">flattenParfor(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst)</a>  Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_asserteqshape.1">from_assertEqShape(node::Expr,  state)</a>  Create array equivalences from an assertEqShape AST node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_assignment.1">from_assignment(lhs,  rhs,  depth,  state)</a>  Process an assignment expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_call.1">from_call(ast::Array{Any, 1},  depth,  state)</a>  Process a call AST node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_expr.1">from_expr(ast::Expr,  depth,  state::ParallelAccelerator.ParallelIR.expr_state,  top_level)</a>  The main ParallelIR function for processing some node in the AST.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_lambda.1">from_lambda(lambda::Expr,  depth,  state)</a>  Process a :lambda Expr.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__from_root.1">from_root(function_name,  ast::Expr)</a>  The main ENTRY point into ParallelIR.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__fullyloweralias.1">fullyLowerAlias(dict::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  input::Union{GenSym, Symbol})</a>  Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a Symbol is present</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__fuse.1">fuse(body,  body_index,  cur,  state)</a>  Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__generate_instr_count.1">generate_instr_count(function_name,  signature)</a>  Try to figure out the instruction count for a given call.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getarrayelemtype.1">getArrayElemType(array::GenSym,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Returns the element type of an Array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getarrayelemtype.2">getArrayElemType(array::SymbolNode,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Returns the element type of an Array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getarrayelemtype.3">getArrayElemType(atyp::DataType)</a>  Returns the element type of an Array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getarraynumdims.1">getArrayNumDims(array::GenSym,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Return the number of dimensions of an Array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getarraynumdims.2">getArrayNumDims(array::SymbolNode,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Return the number of dimensions of an Array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getconstdims.1">getConstDims(num_dim_inputs,  inputInfo::ParallelAccelerator.ParallelIR.InputInfo)</a>  In the case where a domain IR operation on an array creates a lower dimensional output,</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getcorrelation.1">getCorrelation(sng::Union{GenSym, Symbol, SymbolNode},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Get the equivalence class of a domain IR input in inputInfo.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getfirstarraylens.1">getFirstArrayLens(prestatements,  num_dims)</a>  Get the variable which holds the length of the first input array to a parfor.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getio.1">getIO(stmt_ids,  bb_statements)</a>  Given a set of statement IDs and liveness information for the statements of the function, determine</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getinputset.1">getInputSet(node::ParallelAccelerator.ParallelIR.PIRParForAst)</a>  Returns a Set with all the arrays read by this parfor.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getlhsfromassignment.1">getLhsFromAssignment(assignment)</a>  Get the left-hand side of an assignment expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getlhsoutputset.1">getLhsOutputSet(lhs,  assignment)</a>  Get the real outputs of an assignment statement.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getmaxlabel.1">getMaxLabel(max_label,  stmts::Array{Any, 1})</a>  Scan the body of a function in "stmts" and return the max label in a LabelNode AST seen in the body.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getnonblock.1">getNonBlock(head_preds,  back_edge)</a>  Find the basic block before the entry to a loop.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getoraddarraycorrelation.1">getOrAddArrayCorrelation(x::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Return a correlation set for an array.  If the array was not previously added then add it and return it.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getoraddrangecorrelation.1">getOrAddRangeCorrelation(ranges::Array{ParallelAccelerator.ParallelIR.RangeExprs, 1},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Gets (or adds if absent) the range correlation for the given array of RangeExprs.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getoraddsymbolcorrelation.1">getOrAddSymbolCorrelation(array::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state,  dims::Array{Union{GenSym, Symbol}, 1})</a>  A new array is being created with an explicit size specification in dims.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getparforcorrelation.1">getParforCorrelation(parfor,  state)</a>  Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getparfornode.1">getParforNode(node)</a>  Get the parfor object from either a bare parfor or one part of an assignment.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getprivateset.1">getPrivateSet(body::Array{Any, 1})</a>  Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getprivatesetinner.1">getPrivateSetInner(x::Expr,  state::Set{Union{GenSym, Symbol, SymbolNode}},  top_level_number::Int64,  is_top_level::Bool,  read::Bool)</a>  The AstWalk callback function for getPrivateSet.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getrhsfromassignment.1">getRhsFromAssignment(assignment)</a>  Get the right-hand side of an assignment expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__getsname.1">getSName(ssn::Symbol)</a>  Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__get_one.1">get_one(ast::Array{T, N})</a>  Take something returned from AstWalk and assert it should be an array but in this</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__get_unique_num.1">get_unique_num()</a>  If we need to generate a name and make sure it is unique then include an monotonically increasing number.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__hasnosideeffects.1">hasNoSideEffects(node::Union{GenSym, LambdaStaticData, Number, Symbol, SymbolNode})</a>  Sometimes statements we exist in the AST of the form a=Expr where a is a Symbol that isn't live past the assignment</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__hassymbol.1">hasSymbol(ssn::Symbol)</a>  Returns true if the incoming AST node can be interpreted as a Symbol.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__hoistallocation.1">hoistAllocation(ast::Array{Any, 1},  lives,  domLoop::CompilerTools.Loops.DomLoops,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Try to hoist allocations outside the loop if possible.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__insert_no_deps_beginning.1">insert_no_deps_beginning(node,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read)</a>  Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__intermediate_from_exprs.1">intermediate_from_exprs(ast::Array{Any, 1},  depth,  state)</a>  Process an array of expressions that aren't from a :body Expr.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarraytype.1">isArrayType(typ)</a>  Returns true if the incoming type in "typ" is an array type.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarraytype.2">isArrayType(x::SymbolNode)</a>  Returns true if a given SymbolNode "x" is an Array type.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarrayref.1">isArrayref(x)</a>  Is a node an arrayref node?</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarrayrefcall.1">isArrayrefCall(x::Expr)</a>  Is a node a call to arrayref.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarrayset.1">isArrayset(x)</a>  Is a node an arrayset node?</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isarraysetcall.1">isArraysetCall(x::Expr)</a>  Is a node a call to arrayset.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isassignmentnode.1">isAssignmentNode(node::Expr)</a>  Is a node an assignment expression node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isbareparfor.1">isBareParfor(node::Expr)</a>  Is this a parfor node not part of an assignment statement.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isdomainnode.1">isDomainNode(ast::Expr)</a>  Returns true if the given "ast" node is a DomainIR operation.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isfusionassignment.1">isFusionAssignment(x::Expr)</a>  Check if an assignement is a fusion assignment.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isloopheadnode.1">isLoopheadNode(node::Expr)</a>  Is a node a loophead expression node (a form of assignment).</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isparforassignmentnode.1">isParforAssignmentNode(node::Expr)</a>  Is a node an assignment expression with a parfor node as the right-hand side.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__issymbolsused.1">isSymbolsUsed(vars,  top_level_numbers::Array{Int64, 1},  state)</a>  Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__is_eliminated_arraylen.1">is_eliminated_arraylen(x::Expr)</a>  Returns true if the input node is an assignment node where the right-hand side is a call to arraysize.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__isbitstuple.1">isbitstuple(a::Tuple)</a>  Returns true if input "a" is a tuple and each element of the tuple of isbits type.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__iterations_equals_inputs.1">iterations_equals_inputs(node::ParallelAccelerator.ParallelIR.PIRParForAst)</a>  Returns true if the domain operation mapped to this parfor has the property that the iteration space</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__lambdafromdomainlambda.1">lambdaFromDomainLambda(domain_lambda,  dl_inputs)</a>  Form a Julia :lambda Expr from a DomainLambda.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__makeprivateparfor.1">makePrivateParfor(var_name::Symbol,  state)</a>  Takes an existing variable whose name is in "var_name" and adds the descriptor flag ISPRIVATEPARFORLOOP to declare the</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__maketasks.1">makeTasks(start_index,  stop_index,  body,  bb_live_info,  state,  task_graph_mode)</a>  For a given start and stop index in some body and liveness information, form a set of tasks.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__maxfusion.1">maxFusion(bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  For every basic block, try to push domain IR statements down and non-domain IR statements up so that domain nodes</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mergelambdaintoouterstate.1">mergeLambdaIntoOuterState(state,  inner_lambda::Expr)</a>  Pull the information from the inner lambda into the outer lambda.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__merge_correlations.1">merge_correlations(state,  unchanging,  eliminate)</a>  If we somehow determine that two sets of correlations are actually the same length then merge one into the other.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_alloc_array_1d_expr.1">mk_alloc_array_1d_expr(elem_type,  atype,  length)</a>  Return an expression that allocates and initializes a 1D Julia array that has an element type specified by</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_alloc_array_2d_expr.1">mk_alloc_array_2d_expr(elem_type,  atype,  length1,  length2)</a>  Return an expression that allocates and initializes a 2D Julia array that has an element type specified by</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_alloc_array_3d_expr.1">mk_alloc_array_3d_expr(elem_type,  atype,  length1,  length2,  length3)</a>  Return an expression that allocates and initializes a 3D Julia array that has an element type specified by</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arraylen_expr.1">mk_arraylen_expr(x::ParallelAccelerator.ParallelIR.InputInfo,  dim::Int64)</a>  Create an expression whose value is the length of the input array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arraylen_expr.2">mk_arraylen_expr(x::Union{GenSym, Symbol, SymbolNode},  dim::Int64)</a>  Create an expression whose value is the length of the input array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayref1.1">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Return an expression that corresponds to getting the index_var index from the array array_name.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayref1.2">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1})</a>  Return an expression that corresponds to getting the index_var index from the array array_name.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayref1.3">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1})</a>  Return an expression that corresponds to getting the index_var index from the array array_name.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayset1.1">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayset1.2">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1})</a>  Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_arrayset1.3">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1})</a>  Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_assignment_expr.1">mk_assignment_expr(lhs::Union{GenSym, Symbol, SymbolNode},  rhs,  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Create an assignment expression AST node given a left and right-hand side.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_colon_expr.1">mk_colon_expr(start_expr,  skip_expr,  end_expr)</a>  Returns an expression to construct a :colon object that contains the start of a range, the end and the skip expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_convert.1">mk_convert(new_type,  ex)</a>  Returns an expression that convert "ex" into a another type "new_type".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_gotoifnot_expr.1">mk_gotoifnot_expr(cond,  goto_label)</a>  Returns a :gotoifnot Expr given a condition "cond" and a label "goto_label".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_next_expr.1">mk_next_expr(colon_sym,  start_sym)</a>  Returns a :next call Expr that gets the next element of an iteration range from a :colon object.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_parallelir_ref.1">mk_parallelir_ref(sym)</a>  Create an expression that references something inside ParallelIR.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_parallelir_ref.2">mk_parallelir_ref(sym,  ref_type)</a>  Create an expression that references something inside ParallelIR.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_parfor_args_from_mmap.1">mk_parfor_args_from_mmap!(input_arrays::Array{T, N},  dl::ParallelAccelerator.DomainIR.DomainLambda,  with_indices,  domain_oprs,  state)</a>  The main routine that converts a mmap! AST node to a parfor AST node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_parfor_args_from_mmap.2">mk_parfor_args_from_mmap(input_arrays::Array{T, N},  dl::ParallelAccelerator.DomainIR.DomainLambda,  domain_oprs,  state)</a>  The main routine that converts a mmap AST node to a parfor AST node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_parfor_args_from_reduce.1">mk_parfor_args_from_reduce(input_args::Array{Any, 1},  state)</a>  The main routine that converts a reduce AST node to a parfor AST node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_return_expr.1">mk_return_expr(outs)</a>  Given an array of outputs in "outs", form a return expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_start_expr.1">mk_start_expr(colon_sym)</a>  Returns an expression to get the start of an iteration range from a :colon object.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_svec_expr.1">mk_svec_expr(parts...)</a>  Make a svec expression.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_tuple_expr.1">mk_tuple_expr(tuple_fields,  typ)</a>  Return an expression which creates a tuple.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_tupleref_expr.1">mk_tupleref_expr(tuple_var,  index,  typ)</a>  Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mk_untyped_assignment.1">mk_untyped_assignment(lhs,  rhs)</a>  Only used to create fake expression to force lhs to be seen as written rather than read.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mmapinline.1">mmapInline(ast::Expr,  lives,  uniqSet)</a>  # If a definition of a mmap is only used once and not aliased, it can be inlined into its</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mmaptommap.1">mmapToMmap!(ast,  lives,  uniqSet)</a>  Performs the mmap to mmap! phase.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__mustremainlaststatementinblock.1">mustRemainLastStatementInBlock(node::GotoNode)</a>  Returns true if the given AST "node" must remain the last statement in a basic block.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__nametosymbolnode.1">nameToSymbolNode(name::Symbol,  sym_to_type)</a>  Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__nested_function_exprs.1">nested_function_exprs(max_label,  domain_lambda,  dl_inputs)</a>  A routine similar to the main parallel IR entry put but designed to process the lambda part of</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__next_label.1">next_label(state::ParallelAccelerator.ParallelIR.expr_state)</a>  Returns the next usable label for the current function.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__oneifonly.1">oneIfOnly(x)</a>  Returns a single element of an array if there is only one or the array otherwise.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__parfortotask.1">parforToTask(parfor_index,  bb_statements,  body,  state)</a>  Given a parfor statement index in "parfor_index" in the "body"'s statements, create a TaskInfo node for this parfor.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pirprintdl.1">pirPrintDl(dbg_level,  dl)</a>  Debug print the parts of a DomainLambda.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pir_alias_cb.1">pir_alias_cb(ast::Expr,  state,  cbdata)</a>  An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pir_live_cb.1">pir_live_cb(ast::Expr,  cbdata::ANY)</a>  A LivenessAnalysis callback that handles ParallelIR introduced AST node types.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__pir_live_cb_def.1">pir_live_cb_def(x)</a>  Just call the AST walker for symbol for parallel IR nodes with no state.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__printbody.1">printBody(dlvl,  body::Array{Any, 1})</a>  Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__printlambda.1">printLambda(dlvl,  node::Expr)</a>  Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__processandupdatebody.1">processAndUpdateBody(lambda::Expr,  f::Function,  state)</a>  Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__rangesize.1">rangeSize(start,  skip,  last)</a>  Compute size of a range.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__rangetorangedata.1">rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state)</a>  Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__recreateloops.1">recreateLoops(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state,  newLambdaInfo)</a>  In threads mode, we can't have parfor_start and parfor_end in the code since Julia has to compile the code itself and so</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__recreateloopsinternal.1">recreateLoopsInternal(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  loop_nest_level,  next_available_label,  state,  newLambdaInfo)</a>  This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__remembertypeforsym.1">rememberTypeForSym(sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  sym::Union{GenSym, Symbol},  typ::DataType)</a>  Add to the map of symbol names to types.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__removeasserteqshape.1">removeAssertEqShape(args::Array{Any, 1},  state)</a>  Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__removenothingstmts.1">removeNothingStmts(args::Array{Any, 1},  state)</a>  Empty statements can be added to the AST by some passes in ParallelIR.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__remove_dead.1">remove_dead(node,  data::ParallelAccelerator.ParallelIR.RemoveDeadState,  top_level_number,  is_top_level,  read)</a>  An AstWalk callback that uses liveness information in "data" to remove dead stores.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__remove_extra_allocs.1">remove_extra_allocs(ast)</a>  removes extra allocations</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__remove_no_deps.1">remove_no_deps(node::ANY,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read)</a>  # This routine gathers up nodes that do not use</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__replaceparforwithdict.1">replaceParforWithDict(parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  gensym_map)</a>  Not currently used but might need it at some point.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__run_as_task.1">run_as_task()</a>  Return true if run_as_task_decrement would return true but don't update the run_as_tasks count.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__run_as_task_decrement.1">run_as_task_decrement()</a>  If run_as_tasks is positive then convert this parfor to a task and decrement the count so that only the</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__selecttorangedata.1">selectToRangeData(select::Expr,  pre_offsets::Array{Expr, 1},  state)</a>  Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__seqtask.1">seqTask(body_indices,  bb_statements,  body,  state)</a>  Form a task out of a range of sequential statements.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__show.1">show(io::IO,  pnode::ParallelAccelerator.ParallelIR.PIRParForAst)</a>  Overload of Base.show to pretty print for parfor AST nodes.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__simpleindex.1">simpleIndex(dict)</a>  Returns true if all array references use singular index variables and nothing more complicated involving,</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__sub_arraylen_walk.1">sub_arraylen_walk(x::Expr,  replacement,  top_level_number,  is_top_level,  read)</a>  AstWalk callback that does the work of substitute_arraylen on a node-by-node basis.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__sub_arrayset_walk.1">sub_arrayset_walk(x::Expr,  cbd,  top_level_number,  is_top_level,  read)</a>  AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__sub_cur_body_walk.1">sub_cur_body_walk(x::Expr,  cbd::ParallelAccelerator.ParallelIR.cur_body_data,  top_level_number::Int64,  is_top_level::Bool,  read::Bool)</a>  AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__substitute_arraylen.1">substitute_arraylen(x,  replacement)</a>  replacement is an array containing the length of the dimensions of the arrays a part of this parfor.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__substitute_arrayset.1">substitute_arrayset(x,  arrays_set_in_cur_body,  output_items_with_aliases)</a>  Modify the body of a parfor.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__substitute_cur_body.1">substitute_cur_body(x,  temp_map::Dict{Union{GenSym, Symbol}, Union{GenSym, SymbolNode}},  index_map::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  arrays_set_in_cur_body::Set{Union{GenSym, Symbol}},  replace_array_name_in_arrayset::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  state::ParallelAccelerator.ParallelIR.expr_state)</a>  Make changes to the second parfor body in the process of parfor fusion.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__taskableparfor.1">taskableParfor(node)</a>  Returns true if the "node" is a parfor and the task limit hasn't been exceeded.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__tosngen.1">toSNGen(x::Symbol,  typ)</a>  If we have the type, convert a Symbol to SymbolNode.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__tosymgen.1">toSymGen(x::Symbol)</a>  In various places we need a SymGen type which is the union of Symbol and GenSym.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__tosymnodegen.1">toSymNodeGen(x::Symbol,  typ)</a>  Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#method__uncompressed_ast.1">uncompressed_ast(l::LambdaStaticData)</a>  Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__copypropagatestate.1">ParallelAccelerator.ParallelIR.CopyPropagateState</a>  State to aide in the copy propagation phase.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__dirwalk.1">ParallelAccelerator.ParallelIR.DirWalk</a>  Wraps the callback and opaque data passed from the user of ParallelIR's AstWalk.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__domainoperation.1">ParallelAccelerator.ParallelIR.DomainOperation</a>  Holds information about domain operations part of a parfor node.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__equivalenceclasses.1">ParallelAccelerator.ParallelIR.EquivalenceClasses</a>  Holds a dictionary from an array symbol to an integer corresponding to an equivalence class.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__fusionsentinel.1">ParallelAccelerator.ParallelIR.FusionSentinel</a>  Just used to hold a spot in an array to indicate the this is a special assignment expression with embedded real array output names from a fusion.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__inprogress.1">ParallelAccelerator.ParallelIR.InProgress</a>  A sentinel in the instruction count estimation process.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__inputinfo.1">ParallelAccelerator.ParallelIR.InputInfo</a>  Type used by mk_parfor_args... functions to hold information about input arrays.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__inserttasknode.1">ParallelAccelerator.ParallelIR.InsertTaskNode</a>  A data type containing the information that CGen uses to generate a call to pert_insert_divisible_task.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pirparforstartend.1">ParallelAccelerator.ParallelIR.PIRParForStartEnd</a>  After lowering, it is necessary to make the parfor body top-level statements so that basic blocks</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__rangedata.1">ParallelAccelerator.ParallelIR.RangeData</a>  Holds the information from one Domain IR :range Expr.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__removedeadstate.1">ParallelAccelerator.ParallelIR.RemoveDeadState</a>  Holds liveness information for the remove_dead AstWalk phase.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__removenodepsstate.1">ParallelAccelerator.ParallelIR.RemoveNoDepsState</a>  State for the remove_no_deps and insert_no_deps_beginning phases.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__replacedregion.1">ParallelAccelerator.ParallelIR.ReplacedRegion</a>  Store information about a section of a body that will be translated into a task.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__rhsdead.1">ParallelAccelerator.ParallelIR.RhsDead</a>  Marks an assignment statement where the left-hand side can take over the storage from the right-hand side.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__statementwithdeps.1">ParallelAccelerator.ParallelIR.StatementWithDeps</a>  Type for dependence graph creation and topological sorting.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__taskinfo.1">ParallelAccelerator.ParallelIR.TaskInfo</a>  Structure for storing information about task formation.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__cur_body_data.1">ParallelAccelerator.ParallelIR.cur_body_data</a>  Holds the data for substitute_cur_body AST walk.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__cuw_state.1">ParallelAccelerator.ParallelIR.cuw_state</a>  Just to hold the "found" Bool that says whether a unsafe variant was replaced with a regular version.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__expr_state.1">ParallelAccelerator.ParallelIR.expr_state</a>  State passed around while converting an AST from domain to parallel IR.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pir_arg_metadata.1">ParallelAccelerator.ParallelIR.pir_arg_metadata</a>  A Julia representation of the argument metadata that will be passed to the runtime.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pir_array_access_desc.1">ParallelAccelerator.ParallelIR.pir_array_access_desc</a>  Describes an array.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pir_grain_size.1">ParallelAccelerator.ParallelIR.pir_grain_size</a>  A Julia representation of the grain size that will be passed to the runtime.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pir_range.1">ParallelAccelerator.ParallelIR.pir_range</a>  Translated to pert_range_Nd_t in the task runtime.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__pir_range_actual.1">ParallelAccelerator.ParallelIR.pir_range_actual</a>  Similar to pir_range but used in circumstances where the expressions must have already been evaluated.</p>
+<p><a href="../ParallelAccelerator.ParallelIR/#type__sub_arrayset_data.1">ParallelAccelerator.ParallelIR.sub_arrayset_data</a>  Holds data for modifying arrayset calls.</p>
+<h2 id="module-compilertoolsoptframework">MODULE: CompilerTools.OptFramework</h2>
+<hr />
+<h2 id="exported_10">Exported</h2>
+<p><a href="../CompilerTools.OptFramework/#method__addoptpass.1">addOptPass(func,  level)</a>  Same as the other addOptPass but with a pass call back function and pass level as input.</p>
+<p><a href="../CompilerTools.OptFramework/#method__addoptpass.2">addOptPass(pass::CompilerTools.OptFramework.OptPass)</a>  Add an optimization pass. If this is going to be called multiple times then you need some external way of corrdinating the code/modules that are calling this function so that optimization passes are added in some sane order.</p>
+<p><a href="../CompilerTools.OptFramework/#macro___acc.1">@acc(ast1, ast2...)</a>  The @acc macro comes in two forms:</p>
+<p><a href="../CompilerTools.OptFramework/#macro___noacc.1">@noacc(ast)</a>  The macro @noacc can be used at call site to specifically run the non-accelerated copy of an accelerated function. It has no effect and gives a warning when the given function is not found to have been accelerated. We do not support nested @acc or @noacc. </p>
+<hr />
+<h2 id="internal_12">Internal</h2>
+<p><a href="../CompilerTools.OptFramework/#method__typedexpr.1">TypedExpr(typ,  rest...)</a>  Creates a typed Expr AST node.</p>
+<p><a href="../CompilerTools.OptFramework/#method__cleanupastlabels.1">cleanupASTLabels(ast)</a>  Clean up the labels in AST by renaming them, and removing duplicates.</p>
+<p><a href="../CompilerTools.OptFramework/#method__convertcodetolevel.1">convertCodeToLevel(ast::ANY,  sig::ANY,  old_level,  new_level,  func)</a>  convert AST from "old_level" to "new_level". The input "ast" can be either Expr or Function type. In the latter case, the result AST will be obtained from this function using an matching signature "sig". The last "func" is a skeleton function that is used internally to facility such conversion.</p>
+<p><a href="../CompilerTools.OptFramework/#method__convert_expr.1">convert_expr(per_site_opt_set,  ast)</a>  When @acc is used at a function's callsite, we use AstWalk to search for callsites via the opt_calls_insert_trampoline callback and to then insert trampolines.  That updated expression containing trampoline calls is then returned as the generated code from the @acc macro.</p>
+<p><a href="../CompilerTools.OptFramework/#method__convert_function.1">convert_function(per_site_opt_set,  opt_set,  macros,  ast)</a>  When @acc is used at a function definition, it creates a trampoline function, when called with a specific set of signature types, will try to optimize the original function, and call it with the real arguments.  The input "ast" should be an AST of the original function at macro level, which will be   replaced by the trampoline. </p>
+<p><a href="../CompilerTools.OptFramework/#method__create_label_map.1">create_label_map(x,  state::CompilerTools.OptFramework.lmstate,  top_level_number,  is_top_level,  read)</a>  An AstWalk callback that collects information about labels in an AST.</p>
+<p><a href="../CompilerTools.OptFramework/#method__dumplevel.1">dumpLevel(level)</a>  pretty print pass level number as string.</p>
+<p><a href="../CompilerTools.OptFramework/#method__evalpersiteoptset.1">evalPerSiteOptSet(per_site_opt_set)</a>  Statically evaluate per-site optimization passes setting, and return the result.</p>
+<p><a href="../CompilerTools.OptFramework/#method__findoriginalfunc.1">findOriginalFunc(mod::Module,  name::Symbol)</a>  Find the original (before @acc macro) function for a wrapper function in the given module. </p>
+<p><a href="../CompilerTools.OptFramework/#method__findtargetfunc.1">findTargetFunc(mod::Module,  name::Symbol)</a>  Find the optimizing target function (after @acc macro) for a wrapper function in the given module. </p>
+<p><a href="../CompilerTools.OptFramework/#method__getcodeatlevel.1">getCodeAtLevel(func,  sig,  level)</a>  Retrieve the AST of the given function "func" and signature "sig" for at the given pass "level".</p>
+<p><a href="../CompilerTools.OptFramework/#method__identical.1">identical{T}(t::Type{T},  x::T)</a>  A hack to get around Julia's type inference. This is essentially an identity conversion,</p>
+<p><a href="../CompilerTools.OptFramework/#method__makewrapperfunc.1">makeWrapperFunc(new_fname::Symbol,  real_fname::Symbol,  call_sig_args::Array{Any, 1},  per_site_opt_set)</a>  Define a wrapper function with the name given by "new_func" that when called will try to optimize the "real_func" function, and run it with given parameters in "call_sig_args". The input "per_site_opt_set" can be either nothing, or a quoted Expr that refers to an array of OptPass.</p>
+<p><a href="../CompilerTools.OptFramework/#method__opt_calls_insert_trampoline.1">opt_calls_insert_trampoline(x,  per_site_opt_set,  top_level_number,  is_top_level,  read)</a>  An AstWalk callback function.</p>
+<p><a href="../CompilerTools.OptFramework/#method__processfunccall.1">processFuncCall(func::ANY,  call_sig_arg_tuple::ANY,  per_site_opt_set::ANY)</a>  Takes a function, a signature, and a set of optimizations and applies that set of optimizations to the function,</p>
+<p><a href="../CompilerTools.OptFramework/#method__removeduplabels.1">removeDupLabels(stmts)</a>  Sometimes update_labels creates two label nodes that are the same.</p>
+<p><a href="../CompilerTools.OptFramework/#method__setoptpasses.1">setOptPasses(passes::Array{CompilerTools.OptFramework.OptPass, 1})</a>  Set the default set of optimization passes to apply with the @acc macro. </p>
+<p><a href="../CompilerTools.OptFramework/#method__tfuncpresent.1">tfuncPresent(func,  tt)</a>  Makes sure that a newly created function is correctly present in the internal Julia method table.</p>
+<p><a href="../CompilerTools.OptFramework/#method__update_labels.1">update_labels(x,  state::CompilerTools.OptFramework.lmstate,  top_level_number,  is_top_level,  read)</a>  An AstWalk callback that applies the label map created during create_label_map AstWalk.</p>
+<p><a href="../CompilerTools.OptFramework/#type__optpass.1">CompilerTools.OptFramework.OptPass</a>  A data structure that holds information about one high-level optimization pass to run.</p>
+<p><a href="../CompilerTools.OptFramework/#type__lmstate.1">CompilerTools.OptFramework.lmstate</a>  The callback state variable used by create_label_map and update_labels.</p>
+<p><a href="../CompilerTools.OptFramework/#global__goptframeworkdict.1">gOptFrameworkDict</a>  A global memo-table that maps both: the triple (function, signature, optPasses) to the trampoline function, and the trampoline function to the real function.</p>
+<h2 id="module-compilertoolsudchains">MODULE: CompilerTools.UDChains</h2>
+<hr />
+<h2 id="internal_13">Internal</h2>
+<p><a href="../CompilerTools.UDChains/#method__getorcreate.1">getOrCreate(live::Dict{Symbol, Set{T}},  s::Symbol)</a>  Get the set of definition blocks reaching this block for a given symbol "s".</p>
+<p><a href="../CompilerTools.UDChains/#method__getorcreate.2">getOrCreate(udchains::Dict{CompilerTools.LivenessAnalysis.BasicBlock, CompilerTools.UDChains.UDInfo},  bb::CompilerTools.LivenessAnalysis.BasicBlock)</a>  Get the UDInfo for a specified basic block "bb" or create one if it doesn't already exist.</p>
+<p><a href="../CompilerTools.UDChains/#method__getudchains.1">getUDChains(bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Get the Use-Definition chains at a basic block level given LivenessAnalysis.BlockLiveness as input in "bl".</p>
+<p><a href="../CompilerTools.UDChains/#method__printlabels.1">printLabels(level,  dict)</a>  Print a live in or live out dictionary in a nice way if the debug level is set high enough.</p>
+<p><a href="../CompilerTools.UDChains/#method__printset.1">printSet(level,  s)</a>  Print the set part of a live in or live out dictiononary in a nice way if the debug level is set high enough.</p>
+<p><a href="../CompilerTools.UDChains/#method__printudinfo.1">printUDInfo(level,  ud)</a>  Print UDChains in a nice way if the debug level is set high enough.</p>
+<p><a href="../CompilerTools.UDChains/#type__udinfo.1">CompilerTools.UDChains.UDInfo</a>  Contains the UDchains for one basic block.</p>
+<h2 id="module-compilertoolsloops">MODULE: CompilerTools.Loops</h2>
+<hr />
+<h2 id="exported_11">Exported</h2>
+<p><a href="../CompilerTools.Loops/#type__domloops.1">CompilerTools.Loops.DomLoops</a>  A type that holds information about which basic blocks dominate which other blocks.</p>
+<p><a href="../CompilerTools.Loops/#type__loop.1">CompilerTools.Loops.Loop</a>  A type to hold information about a loop.</p>
+<hr />
+<h2 id="internal_14">Internal</h2>
+<p><a href="../CompilerTools.Loops/#method__compute_dom_loops.1">compute_dom_loops(bl::CompilerTools.CFGs.CFG)</a>  Find the loops in a CFGs.CFG in "bl".</p>
+<p><a href="../CompilerTools.Loops/#method__findloopinvariants.1">findLoopInvariants(l::CompilerTools.Loops.Loop,  udinfo::Dict{CompilerTools.LivenessAnalysis.BasicBlock, CompilerTools.UDChains.UDInfo},  bl::CompilerTools.LivenessAnalysis.BlockLiveness)</a>  Finds those computations within a loop that are iteration invariant.</p>
+<p><a href="../CompilerTools.Loops/#method__findloopmembers.1">findLoopMembers(head,  back_edge,  bbs)</a>  Find all the members of the loop as specified by the "head" basic block and the "back_edge" basic block.</p>
+<p><a href="../CompilerTools.Loops/#method__flm_internal.1">flm_internal(cur_bb,  members,  bbs)</a>  Add to the "members" of the loop being accumulated given "cur_bb" which is known to be a member of the loop.</p>
+<p><a href="../CompilerTools.Loops/#method__isinloop.1">isInLoop(dl::CompilerTools.Loops.DomLoops,  bb::Int64)</a>  Takes a DomLoops object containing loop information about the function.</p>
+<h2 id="module-parallelaccelerator">MODULE: ParallelAccelerator</h2>
+<hr />
+<h2 id="internal_15">Internal</h2>
+<p><a href="../ParallelAccelerator/#method____init__.1"><strong>init</strong>()</a>  Called when the package is loaded to do initialization.</p>
+<p><a href="../ParallelAccelerator/#method__embed.1">embed()</a>  This version of embed tries to use JULIA_HOME to find the root of the source distribution.</p>
+<p><a href="../ParallelAccelerator/#method__embed.2">embed(julia_root)</a>  Call this function if you want to embed binary-code of ParallelAccelerator into your Julia build to speed-up @acc compilation time.</p>
+<p><a href="../ParallelAccelerator/#method__getpackageroot.1">getPackageRoot()</a>  Generate a file path to the directory above the one containing this source file.</p>
+<p><a href="../ParallelAccelerator/#method__getpsemode.1">getPseMode()</a>  Return internal mode number by looking up environment variable "PROSPECT_MODE".</p>
+<p><a href="../ParallelAccelerator/#method__gettaskmode.1">getTaskMode()</a>  Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".</p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

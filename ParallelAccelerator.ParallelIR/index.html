@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>ParallelAccelerator.ParallelIR - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../ParallelAccelerator.J2CArray/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../ParallelAccelerator/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+        <li class="main "><a href="#if-a-definition-of-a-mmap-is-only-used-once-and-not-aliased-it-can-be-inlined-into-its">If a definition of a mmap is only used once and not aliased, it can be inlined into its</a></li>
+        
+    
+        <li class="main "><a href="#use-side-as-long-as-its-dependencies-have-not-been-changed">use side as long as its dependencies have not been changed.</a></li>
+        
+    
+        <li class="main "><a href="#fixme-is-the-implementation-still-correct-when-branches-are-present">FIXME: is the implementation still correct when branches are present?</a></li>
+        
+            <li><a href="#mmaptommapast-lives-uniqset">mmapToMmap!(ast,  lives,  uniqSet) ¶</a></li>
+        
+            <li><a href="#mustremainlaststatementinblocknodegotonode">mustRemainLastStatementInBlock(node::GotoNode) ¶</a></li>
+        
+            <li><a href="#nametosymbolnodenamesymbol-sym_to_type">nameToSymbolNode(name::Symbol,  sym_to_type) ¶</a></li>
+        
+            <li><a href="#nested_function_exprsmax_label-domain_lambda-dl_inputs">nested_function_exprs(max_label,  domain_lambda,  dl_inputs) ¶</a></li>
+        
+            <li><a href="#next_labelstateparallelacceleratorparallelirexpr_state">next_label(state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
+        
+            <li><a href="#oneifonlyx">oneIfOnly(x) ¶</a></li>
+        
+            <li><a href="#parfortotaskparfor_index-bb_statements-body-state">parforToTask(parfor_index,  bb_statements,  body,  state) ¶</a></li>
+        
+            <li><a href="#pirprintdldbg_level-dl">pirPrintDl(dbg_level,  dl) ¶</a></li>
+        
+            <li><a href="#pir_alias_cbastexpr-state-cbdata">pir_alias_cb(ast::Expr,  state,  cbdata) ¶</a></li>
+        
+            <li><a href="#pir_live_cbastexpr-cbdataany">pir_live_cb(ast::Expr,  cbdata::ANY) ¶</a></li>
+        
+            <li><a href="#pir_live_cb_defx">pir_live_cb_def(x) ¶</a></li>
+        
+            <li><a href="#printbodydlvl-bodyarrayany-1">printBody(dlvl,  body::Array{Any, 1}) ¶</a></li>
+        
+            <li><a href="#printlambdadlvl-nodeexpr">printLambda(dlvl,  node::Expr) ¶</a></li>
+        
+            <li><a href="#processandupdatebodylambdaexpr-ffunction-state">processAndUpdateBody(lambda::Expr,  f::Function,  state) ¶</a></li>
+        
+            <li><a href="#rangesizestart-skip-last">rangeSize(start,  skip,  last) ¶</a></li>
+        
+            <li><a href="#rangetorangedatarangeexpr-pre_offsetsarrayexpr-1-arr-range_numint64-state">rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state) ¶</a></li>
+        
+            <li><a href="#recreateloopsnew_body-the_parforparallelacceleratorparallelirpirparforast-state-newlambdainfo">recreateLoops(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state,  newLambdaInfo) ¶</a></li>
+        
+            <li><a href="#recreateloopsinternalnew_body-the_parforparallelacceleratorparallelirpirparforast-loop_nest_level-next_available_label-state-newlambdainfo">recreateLoopsInternal(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  loop_nest_level,  next_available_label,  state,  newLambdaInfo) ¶</a></li>
+        
+            <li><a href="#remembertypeforsymsym_to_typedictuniongensym-symbol-datatype-symuniongensym-symbol-typdatatype">rememberTypeForSym(sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  sym::Union{GenSym, Symbol},  typ::DataType) ¶</a></li>
+        
+            <li><a href="#removeasserteqshapeargsarrayany-1-state">removeAssertEqShape(args::Array{Any, 1},  state) ¶</a></li>
+        
+            <li><a href="#removenothingstmtsargsarrayany-1-state">removeNothingStmts(args::Array{Any, 1},  state) ¶</a></li>
+        
+            <li><a href="#remove_deadnode-dataparallelacceleratorparallelirremovedeadstate-top_level_number-is_top_level-read">remove_dead(node,  data::ParallelAccelerator.ParallelIR.RemoveDeadState,  top_level_number,  is_top_level,  read) ¶</a></li>
+        
+            <li><a href="#remove_extra_allocsast">remove_extra_allocs(ast) ¶</a></li>
+        
+            <li><a href="#remove_no_depsnodeany-dataparallelacceleratorparallelirremovenodepsstate-top_level_number-is_top_level-read">remove_no_deps(node::ANY,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read) ¶</a></li>
+        
+    
+        <li class="main "><a href="#this-routine-gathers-up-nodes-that-do-not-use">This routine gathers up nodes that do not use</a></li>
+        
+    
+        <li class="main "><a href="#any-variable-and-removes-them-from-the-ast-into-top_level_no_deps-this-works-in-conjunction-with">any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with</a></li>
+        
+    
+        <li class="main "><a href="#insert_no_deps_beginning-above-to-move-these-statements-with-no-dependencies-to-the-beginning-of-the-ast">insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST</a></li>
+        
+    
+        <li class="main "><a href="#where-they-cant-prevent-fusion">where they can't prevent fusion.</a></li>
+        
+            <li><a href="#replaceparforwithdictparforparallelacceleratorparallelirpirparforast-gensym_map">replaceParforWithDict(parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  gensym_map) ¶</a></li>
+        
+            <li><a href="#run_as_task">run_as_task() ¶</a></li>
+        
+            <li><a href="#run_as_task_decrement">run_as_task_decrement() ¶</a></li>
+        
+            <li><a href="#selecttorangedataselectexpr-pre_offsetsarrayexpr-1-state">selectToRangeData(select::Expr,  pre_offsets::Array{Expr, 1},  state) ¶</a></li>
+        
+            <li><a href="#seqtaskbody_indices-bb_statements-body-state">seqTask(body_indices,  bb_statements,  body,  state) ¶</a></li>
+        
+            <li><a href="#showioio-pnodeparallelacceleratorparallelirpirparforast">show(io::IO,  pnode::ParallelAccelerator.ParallelIR.PIRParForAst) ¶</a></li>
+        
+            <li><a href="#simpleindexdict">simpleIndex(dict) ¶</a></li>
+        
+            <li><a href="#sub_arraylen_walkxexpr-replacement-top_level_number-is_top_level-read">sub_arraylen_walk(x::Expr,  replacement,  top_level_number,  is_top_level,  read) ¶</a></li>
+        
+            <li><a href="#sub_arrayset_walkxexpr-cbd-top_level_number-is_top_level-read">sub_arrayset_walk(x::Expr,  cbd,  top_level_number,  is_top_level,  read) ¶</a></li>
+        
+            <li><a href="#sub_cur_body_walkxexpr-cbdparallelacceleratorparallelircur_body_data-top_level_numberint64-is_top_levelbool-readbool">sub_cur_body_walk(x::Expr,  cbd::ParallelAccelerator.ParallelIR.cur_body_data,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) ¶</a></li>
+        
+            <li><a href="#substitute_arraylenx-replacement">substitute_arraylen(x,  replacement) ¶</a></li>
+        
+            <li><a href="#substitute_arraysetx-arrays_set_in_cur_body-output_items_with_aliases">substitute_arrayset(x,  arrays_set_in_cur_body,  output_items_with_aliases) ¶</a></li>
+        
+            <li><a href="#substitute_cur_bodyx-temp_mapdictuniongensym-symbol-uniongensym-symbolnode-index_mapdictuniongensym-symbol-uniongensym-symbol-arrays_set_in_cur_bodysetuniongensym-symbol-replace_array_name_in_arraysetdictuniongensym-symbol-uniongensym-symbol-stateparallelacceleratorparallelirexpr_state">substitute_cur_body(x,  temp_map::Dict{Union{GenSym, Symbol}, Union{GenSym, SymbolNode}},  index_map::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  arrays_set_in_cur_body::Set{Union{GenSym, Symbol}},  replace_array_name_in_arrayset::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  state::ParallelAccelerator.ParallelIR.expr_state) ¶</a></li>
+        
+            <li><a href="#taskableparfornode">taskableParfor(node) ¶</a></li>
+        
+            <li><a href="#tosngenxsymbol-typ">toSNGen(x::Symbol,  typ) ¶</a></li>
+        
+            <li><a href="#tosymgenxsymbol">toSymGen(x::Symbol) ¶</a></li>
+        
+            <li><a href="#tosymnodegenxsymbol-typ">toSymNodeGen(x::Symbol,  typ) ¶</a></li>
+        
+            <li><a href="#uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelircopypropagatestate">ParallelAccelerator.ParallelIR.CopyPropagateState ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirdirwalk">ParallelAccelerator.ParallelIR.DirWalk ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirdomainoperation">ParallelAccelerator.ParallelIR.DomainOperation ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirequivalenceclasses">ParallelAccelerator.ParallelIR.EquivalenceClasses ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirfusionsentinel">ParallelAccelerator.ParallelIR.FusionSentinel ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirinprogress">ParallelAccelerator.ParallelIR.InProgress ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirinputinfo">ParallelAccelerator.ParallelIR.InputInfo ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirinserttasknode">ParallelAccelerator.ParallelIR.InsertTaskNode ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpirparforstartend">ParallelAccelerator.ParallelIR.PIRParForStartEnd ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirrangedata">ParallelAccelerator.ParallelIR.RangeData ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirremovedeadstate">ParallelAccelerator.ParallelIR.RemoveDeadState ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirremovenodepsstate">ParallelAccelerator.ParallelIR.RemoveNoDepsState ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirreplacedregion">ParallelAccelerator.ParallelIR.ReplacedRegion ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirrhsdead">ParallelAccelerator.ParallelIR.RhsDead ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirstatementwithdeps">ParallelAccelerator.ParallelIR.StatementWithDeps ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirtaskinfo">ParallelAccelerator.ParallelIR.TaskInfo ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelircur_body_data">ParallelAccelerator.ParallelIR.cur_body_data ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelircuw_state">ParallelAccelerator.ParallelIR.cuw_state ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirexpr_state">ParallelAccelerator.ParallelIR.expr_state ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpir_arg_metadata">ParallelAccelerator.ParallelIR.pir_arg_metadata ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpir_array_access_desc">ParallelAccelerator.ParallelIR.pir_array_access_desc ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpir_grain_size">ParallelAccelerator.ParallelIR.pir_grain_size ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpir_range">ParallelAccelerator.ParallelIR.pir_range ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirpir_range_actual">ParallelAccelerator.ParallelIR.pir_range_actual ¶</a></li>
+        
+            <li><a href="#parallelacceleratorparallelirsub_arrayset_data">ParallelAccelerator.ParallelIR.sub_arrayset_data ¶</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="parallelacceleratorparallelir">ParallelAccelerator.ParallelIR</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__astwalk.1" class="lexicon_definition"></a></p>
+<h4 id="astwalkast-callback-cbdata">AstWalk(ast,  callback,  cbdata) <a href="#method__astwalk.1">¶</a></h4>
+<p>ParallelIR version of AstWalk.
+Invokes the DomainIR version of AstWalk and provides the parallel IR AstWalk callback AstWalkCallback.</p>
+<p>Parallel IR AstWalk calls Domain IR AstWalk which in turn calls CompilerTools.AstWalker.AstWalk.
+For each AST node, CompilerTools.AstWalker.AstWalk calls Domain IR callback to give it a chance to handle the node if it is a Domain IR node.
+Likewise, Domain IR callback first calls Parallel IR callback to give it a chance to handle Parallel IR nodes.
+The Parallel IR callback similarly first calls the user-level callback to give it a chance to process the node.
+If a callback returns "nothing" it means it didn't modify that node and that the previous code should process it.
+The Parallel IR callback will return "nothing" if the node isn't a Parallel IR node.
+The Domain IR callback will return "nothing" if the node isn't a Domain IR node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4876</a></p>
+<hr />
+<p><a id="method__pirinplace.1" class="lexicon_definition"></a></p>
+<h4 id="pirinplacex">PIRInplace(x) <a href="#method__pirinplace.1">¶</a></h4>
+<p>If set to non-zero, perform the phase where non-inplace maps are converted to inplace maps to reduce allocations.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3816</a></p>
+<hr />
+<p><a id="method__pirnumsimplify.1" class="lexicon_definition"></a></p>
+<h4 id="pirnumsimplifyx">PIRNumSimplify(x) <a href="#method__pirnumsimplify.1">¶</a></h4>
+<p>Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1672</a></p>
+<hr />
+<p><a id="method__pirrunastasks.1" class="lexicon_definition"></a></p>
+<h4 id="pirrunastasksx">PIRRunAsTasks(x) <a href="#method__pirrunastasks.1">¶</a></h4>
+<p>Debugging feature to specify the number of tasks to create and to stop thereafter.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1853</a></p>
+<hr />
+<p><a id="method__pirsetfuselimit.1" class="lexicon_definition"></a></p>
+<h4 id="pirsetfuselimitx">PIRSetFuseLimit(x) <a href="#method__pirsetfuselimit.1">¶</a></h4>
+<p>Control how many parfor can be fused for testing purposes.
+    -1 means fuse all possible parfors.
+    0  means don't fuse any parfors.
+    1+ means fuse the specified number of parfors but then stop fusing beyond that.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1667</a></p>
+<hr />
+<p><a id="method__pirshortcutarrayassignment.1" class="lexicon_definition"></a></p>
+<h4 id="pirshortcutarrayassignmentx">PIRShortcutArrayAssignment(x) <a href="#method__pirshortcutarrayassignment.1">¶</a></h4>
+<p>Enables an experimental mode where if there is a statement a = b and they are arrays and b is not live-out then 
+use a special assignment node like a move assignment in C++.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3842</a></p>
+<hr />
+<p><a id="method__pirtaskgraphmode.1" class="lexicon_definition"></a></p>
+<h4 id="pirtaskgraphmodex">PIRTaskGraphMode(x) <a href="#method__pirtaskgraphmode.1">¶</a></h4>
+<p>Control how blocks of code are made into tasks.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:589</a></p>
+<hr />
+<p><a id="method__from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayany-1-depth-state">from_exprs(ast::Array{Any, 1},  depth,  state) <a href="#method__from_exprs.1">¶</a></h4>
+<p>Process an array of expressions.
+Differentiate between top-level arrays of statements and arrays of expression that may occur elsewhere than the :body Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2274</a></p>
+<hr />
+<p><a id="type__pirloopnest.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpirloopnest">ParallelAccelerator.ParallelIR.PIRLoopNest <a href="#type__pirloopnest.1">¶</a></h4>
+<p>Holds the information about a loop in a parfor node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:76</a></p>
+<hr />
+<p><a id="type__pirparforast.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpirparforast">ParallelAccelerator.ParallelIR.PIRParForAst <a href="#type__pirparforast.1">¶</a></h4>
+<p>The parfor AST node type.
+While we are lowering domain IR to parfors and fusing we use this representation because it
+makes it easier to associate related statements before and after the loop to the loop itself.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:174</a></p>
+<hr />
+<p><a id="type__pirreduction.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpirreduction">ParallelAccelerator.ParallelIR.PIRReduction <a href="#type__pirreduction.1">¶</a></h4>
+<p>Holds the information about a reduction in a parfor node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:86</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__astwalkcallback.1" class="lexicon_definition"></a></p>
+<h4 id="astwalkcallbackxexpr-dwparallelacceleratorparallelirdirwalk-top_level_numberint64-is_top_levelbool-readbool">AstWalkCallback(x::Expr,  dw::ParallelAccelerator.ParallelIR.DirWalk,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) <a href="#method__astwalkcallback.1">¶</a></h4>
+<p>AstWalk callback that handles ParallelIR AST node types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4724</a></p>
+<hr />
+<p><a id="method__equivalenceclassesadd.1" class="lexicon_definition"></a></p>
+<h4 id="equivalenceclassesaddecparallelacceleratorparallelirequivalenceclasses-symsymbol">EquivalenceClassesAdd(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses,  sym::Symbol) <a href="#method__equivalenceclassesadd.1">¶</a></h4>
+<p>Add a symbol as part of a new equivalence class if the symbol wasn't already in an equivalence class.
+Return the equivalence class for the symbol.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:139</a></p>
+<hr />
+<p><a id="method__equivalenceclassesclear.1" class="lexicon_definition"></a></p>
+<h4 id="equivalenceclassesclearecparallelacceleratorparallelirequivalenceclasses">EquivalenceClassesClear(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses) <a href="#method__equivalenceclassesclear.1">¶</a></h4>
+<p>Clear an equivalence class.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:153</a></p>
+<hr />
+<p><a id="method__equivalenceclassesmerge.1" class="lexicon_definition"></a></p>
+<h4 id="equivalenceclassesmergeecparallelacceleratorparallelirequivalenceclasses-merge_tosymbol-merge_fromsymbol">EquivalenceClassesMerge(ec::ParallelAccelerator.ParallelIR.EquivalenceClasses,  merge_to::Symbol,  merge_from::Symbol) <a href="#method__equivalenceclassesmerge.1">¶</a></h4>
+<p>At some point we realize that two arrays must have the same dimensions but up until that point
+we might not have known that.  In which case they will start in different equivalence classes,
+merge_to and merge_from, but need to be combined into one equivalence class.
+Go through the equivalence class dictionary and for any symbol belonging to the merge_from
+equivalence class, change it to now belong to the merge_to equivalence class.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:123</a></p>
+<hr />
+<p><a id="method__pirbbreorder.1" class="lexicon_definition"></a></p>
+<h4 id="pirbbreorderx">PIRBbReorder(x) <a href="#method__pirbbreorder.1">¶</a></h4>
+<p>If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3832</a></p>
+<hr />
+<p><a id="method__pirhoistallocation.1" class="lexicon_definition"></a></p>
+<h4 id="pirhoistallocationx">PIRHoistAllocation(x) <a href="#method__pirhoistallocation.1">¶</a></h4>
+<p>If set to non-zero, perform the rearrangement phase that tries to moves alllocations outside of loops.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3824</a></p>
+<hr />
+<p><a id="method__typedexpr.1" class="lexicon_definition"></a></p>
+<h4 id="typedexprtyp-rest">TypedExpr(typ,  rest...) <a href="#method__typedexpr.1">¶</a></h4>
+<p>This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:67</a></p>
+<hr />
+<p><a id="method__addunknownarray.1" class="lexicon_definition"></a></p>
+<h4 id="addunknownarrayxuniongensym-symbol-stateparallelacceleratorparallelirexpr_state">addUnknownArray(x::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__addunknownarray.1">¶</a></h4>
+<p>Given an array whose name is in "x", allocate a new equivalence class for this array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:746</a></p>
+<hr />
+<p><a id="method__addunknownrange.1" class="lexicon_definition"></a></p>
+<h4 id="addunknownrangexarrayany-1-stateparallelacceleratorparallelirexpr_state">addUnknownRange(x::Array{Any, 1},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__addunknownrange.1">¶</a></h4>
+<p>Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:755</a></p>
+<hr />
+<p><a id="method__add_merge_correlations.1" class="lexicon_definition"></a></p>
+<h4 id="add_merge_correlationsold_symuniongensym-symbol-new_symuniongensym-symbol-stateparallelacceleratorparallelirexpr_state">add_merge_correlations(old_sym::Union{GenSym, Symbol},  new_sym::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__add_merge_correlations.1">¶</a></h4>
+<p>If we somehow determine that two arrays must be the same length then 
+get the equivalence classes for the two arrays and merge those equivalence classes together.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:792</a></p>
+<hr />
+<p><a id="method__asarray.1" class="lexicon_definition"></a></p>
+<h4 id="asarrayx">asArray(x) <a href="#method__asarray.1">¶</a></h4>
+<p>Return one element array with element x.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4715</a></p>
+<hr />
+<p><a id="method__augment_sn.1" class="lexicon_definition"></a></p>
+<h4 id="augment_sndimint64-index_vars-range_vararrayuniongensym-symbolnode-1-rangearrayparallelacceleratorparallelirrangedata-1">augment_sn(dim::Int64,  index_vars,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) <a href="#method__augment_sn.1">¶</a></h4>
+<p>Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:29</a></p>
+<hr />
+<p><a id="method__call_instruction_count.1" class="lexicon_definition"></a></p>
+<h4 id="call_instruction_countargs-stateparallelacceleratorparallelireic_state-debug_level">call_instruction_count(args,  state::ParallelAccelerator.ParallelIR.eic_state,  debug_level) <a href="#method__call_instruction_count.1">¶</a></h4>
+<p>Generate an instruction count estimate for a call instruction.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:352</a></p>
+<hr />
+<p><a id="method__checkandaddsymbolcorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="checkandaddsymbolcorrelationlhsuniongensym-symbol-state-dim_array">checkAndAddSymbolCorrelation(lhs::Union{GenSym, Symbol},  state,  dim_array) <a href="#method__checkandaddsymbolcorrelation.1">¶</a></h4>
+<p>Make sure all the dimensions are SymbolNodes.
+Make sure each dimension variable is assigned to only once in the function.
+Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3277</a></p>
+<hr />
+<p><a id="method__convertunsafe.1" class="lexicon_definition"></a></p>
+<h4 id="convertunsafestmt">convertUnsafe(stmt) <a href="#method__convertunsafe.1">¶</a></h4>
+<p>Remove unsafe array access Symbols from the incoming "stmt".
+Returns the updated statement if something was modifed, else returns "nothing".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:951</a></p>
+<hr />
+<p><a id="method__convertunsafeorelse.1" class="lexicon_definition"></a></p>
+<h4 id="convertunsafeorelsestmt">convertUnsafeOrElse(stmt) <a href="#method__convertunsafeorelse.1">¶</a></h4>
+<p>Try to remove unsafe array access Symbols from the incoming "stmt".  If successful, then return the updated
+statement, else return the unmodified statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:970</a></p>
+<hr />
+<p><a id="method__convertunsafewalk.1" class="lexicon_definition"></a></p>
+<h4 id="convertunsafewalkxexpr-state-top_level_number-is_top_level-read">convertUnsafeWalk(x::Expr,  state,  top_level_number,  is_top_level,  read) <a href="#method__convertunsafewalk.1">¶</a></h4>
+<p>The AstWalk callback to find unsafe arrayset and arrayref variants and
+replace them with the regular Julia versions.  Sets the "found" flag
+in the state when such a replacement is performed.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:919</a></p>
+<hr />
+<p><a id="method__copy_propagate.1" class="lexicon_definition"></a></p>
+<h4 id="copy_propagatenodeany-dataparallelacceleratorparallelircopypropagatestate-top_level_number-is_top_level-read">copy_propagate(node::ANY,  data::ParallelAccelerator.ParallelIR.CopyPropagateState,  top_level_number,  is_top_level,  read) <a href="#method__copy_propagate.1">¶</a></h4>
+<p>In each basic block, if there is a "copy" (i.e., something of the form "a = b") then put
+that in copies as copies[a] = b.  Then, later in the basic block if you see the symbol
+"a" then replace it with "b".  Note that this is not SSA so "a" may be written again
+and if it is then it must be removed from copies.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2849</a></p>
+<hr />
+<p><a id="method__count_assignments.1" class="lexicon_definition"></a></p>
+<h4 id="count_assignmentsx-symbol_assignsdictsymbol-int64-top_level_number-is_top_level-read">count_assignments(x,  symbol_assigns::Dict{Symbol, Int64},  top_level_number,  is_top_level,  read) <a href="#method__count_assignments.1">¶</a></h4>
+<p>AstWalk callback to count the number of static times that a symbol is assigne within a method.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:920</a></p>
+<hr />
+<p><a id="method__create1d_array_access_desc.1" class="lexicon_definition"></a></p>
+<h4 id="create1d_array_access_descarraysymbolnode">create1D_array_access_desc(array::SymbolNode) <a href="#method__create1d_array_access_desc.1">¶</a></h4>
+<p>Create an array access descriptor for "array".
+Presumes that for point "i" in the iteration space that only index "i" is accessed.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:124</a></p>
+<hr />
+<p><a id="method__create2d_array_access_desc.1" class="lexicon_definition"></a></p>
+<h4 id="create2d_array_access_descarraysymbolnode">create2D_array_access_desc(array::SymbolNode) <a href="#method__create2d_array_access_desc.1">¶</a></h4>
+<p>Create an array access descriptor for "array".
+Presumes that for points "(i,j)" in the iteration space that only indices "(i,j)" is accessed.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:134</a></p>
+<hr />
+<p><a id="method__createinstructioncountestimate.1" class="lexicon_definition"></a></p>
+<h4 id="createinstructioncountestimatethe_parforparallelacceleratorparallelirpirparforast-stateparallelacceleratorparallelirexpr_state">createInstructionCountEstimate(the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__createinstructioncountestimate.1">¶</a></h4>
+<p>Takes a parfor and walks the body of the parfor and estimates the number of instruction needed for one instance of that body.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:557</a></p>
+<hr />
+<p><a id="method__createloweredaliasmap.1" class="lexicon_definition"></a></p>
+<h4 id="createloweredaliasmapdict1">createLoweredAliasMap(dict1) <a href="#method__createloweredaliasmap.1">¶</a></h4>
+<p>Take a single-step alias map, e.g., a=&gt;b, b=&gt;c, and create a lowered dictionary, a=&gt;c, b=&gt;c, that
+maps each array to the transitively lowered array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1840</a></p>
+<hr />
+<p><a id="method__createmaplhstoparfor.1" class="lexicon_definition"></a></p>
+<h4 id="createmaplhstoparforparfor_assignment-the_parfor-is_multibool-sym_to_typedictuniongensym-symbol-datatype-stateparallelacceleratorparallelirexpr_state">createMapLhsToParfor(parfor_assignment,  the_parfor,  is_multi::Bool,  sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__createmaplhstoparfor.1">¶</a></h4>
+<p>Creates a mapping between variables on the left-hand side of an assignment where the right-hand side is a parfor
+and the arrays or scalars in that parfor that get assigned to the corresponding parts of the left-hand side.
+Returns a tuple where the first element is a map for arrays between left-hand side and parfor and the second
+element is a map for reduction scalars between left-hand side and parfor.
+is_multi is true if the assignment is a fusion assignment.
+parfor_assignment is the AST of the whole expression.
+the_parfor is the PIRParForAst type part of the incoming assignment.
+sym_to_type is an out parameter that maps symbols in the output mapping to their types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1774</a></p>
+<hr />
+<p><a id="method__createstatevar.1" class="lexicon_definition"></a></p>
+<h4 id="createstatevarstate-name-typ-access">createStateVar(state,  name,  typ,  access) <a href="#method__createstatevar.1">¶</a></h4>
+<p>Add a local variable to the current function's lambdaInfo.
+Returns a symbol node of the new variable.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:639</a></p>
+<hr />
+<p><a id="method__createtempforarray.1" class="lexicon_definition"></a></p>
+<h4 id="createtempforarrayarray_snuniongensym-symbol-symbolnode-unique_idint64-stateparallelacceleratorparallelirexpr_state">createTempForArray(array_sn::Union{GenSym, Symbol, SymbolNode},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__createtempforarray.1">¶</a></h4>
+<p>Create a temporary variable that is parfor private to hold the value of an element of an array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:647</a></p>
+<hr />
+<p><a id="method__createtempforrangeoffset.1" class="lexicon_definition"></a></p>
+<h4 id="createtempforrangeoffsetnum_used-rangesarrayparallelacceleratorparallelirrangedata-1-unique_idint64-stateparallelacceleratorparallelirexpr_state">createTempForRangeOffset(num_used,  ranges::Array{ParallelAccelerator.ParallelIR.RangeData, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__createtempforrangeoffset.1">¶</a></h4>
+<p>Create a variable to hold the offset of a range offset from the start of the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:322</a></p>
+<hr />
+<p><a id="method__createtempforrangedarray.1" class="lexicon_definition"></a></p>
+<h4 id="createtempforrangedarrayarray_snuniongensym-symbol-symbolnode-rangearrayuniongensym-symbolnode-1-unique_idint64-stateparallelacceleratorparallelirexpr_state">createTempForRangedArray(array_sn::Union{GenSym, Symbol, SymbolNode},  range::Array{Union{GenSym, SymbolNode}, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__createtempforrangedarray.1">¶</a></h4>
+<p>Create a temporary variable that is parfor private to hold the value of an element of an array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:338</a></p>
+<hr />
+<p><a id="method__create_array_access_desc.1" class="lexicon_definition"></a></p>
+<h4 id="create_array_access_descarraysymbolnode">create_array_access_desc(array::SymbolNode) <a href="#method__create_array_access_desc.1">¶</a></h4>
+<p>Create an array access descriptor for "array".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:144</a></p>
+<hr />
+<p><a id="method__create_equivalence_classes.1" class="lexicon_definition"></a></p>
+<h4 id="create_equivalence_classesnodeexpr-stateparallelacceleratorparallelirexpr_state-top_level_numberint64-is_top_levelbool-readbool">create_equivalence_classes(node::Expr,  state::ParallelAccelerator.ParallelIR.expr_state,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) <a href="#method__create_equivalence_classes.1">¶</a></h4>
+<p>AstWalk callback to determine the array equivalence classes.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3405</a></p>
+<hr />
+<p><a id="method__dfsvisit.1" class="lexicon_definition"></a></p>
+<h4 id="dfsvisitswdparallelacceleratorparallelirstatementwithdeps-vtimeint64-topo_sortarrayparallelacceleratorparallelirstatementwithdeps-n">dfsVisit(swd::ParallelAccelerator.ParallelIR.StatementWithDeps,  vtime::Int64,  topo_sort::Array{ParallelAccelerator.ParallelIR.StatementWithDeps, N}) <a href="#method__dfsvisit.1">¶</a></h4>
+<p>Construct a topological sort of the dependence graph.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3863</a></p>
+<hr />
+<p><a id="method__estimateinstrcount.1" class="lexicon_definition"></a></p>
+<h4 id="estimateinstrcountastexpr-stateparallelacceleratorparallelireic_state-top_level_number-is_top_level-read">estimateInstrCount(ast::Expr,  state::ParallelAccelerator.ParallelIR.eic_state,  top_level_number,  is_top_level,  read) <a href="#method__estimateinstrcount.1">¶</a></h4>
+<p>AstWalk callback for estimating the instruction count.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:474</a></p>
+<hr />
+<p><a id="method__extractarrayequivalencies.1" class="lexicon_definition"></a></p>
+<h4 id="extractarrayequivalenciesnodeexpr-state">extractArrayEquivalencies(node::Expr,  state) <a href="#method__extractarrayequivalencies.1">¶</a></h4>
+<p>"node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
+don't already have one and make sure they all share one equivalence class.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3215</a></p>
+<hr />
+<p><a id="method__findselecteddimensions.1" class="lexicon_definition"></a></p>
+<h4 id="findselecteddimensionsinputinfoarrayparallelacceleratorparallelirinputinfo-1-state">findSelectedDimensions(inputInfo::Array{ParallelAccelerator.ParallelIR.InputInfo, 1},  state) <a href="#method__findselecteddimensions.1">¶</a></h4>
+<p>Given all the InputInfo for a Domain IR operation being lowered to Parallel IR,
+determine the number of output dimensions for those arrays taking into account
+that singly selected trailing dimensinos are eliminated.  Make sure that all such
+arrays have the same output dimensions because this will match the loop nest size.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:745</a></p>
+<hr />
+<p><a id="method__flattenparfor.1" class="lexicon_definition"></a></p>
+<h4 id="flattenparfornew_body-the_parforparallelacceleratorparallelirpirparforast">flattenParfor(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst) <a href="#method__flattenparfor.1">¶</a></h4>
+<p>Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that
+body.  This parfor is in the nested (parfor code is in the parfor node itself) temporary form we use for fusion although 
+pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested
+form where we have a parfor_start and parfor_end to delineate the parfor code.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-flatten.jl">ParallelAccelerator/src/parallel-ir-flatten.jl:94</a></p>
+<hr />
+<p><a id="method__from_asserteqshape.1" class="lexicon_definition"></a></p>
+<h4 id="from_asserteqshapenodeexpr-state">from_assertEqShape(node::Expr,  state) <a href="#method__from_asserteqshape.1">¶</a></h4>
+<p>Create array equivalences from an assertEqShape AST node.
+There are two arrays in the args to assertEqShape.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2604</a></p>
+<hr />
+<p><a id="method__from_assignment.1" class="lexicon_definition"></a></p>
+<h4 id="from_assignmentlhs-rhs-depth-state">from_assignment(lhs,  rhs,  depth,  state) <a href="#method__from_assignment.1">¶</a></h4>
+<p>Process an assignment expression.
+Starts by recurisvely processing the right-hand side of the assignment.
+Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
+    Does some array equivalence class work which may be redundant given that we now run a separate equivalence class pass so consider removing that part of this code.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2685</a></p>
+<hr />
+<p><a id="method__from_call.1" class="lexicon_definition"></a></p>
+<h4 id="from_callastarrayany-1-depth-state">from_call(ast::Array{Any, 1},  depth,  state) <a href="#method__from_call.1">¶</a></h4>
+<p>Process a call AST node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2807</a></p>
+<hr />
+<p><a id="method__from_expr.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprastexpr-depth-stateparallelacceleratorparallelirexpr_state-top_level">from_expr(ast::Expr,  depth,  state::ParallelAccelerator.ParallelIR.expr_state,  top_level) <a href="#method__from_expr.1">¶</a></h4>
+<p>The main ParallelIR function for processing some node in the AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4546</a></p>
+<hr />
+<p><a id="method__from_lambda.1" class="lexicon_definition"></a></p>
+<h4 id="from_lambdalambdaexpr-depth-state">from_lambda(lambda::Expr,  depth,  state) <a href="#method__from_lambda.1">¶</a></h4>
+<p>Process a :lambda Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:946</a></p>
+<hr />
+<p><a id="method__from_root.1" class="lexicon_definition"></a></p>
+<h4 id="from_rootfunction_name-astexpr">from_root(function_name,  ast::Expr) <a href="#method__from_root.1">¶</a></h4>
+<p>The main ENTRY point into ParallelIR.
+1) Do liveness analysis.
+2) Convert mmap to mmap! where possible.
+3) Do some code rearrangement (e.g., hoisting) to maximize later fusion.
+4) Create array equivalence classes within the function.
+5) Rearrange statements within a basic block to push domain operations to the bottom so more fusion.
+6) Call the main from_expr to process the AST for the function.  This will
+a) Lower domain IR to parallel IR AST nodes.
+b) Fuse parallel IR nodes where possible.
+c) Convert to task IR nodes if task mode enabled.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4208</a></p>
+<hr />
+<p><a id="method__fullyloweralias.1" class="lexicon_definition"></a></p>
+<h4 id="fullyloweraliasdictdictuniongensym-symbol-uniongensym-symbol-inputuniongensym-symbol">fullyLowerAlias(dict::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  input::Union{GenSym, Symbol}) <a href="#method__fullyloweralias.1">¶</a></h4>
+<p>Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a Symbol is present
+in the dictionary replace it with the corresponding value from the dict.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1829</a></p>
+<hr />
+<p><a id="method__fuse.1" class="lexicon_definition"></a></p>
+<h4 id="fusebody-body_index-cur-state">fuse(body,  body_index,  cur,  state) <a href="#method__fuse.1">¶</a></h4>
+<p>Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1871</a></p>
+<hr />
+<p><a id="method__generate_instr_count.1" class="lexicon_definition"></a></p>
+<h4 id="generate_instr_countfunction_name-signature">generate_instr_count(function_name,  signature) <a href="#method__generate_instr_count.1">¶</a></h4>
+<p>Try to figure out the instruction count for a given call.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:398</a></p>
+<hr />
+<p><a id="method__getarrayelemtype.1" class="lexicon_definition"></a></p>
+<h4 id="getarrayelemtypearraygensym-stateparallelacceleratorparallelirexpr_state">getArrayElemType(array::GenSym,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getarrayelemtype.1">¶</a></h4>
+<p>Returns the element type of an Array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:611</a></p>
+<hr />
+<p><a id="method__getarrayelemtype.2" class="lexicon_definition"></a></p>
+<h4 id="getarrayelemtypearraysymbolnode-stateparallelacceleratorparallelirexpr_state">getArrayElemType(array::SymbolNode,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getarrayelemtype.2">¶</a></h4>
+<p>Returns the element type of an Array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:604</a></p>
+<hr />
+<p><a id="method__getarrayelemtype.3" class="lexicon_definition"></a></p>
+<h4 id="getarrayelemtypeatypdatatype">getArrayElemType(atyp::DataType) <a href="#method__getarrayelemtype.3">¶</a></h4>
+<p>Returns the element type of an Array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:591</a></p>
+<hr />
+<p><a id="method__getarraynumdims.1" class="lexicon_definition"></a></p>
+<h4 id="getarraynumdimsarraygensym-stateparallelacceleratorparallelirexpr_state">getArrayNumDims(array::GenSym,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getarraynumdims.1">¶</a></h4>
+<p>Return the number of dimensions of an Array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:628</a></p>
+<hr />
+<p><a id="method__getarraynumdims.2" class="lexicon_definition"></a></p>
+<h4 id="getarraynumdimsarraysymbolnode-stateparallelacceleratorparallelirexpr_state">getArrayNumDims(array::SymbolNode,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getarraynumdims.2">¶</a></h4>
+<p>Return the number of dimensions of an Array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:619</a></p>
+<hr />
+<p><a id="method__getconstdims.1" class="lexicon_definition"></a></p>
+<h4 id="getconstdimsnum_dim_inputs-inputinfoparallelacceleratorparallelirinputinfo">getConstDims(num_dim_inputs,  inputInfo::ParallelAccelerator.ParallelIR.InputInfo) <a href="#method__getconstdims.1">¶</a></h4>
+<p>In the case where a domain IR operation on an array creates a lower dimensional output,
+the indexing expression needs the expression that selects those constant trailing dimensions
+that are being dropped.  This function returns an array of those constant expressions for
+the trailing dimensions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:766</a></p>
+<hr />
+<p><a id="method__getcorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="getcorrelationsnguniongensym-symbol-symbolnode-stateparallelacceleratorparallelirexpr_state">getCorrelation(sng::Union{GenSym, Symbol, SymbolNode},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getcorrelation.1">¶</a></h4>
+<p>Get the equivalence class of a domain IR input in inputInfo.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1747</a></p>
+<hr />
+<p><a id="method__getfirstarraylens.1" class="lexicon_definition"></a></p>
+<h4 id="getfirstarraylensprestatements-num_dims">getFirstArrayLens(prestatements,  num_dims) <a href="#method__getfirstarraylens.1">¶</a></h4>
+<p>Get the variable which holds the length of the first input array to a parfor.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1438</a></p>
+<hr />
+<p><a id="method__getio.1" class="lexicon_definition"></a></p>
+<h4 id="getiostmt_ids-bb_statements">getIO(stmt_ids,  bb_statements) <a href="#method__getio.1">¶</a></h4>
+<p>Given a set of statement IDs and liveness information for the statements of the function, determine
+which symbols are needed at input and which symbols are purely local to the functio.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:840</a></p>
+<hr />
+<p><a id="method__getinputset.1" class="lexicon_definition"></a></p>
+<h4 id="getinputsetnodeparallelacceleratorparallelirpirparforast">getInputSet(node::ParallelAccelerator.ParallelIR.PIRParForAst) <a href="#method__getinputset.1">¶</a></h4>
+<p>Returns a Set with all the arrays read by this parfor.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1106</a></p>
+<hr />
+<p><a id="method__getlhsfromassignment.1" class="lexicon_definition"></a></p>
+<h4 id="getlhsfromassignmentassignment">getLhsFromAssignment(assignment) <a href="#method__getlhsfromassignment.1">¶</a></h4>
+<p>Get the left-hand side of an assignment expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1077</a></p>
+<hr />
+<p><a id="method__getlhsoutputset.1" class="lexicon_definition"></a></p>
+<h4 id="getlhsoutputsetlhs-assignment">getLhsOutputSet(lhs,  assignment) <a href="#method__getlhsoutputset.1">¶</a></h4>
+<p>Get the real outputs of an assignment statement.
+If the assignment expression is normal then the output is just the left-hand side.
+If the assignment expression is augmented with a FusionSentinel then the real outputs
+are the 4+ arguments to the expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1121</a></p>
+<hr />
+<p><a id="method__getmaxlabel.1" class="lexicon_definition"></a></p>
+<h4 id="getmaxlabelmax_label-stmtsarrayany-1">getMaxLabel(max_label,  stmts::Array{Any, 1}) <a href="#method__getmaxlabel.1">¶</a></h4>
+<p>Scan the body of a function in "stmts" and return the max label in a LabelNode AST seen in the body.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4026</a></p>
+<hr />
+<p><a id="method__getnonblock.1" class="lexicon_definition"></a></p>
+<h4 id="getnonblockhead_preds-back_edge">getNonBlock(head_preds,  back_edge) <a href="#method__getnonblock.1">¶</a></h4>
+<p>Find the basic block before the entry to a loop.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:5</a></p>
+<hr />
+<p><a id="method__getoraddarraycorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="getoraddarraycorrelationxuniongensym-symbol-stateparallelacceleratorparallelirexpr_state">getOrAddArrayCorrelation(x::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getoraddarraycorrelation.1">¶</a></h4>
+<p>Return a correlation set for an array.  If the array was not previously added then add it and return it.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:802</a></p>
+<hr />
+<p><a id="method__getoraddrangecorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="getoraddrangecorrelationrangesarrayparallelacceleratorparallelirrangeexprs-1-stateparallelacceleratorparallelirexpr_state">getOrAddRangeCorrelation(ranges::Array{ParallelAccelerator.ParallelIR.RangeExprs, 1},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__getoraddrangecorrelation.1">¶</a></h4>
+<p>Gets (or adds if absent) the range correlation for the given array of RangeExprs.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:813</a></p>
+<hr />
+<p><a id="method__getoraddsymbolcorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="getoraddsymbolcorrelationarrayuniongensym-symbol-stateparallelacceleratorparallelirexpr_state-dimsarrayuniongensym-symbol-1">getOrAddSymbolCorrelation(array::Union{GenSym, Symbol},  state::ParallelAccelerator.ParallelIR.expr_state,  dims::Array{Union{GenSym, Symbol}, 1}) <a href="#method__getoraddsymbolcorrelation.1">¶</a></h4>
+<p>A new array is being created with an explicit size specification in dims.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:832</a></p>
+<hr />
+<p><a id="method__getparforcorrelation.1" class="lexicon_definition"></a></p>
+<h4 id="getparforcorrelationparfor-state">getParforCorrelation(parfor,  state) <a href="#method__getparforcorrelation.1">¶</a></h4>
+<p>Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1740</a></p>
+<hr />
+<p><a id="method__getparfornode.1" class="lexicon_definition"></a></p>
+<h4 id="getparfornodenode">getParforNode(node) <a href="#method__getparfornode.1">¶</a></h4>
+<p>Get the parfor object from either a bare parfor or one part of an assignment.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1059</a></p>
+<hr />
+<p><a id="method__getprivateset.1" class="lexicon_definition"></a></p>
+<h4 id="getprivatesetbodyarrayany-1">getPrivateSet(body::Array{Any, 1}) <a href="#method__getprivateset.1">¶</a></h4>
+<p>Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:898</a></p>
+<hr />
+<p><a id="method__getprivatesetinner.1" class="lexicon_definition"></a></p>
+<h4 id="getprivatesetinnerxexpr-statesetuniongensym-symbol-symbolnode-top_level_numberint64-is_top_levelbool-readbool">getPrivateSetInner(x::Expr,  state::Set{Union{GenSym, Symbol, SymbolNode}},  top_level_number::Int64,  is_top_level::Bool,  read::Bool) <a href="#method__getprivatesetinner.1">¶</a></h4>
+<p>The AstWalk callback function for getPrivateSet.
+For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:868</a></p>
+<hr />
+<p><a id="method__getrhsfromassignment.1" class="lexicon_definition"></a></p>
+<h4 id="getrhsfromassignmentassignment">getRhsFromAssignment(assignment) <a href="#method__getrhsfromassignment.1">¶</a></h4>
+<p>Get the right-hand side of an assignment expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1070</a></p>
+<hr />
+<p><a id="method__getsname.1" class="lexicon_definition"></a></p>
+<h4 id="getsnamessnsymbol">getSName(ssn::Symbol) <a href="#method__getsname.1">¶</a></h4>
+<p>Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2237</a></p>
+<hr />
+<p><a id="method__get_one.1" class="lexicon_definition"></a></p>
+<h4 id="get_oneastarrayt-n">get_one(ast::Array{T, N}) <a href="#method__get_one.1">¶</a></h4>
+<p>Take something returned from AstWalk and assert it should be an array but in this
+context that the array should also be of length 1 and then return that single element.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4700</a></p>
+<hr />
+<p><a id="method__get_unique_num.1" class="lexicon_definition"></a></p>
+<h4 id="get_unique_num">get_unique_num() <a href="#method__get_unique_num.1">¶</a></h4>
+<p>If we need to generate a name and make sure it is unique then include an monotonically increasing number.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:853</a></p>
+<hr />
+<p><a id="method__hasnosideeffects.1" class="lexicon_definition"></a></p>
+<h4 id="hasnosideeffectsnodeuniongensym-lambdastaticdata-number-symbol-symbolnode">hasNoSideEffects(node::Union{GenSym, LambdaStaticData, Number, Symbol, SymbolNode}) <a href="#method__hasnosideeffects.1">¶</a></h4>
+<p>Sometimes statements we exist in the AST of the form a=Expr where a is a Symbol that isn't live past the assignment
+and we'd like to eliminate the whole assignment statement but we have to know that the right-hand side has no
+side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
+or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2547</a></p>
+<hr />
+<p><a id="method__hassymbol.1" class="lexicon_definition"></a></p>
+<h4 id="hassymbolssnsymbol">hasSymbol(ssn::Symbol) <a href="#method__hassymbol.1">¶</a></h4>
+<p>Returns true if the incoming AST node can be interpreted as a Symbol.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2218</a></p>
+<hr />
+<p><a id="method__hoistallocation.1" class="lexicon_definition"></a></p>
+<h4 id="hoistallocationastarrayany-1-lives-domloopcompilertoolsloopsdomloops-stateparallelacceleratorparallelirexpr_state">hoistAllocation(ast::Array{Any, 1},  lives,  domLoop::CompilerTools.Loops.DomLoops,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__hoistallocation.1">¶</a></h4>
+<p>Try to hoist allocations outside the loop if possible.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3698</a></p>
+<hr />
+<p><a id="method__insert_no_deps_beginning.1" class="lexicon_definition"></a></p>
+<h4 id="insert_no_deps_beginningnode-dataparallelacceleratorparallelirremovenodepsstate-top_level_number-is_top_level-read">insert_no_deps_beginning(node,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read) <a href="#method__insert_no_deps_beginning.1">¶</a></h4>
+<p>Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3055</a></p>
+<hr />
+<p><a id="method__intermediate_from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="intermediate_from_exprsastarrayany-1-depth-state">intermediate_from_exprs(ast::Array{Any, 1},  depth,  state) <a href="#method__intermediate_from_exprs.1">¶</a></h4>
+<p>Process an array of expressions that aren't from a :body Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2288</a></p>
+<hr />
+<p><a id="method__isarraytype.1" class="lexicon_definition"></a></p>
+<h4 id="isarraytypetyp">isArrayType(typ) <a href="#method__isarraytype.1">¶</a></h4>
+<p>Returns true if the incoming type in "typ" is an array type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:584</a></p>
+<hr />
+<p><a id="method__isarraytype.2" class="lexicon_definition"></a></p>
+<h4 id="isarraytypexsymbolnode">isArrayType(x::SymbolNode) <a href="#method__isarraytype.2">¶</a></h4>
+<p>Returns true if a given SymbolNode "x" is an Array type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2316</a></p>
+<hr />
+<p><a id="method__isarrayref.1" class="lexicon_definition"></a></p>
+<h4 id="isarrayrefx">isArrayref(x) <a href="#method__isarrayref.1">¶</a></h4>
+<p>Is a node an arrayref node?</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1356</a></p>
+<hr />
+<p><a id="method__isarrayrefcall.1" class="lexicon_definition"></a></p>
+<h4 id="isarrayrefcallxexpr">isArrayrefCall(x::Expr) <a href="#method__isarrayrefcall.1">¶</a></h4>
+<p>Is a node a call to arrayref.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1377</a></p>
+<hr />
+<p><a id="method__isarrayset.1" class="lexicon_definition"></a></p>
+<h4 id="isarraysetx">isArrayset(x) <a href="#method__isarrayset.1">¶</a></h4>
+<p>Is a node an arrayset node?</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1346</a></p>
+<hr />
+<p><a id="method__isarraysetcall.1" class="lexicon_definition"></a></p>
+<h4 id="isarraysetcallxexpr">isArraysetCall(x::Expr) <a href="#method__isarraysetcall.1">¶</a></h4>
+<p>Is a node a call to arrayset.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1366</a></p>
+<hr />
+<p><a id="method__isassignmentnode.1" class="lexicon_definition"></a></p>
+<h4 id="isassignmentnodenodeexpr">isAssignmentNode(node::Expr) <a href="#method__isassignmentnode.1">¶</a></h4>
+<p>Is a node an assignment expression node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:987</a></p>
+<hr />
+<p><a id="method__isbareparfor.1" class="lexicon_definition"></a></p>
+<h4 id="isbareparfornodeexpr">isBareParfor(node::Expr) <a href="#method__isbareparfor.1">¶</a></h4>
+<p>Is this a parfor node not part of an assignment statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1009</a></p>
+<hr />
+<p><a id="method__isdomainnode.1" class="lexicon_definition"></a></p>
+<h4 id="isdomainnodeastexpr">isDomainNode(ast::Expr) <a href="#method__isdomainnode.1">¶</a></h4>
+<p>Returns true if the given "ast" node is a DomainIR operation.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3882</a></p>
+<hr />
+<p><a id="method__isfusionassignment.1" class="lexicon_definition"></a></p>
+<h4 id="isfusionassignmentxexpr">isFusionAssignment(x::Expr) <a href="#method__isfusionassignment.1">¶</a></h4>
+<p>Check if an assignement is a fusion assignment.
+    In regular assignments, there are only two args, the left and right hand sides.
+    In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1700</a></p>
+<hr />
+<p><a id="method__isloopheadnode.1" class="lexicon_definition"></a></p>
+<h4 id="isloopheadnodenodeexpr">isLoopheadNode(node::Expr) <a href="#method__isloopheadnode.1">¶</a></h4>
+<p>Is a node a loophead expression node (a form of assignment).</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:998</a></p>
+<hr />
+<p><a id="method__isparforassignmentnode.1" class="lexicon_definition"></a></p>
+<h4 id="isparforassignmentnodenodeexpr">isParforAssignmentNode(node::Expr) <a href="#method__isparforassignmentnode.1">¶</a></h4>
+<p>Is a node an assignment expression with a parfor node as the right-hand side.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1033</a></p>
+<hr />
+<p><a id="method__issymbolsused.1" class="lexicon_definition"></a></p>
+<h4 id="issymbolsusedvars-top_level_numbersarrayint64-1-state">isSymbolsUsed(vars,  top_level_numbers::Array{Int64, 1},  state) <a href="#method__issymbolsused.1">¶</a></h4>
+<p>Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
+    We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable
+        usage is present.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1716</a></p>
+<hr />
+<p><a id="method__is_eliminated_arraylen.1" class="lexicon_definition"></a></p>
+<h4 id="is_eliminated_arraylenxexpr">is_eliminated_arraylen(x::Expr) <a href="#method__is_eliminated_arraylen.1">¶</a></h4>
+<p>Returns true if the input node is an assignment node where the right-hand side is a call to arraysize.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1589</a></p>
+<hr />
+<p><a id="method__isbitstuple.1" class="lexicon_definition"></a></p>
+<h4 id="isbitstupleatuple">isbitstuple(a::Tuple) <a href="#method__isbitstuple.1">¶</a></h4>
+<p>Returns true if input "a" is a tuple and each element of the tuple of isbits type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4493</a></p>
+<hr />
+<p><a id="method__iterations_equals_inputs.1" class="lexicon_definition"></a></p>
+<h4 id="iterations_equals_inputsnodeparallelacceleratorparallelirpirparforast">iterations_equals_inputs(node::ParallelAccelerator.ParallelIR.PIRParForAst) <a href="#method__iterations_equals_inputs.1">¶</a></h4>
+<p>Returns true if the domain operation mapped to this parfor has the property that the iteration space
+is identical to the dimenions of the inputs.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1086</a></p>
+<hr />
+<p><a id="method__lambdafromdomainlambda.1" class="lexicon_definition"></a></p>
+<h4 id="lambdafromdomainlambdadomain_lambda-dl_inputs">lambdaFromDomainLambda(domain_lambda,  dl_inputs) <a href="#method__lambdafromdomainlambda.1">¶</a></h4>
+<p>Form a Julia :lambda Expr from a DomainLambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4038</a></p>
+<hr />
+<p><a id="method__makeprivateparfor.1" class="lexicon_definition"></a></p>
+<h4 id="makeprivateparforvar_namesymbol-state">makePrivateParfor(var_name::Symbol,  state) <a href="#method__makeprivateparfor.1">¶</a></h4>
+<p>Takes an existing variable whose name is in "var_name" and adds the descriptor flag ISPRIVATEPARFORLOOP to declare the
+variable to be parfor loop private and eventually go in an OMP private clause.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:659</a></p>
+<hr />
+<p><a id="method__maketasks.1" class="lexicon_definition"></a></p>
+<h4 id="maketasksstart_index-stop_index-body-bb_live_info-state-task_graph_mode">makeTasks(start_index,  stop_index,  body,  bb_live_info,  state,  task_graph_mode) <a href="#method__maketasks.1">¶</a></h4>
+<p>For a given start and stop index in some body and liveness information, form a set of tasks.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:759</a></p>
+<hr />
+<p><a id="method__maxfusion.1" class="lexicon_definition"></a></p>
+<h4 id="maxfusionblcompilertoolslivenessanalysisblockliveness">maxFusion(bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__maxfusion.1">¶</a></h4>
+<p>For every basic block, try to push domain IR statements down and non-domain IR statements up so that domain nodes
+are next to each other and can be fused.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3926</a></p>
+<hr />
+<p><a id="method__mergelambdaintoouterstate.1" class="lexicon_definition"></a></p>
+<h4 id="mergelambdaintoouterstatestate-inner_lambdaexpr">mergeLambdaIntoOuterState(state,  inner_lambda::Expr) <a href="#method__mergelambdaintoouterstate.1">¶</a></h4>
+<p>Pull the information from the inner lambda into the outer lambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1218</a></p>
+<hr />
+<p><a id="method__merge_correlations.1" class="lexicon_definition"></a></p>
+<h4 id="merge_correlationsstate-unchanging-eliminate">merge_correlations(state,  unchanging,  eliminate) <a href="#method__merge_correlations.1">¶</a></h4>
+<p>If we somehow determine that two sets of correlations are actually the same length then merge one into the other.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:764</a></p>
+<hr />
+<p><a id="method__mk_alloc_array_1d_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_alloc_array_1d_exprelem_type-atype-length">mk_alloc_array_1d_expr(elem_type,  atype,  length) <a href="#method__mk_alloc_array_1d_expr.1">¶</a></h4>
+<p>Return an expression that allocates and initializes a 1D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and a "length".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:496</a></p>
+<hr />
+<p><a id="method__mk_alloc_array_2d_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_alloc_array_2d_exprelem_type-atype-length1-length2">mk_alloc_array_2d_expr(elem_type,  atype,  length1,  length2) <a href="#method__mk_alloc_array_2d_expr.1">¶</a></h4>
+<p>Return an expression that allocates and initializes a 2D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:534</a></p>
+<hr />
+<p><a id="method__mk_alloc_array_3d_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_alloc_array_3d_exprelem_type-atype-length1-length2-length3">mk_alloc_array_3d_expr(elem_type,  atype,  length1,  length2,  length3) <a href="#method__mk_alloc_array_3d_expr.1">¶</a></h4>
+<p>Return an expression that allocates and initializes a 3D Julia array that has an element type specified by
+"elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2" and "length3".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:560</a></p>
+<hr />
+<p><a id="method__mk_arraylen_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_arraylen_exprxparallelacceleratorparallelirinputinfo-dimint64">mk_arraylen_expr(x::ParallelAccelerator.ParallelIR.InputInfo,  dim::Int64) <a href="#method__mk_arraylen_expr.1">¶</a></h4>
+<p>Create an expression whose value is the length of the input array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:447</a></p>
+<hr />
+<p><a id="method__mk_arraylen_expr.2" class="lexicon_definition"></a></p>
+<h4 id="mk_arraylen_exprxuniongensym-symbol-symbolnode-dimint64">mk_arraylen_expr(x::Union{GenSym, Symbol, SymbolNode},  dim::Int64) <a href="#method__mk_arraylen_expr.2">¶</a></h4>
+<p>Create an expression whose value is the length of the input array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:440</a></p>
+<hr />
+<p><a id="method__mk_arrayref1.1" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayref1num_dim_inputs-array_name-index_vars-inbounds-stateparallelacceleratorparallelirexpr_state">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__mk_arrayref1.1">¶</a></h4>
+<p>Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54</a></p>
+<hr />
+<p><a id="method__mk_arrayref1.2" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayref1num_dim_inputs-array_name-index_vars-inbounds-stateparallelacceleratorparallelirexpr_state-range_vararrayuniongensym-symbolnode-1">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1}) <a href="#method__mk_arrayref1.2">¶</a></h4>
+<p>Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54</a></p>
+<hr />
+<p><a id="method__mk_arrayref1.3" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayref1num_dim_inputs-array_name-index_vars-inbounds-stateparallelacceleratorparallelirexpr_state-range_vararrayuniongensym-symbolnode-1-rangearrayparallelacceleratorparallelirrangedata-1">mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) <a href="#method__mk_arrayref1.3">¶</a></h4>
+<p>Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54</a></p>
+<hr />
+<p><a id="method__mk_arrayset1.1" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayset1num_dim_inputs-array_name-index_vars-value-inbounds-stateparallelacceleratorparallelirexpr_state">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__mk_arrayset1.1">¶</a></h4>
+<p>Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
+The paramater "inbounds" is true if this access is known to be within the bounds of the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85</a></p>
+<hr />
+<p><a id="method__mk_arrayset1.2" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayset1num_dim_inputs-array_name-index_vars-value-inbounds-stateparallelacceleratorparallelirexpr_state-range_vararrayuniongensym-symbolnode-1">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1}) <a href="#method__mk_arrayset1.2">¶</a></h4>
+<p>Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
+The paramater "inbounds" is true if this access is known to be within the bounds of the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85</a></p>
+<hr />
+<p><a id="method__mk_arrayset1.3" class="lexicon_definition"></a></p>
+<h4 id="mk_arrayset1num_dim_inputs-array_name-index_vars-value-inbounds-stateparallelacceleratorparallelirexpr_state-range_vararrayuniongensym-symbolnode-1-rangearrayparallelacceleratorparallelirrangedata-1">mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) <a href="#method__mk_arrayset1.3">¶</a></h4>
+<p>Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
+The paramater "inbounds" is true if this access is known to be within the bounds of the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85</a></p>
+<hr />
+<p><a id="method__mk_assignment_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_assignment_exprlhsuniongensym-symbol-symbolnode-rhs-stateparallelacceleratorparallelirexpr_state">mk_assignment_expr(lhs::Union{GenSym, Symbol, SymbolNode},  rhs,  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__mk_assignment_expr.1">¶</a></h4>
+<p>Create an assignment expression AST node given a left and right-hand side.
+The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:353</a></p>
+<hr />
+<p><a id="method__mk_colon_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_colon_exprstart_expr-skip_expr-end_expr">mk_colon_expr(start_expr,  skip_expr,  end_expr) <a href="#method__mk_colon_expr.1">¶</a></h4>
+<p>Returns an expression to construct a :colon object that contains the start of a range, the end and the skip expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:878</a></p>
+<hr />
+<p><a id="method__mk_convert.1" class="lexicon_definition"></a></p>
+<h4 id="mk_convertnew_type-ex">mk_convert(new_type,  ex) <a href="#method__mk_convert.1">¶</a></h4>
+<p>Returns an expression that convert "ex" into a another type "new_type".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:473</a></p>
+<hr />
+<p><a id="method__mk_gotoifnot_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_gotoifnot_exprcond-goto_label">mk_gotoifnot_expr(cond,  goto_label) <a href="#method__mk_gotoifnot_expr.1">¶</a></h4>
+<p>Returns a :gotoifnot Expr given a condition "cond" and a label "goto_label".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:900</a></p>
+<hr />
+<p><a id="method__mk_next_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_next_exprcolon_sym-start_sym">mk_next_expr(colon_sym,  start_sym) <a href="#method__mk_next_expr.1">¶</a></h4>
+<p>Returns a :next call Expr that gets the next element of an iteration range from a :colon object.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:892</a></p>
+<hr />
+<p><a id="method__mk_parallelir_ref.1" class="lexicon_definition"></a></p>
+<h4 id="mk_parallelir_refsym">mk_parallelir_ref(sym) <a href="#method__mk_parallelir_ref.1">¶</a></h4>
+<p>Create an expression that references something inside ParallelIR.
+In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:465</a></p>
+<hr />
+<p><a id="method__mk_parallelir_ref.2" class="lexicon_definition"></a></p>
+<h4 id="mk_parallelir_refsym-ref_type">mk_parallelir_ref(sym,  ref_type) <a href="#method__mk_parallelir_ref.2">¶</a></h4>
+<p>Create an expression that references something inside ParallelIR.
+In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:465</a></p>
+<hr />
+<p><a id="method__mk_parfor_args_from_mmap.1" class="lexicon_definition"></a></p>
+<h4 id="mk_parfor_args_from_mmapinput_arraysarrayt-n-dlparallelacceleratordomainirdomainlambda-with_indices-domain_oprs-state">mk_parfor_args_from_mmap!(input_arrays::Array{T, N},  dl::ParallelAccelerator.DomainIR.DomainLambda,  with_indices,  domain_oprs,  state) <a href="#method__mk_parfor_args_from_mmap.1">¶</a></h4>
+<p>The main routine that converts a mmap! AST node to a parfor AST node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:498</a></p>
+<hr />
+<p><a id="method__mk_parfor_args_from_mmap.2" class="lexicon_definition"></a></p>
+<h4 id="mk_parfor_args_from_mmapinput_arraysarrayt-n-dlparallelacceleratordomainirdomainlambda-domain_oprs-state">mk_parfor_args_from_mmap(input_arrays::Array{T, N},  dl::ParallelAccelerator.DomainIR.DomainLambda,  domain_oprs,  state) <a href="#method__mk_parfor_args_from_mmap.2">¶</a></h4>
+<p>The main routine that converts a mmap AST node to a parfor AST node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:789</a></p>
+<hr />
+<p><a id="method__mk_parfor_args_from_reduce.1" class="lexicon_definition"></a></p>
+<h4 id="mk_parfor_args_from_reduceinput_argsarrayany-1-state">mk_parfor_args_from_reduce(input_args::Array{Any, 1},  state) <a href="#method__mk_parfor_args_from_reduce.1">¶</a></h4>
+<p>The main routine that converts a reduce AST node to a parfor AST node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:119</a></p>
+<hr />
+<p><a id="method__mk_return_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_return_exprouts">mk_return_expr(outs) <a href="#method__mk_return_expr.1">¶</a></h4>
+<p>Given an array of outputs in "outs", form a return expression.
+If there is only one out then the args of :return is just that expression.
+If there are multiple outs then form a tuple of them and that tuple goes in :return args.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:338</a></p>
+<hr />
+<p><a id="method__mk_start_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_start_exprcolon_sym">mk_start_expr(colon_sym) <a href="#method__mk_start_expr.1">¶</a></h4>
+<p>Returns an expression to get the start of an iteration range from a :colon object.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:885</a></p>
+<hr />
+<p><a id="method__mk_svec_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_svec_exprparts">mk_svec_expr(parts...) <a href="#method__mk_svec_expr.1">¶</a></h4>
+<p>Make a svec expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:487</a></p>
+<hr />
+<p><a id="method__mk_tuple_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_tuple_exprtuple_fields-typ">mk_tuple_expr(tuple_fields,  typ) <a href="#method__mk_tuple_expr.1">¶</a></h4>
+<p>Return an expression which creates a tuple.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1151</a></p>
+<hr />
+<p><a id="method__mk_tupleref_expr.1" class="lexicon_definition"></a></p>
+<h4 id="mk_tupleref_exprtuple_var-index-typ">mk_tupleref_expr(tuple_var,  index,  typ) <a href="#method__mk_tupleref_expr.1">¶</a></h4>
+<p>Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:480</a></p>
+<hr />
+<p><a id="method__mk_untyped_assignment.1" class="lexicon_definition"></a></p>
+<h4 id="mk_untyped_assignmentlhs-rhs">mk_untyped_assignment(lhs,  rhs) <a href="#method__mk_untyped_assignment.1">¶</a></h4>
+<p>Only used to create fake expression to force lhs to be seen as written rather than read.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:370</a></p>
+<hr />
+<p><a id="method__mmapinline.1" class="lexicon_definition"></a></p>
+<h4 id="mmapinlineastexpr-lives-uniqset">mmapInline(ast::Expr,  lives,  uniqSet) <a href="#method__mmapinline.1">¶</a></h4>
+<h1 id="if-a-definition-of-a-mmap-is-only-used-once-and-not-aliased-it-can-be-inlined-into-its">If a definition of a mmap is only used once and not aliased, it can be inlined into its</h1>
+<h1 id="use-side-as-long-as-its-dependencies-have-not-been-changed">use side as long as its dependencies have not been changed.</h1>
+<h1 id="fixme-is-the-implementation-still-correct-when-branches-are-present">FIXME: is the implementation still correct when branches are present?</h1>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3621</a></p>
+<hr />
+<p><a id="method__mmaptommap.1" class="lexicon_definition"></a></p>
+<h4 id="mmaptommapast-lives-uniqset">mmapToMmap!(ast,  lives,  uniqSet) <a href="#method__mmaptommap.1">¶</a></h4>
+<p>Performs the mmap to mmap! phase.
+If the arguments of a mmap dies aftewards, and is not aliased, then
+we can safely change the mmap to mmap!.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3764</a></p>
+<hr />
+<p><a id="method__mustremainlaststatementinblock.1" class="lexicon_definition"></a></p>
+<h4 id="mustremainlaststatementinblocknodegotonode">mustRemainLastStatementInBlock(node::GotoNode) <a href="#method__mustremainlaststatementinblock.1">¶</a></h4>
+<p>Returns true if the given AST "node" must remain the last statement in a basic block.
+This is true if the node is a GotoNode or a :gotoifnot Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3910</a></p>
+<hr />
+<p><a id="method__nametosymbolnode.1" class="lexicon_definition"></a></p>
+<h4 id="nametosymbolnodenamesymbol-sym_to_type">nameToSymbolNode(name::Symbol,  sym_to_type) <a href="#method__nametosymbolnode.1">¶</a></h4>
+<p>Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1159</a></p>
+<hr />
+<p><a id="method__nested_function_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="nested_function_exprsmax_label-domain_lambda-dl_inputs">nested_function_exprs(max_label,  domain_lambda,  dl_inputs) <a href="#method__nested_function_exprs.1">¶</a></h4>
+<p>A routine similar to the main parallel IR entry put but designed to process the lambda part of
+domain IR AST nodes.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4067</a></p>
+<hr />
+<p><a id="method__next_label.1" class="lexicon_definition"></a></p>
+<h4 id="next_labelstateparallelacceleratorparallelirexpr_state">next_label(state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__next_label.1">¶</a></h4>
+<p>Returns the next usable label for the current function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:738</a></p>
+<hr />
+<p><a id="method__oneifonly.1" class="lexicon_definition"></a></p>
+<h4 id="oneifonlyx">oneIfOnly(x) <a href="#method__oneifonly.1">¶</a></h4>
+<p>Returns a single element of an array if there is only one or the array otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1860</a></p>
+<hr />
+<p><a id="method__parfortotask.1" class="lexicon_definition"></a></p>
+<h4 id="parfortotaskparfor_index-bb_statements-body-state">parforToTask(parfor_index,  bb_statements,  body,  state) <a href="#method__parfortotask.1">¶</a></h4>
+<p>Given a parfor statement index in "parfor_index" in the "body"'s statements, create a TaskInfo node for this parfor.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:1190</a></p>
+<hr />
+<p><a id="method__pirprintdl.1" class="lexicon_definition"></a></p>
+<h4 id="pirprintdldbg_level-dl">pirPrintDl(dbg_level,  dl) <a href="#method__pirprintdl.1">¶</a></h4>
+<p>Debug print the parts of a DomainLambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4017</a></p>
+<hr />
+<p><a id="method__pir_alias_cb.1" class="lexicon_definition"></a></p>
+<h4 id="pir_alias_cbastexpr-state-cbdata">pir_alias_cb(ast::Expr,  state,  cbdata) <a href="#method__pir_alias_cb.1">¶</a></h4>
+<p>An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.
+For each ParallelIR specific node type, form an array of expressions that AliasAnalysis
+    can analyze to reflect the aliases of the given AST node.
+    If we read a symbol it is sufficient to just return that symbol as one of the expressions.
+    If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4884</a></p>
+<hr />
+<p><a id="method__pir_live_cb.1" class="lexicon_definition"></a></p>
+<h4 id="pir_live_cbastexpr-cbdataany">pir_live_cb(ast::Expr,  cbdata::ANY) <a href="#method__pir_live_cb.1">¶</a></h4>
+<p>A LivenessAnalysis callback that handles ParallelIR introduced AST node types.
+For each ParallelIR specific node type, form an array of expressions that liveness
+can analysis to reflect the read/write set of the given AST node.
+If we read a symbol it is sufficient to just return that symbol as one of the expressions.
+If we write a symbol, then form a fake mk_assignment_expr just to get liveness to realize the symbol is written.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2412</a></p>
+<hr />
+<p><a id="method__pir_live_cb_def.1" class="lexicon_definition"></a></p>
+<h4 id="pir_live_cb_defx">pir_live_cb_def(x) <a href="#method__pir_live_cb_def.1">¶</a></h4>
+<p>Just call the AST walker for symbol for parallel IR nodes with no state.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:939</a></p>
+<hr />
+<p><a id="method__printbody.1" class="lexicon_definition"></a></p>
+<h4 id="printbodydlvl-bodyarrayany-1">printBody(dlvl,  body::Array{Any, 1}) <a href="#method__printbody.1">¶</a></h4>
+<p>Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2327</a></p>
+<hr />
+<p><a id="method__printlambda.1" class="lexicon_definition"></a></p>
+<h4 id="printlambdadlvl-nodeexpr">printLambda(dlvl,  node::Expr) <a href="#method__printlambda.1">¶</a></h4>
+<p>Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2340</a></p>
+<hr />
+<p><a id="method__processandupdatebody.1" class="lexicon_definition"></a></p>
+<h4 id="processandupdatebodylambdaexpr-ffunction-state">processAndUpdateBody(lambda::Expr,  f::Function,  state) <a href="#method__processandupdatebody.1">¶</a></h4>
+<p>Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3295</a></p>
+<hr />
+<p><a id="method__rangesize.1" class="lexicon_definition"></a></p>
+<h4 id="rangesizestart-skip-last">rangeSize(start,  skip,  last) <a href="#method__rangesize.1">¶</a></h4>
+<p>Compute size of a range.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:432</a></p>
+<hr />
+<p><a id="method__rangetorangedata.1" class="lexicon_definition"></a></p>
+<h4 id="rangetorangedatarangeexpr-pre_offsetsarrayexpr-1-arr-range_numint64-state">rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state) <a href="#method__rangetorangedata.1">¶</a></h4>
+<p>Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:354</a></p>
+<hr />
+<p><a id="method__recreateloops.1" class="lexicon_definition"></a></p>
+<h4 id="recreateloopsnew_body-the_parforparallelacceleratorparallelirpirparforast-state-newlambdainfo">recreateLoops(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  state,  newLambdaInfo) <a href="#method__recreateloops.1">¶</a></h4>
+<p>In threads mode, we can't have parfor_start and parfor_end in the code since Julia has to compile the code itself and so
+we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
+and outputs that parfor to the new function body as regular Julia loops.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:1156</a></p>
+<hr />
+<p><a id="method__recreateloopsinternal.1" class="lexicon_definition"></a></p>
+<h4 id="recreateloopsinternalnew_body-the_parforparallelacceleratorparallelirpirparforast-loop_nest_level-next_available_label-state-newlambdainfo">recreateLoopsInternal(new_body,  the_parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  loop_nest_level,  next_available_label,  state,  newLambdaInfo) <a href="#method__recreateloopsinternal.1">¶</a></h4>
+<p>This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
+One call of this routine handles one level of the loop nest.
+If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
+insert the body of the parfor into the new function body in "new_body".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:1020</a></p>
+<hr />
+<p><a id="method__remembertypeforsym.1" class="lexicon_definition"></a></p>
+<h4 id="remembertypeforsymsym_to_typedictuniongensym-symbol-datatype-symuniongensym-symbol-typdatatype">rememberTypeForSym(sym_to_type::Dict{Union{GenSym, Symbol}, DataType},  sym::Union{GenSym, Symbol},  typ::DataType) <a href="#method__remembertypeforsym.1">¶</a></h4>
+<p>Add to the map of symbol names to types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1679</a></p>
+<hr />
+<p><a id="method__removeasserteqshape.1" class="lexicon_definition"></a></p>
+<h4 id="removeasserteqshapeargsarrayany-1-state">removeAssertEqShape(args::Array{Any, 1},  state) <a href="#method__removeasserteqshape.1">¶</a></h4>
+<p>Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2588</a></p>
+<hr />
+<p><a id="method__removenothingstmts.1" class="lexicon_definition"></a></p>
+<h4 id="removenothingstmtsargsarrayany-1-state">removeNothingStmts(args::Array{Any, 1},  state) <a href="#method__removenothingstmts.1">¶</a></h4>
+<p>Empty statements can be added to the AST by some passes in ParallelIR.
+This pass over the statements of the :body excludes such "nothing" statements from the new :body.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3306</a></p>
+<hr />
+<p><a id="method__remove_dead.1" class="lexicon_definition"></a></p>
+<h4 id="remove_deadnode-dataparallelacceleratorparallelirremovedeadstate-top_level_number-is_top_level-read">remove_dead(node,  data::ParallelAccelerator.ParallelIR.RemoveDeadState,  top_level_number,  is_top_level,  read) <a href="#method__remove_dead.1">¶</a></h4>
+<p>An AstWalk callback that uses liveness information in "data" to remove dead stores.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2988</a></p>
+<hr />
+<p><a id="method__remove_extra_allocs.1" class="lexicon_definition"></a></p>
+<h4 id="remove_extra_allocsast">remove_extra_allocs(ast) <a href="#method__remove_extra_allocs.1">¶</a></h4>
+<p>removes extra allocations</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4363</a></p>
+<hr />
+<p><a id="method__remove_no_deps.1" class="lexicon_definition"></a></p>
+<h4 id="remove_no_depsnodeany-dataparallelacceleratorparallelirremovenodepsstate-top_level_number-is_top_level-read">remove_no_deps(node::ANY,  data::ParallelAccelerator.ParallelIR.RemoveNoDepsState,  top_level_number,  is_top_level,  read) <a href="#method__remove_no_deps.1">¶</a></h4>
+<h1 id="this-routine-gathers-up-nodes-that-do-not-use">This routine gathers up nodes that do not use</h1>
+<h1 id="any-variable-and-removes-them-from-the-ast-into-top_level_no_deps-this-works-in-conjunction-with">any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with</h1>
+<h1 id="insert_no_deps_beginning-above-to-move-these-statements-with-no-dependencies-to-the-beginning-of-the-ast">insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST</h1>
+<h1 id="where-they-cant-prevent-fusion">where they can't prevent fusion.</h1>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3071</a></p>
+<hr />
+<p><a id="method__replaceparforwithdict.1" class="lexicon_definition"></a></p>
+<h4 id="replaceparforwithdictparforparallelacceleratorparallelirpirparforast-gensym_map">replaceParforWithDict(parfor::ParallelAccelerator.ParallelIR.PIRParForAst,  gensym_map) <a href="#method__replaceparforwithdict.1">¶</a></h4>
+<p>Not currently used but might need it at some point.
+Search a whole PIRParForAst object and replace one SymAllGen with another.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:216</a></p>
+<hr />
+<p><a id="method__run_as_task.1" class="lexicon_definition"></a></p>
+<h4 id="run_as_task">run_as_task() <a href="#method__run_as_task.1">¶</a></h4>
+<p>Return true if run_as_task_decrement would return true but don't update the run_as_tasks count.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:229</a></p>
+<hr />
+<p><a id="method__run_as_task_decrement.1" class="lexicon_definition"></a></p>
+<h4 id="run_as_task_decrement">run_as_task_decrement() <a href="#method__run_as_task_decrement.1">¶</a></h4>
+<p>If run_as_tasks is positive then convert this parfor to a task and decrement the count so that only the
+original number run_as_tasks if the number of tasks created.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:215</a></p>
+<hr />
+<p><a id="method__selecttorangedata.1" class="lexicon_definition"></a></p>
+<h4 id="selecttorangedataselectexpr-pre_offsetsarrayexpr-1-state">selectToRangeData(select::Expr,  pre_offsets::Array{Expr, 1},  state) <a href="#method__selecttorangedata.1">¶</a></h4>
+<p>Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl">ParallelAccelerator/src/parallel-ir-mk-parfor.jl:371</a></p>
+<hr />
+<p><a id="method__seqtask.1" class="lexicon_definition"></a></p>
+<h4 id="seqtaskbody_indices-bb_statements-body-state">seqTask(body_indices,  bb_statements,  body,  state) <a href="#method__seqtask.1">¶</a></h4>
+<p>Form a task out of a range of sequential statements.
+This is not currently implemented.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:1538</a></p>
+<hr />
+<p><a id="method__show.1" class="lexicon_definition"></a></p>
+<h4 id="showioio-pnodeparallelacceleratorparallelirpirparforast">show(io::IO,  pnode::ParallelAccelerator.ParallelIR.PIRParForAst) <a href="#method__show.1">¶</a></h4>
+<p>Overload of Base.show to pretty print for parfor AST nodes.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:273</a></p>
+<hr />
+<p><a id="method__simpleindex.1" class="lexicon_definition"></a></p>
+<h4 id="simpleindexdict">simpleIndex(dict) <a href="#method__simpleindex.1">¶</a></h4>
+<p>Returns true if all array references use singular index variables and nothing more complicated involving,
+for example, addition or subtraction by a constant.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:668</a></p>
+<hr />
+<p><a id="method__sub_arraylen_walk.1" class="lexicon_definition"></a></p>
+<h4 id="sub_arraylen_walkxexpr-replacement-top_level_number-is_top_level-read">sub_arraylen_walk(x::Expr,  replacement,  top_level_number,  is_top_level,  read) <a href="#method__sub_arraylen_walk.1">¶</a></h4>
+<p>AstWalk callback that does the work of substitute_arraylen on a node-by-node basis.
+replacement is an array containing the length of the dimensions of the arrays a part of this parfor.
+If we see a call to create an array, replace the length params with those in the common set in "replacement".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1620</a></p>
+<hr />
+<p><a id="method__sub_arrayset_walk.1" class="lexicon_definition"></a></p>
+<h4 id="sub_arrayset_walkxexpr-cbd-top_level_number-is_top_level-read">sub_arrayset_walk(x::Expr,  cbd,  top_level_number,  is_top_level,  read) <a href="#method__sub_arrayset_walk.1">¶</a></h4>
+<p>AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1388</a></p>
+<hr />
+<p><a id="method__sub_cur_body_walk.1" class="lexicon_definition"></a></p>
+<h4 id="sub_cur_body_walkxexpr-cbdparallelacceleratorparallelircur_body_data-top_level_numberint64-is_top_levelbool-readbool">sub_cur_body_walk(x::Expr,  cbd::ParallelAccelerator.ParallelIR.cur_body_data,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) <a href="#method__sub_cur_body_walk.1">¶</a></h4>
+<p>AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1471</a></p>
+<hr />
+<p><a id="method__substitute_arraylen.1" class="lexicon_definition"></a></p>
+<h4 id="substitute_arraylenx-replacement">substitute_arraylen(x,  replacement) <a href="#method__substitute_arraylen.1">¶</a></h4>
+<p>replacement is an array containing the length of the dimensions of the arrays a part of this parfor.
+If we see a call to create an array, replace the length params with those in the common set in "replacement".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1652</a></p>
+<hr />
+<p><a id="method__substitute_arrayset.1" class="lexicon_definition"></a></p>
+<h4 id="substitute_arraysetx-arrays_set_in_cur_body-output_items_with_aliases">substitute_arrayset(x,  arrays_set_in_cur_body,  output_items_with_aliases) <a href="#method__substitute_arrayset.1">¶</a></h4>
+<p>Modify the body of a parfor.
+temp_map holds a map of array names whose arraysets should be turned into a mapped variable instead of the arrayset. a[i] = b. a=&gt;c. becomes c = b
+map_for_non_eliminated holds arrays for which we need to add a variable to save the value but we can't eiminate the arrayset. a[i] = b. a=&gt;c. becomes c = a[i] = b
+    map_drop_arrayset drops the arrayset without replacing with a variable.  This is because a variable was previously added here with a map_for_non_eliminated case.
+    a[i] = b. becomes b</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1433</a></p>
+<hr />
+<p><a id="method__substitute_cur_body.1" class="lexicon_definition"></a></p>
+<h4 id="substitute_cur_bodyx-temp_mapdictuniongensym-symbol-uniongensym-symbolnode-index_mapdictuniongensym-symbol-uniongensym-symbol-arrays_set_in_cur_bodysetuniongensym-symbol-replace_array_name_in_arraysetdictuniongensym-symbol-uniongensym-symbol-stateparallelacceleratorparallelirexpr_state">substitute_cur_body(x,  temp_map::Dict{Union{GenSym, Symbol}, Union{GenSym, SymbolNode}},  index_map::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  arrays_set_in_cur_body::Set{Union{GenSym, Symbol}},  replace_array_name_in_arrayset::Dict{Union{GenSym, Symbol}, Union{GenSym, Symbol}},  state::ParallelAccelerator.ParallelIR.expr_state) <a href="#method__substitute_cur_body.1">¶</a></h4>
+<p>Make changes to the second parfor body in the process of parfor fusion.
+temp_map holds array names for which arrayrefs should be converted to a variable.  a[i].  a=&gt;b. becomes b
+    index_map holds maps between index variables.  The second parfor is modified to use the index variable of the first parfor.
+    arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
+    replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1575</a></p>
+<hr />
+<p><a id="method__taskableparfor.1" class="lexicon_definition"></a></p>
+<h4 id="taskableparfornode">taskableParfor(node) <a href="#method__taskableparfor.1">¶</a></h4>
+<p>Returns true if the "node" is a parfor and the task limit hasn't been exceeded.
+Also controls whether stencils or reduction can become tasks.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:278</a></p>
+<hr />
+<p><a id="method__tosngen.1" class="lexicon_definition"></a></p>
+<h4 id="tosngenxsymbol-typ">toSNGen(x::Symbol,  typ) <a href="#method__tosngen.1">¶</a></h4>
+<p>If we have the type, convert a Symbol to SymbolNode.
+If we have a GenSym then we have to keep it.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2788</a></p>
+<hr />
+<p><a id="method__tosymgen.1" class="lexicon_definition"></a></p>
+<h4 id="tosymgenxsymbol">toSymGen(x::Symbol) <a href="#method__tosymgen.1">¶</a></h4>
+<p>In various places we need a SymGen type which is the union of Symbol and GenSym.
+This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:699</a></p>
+<hr />
+<p><a id="method__tosymnodegen.1" class="lexicon_definition"></a></p>
+<h4 id="tosymnodegenxsymbol-typ">toSymNodeGen(x::Symbol,  typ) <a href="#method__tosymnodegen.1">¶</a></h4>
+<p>Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:718</a></p>
+<hr />
+<p><a id="method__uncompressed_ast.1" class="lexicon_definition"></a></p>
+<h4 id="uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) <a href="#method__uncompressed_ast.1">¶</a></h4>
+<p>Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:914</a></p>
+<hr />
+<p><a id="type__copypropagatestate.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelircopypropagatestate">ParallelAccelerator.ParallelIR.CopyPropagateState <a href="#type__copypropagatestate.1">¶</a></h4>
+<p>State to aide in the copy propagation phase.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2831</a></p>
+<hr />
+<p><a id="type__dirwalk.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirdirwalk">ParallelAccelerator.ParallelIR.DirWalk <a href="#type__dirwalk.1">¶</a></h4>
+<p>Wraps the callback and opaque data passed from the user of ParallelIR's AstWalk.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:4707</a></p>
+<hr />
+<p><a id="type__domainoperation.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirdomainoperation">ParallelAccelerator.ParallelIR.DomainOperation <a href="#type__domainoperation.1">¶</a></h4>
+<p>Holds information about domain operations part of a parfor node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:95</a></p>
+<hr />
+<p><a id="type__equivalenceclasses.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirequivalenceclasses">ParallelAccelerator.ParallelIR.EquivalenceClasses <a href="#type__equivalenceclasses.1">¶</a></h4>
+<p>Holds a dictionary from an array symbol to an integer corresponding to an equivalence class.
+All array symbol in the same equivalence class are known to have the same shape.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:105</a></p>
+<hr />
+<p><a id="type__fusionsentinel.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirfusionsentinel">ParallelAccelerator.ParallelIR.FusionSentinel <a href="#type__fusionsentinel.1">¶</a></h4>
+<p>Just used to hold a spot in an array to indicate the this is a special assignment expression with embedded real array output names from a fusion.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1690</a></p>
+<hr />
+<p><a id="type__inprogress.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirinprogress">ParallelAccelerator.ParallelIR.InProgress <a href="#type__inprogress.1">¶</a></h4>
+<p>A sentinel in the instruction count estimation process.
+Before recursively processing a call, we add a sentinel for that function so that if we see that
+sentinel later we know we've tried to recursively process it and so can bail out by setting
+fully_analyzed to false.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:346</a></p>
+<hr />
+<p><a id="type__inputinfo.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirinputinfo">ParallelAccelerator.ParallelIR.InputInfo <a href="#type__inputinfo.1">¶</a></h4>
+<p>Type used by mk_parfor_args... functions to hold information about input arrays.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:391</a></p>
+<hr />
+<p><a id="type__inserttasknode.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirinserttasknode">ParallelAccelerator.ParallelIR.InsertTaskNode <a href="#type__inserttasknode.1">¶</a></h4>
+<p>A data type containing the information that CGen uses to generate a call to pert_insert_divisible_task.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:197</a></p>
+<hr />
+<p><a id="type__pirparforstartend.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpirparforstartend">ParallelAccelerator.ParallelIR.PIRParForStartEnd <a href="#type__pirparforstartend.1">¶</a></h4>
+<p>After lowering, it is necessary to make the parfor body top-level statements so that basic blocks
+can be correctly identified and labels correctly found.  There is a phase in parallel IR where we 
+take a PIRParForAst node and split it into a parfor_start node followed by the body as top-level
+statements followed by parfor_end (also a top-level statement).</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:238</a></p>
+<hr />
+<p><a id="type__rangedata.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirrangedata">ParallelAccelerator.ParallelIR.RangeData <a href="#type__rangedata.1">¶</a></h4>
+<p>Holds the information from one Domain IR :range Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:377</a></p>
+<hr />
+<p><a id="type__removedeadstate.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirremovedeadstate">ParallelAccelerator.ParallelIR.RemoveDeadState <a href="#type__removedeadstate.1">¶</a></h4>
+<p>Holds liveness information for the remove_dead AstWalk phase.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:2981</a></p>
+<hr />
+<p><a id="type__removenodepsstate.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirremovenodepsstate">ParallelAccelerator.ParallelIR.RemoveNoDepsState <a href="#type__removenodepsstate.1">¶</a></h4>
+<p>State for the remove_no_deps and insert_no_deps_beginning phases.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3041</a></p>
+<hr />
+<p><a id="type__replacedregion.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirreplacedregion">ParallelAccelerator.ParallelIR.ReplacedRegion <a href="#type__replacedregion.1">¶</a></h4>
+<p>Store information about a section of a body that will be translated into a task.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:21</a></p>
+<hr />
+<p><a id="type__rhsdead.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirrhsdead">ParallelAccelerator.ParallelIR.RhsDead <a href="#type__rhsdead.1">¶</a></h4>
+<p>Marks an assignment statement where the left-hand side can take over the storage from the right-hand side.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:577</a></p>
+<hr />
+<p><a id="type__statementwithdeps.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirstatementwithdeps">ParallelAccelerator.ParallelIR.StatementWithDeps <a href="#type__statementwithdeps.1">¶</a></h4>
+<p>Type for dependence graph creation and topological sorting.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:3848</a></p>
+<hr />
+<p><a id="type__taskinfo.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirtaskinfo">ParallelAccelerator.ParallelIR.TaskInfo <a href="#type__taskinfo.1">¶</a></h4>
+<p>Structure for storing information about task formation.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:36</a></p>
+<hr />
+<p><a id="type__cur_body_data.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelircur_body_data">ParallelAccelerator.ParallelIR.cur_body_data <a href="#type__cur_body_data.1">¶</a></h4>
+<p>Holds the data for substitute_cur_body AST walk.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1460</a></p>
+<hr />
+<p><a id="type__cuw_state.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelircuw_state">ParallelAccelerator.ParallelIR.cuw_state <a href="#type__cuw_state.1">¶</a></h4>
+<p>Just to hold the "found" Bool that says whether a unsafe variant was replaced with a regular version.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:907</a></p>
+<hr />
+<p><a id="type__expr_state.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirexpr_state">ParallelAccelerator.ParallelIR.expr_state <a href="#type__expr_state.1">¶</a></h4>
+<p>State passed around while converting an AST from domain to parallel IR.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:245</a></p>
+<hr />
+<p><a id="type__pir_arg_metadata.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpir_arg_metadata">ParallelAccelerator.ParallelIR.pir_arg_metadata <a href="#type__pir_arg_metadata.1">¶</a></h4>
+<p>A Julia representation of the argument metadata that will be passed to the runtime.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:157</a></p>
+<hr />
+<p><a id="type__pir_array_access_desc.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpir_array_access_desc">ParallelAccelerator.ParallelIR.pir_array_access_desc <a href="#type__pir_array_access_desc.1">¶</a></h4>
+<p>Describes an array.
+row_major is true if the array is stored in row major format.
+dim_info describes which portion of the array is accessed for a given point in the iteration space.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:111</a></p>
+<hr />
+<p><a id="type__pir_grain_size.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpir_grain_size">ParallelAccelerator.ParallelIR.pir_grain_size <a href="#type__pir_grain_size.1">¶</a></h4>
+<p>A Julia representation of the grain size that will be passed to the runtime.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:178</a></p>
+<hr />
+<p><a id="type__pir_range.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpir_range">ParallelAccelerator.ParallelIR.pir_range <a href="#type__pir_range.1">¶</a></h4>
+<p>Translated to pert_range_Nd_t in the task runtime.
+This represents an iteration space.
+dim is the number of dimensions in the iteration space.
+lower_bounds contains the lower bound of the iteration space in each dimension.
+upper_bounds contains the upper bound of the iteration space in each dimension.
+lower_bounds and upper_bounds can be expressions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:56</a></p>
+<hr />
+<p><a id="type__pir_range_actual.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirpir_range_actual">ParallelAccelerator.ParallelIR.pir_range_actual <a href="#type__pir_range_actual.1">¶</a></h4>
+<p>Similar to pir_range but used in circumstances where the expressions must have already been evaluated.
+Therefore the arrays are typed as Int64.
+Up to 3 dimensional iteration space constructors are supported to make it easier to do code generation later.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl">ParallelAccelerator/src/parallel-ir-task.jl:70</a></p>
+<hr />
+<p><a id="type__sub_arrayset_data.1" class="lexicon_definition"></a></p>
+<h4 id="parallelacceleratorparallelirsub_arrayset_data">ParallelAccelerator.ParallelIR.sub_arrayset_data <a href="#type__sub_arrayset_data.1">¶</a></h4>
+<p>Holds data for modifying arrayset calls.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl">ParallelAccelerator/src/parallel-ir.jl:1338</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

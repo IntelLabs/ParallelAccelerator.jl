@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.OptFramework - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.Loops/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.ReadWriteSet/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolsoptframework">CompilerTools.OptFramework</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolsoptframework">CompilerTools.OptFramework</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__addoptpass.1" class="lexicon_definition"></a></p>
+<h4 id="addoptpassfunc-level">addOptPass(func,  level) <a href="#method__addoptpass.1">¶</a></h4>
+<p>Same as the other addOptPass but with a pass call back function and pass level as input.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:103</a></p>
+<hr />
+<p><a id="method__addoptpass.2" class="lexicon_definition"></a></p>
+<h4 id="addoptpasspasscompilertoolsoptframeworkoptpass">addOptPass(pass::CompilerTools.OptFramework.OptPass) <a href="#method__addoptpass.2">¶</a></h4>
+<p>Add an optimization pass. If this is going to be called multiple times then you need some external way of corrdinating the code/modules that are calling this function so that optimization passes are added in some sane order.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:88</a></p>
+<hr />
+<p><a id="macro___acc.1" class="lexicon_definition"></a></p>
+<h4 id="accast1-ast2">@acc(ast1, ast2...) <a href="#macro___acc.1">¶</a></h4>
+<p>The @acc macro comes in two forms:
+1) @acc expression
+3) @acc function ... end
+In the first form, the set of optimization passes to apply come from the default set of optimization passes as specified with the funciton setOptPasses.  The @acc macro replaces each call in the expression with a call to a trampolines that determines the types of the call and if that combination of function and signature has not previously been optimized then it calls the set of optimization passes to optimize it.  Then, the trampoline calls the optimized function.
+The second form is similar, and instead annotating callsite, the @acc macro can be used in front of a function's declaration. Used this way, it will replace the body of the function with the trampoline itself. The programmer can use @acc either at function callsite, or at function delcaration, but not both.
+This macro may optionally take an OptPass array, right after @acc and followed by an expression or function.  In this case, the specified set of optPasses are used just for optimizing the following expression. When used with the second form (in front of a function), the value of this OptPass array will be statically evaluated at the macro expansion stage.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:580</a></p>
+<hr />
+<p><a id="macro___noacc.1" class="lexicon_definition"></a></p>
+<h4 id="noaccast">@noacc(ast) <a href="#macro___noacc.1">¶</a></h4>
+<p>The macro @noacc can be used at call site to specifically run the non-accelerated copy of an accelerated function. It has no effect and gives a warning when the given function is not found to have been accelerated. We do not support nested @acc or @noacc. </p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:651</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__typedexpr.1" class="lexicon_definition"></a></p>
+<h4 id="typedexprtyp-rest">TypedExpr(typ,  rest...) <a href="#method__typedexpr.1">¶</a></h4>
+<p>Creates a typed Expr AST node.
+Convenence function that takes a type as first argument and the varargs thereafter.
+The varargs are used to form an Expr AST node and the type parameter is used to fill in the "typ" field of the Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:42</a></p>
+<hr />
+<p><a id="method__cleanupastlabels.1" class="lexicon_definition"></a></p>
+<h4 id="cleanupastlabelsast">cleanupASTLabels(ast) <a href="#method__cleanupastlabels.1">¶</a></h4>
+<p>Clean up the labels in AST by renaming them, and removing duplicates.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:265</a></p>
+<hr />
+<p><a id="method__convertcodetolevel.1" class="lexicon_definition"></a></p>
+<h4 id="convertcodetolevelastany-sigany-old_level-new_level-func">convertCodeToLevel(ast::ANY,  sig::ANY,  old_level,  new_level,  func) <a href="#method__convertcodetolevel.1">¶</a></h4>
+<p>convert AST from "old_level" to "new_level". The input "ast" can be either Expr or Function type. In the latter case, the result AST will be obtained from this function using an matching signature "sig". The last "func" is a skeleton function that is used internally to facility such conversion.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:133</a></p>
+<hr />
+<p><a id="method__convert_expr.1" class="lexicon_definition"></a></p>
+<h4 id="convert_exprper_site_opt_set-ast">convert_expr(per_site_opt_set,  ast) <a href="#method__convert_expr.1">¶</a></h4>
+<p>When @acc is used at a function's callsite, we use AstWalk to search for callsites via the opt_calls_insert_trampoline callback and to then insert trampolines.  That updated expression containing trampoline calls is then returned as the generated code from the @acc macro.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:471</a></p>
+<hr />
+<p><a id="method__convert_function.1" class="lexicon_definition"></a></p>
+<h4 id="convert_functionper_site_opt_set-opt_set-macros-ast">convert_function(per_site_opt_set,  opt_set,  macros,  ast) <a href="#method__convert_function.1">¶</a></h4>
+<p>When @acc is used at a function definition, it creates a trampoline function, when called with a specific set of signature types, will try to optimize the original function, and call it with the real arguments.  The input "ast" should be an AST of the original function at macro level, which will be   replaced by the trampoline. </p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:486</a></p>
+<hr />
+<p><a id="method__create_label_map.1" class="lexicon_definition"></a></p>
+<h4 id="create_label_mapx-statecompilertoolsoptframeworklmstate-top_level_number-is_top_level-read">create_label_map(x,  state::CompilerTools.OptFramework.lmstate,  top_level_number,  is_top_level,  read) <a href="#method__create_label_map.1">¶</a></h4>
+<p>An AstWalk callback that collects information about labels in an AST.
+The labels in AST are generally not sequential but to feed back into a Function Expr
+correctly they need to be.  So, we keep a map from the old label in the AST to a new label
+that we monotonically increases.
+If we have code in the AST like the following:
+   1:
+   2:
+... then one of these labels is redundant.  We set "last_was_label" if the last AST node
+we saw was a label.  If we see another LabelNode right after that then we duplicate the rhs
+of the label map.  For example, if you had the code:
+   5:
+   4:
+... and the label 5 was the third label in the code then in the label map you would then have:
+   5 -&gt; 3, 4 -&gt; 3.
+This indicates that uses of both label 5 and label 4 in the code will become label 3 in the modified AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:238</a></p>
+<hr />
+<p><a id="method__dumplevel.1" class="lexicon_definition"></a></p>
+<h4 id="dumplevellevel">dumpLevel(level) <a href="#method__dumplevel.1">¶</a></h4>
+<p>pretty print pass level number as string.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:54</a></p>
+<hr />
+<p><a id="method__evalpersiteoptset.1" class="lexicon_definition"></a></p>
+<h4 id="evalpersiteoptsetper_site_opt_set">evalPerSiteOptSet(per_site_opt_set) <a href="#method__evalpersiteoptset.1">¶</a></h4>
+<p>Statically evaluate per-site optimization passes setting, and return the result.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:558</a></p>
+<hr />
+<p><a id="method__findoriginalfunc.1" class="lexicon_definition"></a></p>
+<h4 id="findoriginalfuncmodmodule-namesymbol">findOriginalFunc(mod::Module,  name::Symbol) <a href="#method__findoriginalfunc.1">¶</a></h4>
+<p>Find the original (before @acc macro) function for a wrapper function in the given module. 
+Return the input function if not found. Always return as a GlobalRef.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:616</a></p>
+<hr />
+<p><a id="method__findtargetfunc.1" class="lexicon_definition"></a></p>
+<h4 id="findtargetfuncmodmodule-namesymbol">findTargetFunc(mod::Module,  name::Symbol) <a href="#method__findtargetfunc.1">¶</a></h4>
+<p>Find the optimizing target function (after @acc macro) for a wrapper function in the given module. 
+Return the input function if not found. Always return as a GlobalRef.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:607</a></p>
+<hr />
+<p><a id="method__getcodeatlevel.1" class="lexicon_definition"></a></p>
+<h4 id="getcodeatlevelfunc-sig-level">getCodeAtLevel(func,  sig,  level) <a href="#method__getcodeatlevel.1">¶</a></h4>
+<p>Retrieve the AST of the given function "func" and signature "sig" for at the given pass "level".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:110</a></p>
+<hr />
+<p><a id="method__identical.1" class="lexicon_definition"></a></p>
+<h4 id="identicaltttypet-xt">identical{T}(t::Type{T},  x::T) <a href="#method__identical.1">¶</a></h4>
+<p>A hack to get around Julia's type inference. This is essentially an identity conversion,
+but forces inferred return type to be the given type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:370</a></p>
+<hr />
+<p><a id="method__makewrapperfunc.1" class="lexicon_definition"></a></p>
+<h4 id="makewrapperfuncnew_fnamesymbol-real_fnamesymbol-call_sig_argsarrayany-1-per_site_opt_set">makeWrapperFunc(new_fname::Symbol,  real_fname::Symbol,  call_sig_args::Array{Any, 1},  per_site_opt_set) <a href="#method__makewrapperfunc.1">¶</a></h4>
+<p>Define a wrapper function with the name given by "new_func" that when called will try to optimize the "real_func" function, and run it with given parameters in "call_sig_args". The input "per_site_opt_set" can be either nothing, or a quoted Expr that refers to an array of OptPass.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:374</a></p>
+<hr />
+<p><a id="method__opt_calls_insert_trampoline.1" class="lexicon_definition"></a></p>
+<h4 id="opt_calls_insert_trampolinex-per_site_opt_set-top_level_number-is_top_level-read">opt_calls_insert_trampoline(x,  per_site_opt_set,  top_level_number,  is_top_level,  read) <a href="#method__opt_calls_insert_trampoline.1">¶</a></h4>
+<p>An AstWalk callback function.
+Finds call sites in the AST and replaces them with calls to newly generated trampoline functions.
+These trampolines functions allow us to capture runtime types which in turn enables optimization passes to run on fully typed AST.
+If a function/signature combination has not previously been optimized then call processFuncCall to optimize it.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:440</a></p>
+<hr />
+<p><a id="method__processfunccall.1" class="lexicon_definition"></a></p>
+<h4 id="processfunccallfuncany-call_sig_arg_tupleany-per_site_opt_setany">processFuncCall(func::ANY,  call_sig_arg_tuple::ANY,  per_site_opt_set::ANY) <a href="#method__processfunccall.1">¶</a></h4>
+<p>Takes a function, a signature, and a set of optimizations and applies that set of optimizations to the function,
+returns a new optimized function without modifying the input.  Argument explanation follows:
+1) func - the function being optimized
+2) call_sig_arg_tuple - the signature of the function, i.e., the types of each of its arguments
+3) per_site_opt_set - the set of optimization passes to apply to this function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:309</a></p>
+<hr />
+<p><a id="method__removeduplabels.1" class="lexicon_definition"></a></p>
+<h4 id="removeduplabelsstmts">removeDupLabels(stmts) <a href="#method__removeduplabels.1">¶</a></h4>
+<p>Sometimes update_labels creates two label nodes that are the same.
+This function removes such duplicate labels.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:245</a></p>
+<hr />
+<p><a id="method__setoptpasses.1" class="lexicon_definition"></a></p>
+<h4 id="setoptpassespassesarraycompilertoolsoptframeworkoptpass-1">setOptPasses(passes::Array{CompilerTools.OptFramework.OptPass, 1}) <a href="#method__setoptpasses.1">¶</a></h4>
+<p>Set the default set of optimization passes to apply with the @acc macro. </p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:79</a></p>
+<hr />
+<p><a id="method__tfuncpresent.1" class="lexicon_definition"></a></p>
+<h4 id="tfuncpresentfunc-tt">tfuncPresent(func,  tt) <a href="#method__tfuncpresent.1">¶</a></h4>
+<p>Makes sure that a newly created function is correctly present in the internal Julia method table.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:282</a></p>
+<hr />
+<p><a id="method__update_labels.1" class="lexicon_definition"></a></p>
+<h4 id="update_labelsx-statecompilertoolsoptframeworklmstate-top_level_number-is_top_level-read">update_labels(x,  state::CompilerTools.OptFramework.lmstate,  top_level_number,  is_top_level,  read) <a href="#method__update_labels.1">¶</a></h4>
+<p>An AstWalk callback that applies the label map created during create_label_map AstWalk.
+For each label in the code, replace that label with the rhs of the label map.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:190</a></p>
+<hr />
+<p><a id="type__optpass.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolsoptframeworkoptpass">CompilerTools.OptFramework.OptPass <a href="#type__optpass.1">¶</a></h4>
+<p>A data structure that holds information about one high-level optimization pass to run.
+"func" is the callback function that does the optimization pass and should have the signature (GlobalRef, Expr, Tuple) where the GlobalRef provides the locate of the function to be optimized, Expr is the AST input to this pass, and Tuple is a tuple of all parameter types of the functions. It must return either an optimized Expr, or a Function.
+"level" indicates at which level this pass is to be run. </p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:70</a></p>
+<hr />
+<p><a id="type__lmstate.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolsoptframeworklmstate">CompilerTools.OptFramework.lmstate <a href="#type__lmstate.1">¶</a></h4>
+<p>The callback state variable used by create_label_map and update_labels.
+label_map is a dictionary mapping old label ID's in the old AST with new label ID's in the new AST.
+next_block_num is a monotonically increasing integer starting from 0 so label occur sequentially in the new AST.
+last_was_label keeps track of whether we see two consecutive LabelNodes in the AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:178</a></p>
+<hr />
+<p><a id="global__goptframeworkdict.1" class="lexicon_definition"></a></p>
+<h4 id="goptframeworkdict">gOptFrameworkDict <a href="#global__goptframeworkdict.1">¶</a></h4>
+<p>A global memo-table that maps both: the triple (function, signature, optPasses) to the trampoline function, and the trampoline function to the real function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/OptFramework.jl">CompilerTools/src/OptFramework.jl:167</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

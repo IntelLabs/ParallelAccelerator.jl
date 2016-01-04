@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.LambdaHandling - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.DebugMsg/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.LivenessAnalysis/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolslambdahandling">CompilerTools.LambdaHandling</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolslambdahandling">CompilerTools.LambdaHandling</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__addescapingvariable.1" class="lexicon_definition"></a></p>
+<h4 id="addescapingvariablessymbol-typ-descint64-licompilertoolslambdahandlinglambdainfo">addEscapingVariable(s::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addescapingvariable.1">¶</a></h4>
+<p>Adds a new escaping variable with the given Symbol "s", type "typ", descriptor "desc" in LambdaInfo "li".
+Returns true if the variable already existed and its type and descriptor were updated, false otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:365</a></p>
+<hr />
+<p><a id="method__addescapingvariable.2" class="lexicon_definition"></a></p>
+<h4 id="addescapingvariablevdcompilertoolslambdahandlingvardef-licompilertoolslambdahandlinglambdainfo">addEscapingVariable(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addescapingvariable.2">¶</a></h4>
+<p>Adds a new escaping variable from a VarDef in parameter "vd" into LambdaInfo "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:384</a></p>
+<hr />
+<p><a id="method__addgensym.1" class="lexicon_definition"></a></p>
+<h4 id="addgensymtyp-licompilertoolslambdahandlinglambdainfo">addGenSym(typ,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addgensym.1">¶</a></h4>
+<p>Add a new GenSym to the LambdaInfo in "li" with the given type in "typ".
+Returns the new GenSym.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:393</a></p>
+<hr />
+<p><a id="method__addlocalvariable.1" class="lexicon_definition"></a></p>
+<h4 id="addlocalvariablessymbol-typ-descint64-licompilertoolslambdahandlinglambdainfo">addLocalVariable(s::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addlocalvariable.1">¶</a></h4>
+<p>Adds a new local variable with the given Symbol "s", type "typ", descriptor "desc" in LambdaInfo "li".
+Returns true if the variable already existed and its type and descriptor were updated, false otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:345</a></p>
+<hr />
+<p><a id="method__addlocalvariable.2" class="lexicon_definition"></a></p>
+<h4 id="addlocalvariablevdcompilertoolslambdahandlingvardef-licompilertoolslambdahandlinglambdainfo">addLocalVariable(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addlocalvariable.2">¶</a></h4>
+<p>Adds a local variable from a VarDef to the given LambdaInfo.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:323</a></p>
+<hr />
+<p><a id="method__getbody.1" class="lexicon_definition"></a></p>
+<h4 id="getbodylambdaexpr">getBody(lambda::Expr) <a href="#method__getbody.1">¶</a></h4>
+<p>Returns the body expression part of a lambda expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:705</a></p>
+<hr />
+<p><a id="method__getdesc.1" class="lexicon_definition"></a></p>
+<h4 id="getdescxsymbol-licompilertoolslambdahandlinglambdainfo">getDesc(x::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__getdesc.1">¶</a></h4>
+<p>Returns the descriptor for a local variable or input parameter "x" from LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:265</a></p>
+<hr />
+<p><a id="method__getrefparams.1" class="lexicon_definition"></a></p>
+<h4 id="getrefparamslambdainfocompilertoolslambdahandlinglambdainfo">getRefParams(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__getrefparams.1">¶</a></h4>
+<p>Returns an array of Symbols corresponding to those parameters to the method that are going to be passed by reference.
+In short, isbits() types are passed by value and !isbits() types are passed by reference.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:715</a></p>
+<hr />
+<p><a id="method__getreturntype.1" class="lexicon_definition"></a></p>
+<h4 id="getreturntypelicompilertoolslambdahandlinglambdainfo">getReturnType(li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__getreturntype.1">¶</a></h4>
+<p>Returns the type of the lambda as stored in LambdaInfo "li" and as extracted during lambdaExprToLambdaInfo.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:626</a></p>
+<hr />
+<p><a id="method__gettype.1" class="lexicon_definition"></a></p>
+<h4 id="gettypexsymbol-licompilertoolslambdahandlinglambdainfo">getType(x::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__gettype.1">¶</a></h4>
+<p>Returns the type of a Symbol or GenSym in "x" from LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:235</a></p>
+<hr />
+<p><a id="method__getvardef.1" class="lexicon_definition"></a></p>
+<h4 id="getvardefssymbol-licompilertoolslambdahandlinglambdainfo">getVarDef(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__getvardef.1">¶</a></h4>
+<p>Returns the VarDef for a Symbol in LambdaInfo in "li"</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:272</a></p>
+<hr />
+<p><a id="method__isescapingvariable.1" class="lexicon_definition"></a></p>
+<h4 id="isescapingvariablessymbol-licompilertoolslambdahandlinglambdainfo">isEscapingVariable(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__isescapingvariable.1">¶</a></h4>
+<p>Returns true if the Symbol in "s" is an escaping variable in LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:300</a></p>
+<hr />
+<p><a id="method__isinputparameter.1" class="lexicon_definition"></a></p>
+<h4 id="isinputparameterssymbol-licompilertoolslambdahandlinglambdainfo">isInputParameter(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__isinputparameter.1">¶</a></h4>
+<p>Returns true if the Symbol in "s" is an input parameter in LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:279</a></p>
+<hr />
+<p><a id="method__islocalgensym.1" class="lexicon_definition"></a></p>
+<h4 id="islocalgensymsgensym-licompilertoolslambdahandlinglambdainfo">isLocalGenSym(s::GenSym,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__islocalgensym.1">¶</a></h4>
+<p>Returns true if the GenSym in "s" is a GenSym in LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:307</a></p>
+<hr />
+<p><a id="method__islocalvariable.1" class="lexicon_definition"></a></p>
+<h4 id="islocalvariablessymbol-licompilertoolslambdahandlinglambdainfo">isLocalVariable(s::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__islocalvariable.1">¶</a></h4>
+<p>Returns true if the Symbol in "s" is a local variable in LambdaInfo in "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:286</a></p>
+<hr />
+<p><a id="method__lambdaexprtolambdainfo.1" class="lexicon_definition"></a></p>
+<h4 id="lambdaexprtolambdainfolambdaexpr">lambdaExprToLambdaInfo(lambda::Expr) <a href="#method__lambdaexprtolambdainfo.1">¶</a></h4>
+<p>Convert a lambda expression into our internal storage format, LambdaInfo.
+The input is asserted to be an expression whose head is :lambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:586</a></p>
+<hr />
+<p><a id="method__lambdainfotolambdaexpr.1" class="lexicon_definition"></a></p>
+<h4 id="lambdainfotolambdaexprlambdainfocompilertoolslambdahandlinglambdainfo-body">lambdaInfoToLambdaExpr(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo,  body) <a href="#method__lambdainfotolambdaexpr.1">¶</a></h4>
+<p>Convert our internal storage format, LambdaInfo, back into a lambda expression.
+This takes a LambdaInfo and a body as input parameters.
+This body can be a body expression or you can pass "nothing" if you want but then you will probably need to set the body in args[3] manually by yourself.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:673</a></p>
+<hr />
+<p><a id="method__lambdatypeinf.1" class="lexicon_definition"></a></p>
+<h4 id="lambdatypeinflambdalambdastaticdata-typstuple">lambdaTypeinf(lambda::LambdaStaticData,  typs::Tuple) <a href="#method__lambdatypeinf.1">¶</a></h4>
+<p>Force type inference on a LambdaStaticData object.
+Return both the inferred AST that is to a "code_typed(Function, (type,...))" call, 
+and the inferred return type of the input method.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:637</a></p>
+<hr />
+<p><a id="method__replaceexprwithdict.1" class="lexicon_definition"></a></p>
+<h4 id="replaceexprwithdictexprany-dictdictuniongensym-symbol-any">replaceExprWithDict!(expr::ANY,  dict::Dict{Union{GenSym, Symbol}, Any}) <a href="#method__replaceexprwithdict.1">¶</a></h4>
+<p>Replace the symbols in an expression "expr" with those defined in the
+dictionary "dict".  Return the result expression, which may share part of the
+input expression, and the input "expr" may be modified inplace and shall not be used
+after this call. Note that unlike "replaceExprWithDict", the traversal here is
+done by ASTWalker, which has the ability to traverse non-Expr data.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:511</a></p>
+<hr />
+<p><a id="method__replaceexprwithdict.2" class="lexicon_definition"></a></p>
+<h4 id="replaceexprwithdictexprany-dictdictuniongensym-symbol-any-astwalkfunc">replaceExprWithDict!(expr::ANY,  dict::Dict{Union{GenSym, Symbol}, Any},  AstWalkFunc) <a href="#method__replaceexprwithdict.2">¶</a></h4>
+<p>Replace the symbols in an expression "expr" with those defined in the
+dictionary "dict".  Return the result expression, which may share part of the
+input expression, and the input "expr" may be modified inplace and shall not be used
+after this call. Note that unlike "replaceExprWithDict", the traversal here is
+done by ASTWalker, which has the ability to traverse non-Expr data.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:511</a></p>
+<hr />
+<p><a id="method__replaceexprwithdict.3" class="lexicon_definition"></a></p>
+<h4 id="replaceexprwithdictexpr-dictdictuniongensym-symbol-any">replaceExprWithDict(expr,  dict::Dict{Union{GenSym, Symbol}, Any}) <a href="#method__replaceexprwithdict.3">¶</a></h4>
+<p>Replace the symbols in an expression "expr" with those defined in the
+dictionary "dict".  Return the result expression, which may share part of the
+input expression, but the input "expr" remains intact and is not modified.</p>
+<p>Note that unlike "replaceExprWithDict!", we do not recurse down nested lambda
+expressions (i.e., LambdaStaticData or DomainLambda or any other none Expr
+objects are left unchanged). If such lambdas have escaping names that are to be
+replaced, then the result will be wrong.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:473</a></p>
+<hr />
+<p><a id="method__updateassigneddesc.1" class="lexicon_definition"></a></p>
+<h4 id="updateassigneddesclambdainfocompilertoolslambdahandlinglambdainfo-symbol_assignsdictsymbol-int64">updateAssignedDesc(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo,  symbol_assigns::Dict{Symbol, Int64}) <a href="#method__updateassigneddesc.1">¶</a></h4>
+<p>Update the descriptor part of the VarDef dealing with whether the variable is assigned or not in the function.
+Takes the lambdaInfo and a dictionary that maps symbols names to the number of times they are statically assigned in the function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:682</a></p>
+<hr />
+<p><a id="type__lambdainfo.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslambdahandlinglambdainfo">CompilerTools.LambdaHandling.LambdaInfo <a href="#type__lambdainfo.1">¶</a></h4>
+<p>An internal format for storing a lambda expression's args[1] and args[2].
+The input parameters are stored as a Set since they must be unique and it makes for faster searching.
+The VarDefs are stored as a dictionary from symbol to VarDef since type lookups are reasonably frequent and need to be fast.
+The GenSym part (args[2][3]) is stored as an array since GenSym's are indexed.
+Captured_outer_vars and static_parameter_names are stored as arrays for now since we don't expect them to be changed much.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:86</a></p>
+<hr />
+<p><a id="type__vardef.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslambdahandlingvardef">CompilerTools.LambdaHandling.VarDef <a href="#type__vardef.1">¶</a></h4>
+<p>Represents the triple stored in a lambda's args[2][1].
+The triple is 1) the Symbol of an input parameter or local variable, 2) the type of that Symbol, and 3) a descriptor for that symbol.
+The descriptor can be 0 if the variable is an input parameter, 1 if it is captured, 2 if it is assigned within the function, 4 if
+it is assigned by an inner function, 8 if it is const, and 16 if it is assigned to statically only once by the function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:68</a></p>
+<hr />
+<p><a id="typealias__symgen.1" class="lexicon_definition"></a></p>
+<h4 id="symgen">SymGen <a href="#typealias__symgen.1">¶</a></h4>
+<p>Type aliases for different unions of Symbol, SymbolNode, and GenSym.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:54</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__adddescflag.1" class="lexicon_definition"></a></p>
+<h4 id="adddescflagssymbol-desc_flagint64-licompilertoolslambdahandlinglambdainfo">addDescFlag(s::Symbol,  desc_flag::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__adddescflag.1">¶</a></h4>
+<p>Add one or more bitfields in "desc_flag" to the descriptor for a variable.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:330</a></p>
+<hr />
+<p><a id="method__addinputparameter.1" class="lexicon_definition"></a></p>
+<h4 id="addinputparametervdcompilertoolslambdahandlingvardef-licompilertoolslambdahandlinglambdainfo">addInputParameter(vd::CompilerTools.LambdaHandling.VarDef,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addinputparameter.1">¶</a></h4>
+<p>Add Symbol "s" as input parameter to LambdaInfo "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:218</a></p>
+<hr />
+<p><a id="method__addinputparameters.1" class="lexicon_definition"></a></p>
+<h4 id="addinputparameterscollection-licompilertoolslambdahandlinglambdainfo">addInputParameters(collection,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addinputparameters.1">¶</a></h4>
+<p>Add all variable in "collection" as input parameters to LambdaInfo "li".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:226</a></p>
+<hr />
+<p><a id="method__addlocalvar.1" class="lexicon_definition"></a></p>
+<h4 id="addlocalvarnameabstractstring-typ-descint64-licompilertoolslambdahandlinglambdainfo">addLocalVar(name::AbstractString,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addlocalvar.1">¶</a></h4>
+<p>Add a local variable to the function corresponding to LambdaInfo in "li" with name (as String), type and descriptor.
+Returns true if variable already existed and was updated, false otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:402</a></p>
+<hr />
+<p><a id="method__addlocalvar.2" class="lexicon_definition"></a></p>
+<h4 id="addlocalvarnamesymbol-typ-descint64-licompilertoolslambdahandlinglambdainfo">addLocalVar(name::Symbol,  typ,  desc::Int64,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addlocalvar.2">¶</a></h4>
+<p>Add a local variable to the function corresponding to LambdaInfo in "li" with name (as Symbol), type and descriptor.
+Returns true if variable already existed and was updated, false otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:410</a></p>
+<hr />
+<p><a id="method__addlocalvariables.1" class="lexicon_definition"></a></p>
+<h4 id="addlocalvariablescollection-licompilertoolslambdahandlinglambdainfo">addLocalVariables(collection,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__addlocalvariables.1">¶</a></h4>
+<p>Add multiple local variables from some collection type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:314</a></p>
+<hr />
+<p><a id="method__count_symbols.1" class="lexicon_definition"></a></p>
+<h4 id="count_symbolsxsymbol-statecompilertoolslambdahandlingcountsymbolstate-top_level_number-is_top_level-read">count_symbols(x::Symbol,  state::CompilerTools.LambdaHandling.CountSymbolState,  top_level_number,  is_top_level,  read) <a href="#method__count_symbols.1">¶</a></h4>
+<p>Adds symbols and gensyms to their corresponding sets in CountSymbolState when they are seen in the AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:141</a></p>
+<hr />
+<p><a id="method__createmeta.1" class="lexicon_definition"></a></p>
+<h4 id="createmetalambdainfocompilertoolslambdahandlinglambdainfo">createMeta(lambdaInfo::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__createmeta.1">¶</a></h4>
+<p>Create the args[2] part of a lambda expression given an object of our internal storage format LambdaInfo.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:655</a></p>
+<hr />
+<p><a id="method__createvardict.1" class="lexicon_definition"></a></p>
+<h4 id="createvardictxarrayany-1">createVarDict(x::Array{Any, 1}) <a href="#method__createvardict.1">¶</a></h4>
+<p>Convert the lambda expression's args[2][1] from Array{Array{Any,1},1} to a Dict{Symbol,VarDef}.
+The internal triples are extracted and asserted that name and desc are of the appropriate type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:439</a></p>
+<hr />
+<p><a id="method__dicttoarray.1" class="lexicon_definition"></a></p>
+<h4 id="dicttoarrayxdictsymbol-compilertoolslambdahandlingvardef">dictToArray(x::Dict{Symbol, CompilerTools.LambdaHandling.VarDef}) <a href="#method__dicttoarray.1">¶</a></h4>
+<p>Convert the Dict{Symbol,VarDef} internal storage format from a dictionary back into an array of Any triples.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:644</a></p>
+<hr />
+<p><a id="method__eliminateunusedlocals.1" class="lexicon_definition"></a></p>
+<h4 id="eliminateunusedlocalslicompilertoolslambdahandlinglambdainfo-bodyexpr">eliminateUnusedLocals!(li::CompilerTools.LambdaHandling.LambdaInfo,  body::Expr) <a href="#method__eliminateunusedlocals.1">¶</a></h4>
+<p>Eliminates unused symbols from the LambdaInfo var_defs.
+Takes a LambdaInfo to modify, the body to scan using AstWalk and an optional callback to AstWalk for custom AST types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:181</a></p>
+<hr />
+<p><a id="method__eliminateunusedlocals.2" class="lexicon_definition"></a></p>
+<h4 id="eliminateunusedlocalslicompilertoolslambdahandlinglambdainfo-bodyexpr-astwalkfunc">eliminateUnusedLocals!(li::CompilerTools.LambdaHandling.LambdaInfo,  body::Expr,  AstWalkFunc) <a href="#method__eliminateunusedlocals.2">¶</a></h4>
+<p>Eliminates unused symbols from the LambdaInfo var_defs.
+Takes a LambdaInfo to modify, the body to scan using AstWalk and an optional callback to AstWalk for custom AST types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:181</a></p>
+<hr />
+<p><a id="method__getlocalvariables.1" class="lexicon_definition"></a></p>
+<h4 id="getlocalvariableslicompilertoolslambdahandlinglambdainfo">getLocalVariables(li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__getlocalvariables.1">¶</a></h4>
+<p>Returns an array of Symbols for local variables.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:293</a></p>
+<hr />
+<p><a id="method__mergelambdainfo.1" class="lexicon_definition"></a></p>
+<h4 id="mergelambdainfooutercompilertoolslambdahandlinglambdainfo-innercompilertoolslambdahandlinglambdainfo">mergeLambdaInfo(outer::CompilerTools.LambdaHandling.LambdaInfo,  inner::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__mergelambdainfo.1">¶</a></h4>
+<p>Merge "inner" lambdaInfo into "outer", and "outer" is changed as result.  Note
+that the input_params, static_parameter_names, and escaping_defs of "outer" do
+not change, other fields are merged. The GenSyms in "inner" will need to adjust
+their indices as a result of this merge. We return a dictionary that maps from
+old GenSym to new GenSym for "inner", which can be used to adjust the body Expr
+of "inner" lambda using "replaceExprWithDict" or "replaceExprWithDict!".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:557</a></p>
+<hr />
+<p><a id="method__removelocalvar.1" class="lexicon_definition"></a></p>
+<h4 id="removelocalvarnamesymbol-licompilertoolslambdahandlinglambdainfo">removeLocalVar(name::Symbol,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__removelocalvar.1">¶</a></h4>
+<p>Remove a local variable from lambda "li" given the variable's "name".
+Returns true if the variable existed and it was removed, false otherwise.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:426</a></p>
+<hr />
+<p><a id="method__show.1" class="lexicon_definition"></a></p>
+<h4 id="showioio-licompilertoolslambdahandlinglambdainfo">show(io::IO,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__show.1">¶</a></h4>
+<p>Pretty print a LambdaInfo.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:98</a></p>
+<hr />
+<p><a id="type__countsymbolstate.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslambdahandlingcountsymbolstate">CompilerTools.LambdaHandling.CountSymbolState <a href="#type__countsymbolstate.1">¶</a></h4>
+<p>Holds symbols and gensyms that are seen in a given AST when using the specified callback to handle non-standard Julia AST types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/lambda.jl">CompilerTools/src/lambda.jl:129</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

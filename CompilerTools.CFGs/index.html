@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.CFGs - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.AstWalker/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.DebugMsg/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolscfgs">CompilerTools.CFGs</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolscfgs">CompilerTools.CFGs</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__find_bb_for_statement.1" class="lexicon_definition"></a></p>
+<h4 id="find_bb_for_statementtop_numberint64-blcompilertoolscfgscfg">find_bb_for_statement(top_number::Int64,  bl::CompilerTools.CFGs.CFG) <a href="#method__find_bb_for_statement.1">¶</a></h4>
+<p>Find the basic block that contains a given statement number.
+Returns the basic block label of the basic block that contains the given statement number or "nothing" if the statement number is not found.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:718</a></p>
+<hr />
+<p><a id="method__from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayany-1-depth-state-callback-cbdata">from_exprs(ast::Array{Any, 1},  depth,  state,  callback,  cbdata) <a href="#method__from_exprs.1">¶</a></h4>
+<p>Process an array of expressions.
+We know that the first array of expressions we will find is for the lambda body.
+top_level_number starts out 0 and if we find it to be 0 then we know that we're processing the array of expr for the body
+and so we keep track of the index into body so that we can number the statements in the basic blocks by this top level number.
+Recursively process each element of the array of expressions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:841</a></p>
+<hr />
+<p><a id="method__show.1" class="lexicon_definition"></a></p>
+<h4 id="showioio-bbcompilertoolscfgsbasicblock">show(io::IO,  bb::CompilerTools.CFGs.BasicBlock) <a href="#method__show.1">¶</a></h4>
+<p>Overload of Base.show to pretty-print a CFGS.BasicBlock object.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:124</a></p>
+<hr />
+<p><a id="method__show.2" class="lexicon_definition"></a></p>
+<h4 id="showioio-blcompilertoolscfgscfg">show(io::IO,  bl::CompilerTools.CFGs.CFG) <a href="#method__show.2">¶</a></h4>
+<p>Overload of Base.show to pretty-print a CFG object.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:204</a></p>
+<hr />
+<p><a id="method__show.3" class="lexicon_definition"></a></p>
+<h4 id="showioio-tlscompilertoolscfgstoplevelstatement">show(io::IO,  tls::CompilerTools.CFGs.TopLevelStatement) <a href="#method__show.3">¶</a></h4>
+<p>Overload of Base.show to pretty-print a TopLevelStatement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:63</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__typedexpr.1" class="lexicon_definition"></a></p>
+<h4 id="typedexprtyp-rest">TypedExpr(typ,  rest...) <a href="#method__typedexpr.1">¶</a></h4>
+<p>Creates a typed Expr AST node.
+Convenence function that takes a type as first argument and the varargs thereafter.
+The varargs are used to form an Expr AST node and the type parameter is used to fill in the "typ" field of the Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:43</a></p>
+<hr />
+<p><a id="method__addstatement.1" class="lexicon_definition"></a></p>
+<h4 id="addstatementtop_level-state-astany">addStatement(top_level,  state,  ast::ANY) <a href="#method__addstatement.1">¶</a></h4>
+<p>Adds a top-level statement just encountered during a partial walk of the AST.
+First argument indicates if this statement is a top-level statement.
+Second argument is a object collecting information about the CFG as we go along.
+Third argument is some sub-tree of the AST.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:107</a></p>
+<hr />
+<p><a id="method__addstatementtoendofblock.1" class="lexicon_definition"></a></p>
+<h4 id="addstatementtoendofblockblcompilertoolscfgscfg-block-stmt">addStatementToEndOfBlock(bl::CompilerTools.CFGs.CFG,  block,  stmt) <a href="#method__addstatementtoendofblock.1">¶</a></h4>
+<p>Given a CFG "bl" and a basic "block", add statement "stmt" to the end of that block.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:622</a></p>
+<hr />
+<p><a id="method__changeendinglabel.1" class="lexicon_definition"></a></p>
+<h4 id="changeendinglabelbb-aftercompilertoolscfgsbasicblock-new_bbcompilertoolscfgsbasicblock">changeEndingLabel(bb,  after::CompilerTools.CFGs.BasicBlock,  new_bb::CompilerTools.CFGs.BasicBlock) <a href="#method__changeendinglabel.1">¶</a></h4>
+<p>BasicBlock bb currently is known to contain a jump to the BasicBlock after.
+This function changes bb so that it no longer jumps to after but to "new_bb" instead.
+The jump has to be in the last statement of the BasicBlock.
+AstWalk on the last statement of the BasicBlock is used with the update_label callback function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:310</a></p>
+<hr />
+<p><a id="method__compute_dfn.1" class="lexicon_definition"></a></p>
+<h4 id="compute_dfnbasic_blocks">compute_dfn(basic_blocks) <a href="#method__compute_dfn.1">¶</a></h4>
+<p>Computes the depth first numbering of the basic block graph.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:757</a></p>
+<hr />
+<p><a id="method__compute_dfn_internal.1" class="lexicon_definition"></a></p>
+<h4 id="compute_dfn_internalbasic_blocks-cur_bb-cur_dfn-visited-bbs_df_order">compute_dfn_internal(basic_blocks,  cur_bb,  cur_dfn,  visited,  bbs_df_order) <a href="#method__compute_dfn_internal.1">¶</a></h4>
+<p>The recursive heart of depth first numbering.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:736</a></p>
+<hr />
+<p><a id="method__compute_dominators.1" class="lexicon_definition"></a></p>
+<h4 id="compute_dominatorsblcompilertoolscfgscfg">compute_dominators(bl::CompilerTools.CFGs.CFG) <a href="#method__compute_dominators.1">¶</a></h4>
+<p>Compute the dominators of the CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1182</a></p>
+<hr />
+<p><a id="method__compute_inverse_dominators.1" class="lexicon_definition"></a></p>
+<h4 id="compute_inverse_dominatorsblcompilertoolscfgscfg">compute_inverse_dominators(bl::CompilerTools.CFGs.CFG) <a href="#method__compute_inverse_dominators.1">¶</a></h4>
+<p>Compute the inverse dominators of the CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1246</a></p>
+<hr />
+<p><a id="method__connect.1" class="lexicon_definition"></a></p>
+<h4 id="connectfrom-to-fallthrough">connect(from,  to,  fallthrough) <a href="#method__connect.1">¶</a></h4>
+<p>Connect the "from" input argument basic block to the "to" input argument basic block.
+If the third argument "fallthrough" is true then the "to" block is also set as the "from" basic block's fallthrough successor.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:153</a></p>
+<hr />
+<p><a id="method__connect_finish.1" class="lexicon_definition"></a></p>
+<h4 id="connect_finishstate">connect_finish(state) <a href="#method__connect_finish.1">¶</a></h4>
+<p>Connect the current basic block as a fallthrough to the final invisible basic block (-2).</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:775</a></p>
+<hr />
+<p><a id="method__createfunctionbody.1" class="lexicon_definition"></a></p>
+<h4 id="createfunctionbodyblcompilertoolscfgscfg">createFunctionBody(bl::CompilerTools.CFGs.CFG) <a href="#method__createfunctionbody.1">¶</a></h4>
+<p>Create the array of statements that go in a :body Expr given a CFG "bl".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:667</a></p>
+<hr />
+<p><a id="method__dump_bb.1" class="lexicon_definition"></a></p>
+<h4 id="dump_bbblcompilertoolscfgscfg">dump_bb(bl::CompilerTools.CFGs.CFG) <a href="#method__dump_bb.1">¶</a></h4>
+<p>Prints a CFG "bl" with varying degrees of verbosity from debug level 2 up to 4.
+Additionally, at debug level 4 and graphviz bbs.dot file is generated that can be used to visualize the basic block structure of the function.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:784</a></p>
+<hr />
+<p><a id="method__findreachable.1" class="lexicon_definition"></a></p>
+<h4 id="findreachablereachable-curint64-bbsdictint64-compilertoolscfgsbasicblock">findReachable(reachable,  cur::Int64,  bbs::Dict{Int64, CompilerTools.CFGs.BasicBlock}) <a href="#method__findreachable.1">¶</a></h4>
+<p>Process a basic block and add its successors to the set of reachable blocks
+if it isn't already there.  If it is freshly added then recurse to adds its successors.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:877</a></p>
+<hr />
+<p><a id="method__find_top_number.1" class="lexicon_definition"></a></p>
+<h4 id="find_top_numbertop_numberint64-blcompilertoolscfgscfg">find_top_number(top_number::Int64,  bl::CompilerTools.CFGs.CFG) <a href="#method__find_top_number.1">¶</a></h4>
+<p>Search for a statement with the given number in the CFG "bl".
+Returns the statement corresponding to the given number or "nothing" if the statement number is not found.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:700</a></p>
+<hr />
+<p><a id="method__from_ast.1" class="lexicon_definition"></a></p>
+<h4 id="from_astast">from_ast(ast) <a href="#method__from_ast.1">¶</a></h4>
+<p>The main entry point to construct a control-flow graph.
+Typically you would pass in a :lambda Expr here.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1004</a></p>
+<hr />
+<p><a id="method__from_expr.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprast-callback-cbdata">from_expr(ast,  callback,  cbdata) <a href="#method__from_expr.1">¶</a></h4>
+<p>Another entry point to construct a control-flow graph but one that allows you to pass a callback and some opaque object
+so that non-standard node types can be processed.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1013</a></p>
+<hr />
+<p><a id="method__from_expr.2" class="lexicon_definition"></a></p>
+<h4 id="from_exprastlambdastaticdata-depth-state-top_level-callback-cbdata">from_expr(ast::LambdaStaticData,  depth,  state,  top_level,  callback,  cbdata) <a href="#method__from_expr.2">¶</a></h4>
+<p>The main routine that switches on all the various AST node types.
+The internal nodes of the AST are of type Expr with various different Expr.head field values such as :lambda, :body, :block, etc.
+The leaf nodes of the AST all have different types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1123</a></p>
+<hr />
+<p><a id="method__from_goto.1" class="lexicon_definition"></a></p>
+<h4 id="from_gotolabel-state-callback-cbdata">from_goto(label,  state,  callback,  cbdata) <a href="#method__from_goto.1">¶</a></h4>
+<p>Process a GotoNode for CFG construction.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1052</a></p>
+<hr />
+<p><a id="method__from_if.1" class="lexicon_definition"></a></p>
+<h4 id="from_ifargs-depth-state-callback-cbdata">from_if(args,  depth,  state,  callback,  cbdata) <a href="#method__from_if.1">¶</a></h4>
+<p>Process a :gotoifnot Expr not for CFG construction.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1082</a></p>
+<hr />
+<p><a id="method__from_label.1" class="lexicon_definition"></a></p>
+<h4 id="from_labellabel-state-callback-cbdata">from_label(label,  state,  callback,  cbdata) <a href="#method__from_label.1">¶</a></h4>
+<p>Process LabelNode for CFG construction.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1036</a></p>
+<hr />
+<p><a id="method__from_lambda.1" class="lexicon_definition"></a></p>
+<h4 id="from_lambdaastarrayany-1-depth-state-callback-cbdata">from_lambda(ast::Array{Any, 1},  depth,  state,  callback,  cbdata) <a href="#method__from_lambda.1">¶</a></h4>
+<p>To help construct the CFG given a lambda, we recursively process the body of the lambda.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:820</a></p>
+<hr />
+<p><a id="method__from_return.1" class="lexicon_definition"></a></p>
+<h4 id="from_returnargs-depth-state-callback-cbdata">from_return(args,  depth,  state,  callback,  cbdata) <a href="#method__from_return.1">¶</a></h4>
+<p>Process a :return Expr for CFG construction.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:1069</a></p>
+<hr />
+<p><a id="method__getbbbodyorder.1" class="lexicon_definition"></a></p>
+<h4 id="getbbbodyorderblcompilertoolscfgscfg">getBbBodyOrder(bl::CompilerTools.CFGs.CFG) <a href="#method__getbbbodyorder.1">¶</a></h4>
+<p>Determine a valid and reasonable order of basic blocks in which to reconstruct a :body Expr.
+Also useful for printing in a reasonable order.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:639</a></p>
+<hr />
+<p><a id="method__getdistinctstatementnum.1" class="lexicon_definition"></a></p>
+<h4 id="getdistinctstatementnumblcompilertoolscfgscfg">getDistinctStatementNum(bl::CompilerTools.CFGs.CFG) <a href="#method__getdistinctstatementnum.1">¶</a></h4>
+<p>Get a possible new statement number by finding the maximum statement value in any BasicBlock in the given CFG and adding 1.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:407</a></p>
+<hr />
+<p><a id="method__getmaxbb.1" class="lexicon_definition"></a></p>
+<h4 id="getmaxbbblcompilertoolscfgscfg">getMaxBB(bl::CompilerTools.CFGs.CFG) <a href="#method__getmaxbb.1">¶</a></h4>
+<p>Returns the maximum basic block label for the given CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:217</a></p>
+<hr />
+<p><a id="method__getmaxstatementnum.1" class="lexicon_definition"></a></p>
+<h4 id="getmaxstatementnumbbcompilertoolscfgsbasicblock">getMaxStatementNum(bb::CompilerTools.CFGs.BasicBlock) <a href="#method__getmaxstatementnum.1">¶</a></h4>
+<p>Get the maximum statement index for a given BasicBlock.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:394</a></p>
+<hr />
+<p><a id="method__getminbb.1" class="lexicon_definition"></a></p>
+<h4 id="getminbbblcompilertoolscfgscfg">getMinBB(bl::CompilerTools.CFGs.CFG) <a href="#method__getminbb.1">¶</a></h4>
+<p>Returns the minimum basic block label for the given CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:225</a></p>
+<hr />
+<p><a id="method__insertbefore.1" class="lexicon_definition"></a></p>
+<h4 id="insertbeforeblcompilertoolscfgscfg-afterint64">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64) <a href="#method__insertbefore.1">¶</a></h4>
+<p>Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,
+insert a new basic block into the CFG before block "after".<br />
+Returns a tuple of the new basic block created and if needed a GotoNode AST node to be inserted at the end of the new
+basic block so that it will jump to the "after" basic block.  The user of this function is expected to insert
+at the end of the new basic block once they are done inserting their other code.
+If "after" is the head of a loop, you can stop the basic block containing the loop's back edge from being added to 
+the new basic block by setting excludeBackEdge to true and setting back_edge to the loop's basic block containing
+the back edge.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:332</a></p>
+<hr />
+<p><a id="method__insertbefore.2" class="lexicon_definition"></a></p>
+<h4 id="insertbeforeblcompilertoolscfgscfg-afterint64-excludebackedgebool">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64,  excludeBackEdge::Bool) <a href="#method__insertbefore.2">¶</a></h4>
+<p>Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,
+insert a new basic block into the CFG before block "after".<br />
+Returns a tuple of the new basic block created and if needed a GotoNode AST node to be inserted at the end of the new
+basic block so that it will jump to the "after" basic block.  The user of this function is expected to insert
+at the end of the new basic block once they are done inserting their other code.
+If "after" is the head of a loop, you can stop the basic block containing the loop's back edge from being added to 
+the new basic block by setting excludeBackEdge to true and setting back_edge to the loop's basic block containing
+the back edge.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:332</a></p>
+<hr />
+<p><a id="method__insertbefore.3" class="lexicon_definition"></a></p>
+<h4 id="insertbeforeblcompilertoolscfgscfg-afterint64-excludebackedgebool-back_edge">insertBefore(bl::CompilerTools.CFGs.CFG,  after::Int64,  excludeBackEdge::Bool,  back_edge) <a href="#method__insertbefore.3">¶</a></h4>
+<p>Given a CFG in input parameter "bl" and a basic block label "after" in that CFG,
+insert a new basic block into the CFG before block "after".<br />
+Returns a tuple of the new basic block created and if needed a GotoNode AST node to be inserted at the end of the new
+basic block so that it will jump to the "after" basic block.  The user of this function is expected to insert
+at the end of the new basic block once they are done inserting their other code.
+If "after" is the head of a loop, you can stop the basic block containing the loop's back edge from being added to 
+the new basic block by setting excludeBackEdge to true and setting back_edge to the loop's basic block containing
+the back edge.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:332</a></p>
+<hr />
+<p><a id="method__insertbetween.1" class="lexicon_definition"></a></p>
+<h4 id="insertbetweenblcompilertoolscfgscfg-beforeint64-afterint64">insertBetween(bl::CompilerTools.CFGs.CFG,  before::Int64,  after::Int64) <a href="#method__insertbetween.1">¶</a></h4>
+<p>Insert a new basic block into the CFG "bl" between the basic blocks whose labels are "before" and "after".
+Returns a tuple of the new basic block created and if needed a GotoNode AST node to be inserted at the end of the new
+basic block so that it will jump to the "after" basic block.  The user of this function is expected to insert
+at the end of the new basic block once they are done inserting their other code.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:515</a></p>
+<hr />
+<p><a id="method__insertstatementafter.1" class="lexicon_definition"></a></p>
+<h4 id="insertstatementafterblcompilertoolscfgscfg-block-stmt_idx-new_stmt">insertStatementAfter(bl::CompilerTools.CFGs.CFG,  block,  stmt_idx,  new_stmt) <a href="#method__insertstatementafter.1">¶</a></h4>
+<p>For a given CFG "bl" and a "block" in that CFG, add a new statement "new_stmt" to the basic block
+after statement index "stmt_idx".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:580</a></p>
+<hr />
+<p><a id="method__insertstatementbefore.1" class="lexicon_definition"></a></p>
+<h4 id="insertstatementbeforeblcompilertoolscfgscfg-block-stmt_idx-new_stmt">insertStatementBefore(bl::CompilerTools.CFGs.CFG,  block,  stmt_idx,  new_stmt) <a href="#method__insertstatementbefore.1">¶</a></h4>
+<p>For a given CFG "bl" and a "block" in that CFG, add a new statement "new_stmt" to the basic block
+before statement index "stmt_idx".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:588</a></p>
+<hr />
+<p><a id="method__insertat.1" class="lexicon_definition"></a></p>
+<h4 id="insertata-value-idx">insertat!(a,  value,  idx) <a href="#method__insertat.1">¶</a></h4>
+<p>Insert into an array "a" with a given "value" at the specified index "idx".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:571</a></p>
+<hr />
+<p><a id="method__not_handled.1" class="lexicon_definition"></a></p>
+<h4 id="not_handleda-b">not_handled(a,  b) <a href="#method__not_handled.1">¶</a></h4>
+<p>A default callback that handles no extra AST node types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:995</a></p>
+<hr />
+<p><a id="method__removeuselessblocks.1" class="lexicon_definition"></a></p>
+<h4 id="removeuselessblocksbbsdictint64-compilertoolscfgsbasicblock">removeUselessBlocks(bbs::Dict{Int64, CompilerTools.CFGs.BasicBlock}) <a href="#method__removeuselessblocks.1">¶</a></h4>
+<p>This function simplifies the dict of basic blocks "bbs".
+One such simplification that is necessary for depth first numbering not to fail is the removal of dead blocks.
+Other simplifications can be seen commented out below and while they may make the graph nicer to look at they
+don't really add anything in terms of functionality.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:896</a></p>
+<hr />
+<p><a id="method__replacesucc.1" class="lexicon_definition"></a></p>
+<h4 id="replacesucccur_bbcompilertoolscfgsbasicblock-orig_succcompilertoolscfgsbasicblock-new_succcompilertoolscfgsbasicblock">replaceSucc(cur_bb::CompilerTools.CFGs.BasicBlock,  orig_succ::CompilerTools.CFGs.BasicBlock,  new_succ::CompilerTools.CFGs.BasicBlock) <a href="#method__replacesucc.1">¶</a></h4>
+<p>For a given basic block "cur_bb", replace one of its successors "orig_succ" with a different successor "new_succ".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:858</a></p>
+<hr />
+<p><a id="method__uncompressed_ast.1" class="lexicon_definition"></a></p>
+<h4 id="uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) <a href="#method__uncompressed_ast.1">¶</a></h4>
+<p>Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:814</a></p>
+<hr />
+<p><a id="method__update_label.1" class="lexicon_definition"></a></p>
+<h4 id="update_labelxexpr-statecompilertoolscfgsupdatelabelstate-top_level_number-is_top_level-read">update_label(x::Expr,  state::CompilerTools.CFGs.UpdateLabelState,  top_level_number,  is_top_level,  read) <a href="#method__update_label.1">¶</a></h4>
+<p>An AstWalk callback that pattern matches GotoNode's and :gotoifnot Expr nodes and determines if the
+label specified in this nodes is equal to the "old_label" in the UpdateLabelState and if so replaces
+the "old_label" with "new_label" and sets the "changed" flag to true to indicate that update_label
+was successful.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:255</a></p>
+<hr />
+<p><a id="method__wrapinconditional.1" class="lexicon_definition"></a></p>
+<h4 id="wrapinconditionalblcompilertoolscfgscfg-cond_gotoifnotexpr-firstint64-mergeint64">wrapInConditional(bl::CompilerTools.CFGs.CFG,  cond_gotoifnot::Expr,  first::Int64,  merge::Int64) <a href="#method__wrapinconditional.1">¶</a></h4>
+<p>Modifies the CFG to create a conditional (i.e., if statement) that wraps a certain region of the CFG whose entry block is
+"first" and whose last block is "last".
+Takes a parameters:
+1) bl - the CFG to modify
+2) cond_gotoifnot - a :gotoifnot Expr whose label is equal to "first"
+3) first - the existing starting block of the code to be included in the conditional
+4) merge - the existing block to be executed after the conditional
+To be eligible for wrapping, first and merge must be in the same scope of source code.
+This restriction is validated by confirming that "first" dominates "merge" and that "merge" inverse dominates "first".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:436</a></p>
+<hr />
+<p><a id="method__wrapinconditional.2" class="lexicon_definition"></a></p>
+<h4 id="wrapinconditionalblcompilertoolscfgscfg-cond_gotoifnotexpr-firstint64-mergeint64-back_edgeunioncompilertoolscfgsbasicblock-void">wrapInConditional(bl::CompilerTools.CFGs.CFG,  cond_gotoifnot::Expr,  first::Int64,  merge::Int64,  back_edge::Union{CompilerTools.CFGs.BasicBlock, Void}) <a href="#method__wrapinconditional.2">¶</a></h4>
+<p>Modifies the CFG to create a conditional (i.e., if statement) that wraps a certain region of the CFG whose entry block is
+"first" and whose last block is "last".
+Takes a parameters:
+1) bl - the CFG to modify
+2) cond_gotoifnot - a :gotoifnot Expr whose label is equal to "first"
+3) first - the existing starting block of the code to be included in the conditional
+4) merge - the existing block to be executed after the conditional
+To be eligible for wrapping, first and merge must be in the same scope of source code.
+This restriction is validated by confirming that "first" dominates "merge" and that "merge" inverse dominates "first".</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:436</a></p>
+<hr />
+<p><a id="type__basicblock.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolscfgsbasicblock">CompilerTools.CFGs.BasicBlock <a href="#type__basicblock.1">¶</a></h4>
+<p>Data structure to hold information about one basic block in the control-flow graph.
+This structure contains the following fields:
+1) label - an Int.  If positive, this basic block corresponds to a basic block declared in the AST through a label node.
+                    The special label value -1 corresponds to the starting basic blocks.  The special value -2
+                    corresponds to the final basic block (to which everything must flow).  Negative values correspond to
+                    implicit basic blocks following gotoifnot nodes.  There nodes may goto some (positive) label but if
+                    that branch is not taken they fall-through into an unlabelled basic (in the AST at least) but we
+                    give such blocks negative labels.
+2) preds - a set of basic blocks from which control may reach the current basic block
+3) succs - a set of basic blocks to which control may flow from the current basic block
+4) fallthrough_succ - if not "nothing", this indicates which of the basic block successors is reached via falling through from
+                    the current basic block rather than a jump (goto or gotoifnot)
+5) depth_first_number - a depth first numbering of the basic block graph is performed and this basic block's number is stored here
+6) statements - an array of the statements in this basic block.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:100</a></p>
+<hr />
+<p><a id="type__cfg.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolscfgscfg">CompilerTools.CFGs.CFG <a href="#type__cfg.1">¶</a></h4>
+<p>The main data structure to hold information about the control flow graph.
+The basic_blocks field is a dictionary from basic block label to BasicBlock object.
+The depth_first_numbering is an array of length the number of basic blocks.<br />
+   Entry N in this array is the label of the basic block with depth-first numbering N.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:195</a></p>
+<hr />
+<p><a id="type__toplevelstatement.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolscfgstoplevelstatement">CompilerTools.CFGs.TopLevelStatement <a href="#type__toplevelstatement.1">¶</a></h4>
+<p>Data structure to hold the index (relative to the beginning of the body of the function) of a top-level statement
+and the top-level statement itself.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:54</a></p>
+<hr />
+<p><a id="type__updatelabelstate.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolscfgsupdatelabelstate">CompilerTools.CFGs.UpdateLabelState <a href="#type__updatelabelstate.1">¶</a></h4>
+<p>The opaque callback data type for the update_label callback.
+It holds the old_label that should be changed to the new_label.
+It also holds a "changed" field that starts as false and gets set to true when the callback actually
+finds the old label and replaces it with the new one.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:239</a></p>
+<hr />
+<p><a id="type__expr_state.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolscfgsexpr_state">CompilerTools.CFGs.expr_state <a href="#type__expr_state.1">¶</a></h4>
+<p>Collects information about the CFG as it is being constructed.
+Contains a dictionary of the currently known basic blocks that maps the label to a BasicBlock object.
+cur_bb is the currently active BasicBlock to which the next statement encountered should be added.
+next_if contains the next negative label number to be used for the next needed implicit basic block label.
+top_level_number is the last top-level statement added.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/CFGs.jl">CompilerTools/src/CFGs.jl:173</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

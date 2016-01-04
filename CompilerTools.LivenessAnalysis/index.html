@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.LivenessAnalysis - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.ReadWriteSet/">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.LambdaHandling/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.Loops/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolslivenessanalysis">CompilerTools.LivenessAnalysis</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolslivenessanalysis">CompilerTools.LivenessAnalysis</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__find_bb_for_statement.1" class="lexicon_definition"></a></p>
+<h4 id="find_bb_for_statementtop_numberint64-blcompilertoolslivenessanalysisblockliveness">find_bb_for_statement(top_number::Int64,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__find_bb_for_statement.1">¶</a></h4>
+<p>Search for a basic block containing a statement with the given top-level number in the liveness information.
+Returns a basic block label of a block having that top-level number or "nothing" if no such statement could be found.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:395</a></p>
+<hr />
+<p><a id="method__show.1" class="lexicon_definition"></a></p>
+<h4 id="showioio-bbcompilertoolslivenessanalysisbasicblock">show(io::IO,  bb::CompilerTools.LivenessAnalysis.BasicBlock) <a href="#method__show.1">¶</a></h4>
+<p>Overload of Base.show to pretty-print a LivenessAnalysis.BasicBlock.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:137</a></p>
+<hr />
+<p><a id="method__show.2" class="lexicon_definition"></a></p>
+<h4 id="showioio-blcompilertoolslivenessanalysisblockliveness">show(io::IO,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__show.2">¶</a></h4>
+<p>Overload of Base.show to pretty-print BlockLiveness type.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:349</a></p>
+<hr />
+<p><a id="method__show.3" class="lexicon_definition"></a></p>
+<h4 id="showioio-tlscompilertoolslivenessanalysistoplevelstatement">show(io::IO,  tls::CompilerTools.LivenessAnalysis.TopLevelStatement) <a href="#method__show.3">¶</a></h4>
+<p>Overload of Base.show to pretty-print a LivenessAnalysis.TopLevelStatement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:76</a></p>
+<hr />
+<p><a id="type__blockliveness.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslivenessanalysisblockliveness">CompilerTools.LivenessAnalysis.BlockLiveness <a href="#type__blockliveness.1">¶</a></h4>
+<p>The main return type from LivenessAnalysis.
+Contains a dictionary that maps CFG basic block to liveness basic blocks.
+Also contains the corresponding CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:281</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__typedexpr.1" class="lexicon_definition"></a></p>
+<h4 id="typedexprtyp-rest">TypedExpr(typ,  rest...) <a href="#method__typedexpr.1">¶</a></h4>
+<p>Convenience function to create an Expr and make sure the type is filled in as well.
+The first arg is the type of the Expr and the rest of the args are the constructors args to Expr.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:43</a></p>
+<hr />
+<p><a id="method__addunmodifiedparams.1" class="lexicon_definition"></a></p>
+<h4 id="addunmodifiedparamsfunc-signaturearraydatatype-1-unmodifieds-statecompilertoolslivenessanalysisexpr_state">addUnmodifiedParams(func,  signature::Array{DataType, 1},  unmodifieds,  state::CompilerTools.LivenessAnalysis.expr_state) <a href="#method__addunmodifiedparams.1">¶</a></h4>
+<p>Add an entry the dictionary of which arguments can be modified by which functions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:591</a></p>
+<hr />
+<p><a id="method__add_access.1" class="lexicon_definition"></a></p>
+<h4 id="add_accessbb-sym-read">add_access(bb,  sym,  read) <a href="#method__add_access.1">¶</a></h4>
+<p>Called when AST traversal finds some Symbol "sym" in a basic block "bb".
+"read" is true if the symbol is being used and false if it is being defined.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:191</a></p>
+<hr />
+<p><a id="method__compute_live_ranges.1" class="lexicon_definition"></a></p>
+<h4 id="compute_live_rangesstatecompilertoolslivenessanalysisexpr_state-dfn">compute_live_ranges(state::CompilerTools.LivenessAnalysis.expr_state,  dfn) <a href="#method__compute_live_ranges.1">¶</a></h4>
+<p>Compute the live_in and live_out information for each basic block and statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:432</a></p>
+<hr />
+<p><a id="method__countsymboldefs.1" class="lexicon_definition"></a></p>
+<h4 id="countsymboldefss-lives">countSymbolDefs(s,  lives) <a href="#method__countsymboldefs.1">¶</a></h4>
+<p>Count the number of times that the symbol in "s" is defined in all the basic blocks.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:837</a></p>
+<hr />
+<p><a id="method__create_unmodified_args_dict.1" class="lexicon_definition"></a></p>
+<h4 id="create_unmodified_args_dict">create_unmodified_args_dict() <a href="#method__create_unmodified_args_dict.1">¶</a></h4>
+<p>Convert the function_descriptions table into a dictionary that can be passed to
+LivenessAnalysis to indicate which args are unmodified by which functions.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/function-descriptions.jl">CompilerTools/src/function-descriptions.jl:257</a></p>
+<hr />
+<p><a id="method__def.1" class="lexicon_definition"></a></p>
+<h4 id="defx-blcompilertoolslivenessanalysisblockliveness">def(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__def.1">¶</a></h4>
+<p>Get the def information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:335</a></p>
+<hr />
+<p><a id="method__dump_bb.1" class="lexicon_definition"></a></p>
+<h4 id="dump_bbblcompilertoolslivenessanalysisblockliveness">dump_bb(bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__dump_bb.1">¶</a></h4>
+<p>Dump a bunch of debugging information about BlockLiveness.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:501</a></p>
+<hr />
+<p><a id="method__find_top_number.1" class="lexicon_definition"></a></p>
+<h4 id="find_top_numbertop_numberint64-blcompilertoolslivenessanalysisblockliveness">find_top_number(top_number::Int64,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__find_top_number.1">¶</a></h4>
+<p>Search for a statement with the given top-level number in the liveness information.
+Returns a LivenessAnalysis.TopLevelStatement having that top-level number or "nothing" if no such statement could be found.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:376</a></p>
+<hr />
+<p><a id="method__fromcfg.1" class="lexicon_definition"></a></p>
+<h4 id="fromcfglive_res-cfgcompilertoolscfgscfg-callbackfunction-cbdataany">fromCFG(live_res,  cfg::CompilerTools.CFGs.CFG,  callback::Function,  cbdata::ANY) <a href="#method__fromcfg.1">¶</a></h4>
+<p>Extract liveness information from the CFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:878</a></p>
+<hr />
+<p><a id="method__from_assignment.1" class="lexicon_definition"></a></p>
+<h4 id="from_assignmentastarrayany-1-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_assignment(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_assignment.1">¶</a></h4>
+<p>Walk through an assignment expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:566</a></p>
+<hr />
+<p><a id="method__from_call.1" class="lexicon_definition"></a></p>
+<h4 id="from_callastarrayany-1-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_call(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_call.1">¶</a></h4>
+<p>Walk through a call expression.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:780</a></p>
+<hr />
+<p><a id="method__from_expr.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprastexpr">from_expr(ast::Expr) <a href="#method__from_expr.1">¶</a></h4>
+<p>This function gives you the option of calling the ENTRY point from_expr with an ast and several optional named arguments.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:871</a></p>
+<hr />
+<p><a id="method__from_expr.2" class="lexicon_definition"></a></p>
+<h4 id="from_exprastexpr-callback">from_expr(ast::Expr,  callback) <a href="#method__from_expr.2">¶</a></h4>
+<p>ENTRY point to liveness analysis.
+You must pass a :lambda Expr as "ast".
+If you have non-standard AST nodes, you may pass a callback that will be given a chance to process the non-standard node first.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:859</a></p>
+<hr />
+<p><a id="method__from_expr.3" class="lexicon_definition"></a></p>
+<h4 id="from_exprastexpr-callback-cbdataany">from_expr(ast::Expr,  callback,  cbdata::ANY) <a href="#method__from_expr.3">¶</a></h4>
+<p>ENTRY point to liveness analysis.
+You must pass a :lambda Expr as "ast".
+If you have non-standard AST nodes, you may pass a callback that will be given a chance to process the non-standard node first.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:859</a></p>
+<hr />
+<p><a id="method__from_expr.4" class="lexicon_definition"></a></p>
+<h4 id="from_exprastexpr-callback-cbdataany-no_mod">from_expr(ast::Expr,  callback,  cbdata::ANY,  no_mod) <a href="#method__from_expr.4">¶</a></h4>
+<p>ENTRY point to liveness analysis.
+You must pass a :lambda Expr as "ast".
+If you have non-standard AST nodes, you may pass a callback that will be given a chance to process the non-standard node first.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:859</a></p>
+<hr />
+<p><a id="method__from_expr.5" class="lexicon_definition"></a></p>
+<h4 id="from_exprastlambdastaticdata-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_expr(ast::LambdaStaticData,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_expr.5">¶</a></h4>
+<p>Generic routine for how to walk most AST node types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:932</a></p>
+<hr />
+<p><a id="method__from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayany-1-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_exprs(ast::Array{Any, 1},  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_exprs.1">¶</a></h4>
+<p>Walk through an array of expressions.
+Just recursively call from_expr for each expression in the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:552</a></p>
+<hr />
+<p><a id="method__from_if.1" class="lexicon_definition"></a></p>
+<h4 id="from_ifargs-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_if(args,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_if.1">¶</a></h4>
+<p>Process a gotoifnot which is just a recursive processing of its first arg which is the conditional.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:918</a></p>
+<hr />
+<p><a id="method__from_lambda.1" class="lexicon_definition"></a></p>
+<h4 id="from_lambdaastexpr-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_lambda(ast::Expr,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_lambda.1">¶</a></h4>
+<p>Walk through a lambda expression.
+We just need to extract the ref_params because liveness needs to keep those ref_params live at the end of the function.
+We don't recurse into the body here because from_expr handles that with fromCFG.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:542</a></p>
+<hr />
+<p><a id="method__from_return.1" class="lexicon_definition"></a></p>
+<h4 id="from_returnargs-depthint64-statecompilertoolslivenessanalysisexpr_state-callbackfunction-cbdataany">from_return(args,  depth::Int64,  state::CompilerTools.LivenessAnalysis.expr_state,  callback::Function,  cbdata::ANY) <a href="#method__from_return.1">¶</a></h4>
+<p>Process a return Expr node which is just a recursive processing of all of its args.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:909</a></p>
+<hr />
+<p><a id="method__getunmodifiedargs.1" class="lexicon_definition"></a></p>
+<h4 id="getunmodifiedargsfuncany-args-arg_type_tuplearraydatatype-1-statecompilertoolslivenessanalysisexpr_state">getUnmodifiedArgs(func::ANY,  args,  arg_type_tuple::Array{DataType, 1},  state::CompilerTools.LivenessAnalysis.expr_state) <a href="#method__getunmodifiedargs.1">¶</a></h4>
+<p>For a given function and signature, return which parameters can be modified by the function.
+If we have cached this information previously then return that, else cache the information for some
+well-known functions or default to presuming that all arguments could be modified.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:707</a></p>
+<hr />
+<p><a id="method__get_function_from_string.1" class="lexicon_definition"></a></p>
+<h4 id="get_function_from_stringmodabstractstring-funcabstractstring">get_function_from_string(mod::AbstractString,  func::AbstractString) <a href="#method__get_function_from_string.1">¶</a></h4>
+<p>Takes a module and a function both as Strings. Looks up the specified module as
+part of the "Main" module and then looks and returns the Function object
+corresponding to the "func" String in that module.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/function-descriptions.jl">CompilerTools/src/function-descriptions.jl:239</a></p>
+<hr />
+<p><a id="method__get_info_internal.1" class="lexicon_definition"></a></p>
+<h4 id="get_info_internalxunioncompilertoolslivenessanalysisbasicblock-compilertoolslivenessanalysistoplevelstatement-blcompilertoolslivenessanalysisblockliveness-field">get_info_internal(x::Union{CompilerTools.LivenessAnalysis.BasicBlock, CompilerTools.LivenessAnalysis.TopLevelStatement},  bl::CompilerTools.LivenessAnalysis.BlockLiveness,  field) <a href="#method__get_info_internal.1">¶</a></h4>
+<p>The live_in, live_out, def, and use routines are all effectively the same but just extract a different field name.
+Here we extract this common behavior where x can be a liveness or CFG basic block or a liveness or CFG statement.
+bl is BlockLiveness type as returned by a previous LivenessAnalysis.
+field is the name of the field requested.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:297</a></p>
+<hr />
+<p><a id="method__isdef.1" class="lexicon_definition"></a></p>
+<h4 id="isdefxuniongensym-symbol-live_info">isDef(x::Union{GenSym, Symbol},  live_info) <a href="#method__isdef.1">¶</a></h4>
+<p>Query if the symbol in argument "x" is defined in live_info which can be a BasicBlock or TopLevelStatement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:367</a></p>
+<hr />
+<p><a id="method__ispassedbyref.1" class="lexicon_definition"></a></p>
+<h4 id="ispassedbyrefx-statecompilertoolslivenessanalysisexpr_state">isPassedByRef(x,  state::CompilerTools.LivenessAnalysis.expr_state) <a href="#method__ispassedbyref.1">¶</a></h4>
+<p>Returns true if a parameter is passed by reference.
+isbits types are not passed by ref but everything else is (is this always true..any exceptions?)</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:639</a></p>
+<hr />
+<p><a id="method__live_in.1" class="lexicon_definition"></a></p>
+<h4 id="live_inx-blcompilertoolslivenessanalysisblockliveness">live_in(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__live_in.1">¶</a></h4>
+<p>Get the live_in information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:321</a></p>
+<hr />
+<p><a id="method__live_out.1" class="lexicon_definition"></a></p>
+<h4 id="live_outx-blcompilertoolslivenessanalysisblockliveness">live_out(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__live_out.1">¶</a></h4>
+<p>Get the live_out information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:328</a></p>
+<hr />
+<p><a id="method__not_handled.1" class="lexicon_definition"></a></p>
+<h4 id="not_handleda-b">not_handled(a,  b) <a href="#method__not_handled.1">¶</a></h4>
+<p>The default callback that processes no non-standard Julia AST nodes.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:830</a></p>
+<hr />
+<p><a id="method__recompute_live_ranges.1" class="lexicon_definition"></a></p>
+<h4 id="recompute_live_rangesstate-dfn">recompute_live_ranges(state,  dfn) <a href="#method__recompute_live_ranges.1">¶</a></h4>
+<p>Clear the live_in and live_out data corresponding to all basic blocks and statements and then recompute liveness information.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:414</a></p>
+<hr />
+<p><a id="method__typeofopr.1" class="lexicon_definition"></a></p>
+<h4 id="typeofoprxany-licompilertoolslambdahandlinglambdainfo">typeOfOpr(x::ANY,  li::CompilerTools.LambdaHandling.LambdaInfo) <a href="#method__typeofopr.1">¶</a></h4>
+<p>Get the type of some AST node.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:598</a></p>
+<hr />
+<p><a id="method__uncompressed_ast.1" class="lexicon_definition"></a></p>
+<h4 id="uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) <a href="#method__uncompressed_ast.1">¶</a></h4>
+<p>Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:532</a></p>
+<hr />
+<p><a id="method__use.1" class="lexicon_definition"></a></p>
+<h4 id="usex-blcompilertoolslivenessanalysisblockliveness">use(x,  bl::CompilerTools.LivenessAnalysis.BlockLiveness) <a href="#method__use.1">¶</a></h4>
+<p>Get the use information for "x" where x can be a liveness or CFG basic block or a liveness or CFG statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:342</a></p>
+<hr />
+<p><a id="type__accesssummary.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslivenessanalysisaccesssummary">CompilerTools.LivenessAnalysis.AccessSummary <a href="#type__accesssummary.1">¶</a></h4>
+<p>Sometimes if new AST nodes are introduced then we need to ask for their def and use set as a whole
+and then incorporate that into our liveness analysis directly.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:111</a></p>
+<hr />
+<p><a id="type__basicblock.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslivenessanalysisbasicblock">CompilerTools.LivenessAnalysis.BasicBlock <a href="#type__basicblock.1">¶</a></h4>
+<p>Liveness information for a BasicBlock.
+Contains a pointer to the corresponding CFG BasicBlock.
+Contains def, use, live_in, and live_out for this basic block.
+Contains an array of liveness information for the top level statements in this block.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:124</a></p>
+<hr />
+<p><a id="type__toplevelstatement.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslivenessanalysistoplevelstatement">CompilerTools.LivenessAnalysis.TopLevelStatement <a href="#type__toplevelstatement.1">¶</a></h4>
+<p>Liveness information for a TopLevelStatement in the CFG.
+Contains a pointer to the corresponding CFG TopLevelStatement.
+Contains def, use, live_in, and live_out for the current statement.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:64</a></p>
+<hr />
+<p><a id="type__expr_state.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolslivenessanalysisexpr_state">CompilerTools.LivenessAnalysis.expr_state <a href="#type__expr_state.1">¶</a></h4>
+<p>Holds the state during the AST traversal.
+cfg = the control flow graph from the CFGs module.
+map = our own map of CFG basic blocks to our own basic block information with liveness in it.
+cur_bb = the current basic block in which we are processing AST nodes.
+read = whether the sub-tree we are currently processing is being read or written.
+ref_params = those arguments to the function that are passed by reference.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/liveness.jl">CompilerTools/src/liveness.jl:265</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>

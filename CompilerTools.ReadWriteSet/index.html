@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>CompilerTools.ReadWriteSet - ParallelAccelerator.jl API</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../site/css/base.css" rel="stylesheet">
+        <link href="../site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/css/highlight.css" rel="stylesheet">
+        <link href="../site/site/css/base.css" rel="stylesheet">
+        <link href="../site/site/css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../site/site/css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link href="../site/site/css/highlight.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="../CompilerTools.AliasAnalysis/">ParallelAccelerator.jl API</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AliasAnalysis/">CompilerTools.AliasAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.AstWalker/">CompilerTools.AstWalker</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.CFGs/">CompilerTools.CFGs</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.DebugMsg/">CompilerTools.DebugMsg</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LambdaHandling/">CompilerTools.LambdaHandling</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.LivenessAnalysis/">CompilerTools.LivenessAnalysis</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.Loops/">CompilerTools.Loops</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.OptFramework/">CompilerTools.OptFramework</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">CompilerTools.ReadWriteSet</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools.UDChains/">CompilerTools.UDChains</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../CompilerTools/">CompilerTools</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../DomainIR/">DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Capture/">ParallelAccelerator.API.Capture</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API.Stencil/">ParallelAccelerator.API.Stencil</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.API/">ParallelAccelerator.API</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CGen/">ParallelAccelerator.CGen</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.CallGraph/">ParallelAccelerator.CallGraph</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Comprehension/">ParallelAccelerator.Comprehension</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DistributedIR/">ParallelAccelerator.DistributedIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.DomainIR/">ParallelAccelerator.DomainIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.Driver/">ParallelAccelerator.Driver</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.J2CArray/">ParallelAccelerator.J2CArray</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator.ParallelIR/">ParallelAccelerator.ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelAccelerator/">ParallelAccelerator</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../ParallelIR/">ParallelIR</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../api-index/">Api index</a>
+                    </li>
+                
+                
+                </ul>
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                    <li >
+                        <a rel="next" href="../CompilerTools.OptFramework/">
+                            <i class="fa fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../CompilerTools.UDChains/">
+                            Next <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </li>
+                
+                
+                    <li>
+                        <a href="https://github.com/IntelLabs/ParallelAccelerator.jl">
+                            
+                                <i class="fa fa-github"></i>
+                            
+                            GitHub
+                        </a>
+                    </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#compilertoolsreadwriteset">CompilerTools.ReadWriteSet</a></li>
+        
+            <li><a href="#exported">Exported</a></li>
+        
+            <li><a href="#internal">Internal</a></li>
+        
+    
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="compilertoolsreadwriteset">CompilerTools.ReadWriteSet</h1>
+<h2 id="exported">Exported</h2>
+<hr />
+<p><a id="method__from_exprs.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayt-n">from_exprs(ast::Array{T, N}) <a href="#method__from_exprs.1">¶</a></h4>
+<p>Walk through an array of expressions.
+Just recursively call from_expr for each expression in the array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:129</a></p>
+<hr />
+<p><a id="method__from_exprs.2" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayt-n-callbackunionfunction-void-cbdataany">from_exprs(ast::Array{T, N},  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_exprs.2">¶</a></h4>
+<p>Walk through an array of expressions.
+Just recursively call from_expr for each expression in the array.
+Takes a callback and an opaque object so that non-standard Julia AST nodes can be processed via the callback.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:139</a></p>
+<hr />
+<p><a id="method__from_exprs.3" class="lexicon_definition"></a></p>
+<h4 id="from_exprsastarrayt-n-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_exprs(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_exprs.3">¶</a></h4>
+<p>Walk through an array of expressions.
+Just recursively call from_expr for each expression in the array.
+Takes a callback and an opaque object so that non-standard Julia AST nodes can be processed via the callback.
+Takes a ReadWriteSetType in "rws" into which information will be stored.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:167</a></p>
+<hr />
+<p><a id="method__isread.1" class="lexicon_definition"></a></p>
+<h4 id="isreadsymuniongensym-symbol-rwscompilertoolsreadwritesetreadwritesettype">isRead(sym::Union{GenSym, Symbol},  rws::CompilerTools.ReadWriteSet.ReadWriteSetType) <a href="#method__isread.1">¶</a></h4>
+<p>Return true if some symbol in "sym" is read either as a scalar or array within the computed ReadWriteSetType.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:82</a></p>
+<hr />
+<p><a id="method__iswritten.1" class="lexicon_definition"></a></p>
+<h4 id="iswrittensymuniongensym-symbol-rwscompilertoolsreadwritesetreadwritesettype">isWritten(sym::Union{GenSym, Symbol},  rws::CompilerTools.ReadWriteSet.ReadWriteSetType) <a href="#method__iswritten.1">¶</a></h4>
+<p>Return true if some symbol in "sym" is written either as a scalar or array within the computed ReadWriteSetType.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:95</a></p>
+<hr />
+<p><a id="type__accessset.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolsreadwritesetaccessset">CompilerTools.ReadWriteSet.AccessSet <a href="#type__accessset.1">¶</a></h4>
+<p>Holds which scalars and which array are accessed and for array which index expressions are used.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:40</a></p>
+<hr />
+<p><a id="type__readwritesettype.1" class="lexicon_definition"></a></p>
+<h4 id="compilertoolsreadwritesetreadwritesettype">CompilerTools.ReadWriteSet.ReadWriteSetType <a href="#type__readwritesettype.1">¶</a></h4>
+<p>Stores which scalars and arrays are read or written in some code region.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:49</a></p>
+<h2 id="internal">Internal</h2>
+<hr />
+<p><a id="method__addindexexpr.1" class="lexicon_definition"></a></p>
+<h4 id="addindexexprthis_dict-array_name-index_expr">addIndexExpr!(this_dict,  array_name,  index_expr) <a href="#method__addindexexpr.1">¶</a></h4>
+<p>Takes a dictionary of symbol to an array of index expression.
+Takes an array in "array_name" being accessed with expression "index_expr".
+Makes sure there is an entry in the dictionary for this array and adds the index expression to this array.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:229</a></p>
+<hr />
+<p><a id="method__from_assignment.1" class="lexicon_definition"></a></p>
+<h4 id="from_assignmentastarrayany-1-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_assignment(ast::Array{Any, 1},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_assignment.1">¶</a></h4>
+<p>Process an assignment AST node.
+The left-hand side of the assignment is added to the writeSet.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:214</a></p>
+<hr />
+<p><a id="method__from_call.1" class="lexicon_definition"></a></p>
+<h4 id="from_callastarrayany-1-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_call(ast::Array{Any, 1},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_call.1">¶</a></h4>
+<p>Process :call Expr nodes to find arrayref and arrayset calls and adding the corresponding index expressions to the read and write sets respectively.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:239</a></p>
+<hr />
+<p><a id="method__from_coloncolon.1" class="lexicon_definition"></a></p>
+<h4 id="from_coloncolonastarrayt-n-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_coloncolon(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_coloncolon.1">¶</a></h4>
+<p>Process a :(::) AST node.
+Just process the symbol part of the :(::) node in ast[1] (which is args of the node passed in).</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:189</a></p>
+<hr />
+<p><a id="method__from_expr.1" class="lexicon_definition"></a></p>
+<h4 id="from_exprastany">from_expr(ast::ANY) <a href="#method__from_expr.1">¶</a></h4>
+<p>Walk through one AST node.
+Calls the main internal walking function after initializing an empty ReadWriteSetType.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:146</a></p>
+<hr />
+<p><a id="method__from_expr.2" class="lexicon_definition"></a></p>
+<h4 id="from_exprastany-callbackunionfunction-void-cbdataany">from_expr(ast::ANY,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_expr.2">¶</a></h4>
+<p>Walk through one AST node.
+Calls the main internal walking function after initializing an empty ReadWriteSetType.
+Takes a callback and an opaque object so that non-standard Julia AST nodes can be processed via the callback.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:156</a></p>
+<hr />
+<p><a id="method__from_expr.3" class="lexicon_definition"></a></p>
+<h4 id="from_exprastlambdastaticdata-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_expr(ast::LambdaStaticData,  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_expr.3">¶</a></h4>
+<p>The main routine that switches on all the various AST node types.
+The internal nodes of the AST are of type Expr with various different Expr.head field values such as :lambda, :body, :block, etc.
+The leaf nodes of the AST all have different types.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:302</a></p>
+<hr />
+<p><a id="method__from_lambda.1" class="lexicon_definition"></a></p>
+<h4 id="from_lambdaastexpr-depth-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_lambda(ast::Expr,  depth,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_lambda.1">¶</a></h4>
+<p>Walk through a lambda expression.
+We just need to recurse through the lambda body and can ignore the rest.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:118</a></p>
+<hr />
+<p><a id="method__from_tuple.1" class="lexicon_definition"></a></p>
+<h4 id="from_tupleastarrayt-n-depthinteger-rwscompilertoolsreadwritesetreadwritesettype-callbackunionfunction-void-cbdataany">from_tuple(ast::Array{T, N},  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType,  callback::Union{Function, Void},  cbdata::ANY) <a href="#method__from_tuple.1">¶</a></h4>
+<p>Walk through a tuple.
+Just recursively call from_exprs on the internal tuple array to process each part of the tuple.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:181</a></p>
+<hr />
+<p><a id="method__tosymgen.1" class="lexicon_definition"></a></p>
+<h4 id="tosymgenxuniongensym-symbol">toSymGen(x::Union{GenSym, Symbol}) <a href="#method__tosymgen.1">¶</a></h4>
+<p>In various places we need a SymGen type which is the union of Symbol and GenSym.
+This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:198</a></p>
+<hr />
+<p><a id="method__trycallback.1" class="lexicon_definition"></a></p>
+<h4 id="trycallbackastany-callbackunionfunction-void-cbdataany-depthinteger-rwscompilertoolsreadwritesetreadwritesettype">tryCallback(ast::ANY,  callback::Union{Function, Void},  cbdata::ANY,  depth::Integer,  rws::CompilerTools.ReadWriteSet.ReadWriteSetType) <a href="#method__trycallback.1">¶</a></h4>
+<p>If an AST node is not recognized then we try the passing the node to the callback to see if 
+it was able to process it.  If so, then we process the regular Julia statement returned by
+the callback.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:284</a></p>
+<hr />
+<p><a id="method__uncompressed_ast.1" class="lexicon_definition"></a></p>
+<h4 id="uncompressed_astllambdastaticdata">uncompressed_ast(l::LambdaStaticData) <a href="#method__uncompressed_ast.1">¶</a></h4>
+<p>Convert a compressed LambdaStaticData format into the uncompressed AST format.</p>
+<p><em>source:</em>
+<a href="file:///home/etotoni/.julia/v0.4/CompilerTools/src/read-write-set.jl">CompilerTools/src/read-write-set.jl:108</a></p></div>
+            
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <p>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script>var base_url = '..';</script>
+        <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+        <script src="../js/base.js"></script>
+        <script src="../site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/mkdocs/js/require.js"></script>
+        <script src="../site/mkdocs/js/search.js"></script>
+        <script src="../site/mkdocs/js/text.js"></script>
+        <script src="../site/js/base.js"></script>
+        <script src="../site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/js/highlight.pack.js"></script>
+        <script src="../site/js/jquery-1.10.2.min.js"></script>
+        <script src="../site/site/mkdocs/js/lunr-0.5.7.min.js"></script>
+        <script src="../site/site/mkdocs/js/mustache.min.js"></script>
+        <script src="../site/site/mkdocs/js/require.js"></script>
+        <script src="../site/site/mkdocs/js/search.js"></script>
+        <script src="../site/site/mkdocs/js/text.js"></script>
+        <script src="../site/site/js/base.js"></script>
+        <script src="../site/site/js/bootstrap-3.0.3.min.js"></script>
+        <script src="../site/site/js/highlight.pack.js"></script>
+        <script src="../site/site/js/jquery-1.10.2.min.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            From here you can search these documents. Enter
+                            your search terms below.
+                        </p>
+                        <form role="form">
+                            <div class="form-group">
+                                <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                            </div>
+                        </form>
+                        <div id="mkdocs-search-results"></div>
+                    </div>
+                    <div class="modal-footer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </body>
+</html>
