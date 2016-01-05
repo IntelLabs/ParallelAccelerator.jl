@@ -966,7 +966,7 @@ function from_getfield(args)
     tgt = from_expr(args[1])
     if isa(args[1], SymbolNode)
       args1typ = args[1].typ
-    elseif isa(args[1], GenSym)
+    elseif isa(args[1], GenSym) || isa(args[1], Symbol)
       args1typ = lstate.symboltable[args[1]]
     else
       throw("Unhandled argument 1 type to getfield")
@@ -2139,7 +2139,20 @@ function from_parforstart_serial(args)
     stops = map((a)->from_expr(a.upper), lpNests)
     steps = map((a)->from_expr(a.step), lpNests)
 
-    return "{ {\n"*from_loopnest(ivs, starts, stops, steps)
+    # Generate reduction initializers
+    rds = parfor.reductions
+    rdvars = rdinis = ""
+    dprintln(3,"reductions = ", rds);
+    if !isempty(rds)
+        rdvars = map((a)->from_expr(a.reductionVar), rds)
+        rdinis = map((a)->from_expr(a.reductionVarInit), rds)
+    end
+    rdsprolog = ""
+    for i in 1:length(rds)
+        rdsprolog *= "$(rdvars[i]) = $(rdinis[i]);\n"
+    end
+
+    return rdsprolog*"\n{ {\n"*from_loopnest(ivs, starts, stops, steps)
 
 #  s *= "{\n{\n" * mapfoldl(
 #           (i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",

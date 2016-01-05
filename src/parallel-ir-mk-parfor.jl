@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-@doc """
+"""
 Look at the arrays that are accessed and see if they use a forward index, i.e.,
 an index that could be greater than 1.
 """
@@ -50,7 +50,7 @@ function getPastIndex(arrays :: Dict{SymGen, Array{Array{Any,1},1}})
     return ret
 end
 
-@doc """
+"""
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
 function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1})
@@ -76,7 +76,7 @@ function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1
     return base
 end
 
-@doc """
+"""
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 """
@@ -112,7 +112,7 @@ function mk_arrayref1(num_dim_inputs,
         indsyms...)
 end
 
-@doc """
+"""
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
@@ -153,7 +153,7 @@ function mk_arrayset1(num_dim_inputs,
        indsyms...)
 end
 
-@doc """
+"""
 The main routine that converts a reduce AST node to a parfor AST node.
 """
 function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
@@ -360,7 +360,7 @@ end
 # ===============================================================================================================================
 
 
-@doc """
+"""
 Create a variable to hold the offset of a range offset from the start of the array.
 """
 function createTempForRangeOffset(num_used, ranges :: Array{RangeData,1}, unique_id :: Int64, state :: expr_state)
@@ -386,7 +386,7 @@ function getSName(rd :: SingularSelector)
     return rd.value
 end
 
-@doc """
+"""
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
 function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{DimensionSelector,1}, unique_id :: Int64, state :: expr_state)
@@ -402,7 +402,7 @@ function createTempForRangeInfo(array_sn :: SymAllGen, unique_id :: Int64, range
     return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
-@doc """
+"""
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 """
 function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
@@ -437,7 +437,7 @@ function addRangePreoffsets(rd :: Union{MaskSelector,SingularSelector}, pre_offs
     # Intentionally do nothing.
 end
 
-@doc """
+"""
 Convert the range(s) part of a :select Expr introduced by Domain IR into an array of Parallel IR data structures RangeData.
 """
 function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
@@ -563,7 +563,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     return loopNests
 end
 
-@doc """
+"""
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, with_indices, domain_oprs, state)
@@ -817,7 +817,7 @@ function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
     return parfor_index_syms
 end
 
-@doc """
+"""
 Given all the InputInfo for a Domain IR operation being lowered to Parallel IR,
 determine the number of output dimensions for those arrays taking into account
 that singly selected trailing dimensinos are eliminated.  Make sure that all such
@@ -838,7 +838,7 @@ function findSelectedDimensions(inputInfo :: Array{InputInfo,1}, state)
     return res
 end
 
-@doc """
+"""
 In the case where a domain IR operation on an array creates a lower dimensional output,
 the indexing expression needs the expression that selects those constant trailing dimensions
 that are being dropped.  This function returns an array of those constant expressions for
@@ -866,7 +866,7 @@ function getConstDims(num_dim_inputs, inputInfo :: InputInfo)
     return ret
 end
 
-@doc """
+"""
 The main routine that converts a mmap AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, domain_oprs, state)

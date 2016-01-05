@@ -62,7 +62,7 @@ const ISPRIVATEPARFORLOOP = 32
 
 unique_num = 1
 
-@doc """
+"""
 This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.
 """
 function TypedExpr(typ, rest...)
@@ -71,7 +71,7 @@ function TypedExpr(typ, rest...)
     res
 end
 
-@doc """
+"""
 Holds the information about a loop in a parfor node.
 """
 type PIRLoopNest
@@ -81,7 +81,7 @@ type PIRLoopNest
     step
 end
 
-@doc """
+"""
 Holds the information about a reduction in a parfor node.
 """
 type PIRReduction
@@ -90,7 +90,7 @@ type PIRReduction
     reductionFunc
 end
 
-@doc """
+"""
 Holds information about domain operations part of a parfor node.
 """
 type DomainOperation
@@ -98,7 +98,7 @@ type DomainOperation
     input_args :: Array{Any,1}
 end
 
-@doc """
+"""
 Holds a dictionary from an array symbol to an integer corresponding to an equivalence class.
 All array symbol in the same equivalence class are known to have the same shape.
 """
@@ -110,7 +110,7 @@ type EquivalenceClasses
     end
 end
 
-@doc """
+"""
 At some point we realize that two arrays must have the same dimensions but up until that point
 we might not have known that.  In which case they will start in different equivalence classes,
 merge_to and merge_from, but need to be combined into one equivalence class.
@@ -132,7 +132,7 @@ function EquivalenceClassesMerge(ec :: EquivalenceClasses, merge_to :: Symbol, m
     nothing
 end
 
-@doc """
+"""
 Add a symbol as part of a new equivalence class if the symbol wasn't already in an equivalence class.
 Return the equivalence class for the symbol.
 """
@@ -148,7 +148,7 @@ function EquivalenceClassesAdd(ec :: EquivalenceClasses, sym :: Symbol)
     ec.data[sym]
 end
 
-@doc """
+"""
 Clear an equivalence class.
 """
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
@@ -164,7 +164,7 @@ type RangeExprs
     last_val
 end
 
-@doc """
+"""
 Holds the information from one Domain IR :range Expr.
 """
 type RangeData
@@ -278,7 +278,7 @@ function isequal(x :: Array{Any,1}, y :: Array{Any,1})
     return true
 end
 
-@doc """
+"""
 Type used by mk_parfor_args... functions to hold information about input arrays.
 """
 type InputInfo
@@ -298,7 +298,7 @@ type InputInfo
     end
 end
 
-@doc """
+"""
 The parfor AST node type.
 While we are lowering domain IR to parfors and fusing we use this representation because it
 makes it easier to associate related statements before and after the loop to the loop itself.
@@ -345,7 +345,7 @@ function parforRangeInput(parfor :: PIRParForAst)
 #    return isa(parfor.first_input, Array{DimensionSelector,1})
 end
 
-@doc """
+"""
 Not currently used but might need it at some point.
 Search a whole PIRParForAst object and replace one SymAllGen with another.
 """
@@ -363,7 +363,7 @@ function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
     parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map)
 end
 
-@doc """
+"""
 After lowering, it is necessary to make the parfor body top-level statements so that basic blocks
 can be correctly identified and labels correctly found.  There is a phase in parallel IR where we 
 take a PIRParForAst node and split it into a parfor_start node followed by the body as top-level
@@ -376,7 +376,7 @@ type PIRParForStartEnd
     private_vars :: Array{SymAllGen,1}
 end
 
-@doc """
+"""
 State passed around while converting an AST from domain to parallel IR.
 """
 type expr_state
@@ -404,7 +404,7 @@ end
 
 include("parallel-ir-stencil.jl")
 
-@doc """
+"""
 Overload of Base.show to pretty print for parfor AST nodes.
 """
 function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
@@ -465,7 +465,7 @@ end
 
 export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRTaskGraphMode, PIRPolyhedral
 
-@doc """
+"""
 Given an array of outputs in "outs", form a return expression.
 If there is only one out then the args of :return is just that expression.
 If there are multiple outs then form a tuple of them and that tuple goes in :return args.
@@ -482,7 +482,7 @@ function mk_return_expr(outs)
     end
 end
 
-@doc """
+"""
 Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
@@ -501,7 +501,7 @@ function mk_assignment_expr(lhs :: SymbolNode, rhs)
     TypedExpr(lhs.typ, symbol('='), lhs, rhs)
 end
 
-@doc """
+"""
 Only used to create fake expression to force lhs to be seen as written rather than read.
 """
 function mk_untyped_assignment(lhs, rhs)
@@ -516,7 +516,7 @@ function isRange(inputInfo :: InputInfo)
     return length(inputInfo.range) > 0
 end
 
-@doc """
+"""
 Compute size of a range.
 """
 function rangeSize(start, skip, last)
@@ -524,14 +524,14 @@ function rangeSize(start, skip, last)
     return last - start + 1
 end
 
-@doc """
+"""
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: SymAllGen, dim :: Int64)
     TypedExpr(Int64, :call, TopNode(:arraysize), :($x), dim)
 end
 
-@doc """
+"""
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
@@ -549,7 +549,7 @@ function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
     end 
 end
 
-@doc """
+"""
 Create an expression that references something inside ParallelIR.
 In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.
 """
@@ -559,28 +559,28 @@ function mk_parallelir_ref(sym, ref_type=Function)
     TypedExpr(ref_type, :call, TopNode(:getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
 end
 
-@doc """
+"""
 Returns an expression that convert "ex" into a another type "new_type".
 """
 function mk_convert(new_type, ex)
     TypedExpr(new_type, :call, TopNode(:convert), new_type, ex)
 end
 
-@doc """
+"""
 Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.
 """
 function mk_tupleref_expr(tuple_var, index, typ)
     TypedExpr(typ, :call, TopNode(:tupleref), tuple_var, index)
 end
 
-@doc """
+"""
 Make a svec expression.
 """
 function mk_svec_expr(parts...)
     TypedExpr(SimpleVector, :call, TopNode(:svec), parts...)
 end
 
-@doc """
+"""
 Return an expression that allocates and initializes a 1D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and a "length".
 """
@@ -618,7 +618,7 @@ function get_length_expr(length::Any)
     throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
 end
 
-@doc """
+"""
 Return an expression that allocates and initializes a 2D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2".
 """
@@ -644,7 +644,7 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        0)
 end
 
-@doc """
+"""
 Return an expression that allocates and initializes a 3D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2" and "length3".
 """
@@ -670,14 +670,14 @@ function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
        0)
 end
 
-@doc """
+"""
 Returns true if the incoming type in "typ" is an array type.
 """
 function isArrayType(typ)
     return (typ.name == Array.name || typ.name == BitArray.name)
 end
 
-@doc """
+"""
 Returns the element type of an Array.
 """
 function getArrayElemType(atyp :: DataType)
@@ -690,14 +690,14 @@ function getArrayElemType(atyp :: DataType)
     end
 end
 
-@doc """
+"""
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: SymbolNode, state :: expr_state)
     return getArrayElemType(array.typ)
 end
 
-@doc """
+"""
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: GenSym, state :: expr_state)
@@ -705,7 +705,7 @@ function getArrayElemType(array :: GenSym, state :: expr_state)
     return getArrayElemType(atyp)
 end
 
-@doc """
+"""
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: SymbolNode, state :: expr_state)
@@ -714,7 +714,7 @@ function getArrayNumDims(array :: SymbolNode, state :: expr_state)
     ndims(array.typ)
 end
 
-@doc """
+"""
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: GenSym, state :: expr_state)
@@ -723,7 +723,7 @@ function getArrayNumDims(array :: GenSym, state :: expr_state)
     ndims(gstyp)
 end
 
-@doc """
+"""
 Add a local variable to the current function's lambdaInfo.
 Returns a symbol node of the new variable.
 """
@@ -733,7 +733,7 @@ function createStateVar(state, name, typ, access)
     return SymbolNode(new_temp_sym, typ)
 end
 
-@doc """
+"""
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
 function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state)
@@ -743,7 +743,7 @@ function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: 
 end
 
 
-@doc """
+"""
 Takes an existing variable whose name is in "var_name" and adds the descriptor flag ISPRIVATEPARFORLOOP to declare the
 variable to be parfor loop private and eventually go in an OMP private clause.
 """
@@ -752,7 +752,7 @@ function makePrivateParfor(var_name :: Symbol, state)
     assert(res)
 end
 
-@doc """
+"""
 Returns true if all array references use singular index variables and nothing more complicated involving,
 for example, addition or subtraction by a constant.
 """
@@ -781,7 +781,7 @@ function simpleIndex(dict)
     return true
 end
 
-@doc """
+"""
 In various places we need a SymGen type which is the union of Symbol and GenSym.
 This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.
 """
@@ -802,7 +802,7 @@ function toSymGen(x)
     throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
 end
 
-@doc """
+"""
 Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
 """
 function toSymNodeGen(x :: Symbol, typ)
@@ -822,7 +822,7 @@ function toSymNodeGen(x, typ)
     throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
 end
 
-@doc """
+"""
 Returns the next usable label for the current function.
 """
 function next_label(state :: expr_state)
@@ -830,7 +830,7 @@ function next_label(state :: expr_state)
     return state.max_label
 end
 
-@doc """
+"""
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
 function addUnknownArray(x :: SymGen, state :: expr_state)
@@ -840,7 +840,7 @@ function addUnknownArray(x :: SymGen, state :: expr_state)
     state.array_length_correlation[x] = m + 1
 end
 
-@doc """
+"""
 Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
 """
 function addUnknownRange(x :: Array{DimensionSelector,1}, state :: expr_state)
@@ -849,7 +849,7 @@ function addUnknownRange(x :: Array{DimensionSelector,1}, state :: expr_state)
     state.range_correlation[x] = m + 1
 end
 
-@doc """
+"""
 If we somehow determine that two sets of correlations are actually the same length then merge one into the other.
 """
 function merge_correlations(state, unchanging, eliminate)
@@ -879,7 +879,7 @@ function merge_correlations(state, unchanging, eliminate)
     nothing
 end
 
-@doc """
+"""
 If we somehow determine that two arrays must be the same length then 
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
@@ -893,7 +893,7 @@ function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: e
     print_correlations(3, state)
 end
 
-@doc """
+"""
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
 function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
@@ -908,7 +908,7 @@ function simplify_internal(x :: ANY, state, top_level_number :: Int64, is_top_le
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Do some simplification to expressions that are part of ranges.
 For example, the range 2:s-1 becomes a length (s-1)-2 which this function in turn transforms to s-3.
 """
@@ -974,7 +974,7 @@ function simplify_internal(x :: Expr, state, top_level_number :: Int64, is_top_l
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Convert one RangeData to some length expression and then simplify it.
 """
 function form_and_simplify(rd :: RangeData)
@@ -998,14 +998,14 @@ function form_and_simplify(x :: ANY)
     return x
 end
 
-@doc """
+"""
 For each entry in ranges, form a range length expression and simplify them.
 """
 function form_and_simplify(ranges :: Array{DimensionSelector,1})
     return [form_and_simplify(x) for x in ranges]
 end
 
-@doc """
+"""
 We can only do exact matches in the range correlation dict but there can still be non-exact matches
 where the ranges are different but equivalent in length.  In this function, we can the dictionary
 and look for equivalent ranges.
@@ -1035,7 +1035,7 @@ function nonExactRangeSearch(ranges :: Array{DimensionSelector,1}, range_correla
     return nothing
 end
 
-@doc """
+"""
 Gets (or adds if absent) the range correlation for the given array of RangeExprs.
 """
 function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, state :: expr_state)
@@ -1073,7 +1073,7 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
     state.range_correlation[ranges]
 end
 
-@doc """
+"""
 A new array is being created with an explicit size specification in dims.
 """
 function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{SymGen,1})
@@ -1094,7 +1094,7 @@ function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims ::
     end
 end
 
-@doc """
+"""
 If we need to generate a name and make sure it is unique then include an monotonically increasing number.
 """
 function get_unique_num()
@@ -1107,7 +1107,7 @@ end
 
 include("parallel-ir-mk-parfor.jl")
 
-@doc """
+"""
 The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
@@ -1139,7 +1139,7 @@ function getPrivateSetInner(x::ANY, state :: Set{SymAllGen}, top_level_number ::
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
 """
 function getPrivateSet(body :: Array{Any,1})
@@ -1155,13 +1155,13 @@ end
 
 # ===============================================================================================================================
 
-@doc """
+"""
 Convert a compressed LambdaStaticData format into the uncompressed AST format.
 """
 uncompressed_ast(l::LambdaStaticData) =
 isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-@doc """
+"""
 AstWalk callback to count the number of static times that a symbol is assigne within a method.
 """
 function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_number, is_top_level, read)
@@ -1180,14 +1180,14 @@ function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_num
     return CompilerTools.AstWalker.ASTWALK_RECURSE 
 end
 
-@doc """
+"""
 Just call the AST walker for symbol for parallel IR nodes with no state.
 """
 function pir_live_cb_def(x)
     pir_live_cb(x, nothing)
 end
 
-@doc """
+"""
 Process a :lambda Expr.
 """
 function from_lambda(lambda :: Expr, depth, state)
@@ -1228,7 +1228,7 @@ function from_lambda(lambda :: Expr, depth, state)
     return lambda
 end
 
-@doc """
+"""
 Is a node an assignment expression node.
 """
 function isAssignmentNode(node :: Expr)
@@ -1239,7 +1239,7 @@ function isAssignmentNode(node::Any)
     return false
 end
 
-@doc """
+"""
 Is a node a loophead expression node (a form of assignment).
 """
 function isLoopheadNode(node :: Expr)
@@ -1250,7 +1250,7 @@ function isLoopheadNode(node)
     return false
 end
 
-@doc """
+"""
 Is this a parfor node not part of an assignment statement.
 """
 function isBareParfor(node :: Expr)
@@ -1274,7 +1274,7 @@ function isParforAssignmentNodeInner(lhs::Any, rhs::Any)
     return false
 end
 
-@doc """
+"""
 Is a node an assignment expression with a parfor node as the right-hand side.
 """
 function isParforAssignmentNode(node::Expr)
@@ -1300,7 +1300,7 @@ function isParforAssignmentNode(node::Any)
     return false
 end
 
-@doc """
+"""
 Get the parfor object from either a bare parfor or one part of an assignment.
 """
 function getParforNode(node)
@@ -1311,21 +1311,21 @@ function getParforNode(node)
     end
 end
 
-@doc """
+"""
 Get the right-hand side of an assignment expression.
 """
 function getRhsFromAssignment(assignment)
     assignment.args[2]
 end
 
-@doc """
+"""
 Get the left-hand side of an assignment expression.
 """
 function getLhsFromAssignment(assignment)
     assignment.args[1]
 end
 
-@doc """
+"""
 Returns true if the domain operation mapped to this parfor has the property that the iteration space
 is identical to the dimenions of the inputs.
 """
@@ -1347,7 +1347,7 @@ function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParF
     end
 end
 
-@doc """
+"""
 Returns a Set with all the arrays read by this parfor.
 """
 function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
@@ -1356,7 +1356,7 @@ function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
     ret
 end
 
-@doc """
+"""
 Get the real outputs of an assignment statement.
 If the assignment expression is normal then the output is just the left-hand side.
 If the assignment expression is augmented with a FusionSentinel then the real outputs
@@ -1392,7 +1392,7 @@ function getLhsOutputSet(lhs, assignment)
     ret
 end
 
-@doc """
+"""
 Return an expression which creates a tuple.
 """
 function mk_tuple_expr(tuple_fields, typ)
@@ -1400,7 +1400,7 @@ function mk_tuple_expr(tuple_fields, typ)
     TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
 end
 
-@doc """
+"""
 Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
 """
 function nameToSymbolNode(name :: Symbol, sym_to_type)
@@ -1459,7 +1459,7 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
 end
 
-@doc """
+"""
 Pull the information from the inner lambda into the outer lambda.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
@@ -1579,7 +1579,7 @@ function is_dead_arrayset(x, all_aliased_outputs :: Set)
     return false
 end
 
-@doc """
+"""
 Holds data for modifying arrayset calls.
 """
 type sub_arrayset_data
@@ -1587,7 +1587,7 @@ type sub_arrayset_data
     output_items_with_aliases
 end
 
-@doc """
+"""
 Is a node an arrayset node?
 """
 function isArrayset(x)
@@ -1597,7 +1597,7 @@ function isArrayset(x)
     return false
 end
 
-@doc """
+"""
 Is a node an arrayref node?
 """
 function isArrayref(x)
@@ -1607,7 +1607,7 @@ function isArrayref(x)
     return false
 end
 
-@doc """
+"""
 Is a node a call to arrayset.
 """
 function isArraysetCall(x :: Expr)
@@ -1618,7 +1618,7 @@ function isArraysetCall(x)
     return false
 end
 
-@doc """
+"""
 Is a node a call to arrayref.
 """
 function isArrayrefCall(x :: Expr)
@@ -1629,7 +1629,7 @@ function isArrayrefCall(x)
     return false
 end
 
-@doc """
+"""
 AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.
 """
 function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
@@ -1666,7 +1666,7 @@ function sub_arrayset_walk(x::ANY, cbd, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Modify the body of a parfor.
 temp_map holds a map of array names whose arraysets should be turned into a mapped variable instead of the arrayset. a[i] = b. a=>c. becomes c = b
 map_for_non_eliminated holds arrays for which we need to add a variable to save the value but we can't eiminate the arrayset. a[i] = b. a=>c. becomes c = a[i] = b
@@ -1679,7 +1679,7 @@ function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliase
     return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
 end
 
-@doc """
+"""
 Get the variable which holds the length of the first input array to a parfor.
 """
 function getFirstArrayLens(prestatements, num_dims)
@@ -1701,7 +1701,7 @@ function getFirstArrayLens(prestatements, num_dims)
     ret
 end
 
-@doc """
+"""
 Holds the data for substitute_cur_body AST walk.
 """
 type cur_body_data
@@ -1712,7 +1712,7 @@ type cur_body_data
     state :: expr_state
 end
 
-@doc """
+"""
 AstWalk callback that does the work of substitute_cur_body on a node-by-node basis.
 """
 function sub_cur_body_walk(x::Expr,
@@ -1808,7 +1808,7 @@ function sub_cur_body_walk(x::ANY,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Make changes to the second parfor body in the process of parfor fusion.
 temp_map holds array names for which arrayrefs should be converted to a variable.  a[i].  a=>b. becomes b
     index_map holds maps between index variables.  The second parfor is modified to use the index variable of the first parfor.
@@ -1830,7 +1830,7 @@ function substitute_cur_body(x,
     return DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
 end
 
-@doc """
+"""
 Returns true if the input node is an assignment node where the right-hand side is a call to arraysize.
 """
 function is_eliminated_arraylen(x::Expr)
@@ -1857,7 +1857,7 @@ function is_eliminated_arraylen(x::ANY)
     return false
 end
 
-@doc """
+"""
 AstWalk callback that does the work of substitute_arraylen on a node-by-node basis.
 replacement is an array containing the length of the dimensions of the arrays a part of this parfor.
 If we see a call to create an array, replace the length params with those in the common set in "replacement".
@@ -1891,7 +1891,7 @@ function sub_arraylen_walk(x::ANY, replacement, top_level_number, is_top_level, 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 replacement is an array containing the length of the dimensions of the arrays a part of this parfor.
 If we see a call to create an array, replace the length params with those in the common set in "replacement".
 """
@@ -1902,7 +1902,7 @@ function substitute_arraylen(x, replacement)
 end
 
 fuse_limit = -1
-@doc """
+"""
 Control how many parfor can be fused for testing purposes.
     -1 means fuse all possible parfors.
     0  means don't fuse any parfors.
@@ -1912,15 +1912,15 @@ function PIRSetFuseLimit(x)
     global fuse_limit = x
 end
 
-rearrange_passes = 3
-@doc """
+"""
 Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.
+DEPRECATED.
 """
 function PIRNumSimplify(x)
-    global rearrange_passes = x
+    println("PIRNumSimplify is deprecated.")
 end
 
-@doc """
+"""
 Add to the map of symbol names to types.
 """
 function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
@@ -1931,13 +1931,13 @@ function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen
     sym_to_type[sym] = typ
 end
 
-@doc """
+"""
 Just used to hold a spot in an array to indicate the this is a special assignment expression with embedded real array output names from a fusion.
 """
 type FusionSentinel
 end
 
-@doc """
+"""
 Check if an assignement is a fusion assignment.
     In regular assignments, there are only two args, the left and right hand sides.
     In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.
@@ -1953,7 +1953,7 @@ function isFusionAssignment(x :: Expr)
     end
 end
 
-@doc """
+"""
 Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
     We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable
         usage is present.
@@ -1981,14 +1981,14 @@ function isSymbolsUsed(vars, top_level_numbers :: Array{Int,1}, state)
     return false
 end
 
-@doc """
+"""
 Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".
 """
 function getParforCorrelation(parfor, state)
     return getCorrelation(parfor.first_input, state)
 end
 
-@doc """
+"""
 Get the equivalence class of a domain IR input in inputInfo.
 """
 function getCorrelation(sng :: SymAllGen, state :: expr_state)
@@ -2010,7 +2010,7 @@ function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
     end
 end
 
-@doc """
+"""
 Creates a mapping between variables on the left-hand side of an assignment where the right-hand side is a parfor
 and the arrays or scalars in that parfor that get assigned to the corresponding parts of the left-hand side.
 Returns a tuple where the first element is a map for arrays between left-hand side and parfor and the second
@@ -2077,7 +2077,7 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
     map_lhs_post_array, map_lhs_post_reduction
 end
 
-@doc """
+"""
 Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a Symbol is present
 in the dictionary replace it with the corresponding value from the dict.
 """
@@ -2088,7 +2088,7 @@ function fullyLowerAlias(dict :: Dict{SymGen, SymGen}, input :: SymGen)
     input
 end
 
-@doc """
+"""
 Take a single-step alias map, e.g., a=>b, b=>c, and create a lowered dictionary, a=>c, b=>c, that
 maps each array to the transitively lowered array.
 """
@@ -2103,14 +2103,14 @@ function createLoweredAliasMap(dict1)
 end
 
 run_as_tasks = 0
-@doc """
+"""
 Debugging feature to specify the number of tasks to create and to stop thereafter.
 """
 function PIRRunAsTasks(x)
     global run_as_tasks = x
 end
 
-@doc """
+"""
 Returns a single element of an array if there is only one or the array otherwise.
 """
 function oneIfOnly(x)
@@ -2121,7 +2121,7 @@ function oneIfOnly(x)
     end
 end
 
-@doc """
+"""
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """
 function fuse(body, body_index, cur, state)
@@ -2479,7 +2479,7 @@ function fuse(body, body_index, cur, state)
     false
 end
 
-@doc """
+"""
 Returns true if the incoming AST node can be interpreted as a Symbol.
 """
 function hasSymbol(ssn :: Symbol)
@@ -2498,7 +2498,7 @@ function hasSymbol(ssn)
     return false
 end
 
-@doc """
+"""
 Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.
 """
 function getSName(ssn :: Symbol)
@@ -2524,7 +2524,7 @@ function getSName(ssn)
     throw(string("getSName called with something of type ", stype))
 end
 
-#@doc """
+#"""
 #Store information about a section of a body that will be translated into a task.
 #"""
 #type TaskGraphSection
@@ -2533,7 +2533,7 @@ end
 #  exprs            :: Array{Any,1}
 #end
 
-@doc """
+"""
 Process an array of expressions.
 Differentiate between top-level arrays of statements and arrays of expression that may occur elsewhere than the :body Expr.
 """
@@ -2549,7 +2549,7 @@ function from_exprs(ast::Array{Any,1}, depth, state)
     end
 end
 
-@doc """
+"""
 Process an array of expressions that aren't from a :body Expr.
 """
 function intermediate_from_exprs(ast::Array{Any,1}, depth, state)
@@ -2577,7 +2577,7 @@ include("parallel-ir-top-exprs.jl")
 include("parallel-ir-flatten.jl")
 
 
-@doc """
+"""
 Returns true if a given SymbolNode "x" is an Array type.
 """
 function isArrayType(x :: SymbolNode)
@@ -2588,7 +2588,7 @@ function isArrayType(x :: SymbolNode)
     return false
 end
 
-@doc """
+"""
 Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".
 """
 function printBody(dlvl, body :: Array{Any,1})
@@ -2601,7 +2601,7 @@ function printBody(dlvl, body :: Expr)
     printBody(dlvl, body.args)
 end
 
-@doc """
+"""
 Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 """
 function printLambda(dlvl, node :: Expr)
@@ -2665,7 +2665,7 @@ function pir_rws_cb(ast :: ANY, cbdata :: ANY)
     return pir_live_cb(ast, cbdata)
 end
 
-@doc """
+"""
 A LivenessAnalysis callback that handles ParallelIR introduced AST node types.
 For each ParallelIR specific node type, form an array of expressions that liveness
 can analysis to reflect the read/write set of the given AST node.
@@ -2802,7 +2802,7 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
     return DomainIR.dir_live_cb(ast, cbdata)
 end
 
-@doc """
+"""
 Sometimes statements we exist in the AST of the form a=Expr where a is a Symbol that isn't live past the assignment
 and we'd like to eliminate the whole assignment statement but we have to know that the right-hand side has no
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
@@ -2853,7 +2853,7 @@ function hasNoSideEffects(node :: Expr)
     return false
 end
 
-@doc """
+"""
 Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.
 """
 function removeAssertEqShape(args :: Array{Any,1}, state)
@@ -2867,7 +2867,7 @@ function removeAssertEqShape(args :: Array{Any,1}, state)
     return newBody
 end
 
-@doc """
+"""
 Create array equivalences from an assertEqShape AST node.
 There are two arrays in the args to assertEqShape.
 """
@@ -2946,7 +2946,7 @@ function from_assignment_fusion(args::Array{Any,1}, depth, state)
     return [toSNGen(lhs, out_typ); rhs], out_typ
 end
 
-@doc """
+"""
 Process an assignment expression.
 Starts by recurisvely processing the right-hand side of the assignment.
 Eliminates the assignment of a=b if a is dead afterwards and b has no side effects.
@@ -3053,7 +3053,7 @@ function from_assignment(lhs, rhs, depth, state)
     return [toSNGen(lhs, out_typ); rhs], out_typ
 end
 
-@doc """
+"""
 If we have the type, convert a Symbol to SymbolNode.
 If we have a GenSym then we have to keep it.
 """
@@ -3074,7 +3074,7 @@ function toSNGen(x, typ)
     throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
 end
 
-@doc """
+"""
 Process a call AST node.
 """
 function from_call(ast::Array{Any,1}, depth, state)
@@ -3098,7 +3098,7 @@ function from_call(ast::Array{Any,1}, depth, state)
     return [fun; args]
 end
 
-@doc """
+"""
 State to aide in the copy propagation phase.
 """
 type CopyPropagateState
@@ -3110,7 +3110,7 @@ type CopyPropagateState
     end
 end
 
-@doc """
+"""
 In each basic block, if there is a "copy" (i.e., something of the form "a = b") then put
 that in copies as copies[a] = b.  Then, later in the basic block if you see the symbol
 "a" then replace it with "b".  Note that this is not SSA so "a" may be written again
@@ -3248,14 +3248,14 @@ function copy_propagate_helper(node::ANY,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 Holds liveness information for the remove_dead AstWalk phase.
 """
 type RemoveDeadState
     lives :: CompilerTools.LivenessAnalysis.BlockLiveness
 end
 
-@doc """
+"""
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
 function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_level, read)
@@ -3308,7 +3308,7 @@ type DictInfo
     expr
 end
 
-@doc """
+"""
 State for the remove_no_deps and insert_no_deps_beginning phases.
 """
 type RemoveNoDepsState
@@ -3323,7 +3323,7 @@ type RemoveNoDepsState
     end
 end
 
-@doc """
+"""
 Works with remove_no_deps below to move statements with no dependencies to the beginning of the AST.
 """
 function insert_no_deps_beginning(node, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
@@ -3333,7 +3333,7 @@ function insert_no_deps_beginning(node, data :: RemoveNoDepsState, top_level_num
     nothing
 end
 
-@doc """
+"""
 # This routine gathers up nodes that do not use
 # any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with
 # insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
@@ -3482,7 +3482,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
 don't already have one and make sure they all share one equivalence class.
 """
@@ -3540,7 +3540,7 @@ function extractArrayEquivalencies(node :: Expr, state)
     return main_length_correlation
 end
 
-@doc """
+"""
 Make sure all the dimensions are SymbolNodes.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
@@ -3563,7 +3563,7 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
     return true
 end
 
-@doc """
+"""
 Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.
 """
 function processAndUpdateBody(lambda :: Expr, f :: Function, state)
@@ -3572,7 +3572,7 @@ function processAndUpdateBody(lambda :: Expr, f :: Function, state)
     return lambda
 end
 
-@doc """
+"""
 Empty statements can be added to the AST by some passes in ParallelIR.
 This pass over the statements of the :body excludes such "nothing" statements from the new :body.
 """
@@ -3694,7 +3694,7 @@ function print_correlations(level, state)
     end
 end
 
-@doc """
+"""
 AstWalk callback to determine the array equivalence classes.
 """
 function create_equivalence_classes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
@@ -3907,7 +3907,7 @@ function mmapInline_refs(expr::Any, i::Int, uniqSet, defs::Dict{Union{Symbol, Ge
 end
 
 
-@doc """
+"""
 # If a definition of a mmap is only used once and not aliased, it can be inlined into its
 # use side as long as its dependencies have not been changed.
 # FIXME: is the implementation still correct when branches are present?
@@ -3988,7 +3988,7 @@ function mmapInline(ast::Expr, lives, uniqSet)
     end
 end
 
-@doc """
+"""
 Try to hoist allocations outside the loop if possible.
 """
 function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
@@ -4050,7 +4050,7 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
     return ast
 end
 
-@doc """
+"""
 Performs the mmap to mmap! phase.
 If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
@@ -4106,7 +4106,7 @@ function mmapToMmap!(ast, lives, uniqSet)
 end
 
 mmap_to_mmap! = 1
-@doc """
+"""
 If set to non-zero, perform the phase where non-inplace maps are converted to inplace maps to reduce allocations.
 """
 function PIRInplace(x)
@@ -4114,7 +4114,7 @@ function PIRInplace(x)
 end
 
 hoist_allocation = 1
-@doc """
+"""
 If set to non-zero, perform the rearrangement phase that tries to moves alllocations outside of loops.
 """
 function PIRHoistAllocation(x)
@@ -4122,7 +4122,7 @@ function PIRHoistAllocation(x)
 end
 
 bb_reorder = 1
-@doc """
+"""
 If set to non-zero, perform the bubble-sort like reordering phase to coalesce more parfor nodes together for fusion.
 """
 function PIRBbReorder(x)
@@ -4130,7 +4130,7 @@ function PIRBbReorder(x)
 end 
 
 shortcut_array_assignment = 0
-@doc """
+"""
 Enables an experimental mode where if there is a statement a = b and they are arrays and b is not live-out then 
 use a special assignment node like a move assignment in C++.
 """
@@ -4138,7 +4138,7 @@ function PIRShortcutArrayAssignment(x)
     global shortcut_array_assignment = x
 end
 
-@doc """
+"""
 Type for dependence graph creation and topological sorting.
 """
 type StatementWithDeps
@@ -4153,7 +4153,7 @@ type StatementWithDeps
     end
 end
 
-@doc """
+"""
 Construct a topological sort of the dependence graph.
 """
 function dfsVisit(swd :: StatementWithDeps, vtime :: Int64, topo_sort :: Array{StatementWithDeps})
@@ -4172,7 +4172,7 @@ function dfsVisit(swd :: StatementWithDeps, vtime :: Int64, topo_sort :: Array{S
     return vtime
 end
 
-@doc """
+"""
 Returns true if the given "ast" node is a DomainIR operation.
 """
 
@@ -4198,7 +4198,7 @@ function isDomainNode(ast)
 end
 
 
-@doc """
+"""
 Returns true if the given AST "node" must remain the last statement in a basic block.
 This is true if the node is a GotoNode or a :gotoifnot Expr.
 """
@@ -4214,7 +4214,7 @@ function mustRemainLastStatementInBlock(node :: Expr)
     return node.head == :gotoifnot  ||  node.head == :return
 end
 
-@doc """
+"""
 For every basic block, try to push domain IR statements down and non-domain IR statements up so that domain nodes
 are next to each other and can be fused.
 """
@@ -4307,7 +4307,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
     end
 end
 
-@doc """
+"""
 Debug print the parts of a DomainLambda.
 """
 function pirPrintDl(dbg_level, dl)
@@ -4316,7 +4316,7 @@ function pirPrintDl(dbg_level, dl)
     dprintln(dbg_level, "linfo  = ", dl.linfo)
 end
 
-@doc """
+"""
 Scan the body of a function in "stmts" and return the max label in a LabelNode AST seen in the body.
 """
 function getMaxLabel(max_label, stmts :: Array{Any, 1})
@@ -4328,7 +4328,7 @@ function getMaxLabel(max_label, stmts :: Array{Any, 1})
     return max_label
 end
 
-@doc """
+"""
 Form a Julia :lambda Expr from a DomainLambda.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
@@ -4355,7 +4355,7 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     return (ast, input_arrays) 
 end
 
-@doc """
+"""
 A routine similar to the main parallel IR entry put but designed to process the lambda part of
 domain IR AST nodes.
 """
@@ -4419,7 +4419,6 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
 
     changed = true
     while changed
-#    for i = 1:rearrange_passes
         dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         ast = AstWalk(ast, remove_no_deps, rnd_state)
@@ -4485,7 +4484,7 @@ function get_input_arrays(linfo::LambdaInfo)
     ret
 end
 
-@doc """
+"""
 The main ENTRY point into ParallelIR.
 1) Do liveness analysis.
 2) Convert mmap to mmap! where possible.
@@ -4645,13 +4644,153 @@ function from_root(function_name, ast :: Expr)
 
     dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
     printLambda(1, ast)
+
+    #remove_extra_allocs(ast)
+
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     end
     ast
 end
 
-@doc """
+type rm_allocs_state
+    defs::Set{SymGen}
+    removed_arrs::Dict{SymGen,Array{Any,1}}
+    lambdaInfo
+end
+
+
+"""
+removes extra allocations
+"""
+function remove_extra_allocs(ast)
+    dprintln(3,"starting remove extra allocs")
+    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, lambdaInfo)
+    #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, lambdaInfo)
+    dprintln(3,"remove extra allocations lives ", lives)
+    defs = Set{SymGen}()
+    for i in values(lives.basic_blocks)
+        defs = union(defs, i.def)
+    end
+    dprintln(3, "remove extra allocations defs ",defs)
+    rm_state = rm_allocs_state(defs, Dict{SymGen,Array{Any,1}}(), lambdaInfo)
+    AstWalk(ast, rm_allocs_cb, rm_state)
+
+    return;
+end
+
+function toSynGemOrInt(a::SymbolNode)
+    return a.name
+end
+
+function toSynGemOrInt(a::Union{Int,SymGen})
+    return a
+end
+
+
+function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
+    head = ast.head
+    args = ast.args
+    if head == :(=) && isAllocation(args[2])
+        arr = toSymGen(args[1])
+        if in(arr, state.defs)
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        alloc_args = args[2].args[2:end]
+        sh::Array{Any,1} = get_alloc_shape(alloc_args)
+        shape = map(toSynGemOrInt,sh)
+        dprintln(3,"rm alloc shape ", shape)
+        ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
+        updateLambdaType(arr, length(shape), state.lambdaInfo)
+        state.removed_arrs[arr] = shape
+        return ast
+    elseif head==:call
+        if args[1]==TopNode(:arraysize) && in(args[2], keys(state.removed_arrs))
+            shape = state.removed_arrs[args[2]]
+            return shape[args[3]]
+        elseif args[1]==GlobalRef(Base,:arraylen) && in(args[2], keys(state.removed_arrs))
+            shape = state.removed_arrs[args[2]]
+            dim = length(shape)
+            dprintln(3, "arraylen found")
+            if dim==1
+                ast = shape[1]
+            else
+                mul = foldl((a,b)->"$a*$b", "", shape)
+                ast = eval(parse(mul))
+            end
+            return ast
+        elseif args[1]==TopNode(:unsafe_arrayref) && in(args[2], keys(state.removed_arrs))
+            return 0
+        end
+    # remove extra arrays from parfor data structures
+    elseif head==:parfor
+        parfor = ast.args[1]
+        if in(parfor.first_input, keys(state.removed_arrs))
+            #TODO parfor.first_input = NoArrayInput
+        end
+        for arr in keys(parfor.rws.readSet.arrays)
+            if in(arr, keys(state.removed_arrs))
+                delete!(parfor.rws.readSet.arrays, arr)
+            end
+        end
+        for arr in keys(parfor.rws.writeSet.arrays)
+            if in(arr, keys(state.removed_arrs))
+                delete!(parfor.rws.writeSet.arrays, arr)
+            end
+        end
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function updateLambdaType(arr::Symbol, dim::Int, lambdaInfo)
+    #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    #lambdaInfo.var_defs[arr] = eval(parse(typ));
+    lambdaInfo.var_defs[arr].typ = Int64; 
+end
+
+function updateLambdaType(arr::GenSym, dim::Int, lambdaInfo)
+    #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
+    #lambdaInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
+    lambdaInfo.gen_sym_typs[arr.id+1] = Int64;
+end
+
+function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function get_alloc_shape(args)
+    # tuple
+    if args[1]==:(:jl_new_array) && length(args)==7
+        return args[6].args[2:end]
+    else
+        shape_arr = Any[]
+        i = 1
+        while 6+(i-1)*2 <= length(args)
+            push!(shape_arr, args[6+(i-1)*2])
+            i+=1
+        end
+        return shape_arr
+    end
+    return Any[]
+end
+
+function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
+    head = ast.head
+    args = ast.args
+    if head == :(=) && isAllocation(args[2])
+        return pir_live_cb(args[2], cbdata)
+    end
+    return pir_live_cb(ast,cbdata)
+end
+
+function rm_allocs_live_cb(ast :: ANY, cbdata :: ANY)
+    return pir_live_cb(ast,cbdata)
+end
+
+
+
+"""
 Returns true if input "a" is a tuple and each element of the tuple of isbits type.
 """
 function isbitstuple(a::Tuple)
@@ -4704,7 +4843,7 @@ function from_expr(ast::Number, depth, state :: expr_state, top_level)
     return [ast] 
 end
 
-@doc """
+"""
 The main ParallelIR function for processing some node in the AST.
 """
 function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
@@ -4856,7 +4995,7 @@ function from_alloc(args::Array{Any,1})
 end
 
 
-@doc """
+"""
 Take something returned from AstWalk and assert it should be an array but in this
 context that the array should also be of length 1 and then return that single element.
 """
@@ -4865,7 +5004,7 @@ function get_one(ast::Array)
     ast[1]
 end
 
-@doc """
+"""
 Wraps the callback and opaque data passed from the user of ParallelIR's AstWalk.
 """
 type DirWalk
@@ -4873,7 +5012,7 @@ type DirWalk
     cbdata
 end
 
-@doc """
+"""
 Return one element array with element x.
 """
 function asArray(x)
@@ -4882,7 +5021,7 @@ function asArray(x)
     return ret
 end
 
-@doc """
+"""
 AstWalk callback that handles ParallelIR AST node types.
 """
 function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
@@ -5017,7 +5156,7 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-@doc """
+"""
 ParallelIR version of AstWalk.
 Invokes the DomainIR version of AstWalk and provides the parallel IR AstWalk callback AstWalkCallback.
 
@@ -5034,7 +5173,7 @@ function AstWalk(ast::Any, callback, cbdata)
     DomainIR.AstWalk(ast, AstWalkCallback, dw)
 end
 
-@doc """
+"""
 An AliasAnalysis callback (similar to LivenessAnalysis callback) that handles ParallelIR introduced AST node types.
 For each ParallelIR specific node type, form an array of expressions that AliasAnalysis
     can analyze to reflect the aliases of the given AST node.

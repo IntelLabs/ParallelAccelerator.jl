@@ -35,7 +35,7 @@ using CompilerTools.OptFramework
 
 #import Base.deepcopy_internal
 #
-#@doc """
+#"""
 #Overload deepcopy_internal() to just return a Module instead of trying to duplicate it.
 #"""
 #deepcopy_internal(x :: Module, stackdict::ObjectIdDict) = x
@@ -52,7 +52,7 @@ const OFFLOAD2_MODE = 3
 const TASK_MODE = 4
 const THREADS_MODE = 5
 
-@doc """
+"""
 Return internal mode number by looking up environment variable "PROSPECT_MODE".
 """
 function getPseMode()
@@ -91,7 +91,7 @@ function isDistributedMode()
     return mode=="1"
 end
 
-@doc """
+"""
 Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".
 If not specified, it defaults to NO_TASK_MODE, or DYNAMIC_TASK_MODE when 
 getPseMode() is TASK_MODE.
@@ -119,7 +119,7 @@ function getTaskMode()
   end
 end
 
-@doc """
+"""
 Generate a file path to the directory above the one containing this source file.
 This should be the root of the package.
 """
@@ -131,7 +131,7 @@ type UnsupportedFeature <: Exception
   text :: AbstractString
 end
 
-@doc """
+"""
 Call this function if you want to embed binary-code of ParallelAccelerator into your Julia build to speed-up @acc compilation time.
 It will attempt to add a userimg.jl file to your Julia distribution and then re-build Julia.
 """
@@ -178,7 +178,7 @@ function embed(julia_root)
   return nothing
 end
 
-@doc """
+"""
 This version of embed tries to use JULIA_HOME to find the root of the source distribution.
 It then calls the version above specifying the path.
 """
@@ -201,7 +201,7 @@ include("driver.jl")
 
 importall .Driver
 
-@doc """
+"""
 Called when the package is loaded to do initialization.
 """
 function __init__()
