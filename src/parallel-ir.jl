@@ -216,6 +216,7 @@ end
 
 type SingularSelector
     value :: Union{SymAllGen,Number}
+    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
 end
 
 function hash(x :: SingularSelector)
@@ -535,18 +536,21 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
-    if dim <= length(x.range) && isa(x.range[dim], RangeData)
-        #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
-        # TODO: do something with skip!
+    if dim <= length(x.range) 
         r = x.range[dim]
-        last  = isa(r.exprs.last_val, Expr)  ? r.last  : r.exprs.last_val
-        start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
-        ret = DomainIR.add(DomainIR.sub(last, start), 1)
-        dprintln(3, "mk_arraylen_expr for range = ", r, " last = ", last, " start = ", start, " ret = ", ret)
-        return ret
-    else
-        return mk_arraylen_expr(x.array, dim)
-    end 
+        if isa(x.range[dim], RangeData)
+            # TODO: do something with skip!
+            last  = isa(r.exprs.last_val, Expr)  ? r.last  : r.exprs.last_val
+            start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
+            ret = DomainIR.add(DomainIR.sub(last, start), 1)
+            dprintln(3, "mk_arraylen_expr for range = ", r, " last = ", last, " start = ", start, " ret = ", ret)
+            return ret
+        elseif isa(x.range[dim], SingularSelector)
+            return 1
+        end
+    end
+
+    return mk_arraylen_expr(x.array, dim)
 end
 
 """

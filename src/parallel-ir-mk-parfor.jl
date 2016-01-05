@@ -50,6 +50,10 @@ function getPastIndex(arrays :: Dict{SymGen, Array{Array{Any,1},1}})
     return ret
 end
 
+function isSingularSelectorOne(ss :: SingularSelector)
+    return ss.value == 1
+end
+
 """
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 """
@@ -65,10 +69,12 @@ function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1
 
     dprintln(3,"pre-base = ", base)
 
-    if dim <= length(range) && 
-       isa(range[dim], RangeData) &&
-       !isStartOneRange(range[dim].exprs)
-        base = DomainIR.add(base, range[dim].offset_temp_var)
+    if dim <= length(range) 
+       if isa(range[dim], RangeData) && !isStartOneRange(range[dim].exprs)
+          base = DomainIR.add(base, range[dim].offset_temp_var)
+       elseif isa(range[dim], SingularSelector) && !isSingularSelectorOne(range[dim])
+          base = DomainIR.add(base, range[dim].offset_temp_var)
+       end
     end
 
     dprintln(3,"post-base = ", base)
@@ -383,7 +389,8 @@ function getSName(rd :: MaskSelector)
     return getSName(rd.value)
 end
 function getSName(rd :: SingularSelector)
-    return rd.value
+    return getSName(rd.offset_temp_var)
+    #return rd.value
 end
 
 """
@@ -421,7 +428,8 @@ function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
 end
 function rangeToRangeData(other :: Union{SymAllGen,Number}, arr, range_num :: Int, state)
     dprintln(3,"rangeToRangeData for non-Expr")
-    return SingularSelector(other)
+    singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return SingularSelector(other, singular_temp_var)
 end
 
 function rangeToRangeData(sym, arr, range_num :: Int, state)
@@ -548,6 +556,7 @@ end
 
 function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, inputInfo, unique_node_id, parfor_index_syms, state)
     loopNests = Array(PIRLoopNest, num_dim_inputs)
+    dprintln(3, "gen_pir_loopnest for ", inputInfo[1])
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
         save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
@@ -557,8 +566,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
         push!(pre_statements,array1_len)
         CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         push!(save_array_lens, save_array_len)
-        loopNests[num_dim_inputs - i + 1] =
-        PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
+        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
     end
     return loopNests
 end
@@ -786,7 +794,15 @@ function generatePreOffsetStatement(range :: RangeData, ret)
     end
 end
 
-function generatePreOffsetStatement(range :: Union{MaskSelector,SingularSelector}, ret)
+function generatePreOffsetStatement(ss :: SingularSelector, ret)
+    dprintln(3, "generatePreOffsetStatement for SingularSelector ", range)
+    if !isSingularSelectorOne(ss)
+        range_expr = mk_assignment_expr(ss.offset_temp_var, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), ss.value, 1))
+        push!(ret, range_expr)
+    end
+end
+
+function generatePreOffsetStatement(range :: MaskSelector, ret)
     # Intentionally do nothing.
 end
 
