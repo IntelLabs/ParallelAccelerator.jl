@@ -4477,7 +4477,7 @@ function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
     head = ast.head
     args = ast.args
     if head == :(=) && isAllocation(args[2])
-        return Any[]
+        return pir_live_cb(args[2], cbdata)
     end
     return pir_live_cb(ast,cbdata)
 end
