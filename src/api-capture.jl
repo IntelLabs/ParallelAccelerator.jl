@@ -33,21 +33,16 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
     elseif head == :call
         # f(...)
         opr = node.args[1]
-        if isa(opr, Symbol) 
-            api_opr = GlobalRef(API, opr)
-            if in(opr, operators)
-                node.args[1] = api_opr
-            end
-            if in(opr, binary_operator_set) && length(node.args) > 3
-            # we'll turn multiple arguments into pairwise
-                expr = foldl((a, b) -> Expr(:call, api_opr, a, b), node.args[2:end])
-                node.args = expr.args
-            end
-        end
+        handle_operator(opr, node)
     elseif head == :(=) && isa(node.args[1], Symbol) && isa(node.args[2], Expr) && node.args[2].head ==:call && node.args[2].args[1]==:DataSource
         arr_var_expr = node.args[2].args[2]
-        dims = arr_var_expr.args[3]
-        @assert arr_var_expr.args[1]==:Array "Data sources need arrays as type"
+        
+        @assert arr_var_expr.args[1]==:Array || arr_var_expr.args[1]==:Matrix "Data sources need Array or Matrix as type"
+        dims = 2 # Matrix type is 2D array
+        if arr_var_expr.args[1]==:Array
+            dims = arr_var_expr.args[3]
+        end
+
         node.args[1] = :($(node.args[1])::$arr_var_expr)
         source_typ = node.args[2].args[3]
         @assert source_typ==:HDF5 "Only HDF5 data sources supported for now."
@@ -57,7 +52,6 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
         call_name = symbol("__hps_data_source_$source_typ")
         call = :($(call_name)($hdf_var_name,$hdf_file_name))
         node.args[2] = call
-        #@bp
 #=        arr_var_expr = node.args[2].args[2]
         dims = arr_var_expr.args[3]
         @assert arr_var_expr.args[1]==:Array "Data sources need arrays as type"
@@ -120,6 +114,30 @@ end
 
 function process_node(node::Any, state, top_level_number, is_top_level, read)
     CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
+function handle_operator(opr::Symbol, node::Expr)
+    api_opr = GlobalRef(API, opr)
+    if in(opr, operators)
+        node.args[1] = api_opr
+    end
+    if in(opr, binary_operator_set) && length(node.args) > 3
+        # we'll turn multiple arguments into pairwise
+        expr = foldl((a, b) -> Expr(:call, api_opr, a, b), node.args[2:end])
+        node.args = expr.args
+    end
+end
+
+function handle_operator(opr::Expr, node::Expr)
+    if opr.head==:. && opr.args[1]==:HPS
+        hps_call = opr.args[2]
+        new_opr = symbol("__hps_$hps_call")
+        node.args[1] = new_opr
+    end
+end
+
+function handle_operator(opr::Any, node::Expr)
 end
 
 #function get_unique_data_source_num()
