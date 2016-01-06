@@ -180,7 +180,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         state.parfor_info[parfor.unique_id] = allArrs
         
         # only 1D parfors supported for now
-        if !parfor.simply_indexed || length(parfor.loopNests)!=1
+        if length(parfor.arrays_read_past_index)!=0 || length(parfor.arrays_written_past_index)!=0 || length(parfor.loopNests)!=1
             dprintln(2,"DistIR arr info walk parfor sequential: ", node)
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
