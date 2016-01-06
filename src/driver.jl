@@ -173,7 +173,23 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
           t = eltype(t)
       end
   end
-  dprintln(3, "array_types_in_sig = ", array_types_in_sig)
+  dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
+
+  lambdaInfo = lambdaExprToLambdaInfo(code)
+  ret_type = getReturnType(lambdaInfo)
+  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
+  ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
+
+  # Add arrays from the return type to array_types_in_sig.
+  for rt in ret_typs
+      t = rt[1]
+      while isarray(t)
+          array_types_in_sig[t] = atiskey;
+          atiskey += 1
+          t = eltype(t)
+      end
+  end
+  dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
  
   outfile_name = CGen.writec(CGen.from_root(code, function_name_string, array_types_in_sig))
   CGen.compile(outfile_name)
@@ -189,10 +205,6 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   # This is the name of the function that j2c generates.
   j2c_name = string("_",function_name_string,"_")
   
-  lambdaInfo = lambdaExprToLambdaInfo(code)
-  ret_type = getReturnType(lambdaInfo)
-  # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
-  ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarray(ret_type)) ]
 
   # Convert Arrays in signature to Ptr and add extra arguments for array dimensions
   (modified_sig, sig_dims) = convert_sig(signature)

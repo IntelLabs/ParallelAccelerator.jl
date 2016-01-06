@@ -844,7 +844,14 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
             (body[i].head == :loophead || body[i].head == :loopend)
             max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
         else
-            push!(expanded_body, body[i])
+            # Convert loophead and loopend into Julia loops.
+            if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
+               typeof(body[i]) == Expr && 
+               (body[i].head == :loophead || body[i].head == :loopend)
+                max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
+            else
+                push!(expanded_body, body[i])
+            end
         end
     end
 

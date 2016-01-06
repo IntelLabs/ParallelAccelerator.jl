@@ -893,7 +893,6 @@ function mk_next_expr(colon_sym, start_sym)
     TypedExpr(Any, :call, TopNode(:next), colon_sym, start_sym)
 end
 
-
 """
 Returns a :gotoifnot Expr given a condition "cond" and a label "goto_label".
 """
@@ -1158,6 +1157,27 @@ function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
     dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
     recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaInfo)
+    nothing
+end
+
+"""
+Takes a new array of body statements in the process of construction in "new_body" and takes a parfor to add to that
+body.  This parfor is in the nested (parfor code is in the parfor node itself) temporary form we use for fusion although 
+pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested
+form where we have a parfor_start and parfor_end to delineate the parfor code.
+"""
+function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
+    dprintln(2,"Flattening ", the_parfor)
+
+    private_set = getPrivateSet(the_parfor.body)
+    private_array = collect(private_set)
+
+    # Output to the new body that this is the start of a parfor.
+    push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
+    # Output the body of the parfor as top-level statements in the new function body.
+    append!(new_body, the_parfor.body)
+    # Output to the new body that this is the end of a parfor.
+    push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
     nothing
 end
 

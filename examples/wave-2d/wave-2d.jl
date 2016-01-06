@@ -34,14 +34,62 @@ if "--demo" in ARGS
     using Winston
 end
 
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
+#CompilerTools.LivenessAnalysis.set_debug_level(5)
+
 @acc function runWaveStencil(p::Array{Float64,2},
                              c::Array{Float64,2},
                              f::Array{Float64,2},
-                             r::Float64)
+                             r::Float64,
+                             t::Float64,
+                             n::Int,
+                             s2::Int,
+                             s4::Int,
+                             s::Int)
     runStencil(p, c, f, 1, :oob_skip) do p, c, f
         f[0, 0] = 2 * c[0, 0] - p[0, 0] + r * r * (c[-1, 0] + c[1, 0] + c[0, -1] + c[0, 1] - 4*c[0, 0])
     end
+
+    # Dynamic source
+    f[s2+s4-1:s2+s4+1, 1:2] = 1.5 * sin(t*n)
+    f[s2-s4-1:s2-s4+1, 1:2] = 1.5 * sin(t*n)
+    f[2:s-1, 1:2] = 1
+
+    # Transparent boundary handling
+    f[2:s-1, 1] = (2 * c[2:s-1, 1] + (r-1) * p[2:s-1, 1] + 2*r*r*(c[2:s-1, 2]   + c[3:s, 1] + c[1:s-2, 1] - 3 * c[2:s-1, 1])) / (1+r) # Y:1
+    f[2:s-1, s] = (2 * c[2:s-1, s] + (r-1) * p[2:s-1, s] + 2*r*r*(c[2:s-1, s-1] + c[3:s, s] + c[1:s-2, s] - 3 * c[2:s-1, s])) / (1+r) # Y:s
+    f[1, 2:s-1] = (2 * c[1, 2:s-1] + (r-1) * p[1, 2:s-1] + 2*r*r*(c[2, 2:s-1]   + c[1, 3:s] + c[1, 1:s-2] - 3 * c[1, 2:s-1])) / (1+r) # X:1
+    f[s, 2:s-1] = (2 * c[s, 2:s-1] + (r-1) * p[s, 2:s-1] + 2*r*r*(c[s-1, 2:s-1] + c[s, 3:s] + c[s, 1:s-2] - 3 * c[s, 2:s-1])) / (1+r) # Y:s
+
     return 0
+end
+
+function prime_wave2d()
+    speed = 10         # Propagation speed
+    s = 16             # Array size (spatial resolution of the simulation)
+
+    s2 = div(s, 2)
+    s4 = div(s, 4)
+    s8 = div(s, 8)
+    s16 = div(s, 16)
+
+    p = zeros(s, s) # past
+    c = zeros(s, s) # current
+    f = zeros(s, s) # future
+
+    dt = 0.0001     # Time resolution of the simulation
+    dx = 0.01       # Distance between elements
+    r = speed * dt / dx 
+
+    n = 300
+
+    for i = s2 - s16 : s2 + s16
+        # Initial conditions
+        c[i, s2 - s16 : s2 + s16] = - 2 * cos(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos(0.5 * 2 * pi / (s8) * i)
+        p[i, 1:s] = c[i, 1:s]
+    end
+
+    runWaveStencil(p, c, f, r, 0.0, n, s2, s4, s)
 end
 
 function wave2d(demo::Bool)
@@ -79,18 +127,7 @@ function wave2d(demo::Bool)
     # Main loop
     for t = 0 : dt : stopTime
         # Wave equation
-        runWaveStencil(p, c, f, r)
-
-        # Dynamic source
-        f[s2+s4-1:s2+s4+1, 1:2] = 1.5 * sin(t*n)
-        f[s2-s4-1:s2-s4+1, 1:2] = 1.5 * sin(t*n)
-        f[2:s-1, 1:2] = 1
-
-        # Transparent boundary handling
-        f[2:s-1, 1] = (2 * c[2:s-1, 1] + (r-1) * p[2:s-1, 1] + 2*r*r*(c[2:s-1, 2]   + c[3:s, 1] + c[1:s-2, 1] - 3 * c[2:s-1, 1])) / (1+r) # Y:1
-        f[2:s-1, s] = (2 * c[2:s-1, s] + (r-1) * p[2:s-1, s] + 2*r*r*(c[2:s-1, s-1] + c[3:s, s] + c[1:s-2, s] - 3 * c[2:s-1, s])) / (1+r) # Y:s
-        f[1, 2:s-1] = (2 * c[1, 2:s-1] + (r-1) * p[1, 2:s-1] + 2*r*r*(c[2, 2:s-1]   + c[1, 3:s] + c[1, 1:s-2] - 3 * c[1, 2:s-1])) / (1+r) # X:1
-        f[s, 2:s-1] = (2 * c[s, 2:s-1] + (r-1) * p[s, 2:s-1] + 2*r*r*(c[s-1, 2:s-1] + c[s, 3:s] + c[s, 1:s-2] - 3 * c[s, 2:s-1])) / (1+r) # Y:s
+        runWaveStencil(p, c, f, r, t, n, s2, s4, s)
 
         # Transparent corner handling
         f[1, 1] = (2 * c[1, 1] + (r-1) * p[1, 1] + 2*r*r* (c[2, 1]   + c[1, 2]   - 2*c[1, 1])) / (1+r) # X:1; Y:1
@@ -130,8 +167,7 @@ Options:
     demo = arguments["--demo"]
 
     tic()
-    empty=Array(Float64,0,0)
-    runWaveStencil(empty, empty, empty, 0.0)
+    prime_wave2d()
     println("SELFPRIMED ", toq())
     
     tic()

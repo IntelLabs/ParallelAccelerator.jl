@@ -26,11 +26,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module RangeTest
 using ParallelAccelerator
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
+ParallelAccelerator.DomainIR.set_debug_level(4)
+ParallelAccelerator.ParallelIR.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
+
+@acc function singulartest1(A::Array{Float64,2})
+    return A[:,1] .* 2.0
+end
+
+@acc function rangetest1(A::Array{Float64,2})
+    return A[:,1:1] .* 2.0
+end
 
 @acc function reduce_col(col::Int)
     A = rand(10^5,10);
@@ -45,8 +53,6 @@ end
     sum((A[r, col] .- x[r]) .* (A[r, col] .- x[r]))
 end
 
-
-
 function test1()
     return reduce_col(3)
 end
@@ -55,6 +61,13 @@ function test2()
     return reduce_col2(3)
 end
 
+function test3()
+    return singulartest1([1.1 2.2; 3.3 4.4])
+end
+
+function test4()
+    return rangetest1([1.1 2.2; 3.3 4.4])
+end
 
 end
 
@@ -63,6 +76,8 @@ println("Testing ranges...")
 
 @test RangeTest.test1() > 1.66e3
 @test RangeTest.test2() > 1.66e3
+@test RangeTest.test3() == [2.2; 6.6]
+@test ndims(RangeTest.test4()) == 2
 
 println("Done testing ranges.")
 

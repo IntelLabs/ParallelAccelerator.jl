@@ -454,7 +454,9 @@ function from_range(rhs)
 end
 
 function rangeToMask(state, r::Int, arraysize)
-    return mk_range(state, r, r, 1)
+    # return mk_range(state, r, r, 1)
+    # scalar is not treated as a range in Julia
+    return r
 end
 
 function rangeToMask(state, r::SymAllGen, arraysize)
@@ -464,9 +466,10 @@ function rangeToMask(state, r::SymAllGen, arraysize)
     elseif isunitrange(typ)
         r = lookupConstDefForArg(state, r)
         (start, step, final) = from_range(r)
-        mk_range(start, step, final)
+        mk_range(state, start, step, final)
     elseif isinttyp(typ) 
-        mk_range(state, r, convert(typ, 1), r)
+        #mk_range(state, r, convert(typ, 1), r)
+        r
     else
         error("Unhandled range object: ", r)
     end
@@ -672,7 +675,9 @@ end
 
 isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
 add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
+sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_ssub), x, y)
 mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
+sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, TopNode(:sdiv_int), x, y)
 neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
 isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
 isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
@@ -681,6 +686,8 @@ isSubExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sub_
 isMulExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :mul_int) || isTopNodeOrGlobalRef(x.args[1], :checked_smul))
 isAddExprInt(x::Expr) = isAddExpr(x) && isa(x.args[3], Int)
 isMulExprInt(x::Expr) = isMulExpr(x) && isa(x.args[3], Int)
+isAddExpr(x::ANY) = false
+isSubExpr(x::ANY) = false
 sub(x, y) = add(x, neg(y))
 add(x::Int,  y::Int) = x + y
 add(x::Int,  y::Expr)= add(y, x)
@@ -1239,6 +1246,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             #newlhs = addGenSym(typ, state.linfo)
             etyp = elmTypOf(atyp)
             ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
+            dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
                 expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
             else
@@ -1892,9 +1900,12 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
             end
             for i = 1:length(ranges)
                 # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
-                assert(isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask))
-                for j = 1:length(ranges[i].args)
-                    ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
+                if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
+                    for j = 1:length(ranges[i].args)
+                        ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
+                    end
+                else
+                    assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
                 end
             end
             return x

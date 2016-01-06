@@ -155,14 +155,148 @@ function EquivalenceClassesClear(ec :: EquivalenceClasses)
     empty!(ec.data)
 end
 
+import Base.hash
+import Base.isequal
+
 type RangeExprs
     start_val
     skip_val
     last_val
 end
 
+"""
+Holds the information from one Domain IR :range Expr.
+"""
+type RangeData
+    start
+    skip
+    last
+    exprs :: RangeExprs
+    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
+
+    function RangeData(s, sk, l, sv, skv, lv, temp_var)
+        new(s, sk, l, RangeExprs(sv, skv, lv), temp_var)
+    end
+    function RangeData(re :: RangeExprs)
+        new(nothing, nothing, nothing, re, :you_should_never_see_this_used)
+    end
+end
+
+function hash(x :: RangeData)
+    dprintln(4, "hash of RangeData ", x)
+    hash(x.exprs.last_val)
+end
+function isequal(x :: RangeData, y :: RangeData)
+    dprintln(4, "isequal of RangeData ", x, " ", y)
+    isequal(x.exprs, y.exprs)
+end
+function isequal(x :: RangeExprs, y :: RangeExprs)
+    isequal(x.start_val, y.start_val) &&
+    isequal(x.skip_val, y.skip_val ) &&
+    isequal(x.last_val, y.last_val)
+end
+
 function isStartOneRange(re :: RangeExprs)
     return re.start_val == 1
+end
+
+type MaskSelector
+    value :: SymAllGen
+end
+
+function hash(x :: MaskSelector)
+    ret = hash(x.value)
+    dprintln(4, "hash of MaskSelector ", x, " = ", ret)
+    return ret
+end
+function isequal(x :: MaskSelector, y :: MaskSelector)
+    dprintln(4, "isequal of MaskSelector ", x, " ", y)
+    isequal(x.value, y.value)
+end
+
+type SingularSelector
+    value :: Union{SymAllGen,Number}
+    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
+end
+
+function hash(x :: SingularSelector)
+    dprintln(4, "hash of SingularSelector ", x)
+    hash(x.value)
+end
+function isequal(x :: SingularSelector, y :: SingularSelector)
+    dprintln(4, "isequal of SingularSelector ", x, " ", y)
+    isequal(x.value, y.value)
+end
+
+typealias DimensionSelector Union{RangeData, MaskSelector, SingularSelector}
+
+function hash(x :: Array{DimensionSelector,1})
+    dprintln(4, "Array{DimensionSelector,1} hash")
+    sum([hash(i) for i in x])
+end
+function isequal(x :: Array{DimensionSelector,1}, y :: Array{DimensionSelector,1})
+    dprintln(4, "Array{DimensionSelector,1} isequal")
+    if length(x) != length(y)
+        return false
+    end
+    for i = 1:length(x)
+        if !isequal(x[i], y[i])
+             return false
+        end
+    end
+    return true
+end
+
+function hash(x :: SymbolNode)
+    ret = hash(x.name)
+    dprintln(4, "hash of SymbolNode ", x, " = ", ret)
+    return ret
+end
+function isequal(x :: SymbolNode, y :: SymbolNode)
+    return isequal(x.name, y.name) && isequal(x.typ, y.typ)
+end
+
+function hash(x :: Expr)
+    dprintln(4, "hash of Expr")
+    return hash(x.head) + hash(x.args)
+end
+function isequal(x :: Expr, y :: Expr)
+    return isequal(x.head, y.head) && isequal(x.args, y.args)
+end
+
+function hash(x :: Array{Any,1})
+    return sum([hash(y) for y in x])
+end
+function isequal(x :: Array{Any,1}, y :: Array{Any,1})
+    if length(x) != length(y)
+       return false
+    end
+    for i = 1:length(x)
+        if !isequal(x[i], y[i])
+            return false
+        end
+    end
+    return true
+end
+
+"""
+Type used by mk_parfor_args... functions to hold information about input arrays.
+"""
+type InputInfo
+    array                                # The name of the array.
+    dim                                  # The number of dimensions.
+    out_dim                              # The number of indexed (non-const) dimensions.
+    range :: Array{DimensionSelector,1}  # Empty if whole array, else one RangeData or BitArray mask per dimension.
+    elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
+    pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
+    rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
+
+    function InputInfo()
+        new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
+    end
+    function InputInfo(arr)
+        new(arr, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
+    end
 end
 
 """
@@ -171,7 +305,7 @@ While we are lowering domain IR to parfors and fusing we use this representation
 makes it easier to associate related statements before and after the loop to the loop itself.
 """
 type PIRParForAst
-    first_input  :: Union{SymAllGen, Array{RangeExprs,1} } 
+    first_input  :: InputInfo
     body                                      # holds the body of the innermost loop (outer loops can't have anything in them except inner loops)
     preParFor    :: Array{Any,1}              # do these statements before the parfor
     loopNests    :: Array{PIRLoopNest,1}      # holds information about the loop nests
@@ -190,23 +324,26 @@ type PIRParForAst
     # This will be "nothing" if we don't know how to estimate.  If not "nothing" then it is an expression which may
     # include calls.
     instruction_count_expr
-    simply_indexed :: Bool
+    arrays_written_past_index :: Set{SymGen}
+    arrays_read_past_index :: Set{SymGen}
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, si)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
         r = CompilerTools.ReadWriteSet.from_exprs(b)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, si)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, si)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, wrote_past_index, read_past_index)
+        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 end
 
 function parforArrayInput(parfor :: PIRParForAst)
-    return isa(parfor.first_input, SymAllGen)
+    return !parforRangeInput(parfor)
+#    return isa(parfor.first_input, SymAllGen)
 end
 function parforRangeInput(parfor :: PIRParForAst)
-    return isa(parfor.first_input, Array{RangeExprs,1})
+    return isRange(parfor.first_input)
+#    return isa(parfor.first_input, Array{DimensionSelector,1})
 end
 
 """
@@ -251,7 +388,7 @@ type expr_state
     next_eq_class            :: Int
     array_length_correlation :: Dict{SymGen,Int}
     symbol_array_correlation :: Dict{Array{SymGen,1},Int}
-    range_correlation        :: Dict{Array{Any,1},Int}
+    range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
     max_label :: Int # holds the max number of all LabelNodes
 
@@ -262,7 +399,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, 0, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{Any,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
     end
 end
 
@@ -372,59 +509,12 @@ function mk_untyped_assignment(lhs, rhs)
     Expr(symbol('='), lhs, rhs)
 end
 
-"""
-Holds the information from one Domain IR :range Expr.
-"""
-type RangeData
-    start
-    skip
-    last
-    exprs :: RangeExprs
-
-    function RangeData(s, sk, l, sv, skv, lv)
-        new(s, sk, l, RangeExprs(sv, skv, lv))
-    end
-end
-
-"""
-Type used by mk_parfor_args... functions to hold information about input arrays.
-"""
-type InputInfo
-    array                                # The name of the array.
-    dim                                  # The number of dimensions.
-    out_dim                              # The number of indexed (non-const) dimensions.
-    select_bitarrays :: Array{SymNodeGen,1}  # Empty if whole array or range, else on BitArray per dimension.
-    range :: Array{RangeData,1}          # Empty if whole array, else one RangeData per dimension.
-    range_offset :: Array{SymNodeGen,1}  # New temp variables to hold offset from iteration space for each dimension.
-    elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
-    pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
-    rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
-
-    function InputInfo()
-        new(nothing, 0, 0, Array{SymGen,1}[], RangeData[], SymGen[], nothing, Expr[], Expr(:noop))
-    end
-end
-
 function isWholeArray(inputInfo :: InputInfo) 
-    return length(inputInfo.select_bitarrays) == 0 && length(inputInfo.range) == 0 
+    return length(inputInfo.range) == 0 
 end
-function isMask(inputInfo :: InputInfo)
-    return length(inputInfo.select_bitarrays) > 0
-end
+
 function isRange(inputInfo :: InputInfo)
     return length(inputInfo.range) > 0
-end 
-
-function getRangeOrArray(inputInfo :: InputInfo, num_dims)
-    if isRange(inputInfo)
-        return map(x -> x.exprs, inputInfo.range[1:num_dims])
-    else
-        return inputInfo.array
-    end
-end
-
-function getRangeOrArray(inputInfo :: Array{InputInfo,1}, num_dims)
-    return getRangeOrArray(inputInfo[1], num_dims)
 end
 
 """
@@ -446,16 +536,21 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
-    if dim <= length(x.range)
-        #return TypedExpr(Int64, :call, mk_parallelir_ref(rangeSize), x.range[dim].start, x.range[dim].skip, x.range[dim].last)
-        # TODO: do something with skip!
+    if dim <= length(x.range) 
         r = x.range[dim]
-        last = isa(r.exprs.last_val, Expr) ? r.last : r.exprs.last_val
-        start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
-        return DomainIR.add(DomainIR.sub(last, start), 1)
-    else
-        return mk_arraylen_expr(x.array, dim)
-    end 
+        if isa(x.range[dim], RangeData)
+            # TODO: do something with skip!
+            last  = isa(r.exprs.last_val, Expr)  ? r.last  : r.exprs.last_val
+            start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
+            ret = DomainIR.add(DomainIR.sub(last, start), 1)
+            dprintln(3, "mk_arraylen_expr for range = ", r, " last = ", last, " start = ", start, " ret = ", ret)
+            return ret
+        elseif isa(x.range[dim], SingularSelector)
+            return 1
+        end
+    end
+
+    return mk_arraylen_expr(x.array, dim)
 end
 
 """
@@ -666,12 +761,10 @@ Returns true if all array references use singular index variables and nothing mo
 for example, addition or subtraction by a constant.
 """
 function simpleIndex(dict)
-    # Prepare to iterate over all the keys in the dictionary.
-    kv = collect(keys(dict))
-    # For each key in the dictionary.
-    for k in kv
+    # For each entry in the dictionary.
+    for k in dict
         # Get the corresponding array of seen indexing expressions.
-        array_ae = dict[k]
+        array_ae = k[2]
         # For each indexing expression.
         for i = 1:length(array_ae)
             ae = array_ae[i]
@@ -745,6 +838,7 @@ end
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
 function addUnknownArray(x :: SymGen, state :: expr_state)
+    dprintln(3, "addUnknownArray x = ", x, " next = ", state.next_eq_class)
     m = state.next_eq_class
     state.next_eq_class += 1
     state.array_length_correlation[x] = m + 1
@@ -753,7 +847,7 @@ end
 """
 Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
 """
-function addUnknownRange(x :: Array{Any,1}, state :: expr_state)
+function addUnknownRange(x :: Array{DimensionSelector,1}, state :: expr_state)
     m = state.next_eq_class
     state.next_eq_class += 1
     state.range_correlation[x] = m + 1
@@ -771,11 +865,15 @@ function merge_correlations(state, unchanging, eliminate)
             state.array_length_correlation[i[1]] = unchanging
         end
     end
+    # The symbol_array_correlation shares the equivalence class space so
+    # do the same re-numbering here.
     for i in state.symbol_array_correlation
         if i[2] == eliminate
             state.symbol_array_correlation[i[1]] = unchanging
         end
     end
+    # The range_correlation shares the equivalence class space so
+    # do the same re-numbering here.
     for i in state.range_correlation
         if i[2] == eliminate
             state.range_correlation[i[1]] = unchanging
@@ -790,11 +888,13 @@ If we somehow determine that two arrays must be the same length then
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
 function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: expr_state)
-    dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym, " ", state.array_length_correlation)
+    dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym)
+    print_correlations(3, state)
     old_corr = getOrAddArrayCorrelation(old_sym, state)
     new_corr = getOrAddArrayCorrelation(new_sym, state)
     merge_correlations(state, old_corr, new_corr)
-    dprintln(3, "add_merge_correlations post ", state.array_length_correlation)
+    dprintln(3, "add_merge_correlations post")
+    print_correlations(3, state)
 end
 
 """
@@ -808,23 +908,173 @@ function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
     state.array_length_correlation[x]
 end
 
+function simplify_internal(x :: ANY, state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+"""
+Do some simplification to expressions that are part of ranges.
+For example, the range 2:s-1 becomes a length (s-1)-2 which this function in turn transforms to s-3.
+"""
+function simplify_internal(x :: Expr, state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    is_sub = DomainIR.isSubExpr(x)
+    is_add = DomainIR.isAddExpr(x)
+    dprintln(3, "simplify_internal ", x, " is_sub = ", is_sub, " is_add = ", is_add)
+    # We only do any simpilfication to addition or subtraction statements at the moment.
+    if is_sub || is_add
+        # Recursively translate the ops to this operator first.
+        x.args[2] = AstWalk(x.args[2], simplify_internal, nothing)
+        x.args[3] = AstWalk(x.args[3], simplify_internal, nothing)
+        # Extract the two operands to this operation.
+        op1 = x.args[2]
+        op2 = x.args[3]
+        # We only support simplification when operand1 is itself an addition or subtraction operator.
+        op1_sub = DomainIR.isSubExpr(op1)
+        op1_add = DomainIR.isAddExpr(op1)
+        dprintln(3, "op1 = ", op1, " op2 = ", op2)
+        # If operand1 is an addition or subtraction operator and operand2 is a number then keep checking if we can simplify.
+        if (op1_sub || op1_add) && isa(op2, Number)
+            # Get the two operands to the operand1.
+            op1_op1 = op1.args[2]
+            op1_op2 = op1.args[3]
+            dprintln(3, "op1_op1 = ", op1_op1, " op1_op2 = ", op1_op2)
+            # We can do some simplification if the second operand2 here is also a number.
+            if isa(op1_op2, Number)
+                dprintln(3, "simplify will modify")
+                # If we have like operations then we can combine the second operands by addition.
+                if is_sub == op1_sub
+                    new_number = op1_op2 + op2
+                    dprintln(3, "same ops so added to get ", new_number)
+                else
+                    # Consider, (s-1)+2 and (s+1)-2, where the operations are different.
+                    # In both case, we can do 1-2 (op2 is 2, op1_op2 is 1).
+                    # This would become (s-(-1)) and (s+(-1)) respectively.
+                    new_number = op1_op2 - op2
+                    dprintln(3, "diff ops so subtracted to get ", new_number)
+                end
+
+                # If we happen to get a zero then we can eliminate both operations.
+                if new_number == 0
+                    dprintln(3, "new_number is 0 so eliminating both operations")
+                    return op1_op1
+                elseif new_number < 0
+                    # Canonicalize so that op2 is always positive by switching the operation from add to sub or vice versa if necessary.
+                    dprintln(3, "new_number < 0 so switching op1 from add to sub or vice versa")
+                    op1_sub = !op1_sub
+                    new_number = abs(new_number)
+                end
+
+                # Form a sub or add expression to replace the current node.
+                if op1_sub
+                    ret = DomainIR.sub_expr(op1_op1, new_number)
+                else
+                    ret = DomainIR.add_expr(op1_op1, new_number)
+                end
+                dprintln(3,"new simplified expr is ", ret)
+                return ret
+            end
+        end
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+"""
+Convert one RangeData to some length expression and then simplify it.
+"""
+function form_and_simplify(rd :: RangeData)
+    re = rd.exprs
+    dprintln(3, "form_and_simplify ", re)
+    # Number of iteration is (last-start)/skip.  This is only approximate due to the non-linear effects of integer div.
+    # We don't attempt to equate different ranges with different skips.
+    last_minus_start = DomainIR.sub_expr(re.last_val, re.start_val)
+    if re.skip_val != 1
+        with_skip = DomainIR.sdiv_int_expr(last_minus_start, re.skip_val)
+    else
+        with_skip = last_minus_start
+    end
+    dprintln(3, "before simplify = ", with_skip)
+    ret = AstWalk(with_skip, simplify_internal, nothing)
+    dprintln(3, "after simplify = ", ret)
+    return ret
+end
+
+function form_and_simplify(x :: ANY)
+    return x
+end
+
+"""
+For each entry in ranges, form a range length expression and simplify them.
+"""
+function form_and_simplify(ranges :: Array{DimensionSelector,1})
+    return [form_and_simplify(x) for x in ranges]
+end
+
+"""
+We can only do exact matches in the range correlation dict but there can still be non-exact matches
+where the ranges are different but equivalent in length.  In this function, we can the dictionary
+and look for equivalent ranges.
+"""
+function nonExactRangeSearch(ranges :: Array{DimensionSelector,1}, range_correlations)
+    # Get the simplified form of the range we are looking for.
+    simplified = form_and_simplify(ranges)
+    dprintln(3, "searching for simplified expr ", simplified)
+    # For each range correlation in the dictionary.
+    for kv in range_correlations
+        key = kv[1]
+        correlation = kv[2]
+
+        dprintln(3, "Before form_and_simplify(key)")
+        # Simplify the current dictionary entry to enable comparison.
+        simplified_key = form_and_simplify(key)
+        dprintln(3, "comparing ", simplified, " against simplified_key ", simplified_key)
+        # If the simplified form of the incoming range and the dictionary entry are equal now then the ranges are equivalent.
+        if isequal(simplified, simplified_key)
+            dprintln(3, "simplified and simplified key are equal")
+            return correlation
+        else
+            dprintln(3, "simplified and simplified key are not equal")
+        end
+    end
+    # No equivalent range entry in the dictionary.
+    return nothing
+end
+
 """
 Gets (or adds if absent) the range correlation for the given array of RangeExprs.
 """
-function getOrAddRangeCorrelation(ranges :: Array{RangeExprs,1}, state :: expr_state)
+function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, state :: expr_state)
+    dprintln(3, "getOrAddRangeCorrelation for ", array, " with ranges = ", ranges, " and hash = ", hash(ranges))
+    print_correlations(3, state)
+
     # We can't match on array of RangeExprs so we flatten to Array of Any
-    aa = Any[]
+    all_mask = true
     for i = 1:length(ranges)
-        push!(aa, ranges[i].start_val)
-        push!(aa, ranges[i].skip_val)
-        push!(aa, ranges[i].last_val)
+        all_mask = all_mask & isa(ranges[i], MaskSelector)
     end
 
-    if !haskey(state.range_correlation, aa)
-        dprintln(3,"Correlation for range not found = ", ranges)
-        addUnknownRange(aa, state)
+    if !haskey(state.range_correlation, ranges)
+        dprintln(3,"Exact match for correlation for range not found = ", ranges)
+        # Look for an equivalent but non-exact range in the dictionary.
+        nonExactCorrelation = nonExactRangeSearch(ranges, state.range_correlation)
+        if nonExactCorrelation == nothing
+            dprintln(3, "No non-exact match so adding new range")
+            range_corr = addUnknownRange(ranges, state)
+            # If all the dimensions are selected based on masks then the iteration space
+            # is that of the entire array and so we can establish a correlation between the
+            # DimensionSelector and the whole array.
+            if all_mask
+                dprintln(3, "All dimension selectors are masks so establishing correlation to main array.")
+                masked_array_corr = getOrAddArrayCorrelation(toSymGen(array), state)
+                merge_correlations(state, masked_array_corr, range_corr)
+            end
+        else
+            # Found an equivalent range.
+            dprintln(3, "Adding non-exact range match to class ", nonExactCorrelation)
+            state.range_correlation[ranges] = nonExactCorrelation
+        end
+        print_correlations(3, state)
     end
-    state.range_correlation[aa]
+    state.range_correlation[ranges]
 end
 
 """
@@ -1666,12 +1916,12 @@ function PIRSetFuseLimit(x)
     global fuse_limit = x
 end
 
-rearrange_passes = 2
 """
 Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.
+DEPRECATED.
 """
 function PIRNumSimplify(x)
-    global rearrange_passes = x
+    println("PIRNumSimplify is deprecated.")
 end
 
 """
@@ -1750,9 +2000,18 @@ function getCorrelation(sng :: SymAllGen, state :: expr_state)
     return getOrAddArrayCorrelation(toSymGen(sng), state)
 end
 
-function getCorrelation(are :: Array{RangeExprs,1}, state :: expr_state)
-    dprintln(3, "getCorrelation for Array{RangeExprs} = ", are)
-    return getOrAddRangeCorrelation(are, state)
+function getCorrelation(array :: SymAllGen, are :: Array{DimensionSelector,1}, state :: expr_state)
+    dprintln(3, "getCorrelation for Array{DimensionSelector,1} = ", are)
+    return getOrAddRangeCorrelation(array, are, state)
+end
+
+function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
+    num_dim_inputs = findSelectedDimensions([inputInfo], state)
+    if isRange(inputInfo)
+        return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
+    else
+        return getCorrelation(inputInfo.array, state)
+    end
 end
 
 """
@@ -1942,15 +2201,26 @@ function fuse(body, body_index, cur, state)
     cur_iei  = iterations_equals_inputs(cur_parfor)
     dprintln(3, "iterations_equals_inputs prev and cur = ", prev_iei, " ", cur_iei)
     dprintln(3, "loweredAliasMap = ", loweredAliasMap)
-    dprintln(3, "prev_parfor.simply_indexed = ", prev_parfor.simply_indexed)
-    dprintln(3, "cur_parfor.simply_indexed = ", cur_parfor.simply_indexed)
+    dprintln(3, "cur_parfor.arrays_read_past_index = ", cur_parfor.arrays_read_past_index)
+    arrays_non_simply_indexed_in_cur_that_access_prev_output = intersect(cur_parfor.arrays_read_past_index, prev_output_arrays)
+    dprintln(3, "arrays_non_simply_indexed_in_cur_that_access_prev_output = ", arrays_non_simply_indexed_in_cur_that_access_prev_output)
+    dprintln(3, "prev_parfor.arrays_written_past_index = ", prev_parfor.arrays_written_past_index)
+    cur_accessed = CompilerTools.ReadWriteSet.getArraysAccessed(cur_parfor.rws)
+    arrays_non_simply_indexed_in_prev_that_are_read_in_cur = intersect(prev_parfor.arrays_written_past_index, cur_accessed)
+    dprintln(3, "arrays_non_simply_indexed_in_prev_that_are_read_in_cur = ", arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
+    if !isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output)
+        dprintln(1, "Fusion won't happen because the second parfor accesses some array created by the first parfor in a non-simple way.")
+    end
+    if !isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
+        dprintln(1, "Fusion won't happen because the first parfor wrote to some array index in a non-simple way that the second parfor needs to access.")
+    end
 
-    if prev_iei &&
+    if  prev_iei &&
         cur_iei  &&
         out_correlation == in_correlation &&
         !reduction_var_used &&
-        prev_parfor.simply_indexed &&
-        cur_parfor.simply_indexed   
+        isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) &&
+        isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
         assert(prev_num_dims == cur_num_dims)
 
         dprintln(3, "Fusion will happen here.")
@@ -2575,7 +2845,11 @@ function hasNoSideEffects(node :: Expr)
             func == TopNode(:box) ||
             func == TopNode(:tuple) ||
             func == TopNode(:getindex_bool_1d) ||
-            func == :getindex
+            func == :getindex ||
+            func == GlobalRef(Core.Intrinsics, :box) ||
+            func == GlobalRef(Core.Intrinsics, :sub_int) ||
+            func == GlobalRef(Core.Intrinsics, :add_int) ||
+            func == GlobalRef(Core.Intrinsics, :mul_int) 
             return true
         end
     end
@@ -2612,11 +2886,13 @@ function from_assertEqShape(node::Expr, state)
         dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
         return true
     else
-        dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations = ", state.array_length_correlation)
+        dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations")
+        print_correlations(3, state)
         # If assertEqShape is called on e.g., inputs, then we can't statically eliminate the assignment
         # but if the assert doesn't fire then we do thereafter know that the arrays are in the same length set.
         merge_correlations(state, a1_corr, a2_corr)
-        dprintln(3,"assertEqShape NOT statically verified.  Merge correlations = ", state.array_length_correlation)
+        dprintln(3,"assertEqShape NOT statically verified.  Merge correlations")
+        print_correlations(3, state)
         return false
     end
 end
@@ -2760,7 +3036,7 @@ function from_assignment(lhs, rhs, depth, state)
                         if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
                             dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
                             getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
-                            dprintln(3, "correlations = ", state.array_length_correlation)
+                            print_correlations(3, state)
                         end
                     end
                 end
@@ -3044,9 +3320,10 @@ type RemoveNoDepsState
     top_level_no_deps :: Array{Any,1}
     hoistable_scalars :: Set{SymGen}
     dict_sym          :: Dict{SymGen, DictInfo}
+    change            :: Bool
 
     function RemoveNoDepsState(l, hs)
-        new(l, Any[], hs, Dict{SymGen, DictInfo}())
+        new(l, Any[], hs, Dict{SymGen, DictInfo}(), false)
     end
 end
 
@@ -3070,7 +3347,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
     dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
     if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
+        dprintln(3,"node.head: ", node.head)
     end
     ntype = typeof(node)
 
@@ -3110,6 +3387,7 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
                     dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
+                        data.change = true
                         dprintln(3,"remove_no_deps lhs is NOT live out")
                         if hasNoSideEffects(rhs)
                             dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
@@ -3244,9 +3522,9 @@ function extractArrayEquivalencies(node :: Expr, state)
     for i = 1 : length(input_arrays)
         push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
-    num_dim_inputs = findSelectedDimensions(inputInfo, state)
+#    num_dim_inputs = findSelectedDimensions(inputInfo, state)
 
-    main_length_correlation = getCorrelation(getRangeOrArray(inputInfo[1], num_dim_inputs), state)
+    main_length_correlation = getCorrelation(inputInfo[1], state)
     # Get the correlation set of the first input array.
     #main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
 
@@ -3254,17 +3532,15 @@ function extractArrayEquivalencies(node :: Expr, state)
     # Also, create indexed versions of those symbols for the loop body
     for i = 2:length(inputInfo)
         dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
-        this_correlation = getCorrelation(getRangeOrArray(inputInfo[i], num_dim_inputs), state)
+        this_correlation = getCorrelation(inputInfo[i], state)
         # Verify that all the inputs are the same size by verifying they are in the same correlation set.
         if this_correlation != main_length_correlation
             merge_correlations(state, main_length_correlation, this_correlation)
         end
     end
 
-    dprintln(3,"extractArrayEq result = ", state.array_length_correlation)
-    if length(state.range_correlation) > 0
-        dprintln(3,"range_correlations = ", state.range_correlation)
-    end
+    dprintln(3,"extractArrayEq result")
+    print_correlations(3, state)
     return main_length_correlation
 end
 
@@ -3275,6 +3551,7 @@ Extract just the dimension variables names into dim_names and then register the 
 """
 function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
     dim_names = SymGen[]
+
     for i = 1:length(dim_array)
         if typeof(dim_array[i]) != SymbolNode
             return false
@@ -3389,15 +3666,36 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         if rhs_corr != nothing && isa(lhs, SymAllGen)
             lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
-            dprintln(3,"Correlations after map merge into lhs = ", state.array_length_correlation)
-            if length(state.range_correlation) > 0
-                dprintln(3,"range_correlations = ", state.range_correlation)
-            end
+            dprintln(3,"Correlations after map merge into lhs")
+            print_correlations(3, state)
         end
     end
 end
 
 function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
+end
+
+function print_correlations(level, state)
+    if !isempty(state.array_length_correlation)
+        dprintln(level,"array_length_correlations = ", state.array_length_correlation)
+    end
+    if !isempty(state.symbol_array_correlation)
+        dprintln(level,"symbol_array_correlations = ", state.symbol_array_correlation)
+    end
+    if !isempty(state.range_correlation)
+        dprintln(level,"range_correlations = ")
+        for i in state.range_correlation
+            dprint(level, "    ")
+            for j in i[1]
+                if isa(j, RangeData)
+                    dprint(level, j.exprs, " ")
+                else
+                    dprint(level, j, " ")
+                end
+            end
+            dprintln(level, " => ", i[2])
+        end
+    end
 end
 
 """
@@ -3406,7 +3704,8 @@ AstWalk callback to determine the array equivalence classes.
 function create_equivalence_classes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-    dprintln(3,"node.head = ", node.head)
+    dprintln(3,"node.head: ", node.head)
+    print_correlations(3, state)
 
     if node.head == :lambda
         save_lambdaInfo  = state.lambdaInfo
@@ -4122,7 +4421,8 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
 
     rep_start = time_ns()
 
-    for i = 1:rearrange_passes
+    changed = true
+    while changed
         dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         ast = AstWalk(ast, remove_no_deps, rnd_state)
@@ -4137,11 +4437,14 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
         dprintln(1,"Re-starting liveness analysis.")
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
         dprintln(1,"Finished liveness analysis.")
+
+        changed = rnd_state.change
     end
 
     dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
     dprintln(1,"Doing conversion to parallel IR.")
+    dprintln(3,"ast = ", ast)
 
     new_vars.block_lives = lives
 
@@ -4262,7 +4565,8 @@ function from_root(function_name, ast :: Expr)
 
     rep_start = time_ns()
 
-    for i = 1:rearrange_passes
+    changed = true
+    while changed
         dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         ast = AstWalk(ast, remove_no_deps, rnd_state)
@@ -4280,6 +4584,8 @@ function from_root(function_name, ast :: Expr)
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
         dprintln(1,"Finished liveness analysis.", " function = ", function_name)
         dprintln(3,"lives = ", lives)
+
+        changed = rnd_state.change
     end
 
     dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
@@ -4307,8 +4613,7 @@ function from_root(function_name, ast :: Expr)
     dprintln(3,"Creating equivalence classes.", " function = ", function_name)
     AstWalk(ast, create_equivalence_classes, new_vars)
     dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
-    dprintln(3,"symbol_correlations = ", new_vars.symbol_array_correlation)
-    dprintln(3,"array_correlations  = ", new_vars.array_length_correlation)
+    print_correlations(3, new_vars)
 
     dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
 
@@ -4329,6 +4634,7 @@ function from_root(function_name, ast :: Expr)
     end
 
     dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
+    printLambda(3, ast)
 
     new_vars.block_lives = lives
     dprintln(3,"Lives before main Parallel IR = ")

@@ -479,8 +479,8 @@ end
 function from_exprs(args::Array)
     s = ""
     for a in args
+        dprintln(3, "from_exprs working on = ", a)
         se = from_expr(a)
-        dprintln(3, "from_exprs se = ", se)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -2719,7 +2719,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     if isEntryPoint
         resetLambdaState(lstate)
 
-        if length(array_types_in_sig) > 0
+#        if length(array_types_in_sig) > 0
             gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
             for (key, value) in array_types_in_sig
                 atyp = toCtype(key)
@@ -2728,6 +2728,10 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
             end
             gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
             c *= gen_j2c_array_new   
+#        end
+    else
+        if length(array_types_in_sig) > 0
+           dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
         end
     end
     c
@@ -2766,6 +2770,7 @@ function insert(func::Function, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
+        dprintln(3, "Adding function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end
@@ -2775,6 +2780,7 @@ function insert(func::IntrinsicFunction, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
+        dprintln(3, "Adding intrinsic function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end

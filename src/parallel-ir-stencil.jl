@@ -198,12 +198,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = oob_skip ? Any[] : Any[TypedExpr(Void, head,
-        PIRParForAst(toSymGen(buf),
+        PIRParForAst(InputInfo(toSymGen(buf)),
             vcat(lowerGotos, upperGotos, borderExpr),
             [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
             PIRReduction[],
-            [], [], irState.top_level_number, get_unique_num(), false))]
+            [], [], irState.top_level_number, get_unique_num(), Set{SymGen}(), Set{SymGen}([toSymGen(x) for x in bufs])))]
 
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
@@ -214,7 +214,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
   expr = PIRParForAst(
-    buf,
+    InputInfo(buf),
     bodyExpr,
     [],
     loopNest,
@@ -223,6 +223,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
     get_unique_num(), 
-    false)
+    Set{SymGen}(), 
+    Set{SymGen}([toSymGen(x) for x in bufs]))
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end
