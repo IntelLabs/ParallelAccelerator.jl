@@ -40,6 +40,7 @@ import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.isDistributedMode
+import ParallelAccelerator.H5SizeArr_t
 
 # uncomment this line for using Debug.jl
 #using Debug
@@ -105,7 +106,8 @@ type LambdaGlobalData
             Float64 =>  "double",
             Bool    =>  "bool",
             Char    =>  "char",
-            Void    =>  "void"
+            Void    =>  "void",
+            H5SizeArr_t => "hsize_t*"
     )
 
         #new(ASTDispatcher(), [], Dict(), Dict(), [], [])
@@ -633,12 +635,10 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
         s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
         s *= "assert(space_id_$num != -1);\n"    
         s *= "hsize_t data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
-        # only 1D for now    
-        s *= "assert(data_ndim_$num == 1);\n"
         s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
         s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);\n"
         # only 1D for now
-        s *= from_expr(lhs)*" = space_dims_$num[0];"
+        s *= from_expr(lhs)*" = space_dims_$num;"
         return s
     end
     return ""
@@ -1724,6 +1724,19 @@ function pattern_match_call_data_src_read(f::Any, v::Any, rf::Any, o::Any, arr::
     return ""
 end
 
+function pattern_match_call_dist_h5_size(f::Symbol, h5size_arr::GenSym, ind::Union{Int64,SymAllGen})
+    s = ""
+    if f==:__hps_get_H5_dim_size
+        dprintln(3,"match dist_h5_size ",f," ", h5size_arr, " ",ind)
+        s = from_expr(h5size_arr)*"["*from_expr(ind)*"-1]"
+    end
+    return s
+end
+
+function pattern_match_call_dist_h5_size(f::Any, h5size_arr::Any, ind::Any)
+    return ""
+end
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
@@ -1742,7 +1755,8 @@ function pattern_match_call(ast::Array{Any, 1})
         s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
     end
     if(length(ast)==3) # randn! call has 3 args
-        s = pattern_match_call_randn(ast[1],ast[2],ast[3])
+        s = pattern_match_call_dist_h5_size(ast[1],ast[2],ast[3])
+        s *= pattern_match_call_randn(ast[1],ast[2],ast[3])
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3])
     end

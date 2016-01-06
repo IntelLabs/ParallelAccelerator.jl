@@ -38,6 +38,8 @@ using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using CompilerTools.AliasAnalysis
 
+import ..H5SizeArr_t
+
 # uncomment this line when using Debug.jl
 #using Debug
 
@@ -867,12 +869,20 @@ function from_assignment(state, env, expr::Expr)
                 # generate array size call
                 # arr_size_var = addGenSym(Tuple, state.linfo)
                 # assume 1D for now
-                arr_size_var = addGenSym(Int64, state.linfo)
+                arr_size_var = addGenSym(H5SizeArr_t, state.linfo)
                 size_call = mk_call(:__hps_data_source_HDF5_size, [dsrc_id_var, lhs])
                 updateDef(state, arr_size_var, size_call)
                 emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
                 # generate array allocation
-                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, Any[arr_size_var]))
+                size_expr = Any[]
+                for i in 1:dims
+                    size_i = addGenSym(Int64, state.linfo)
+                    size_i_call = mk_call(:__hps_get_H5_dim_size, [arr_size_var, i])
+                    updateDef(state, size_i, size_i_call)
+                    emitStmt(state, mk_expr(Int64, :(=), size_i, size_i_call))
+                    push!(size_expr, size_i)
+                end
+                arrdef = type_expr(arr_typ, mk_alloc(state, elem_typ, size_expr))
                 updateDef(state, lhs, arrdef)
                 emitStmt(state, mk_expr(arr_typ, :(=), lhs, arrdef))
                 # generate read call
