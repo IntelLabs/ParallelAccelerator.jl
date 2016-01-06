@@ -225,7 +225,7 @@ _Intrinsics = [
         "nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
-        "checked_ssub", "checked_sadd", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
+        "checked_ssub", "checked_sadd", "checked_smul", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int"
@@ -1204,6 +1204,12 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
     elseif intr == "checked_sadd"
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
+    elseif intr == "checked_smul"
+        return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
+    elseif intr == "smod_int"
+        m = from_expr(args[1])
+        n = from_expr(args[2])
+        return "((($m) % ($n) + ($n)) % $n)"
     elseif intr == "srem_int"
         return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
     #TODO: Check if flip semantics are the same as Julia codegen.
