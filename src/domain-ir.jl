@@ -878,6 +878,10 @@ function from_assignment(state, env, expr::Expr)
                 # generate read call
                 read_call = mk_call(:__hps_data_source_HDF5_read, [dsrc_id_var, lhs])
                 return read_call
+            elseif isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_kmeans
+                dprintln(env,"kmeans found ", inner_call)
+                lib_call = mk_call(:__hps_kmeans, [lhs,inner_call.args[2], inner_call.args[3]])
+                return lib_call 
             end
         end
     end

@@ -125,7 +125,7 @@ function process_assignment(node, lhs::Symbol, rhs::Expr)
         return [declare_expr; size_expr]
 =#
    elseif rhs.head==:call && isa(rhs.args[1],Expr) && rhs.args[1].head==:. && rhs.args[1].args[1]==:HPS
-        hps_call = rhs.args[1].args[2]
+        hps_call = rhs.args[1].args[2].args[1]
         new_opr = symbol("__hps_$hps_call")
         node.args[2].args[1] = new_opr
         node.args[1] = :($lhs::Matrix{Float64})
