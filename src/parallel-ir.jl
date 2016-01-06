@@ -4649,7 +4649,7 @@ function from_root(function_name, ast :: Expr)
     dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
     printLambda(1, ast)
 
-    #remove_extra_allocs(ast)
+    remove_extra_allocs(ast)
 
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
