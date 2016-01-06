@@ -831,7 +831,7 @@ FLUSH();
     }
 
     uint64_t ARRAYSIZE(unsigned i) {
-        return dims[i-1];
+        return (i <= num_dim ? dims[i-1] : 1);
     }
 
     void ARRAYBOUNDSCHECK(uint64_t i) {
