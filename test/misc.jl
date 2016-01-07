@@ -83,7 +83,7 @@ function test5()
 end
 
 @acc function mod_rem_test(x, y)
-    Int[ mod(x, y); rem(x, y) ]
+    Int[ mod(x, y), rem(x, y) ]
 end
 
 end
@@ -95,9 +95,9 @@ println("Testing miscellaneous features...")
 @test MiscTest.test3() 
 @test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
 @test MiscTest.test5() 
-@test MiscTest.mod_rem_test(7,3) == [1; 1]
-@test MiscTest.mod_rem_test(7,-3) == [-2; 1]
-@test MiscTest.mod_rem_test(-7,3) == [2; -1]
-@test MiscTest.mod_rem_test(-7,-3) == [-1; -1]
+@test MiscTest.mod_rem_test(7,3) == [1, 1]
+@test MiscTest.mod_rem_test(7,-3) == [-2, 1]
+@test MiscTest.mod_rem_test(-7,3) == [2, -1]
+@test MiscTest.mod_rem_test(-7,-3) == [-1, -1]
 println("Done testing miscellaneous features...")
 
