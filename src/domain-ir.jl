@@ -875,7 +875,7 @@ function from_assignment(state, env, expr::Expr)
                 emitStmt(state, mk_expr(arr_size_var, :(=), arr_size_var, size_call))
                 # generate array allocation
                 size_expr = Any[]
-                for i in 1:dims
+                for i in dims:-1:1
                     size_i = addGenSym(Int64, state.linfo)
                     size_i_call = mk_call(:__hps_get_H5_dim_size, [arr_size_var, i])
                     updateDef(state, size_i, size_i_call)
