@@ -1672,7 +1672,8 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
-function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::AbstractString, file_name::AbstractString, arr::Symbol)
+function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Union{SymAllGen,AbstractString}, file_name::Union{SymAllGen,AbstractString}, arr::Symbol)
+    s = ""
     if f==:__hps_data_source_HDF5_open
         num::AbstractString = from_expr(id.id)
     
@@ -1682,18 +1683,15 @@ function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Abstr
         s *= "hid_t file_id_$num;\n"
         s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);\n"
         s *= "assert(ret_$num != -1);\n"
-        s *= "file_id_$num = H5Fopen(\"$file_name\", H5F_ACC_RDONLY, plist_id_$num);\n"
+        s *= "file_id_$num = H5Fopen("*from_expr(file_name)*", H5F_ACC_RDONLY, plist_id_$num);\n"
         s *= "assert(file_id_$num != -1);\n"
         s *= "ret_$num = H5Pclose(plist_id_$num);\n"
         s *= "assert(ret_$num != -1);\n"
         s *= "hid_t dataset_id_$num;\n"
-        s *= "dataset_id_$num = H5Dopen2(file_id_$num, \"$data_var\", H5P_DEFAULT);\n"
+        s *= "dataset_id_$num = H5Dopen2(file_id_$num, "*from_expr(data_var)*", H5P_DEFAULT);\n"
         s *= "assert(dataset_id_$num != -1);\n"
-
-        return s
-    else
-        return ""
     end
+    return s
 end
 
 function pattern_match_call_data_src_open(f::Any, v::Any, rf::Any, o::Any, arr::Any)
