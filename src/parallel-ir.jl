@@ -289,14 +289,25 @@ type InputInfo
     range :: Array{DimensionSelector,1}  # Empty if whole array, else one RangeData or BitArray mask per dimension.
     elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
     pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
-    rangeconds :: Expr                   # if selecting based on bitarrays, conditional for selecting elements
+    rangeconds :: Array{Expr,1}          # If selecting based on bitarrays, conditional for selecting elements
 
     function InputInfo()
-        new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
+        new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr[])
     end
     function InputInfo(arr)
-        new(arr, 0, 0, DimensionSelector[], nothing, Expr[], Expr(:noop))
+        new(arr, 0, 0, DimensionSelector[], nothing, Expr[], Expr[])
     end
+end
+
+function show(io::IO, ii :: ParallelAccelerator.ParallelIR.InputInfo)
+    println(io,"")
+    println(io,"array   = ", ii.array)
+    println(io,"dim     = ", ii.dim)
+    println(io,"out_dim = ", ii.out_dim)
+    println(io,"range   = ", length(ii.range), " ", ii.range)
+    println(io,"eltemp  = ", ii.elementTemp)
+    println(io,"pre     = ", ii.pre_offsets)
+    println(io,"conds   = ", ii.rangeconds)
 end
 
 """
@@ -2007,6 +2018,7 @@ end
 
 function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
+    dprintln(3, "getCorrelation for inputInfo num_dim_inputs = ", num_dim_inputs)
     if isRange(inputInfo)
         return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
     else
@@ -3523,6 +3535,7 @@ function extractArrayEquivalencies(node :: Expr, state)
         push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
 #    num_dim_inputs = findSelectedDimensions(inputInfo, state)
+    dprintln(3, "inputInfo = ", inputInfo)
 
     main_length_correlation = getCorrelation(inputInfo[1], state)
     # Get the correlation set of the first input array.

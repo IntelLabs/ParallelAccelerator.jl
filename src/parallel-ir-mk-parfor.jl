@@ -119,6 +119,44 @@ function mk_arrayref1(num_dim_inputs,
 end
 
 """
+Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
+"""
+function mk_mask_arrayref1(cur_dimension,
+                           num_dim_inputs, 
+                           array_name, 
+                           index_vars, 
+                           inbounds, 
+                           state     :: expr_state, 
+                           range     :: Array{DimensionSelector,1} = DimensionSelector[])
+    dprintln(3,"mk_mask_arrayref1 typeof(index_vars) = ", typeof(index_vars))
+    dprintln(3,"mk_mask_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
+    elem_typ = getArrayElemType(array_name, state)
+    dprintln(3,"mk_mask_arrayref1 element type = ", elem_typ)
+    dprintln(3,"mk_mask_arrayref1 range = ", range)
+    dprintln(3,"mk_mask_arrayref1 cur_dim = ", cur_dimension)
+
+    if inbounds
+        fname = :unsafe_arrayref
+    else
+        fname = :arrayref
+    end
+
+    indsyms = [ x <= num_dim_inputs ? 
+                   augment_sn(x, index_vars, range) : 
+                   index_vars[x] 
+                for x = 1:length(index_vars) ]
+    dprintln(3,"mk_mask_arrayref1 indsyms = ", indsyms)
+
+    TypedExpr(
+        elem_typ,
+        :call,
+        TopNode(fname),
+        :($array_name),
+        indsyms[cur_dimension])
+end
+
+"""
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 """
@@ -507,11 +545,31 @@ function get_mmap_input_info(input_array :: Expr, state)
         argtyp = typeof(thisInfo.array)
         dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
         @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
-        select_kind = input_array.args[2].head
+
+        selector    = input_array.args[2]
+        select_kind = selector.head
         @assert (select_kind==:tomask || select_kind==:range || select_kind==:ranges) ":select should have :tomask or :range or :ranges in args[2]"
         dprintln(3,"select_kind = ", select_kind)
+
         if select_kind == :tomask
-            thisInfo.range = [MaskSelector(x) for x in input_array.args[2].args]
+            # We support two cases.
+            # 1) There is a separate 1D mask for each dimension of the input array thisInfo.array.
+            # 2) There is one N-dimensional mask and the input array is also N-dimensional.
+            if thisInfo.dim == length(selector.args)
+                dprintln(3, "One 1D mask per dimension.")
+                thisInfo.range = [MaskSelector(x) for x in selector.args]
+            elseif length(selector.args) == 1
+                ndim_mask = selector.args[1]
+                ndim_mask_dim = getArrayNumDims(ndim_mask, state)
+                if ndim_mask_dim == thisInfo.dim
+                    dprintln(3, "One mask of ", thisInfo.dim, " dimension.")
+                    thisInfo.range = [MaskSelector(ndim_mask) for i=1:thisInfo.dim] 
+                else
+                    throw(string(":tomask selector was 1-element but the dimensionality of the mask array did not match the dimensionality of the input array."))
+                end
+            else
+                throw(string(":tomask selector was neither 1-element nor equal in length to the number of input array dimensions."))
+            end
             thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
         else
             (thisInfo.range, thisInfo.out_dim) = selectToRangeData(input_array, thisInfo.pre_offsets, state)
@@ -542,15 +600,28 @@ function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_sym
         if !isa(thisInfo.range[i], MaskSelector)
             continue
         end        
-        if i > 1
-            throw(string("bitarray_mask only support for 1D arrays"))
-        end
         mask_array = thisInfo.range[i].value
-        # this hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
-        #      if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
-        #        mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
-        #      end
-        thisInfo.rangeconds = mk_arrayref1(num_dim_inputs, mask_array, parfor_index_syms, true, state)
+        is_1d_mask = getArrayNumDims(mask_array, state) == 1
+
+        # We support a 1D mask per array dimension or a singular N-dimensional mask where N is
+        # the number of dimensions of the input array.  So, we will always create a rangeconds
+        # for the first mask in range array.  We duplicate the N-dimensional mask up to N entries
+        # so if we see a subsequent duplicate entry for a N-dimensional mask we don't create
+        # additional rangeconds.  1D masks will always get a rangeconds of course.
+        if i == 1 || ( (i > 1) && is_1d_mask)
+            # This hack helps Cgen by converting BitArray to Array{Bool,1}, but it causes an error in liveness analysis
+            # if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
+            #    mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
+            # end
+
+            # A 1D mask will only use one of the parfor index variables, based on the current dimension "i".
+            # A N-dimensional mask will use all the parfor index variables and can use the standard mk_arrayref1.
+            if is_1d_mask
+                push!(thisInfo.rangeconds, mk_mask_arrayref1(i, num_dim_inputs, mask_array, parfor_index_syms, true, state))
+            else
+                push!(thisInfo.rangeconds, mk_arrayref1(num_dim_inputs, mask_array, parfor_index_syms, true, state))
+            end
+        end
     end
 end
 
@@ -652,8 +723,8 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     elseLabel = next_label(state)
     condExprs = Any[]
     for i = 1:length(inputInfo)
-        if inputInfo[i].rangeconds.head != :noop
-            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+        for j = 1:length(inputInfo[i].rangeconds)
+            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds[j], elseLabel))
         end
     end
     out_body = out_body[1:oblen-1]
@@ -979,8 +1050,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     elseLabel = next_label(state)
     condExprs = Any[]
     for i = 1:length(inputInfo)
-        if inputInfo[i].rangeconds.head != :noop
-            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds, elseLabel))
+        for j = 1:length(inputInfo[i].rangeconds)
+            push!(condExprs, Expr(:gotoifnot, inputInfo[i].rangeconds[j], elseLabel))
         end
     end
     # Create each output array
