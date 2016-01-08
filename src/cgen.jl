@@ -1672,7 +1672,8 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
-function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::AbstractString, file_name::AbstractString, arr::Symbol)
+function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Union{SymAllGen,AbstractString}, file_name::Union{SymAllGen,AbstractString}, arr::Symbol)
+    s = ""
     if f==:__hps_data_source_HDF5_open
         num::AbstractString = from_expr(id.id)
     
@@ -1682,18 +1683,15 @@ function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Abstr
         s *= "hid_t file_id_$num;\n"
         s *= "ret_$num = H5Pset_fapl_mpio(plist_id_$num, MPI_COMM_WORLD, MPI_INFO_NULL);\n"
         s *= "assert(ret_$num != -1);\n"
-        s *= "file_id_$num = H5Fopen(\"$file_name\", H5F_ACC_RDONLY, plist_id_$num);\n"
+        s *= "file_id_$num = H5Fopen("*from_expr(file_name)*", H5F_ACC_RDONLY, plist_id_$num);\n"
         s *= "assert(file_id_$num != -1);\n"
         s *= "ret_$num = H5Pclose(plist_id_$num);\n"
         s *= "assert(ret_$num != -1);\n"
         s *= "hid_t dataset_id_$num;\n"
-        s *= "dataset_id_$num = H5Dopen2(file_id_$num, \"$data_var\", H5P_DEFAULT);\n"
+        s *= "dataset_id_$num = H5Dopen2(file_id_$num, "*from_expr(data_var)*", H5P_DEFAULT);\n"
         s *= "assert(dataset_id_$num != -1);\n"
-
-        return s
-    else
-        return ""
     end
+    return s
 end
 
 function pattern_match_call_data_src_open(f::Any, v::Any, rf::Any, o::Any, arr::Any)
@@ -1998,7 +1996,23 @@ function from_parforend(args)
     for i in 1:length(lpNests)
         s *= "}\n"
     end
-    s *= lstate.ompdepth <=1 ? "}\n}/*parforend*/\n" : "" # end block introduced by private list
+    rdsinit = rdsepilog = ""
+    rds = parfor.reductions
+    needs_custom_reduction = lstate.ompdepth <= 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    if needs_custom_reduction
+        nthreadsvar = "_num_threads"
+        rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
+        for rd in rds
+            rdv = rd.reductionVar
+            rdvtyp = toCtype(getSymType(rdv))
+            rdvar = from_expr(rdv)
+            rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            rdsepilog *= "const $rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
+            rdsepilog *= "$rdvar = " * from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
+        end
+        rdsepilog *= "}\n"
+    end
+    s *= lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
     dprintln(3,"Parforend = ", s)
     lstate.ompdepth -= 1
     s
@@ -2032,6 +2046,26 @@ function from_loopnest(ivs, starts, stops, steps)
     )
 end
 
+function from_reductionVarInit(reductionVarInit :: Function, a) 
+    from_expr(reductionVarInit(a))
+end
+
+function from_reductionVarInit(reductionVarInit :: Any, a)
+    from_expr(a) * " = " * from_expr(reductionVarInit) * ";\n"
+end
+
+function from_reductionFunc(reductionFunc :: Symbol, a, b) 
+    from_expr(a) * " " * string(reductionFunc) * " " * from_expr(b)
+end
+
+function from_reductionFunc(reductionFunc :: Function, a, b) 
+    from_expr(reductionFunc(a, b))
+end
+
+function from_reductionFunc(reductionFunc :: Any, a, b)
+    throw(string("CGen Error: Unsupported redunction function: ", reductionFunc, " :: ", typeof(reductionFunc)))
+end
+
 # If the parfor body is too complicated then DomainIR or ParallelIR will set
 # instruction_count_expr = nothing
 
@@ -2039,6 +2073,7 @@ end
 # mode = 1 uses static insn count if it is there, but doesn't do dynamic estimation and fair core allocation between levels in a loop nest.
 # mode = 2 does all of the above
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
+
 
 function from_parforstart(args)
     global lstate
@@ -2081,22 +2116,72 @@ function from_parforstart(args)
 
     s = ""
 
+    # thread count related stuff
+    lcountexpr = ""
+    for i in 1:length(lpNests)
+        lcountexpr *= "(((" * starts[i] * ") + 1 - (" * stops[i] * ")) / (" * steps[i] * "))" * (i == length(lpNests) ? "" : " * ")
+    end
+    nthreadsvar = "_num_threads"
+    preclause = "unsigned $nthreadsvar;\n"
+    nthreadsclause = ""
+    instruction_count_expr = parfor.instruction_count_expr
+    if num_threads_mode == 1 && instruction_count_expr != nothing
+        insncount = from_expr(instruction_count_expr)
+        preclause = "$nthreadsvar = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n"
+        nthreadsclause = "num_threads($nthreadsvar) "
+    elseif num_threads_mode == 2
+        if instruction_count_expr != nothing
+            insncount = from_expr(instruction_count_expr)
+            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
+        else
+            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n"
+        end
+        preclause *= "$nthreadsvar = j2c_block_region_thread_count.getUsed();\n"
+        nthreadsclause = "num_threads($nthreadsvar)"
+    elseif num_threads_mode == 3
+        if instruction_count_expr != nothing
+            insncount = from_expr(instruction_count_expr)
+            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n"
+        else
+            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n"
+        end
+        preclause *= "$nthreadsvar = j2c_block_region_thread_count.getUsed();\n"
+        nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads($nthreadsvar) "
+    else
+        preclause *= "$nthreadsvar = omp_get_num_threads();\n"
+        nthreadsclause = "num_threads($nthreadsvar) "
+    end
+    dprintln(3, "preclause = ", preclause)
+    dprintln(3, "nthreadsvar = ", nthreadsvar)
+    dprintln(3, "nthreadsclause = ", nthreadsclause)
     # Generate initializers and OpenMP clauses for reductions
     rds = parfor.reductions
-    rdvars = rdinis = rdops = ""
+    # non-symbol reductionFunc is not supported by OpenMP
+    rdsextra = rdsprolog = rdsclause = ""
     dprintln(3,"reductions = ", rds);
-    if !isempty(rds)
-        rdvars = map((a)->from_expr(a.reductionVar), rds)
-        rdinis = map((a)->from_expr(a.reductionVarInit), rds)
-        rdops  = map((a)->string(a.reductionFunc), rds)
-    end
-    rdsprolog = rdsclause = ""
-    for i in 1:length(rds)
-        rdsprolog *= "$(rdvars[i]) = $(rdinis[i]);\n"
-        rdsclause *= "reduction($(rdops[i]) : $(rdvars[i])) "
-    end
-
     lstate.ompdepth += 1
+    # custom reduction only kicks in when omp parallel is produced, i.e., when ompdepth == 1
+    needs_custom_reduction = lstate.ompdepth == 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    for rd in rds
+        rdv = rd.reductionVar
+        rdvtyp = toCtype(getSymType(rdv))
+        rdvar = from_expr(rdv)
+        if needs_custom_reduction
+            rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
+            rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
+            rdsprolog *= "$rdvtyp &$rdvar = $(rdvar)_vec[rds_init_loop_var];\n"
+            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv) * "}\n"
+            #push!(private_vars, rdv)
+            rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
+        else
+            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            rdop = string(rd.reductionFunc)
+            rdsclause *= "reduction($(rdop) : $(rdvar)) "
+        end
+    end
+    dprintln(3, "rdsprolog = ", rdsprolog)
+    dprintln(3, "rdsclause = ", rdsclause)
+
     # Don't put openmp pragmas on nested parfors.
     if lstate.ompdepth > 1
         # Still need to prepend reduction variable initialization for non-openmp loops.
@@ -2111,38 +2196,7 @@ function from_parforstart(args)
     privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
 
 
-    lcountexpr = ""
-    for i in 1:length(lpNests)
-        lcountexpr *= "(((" * starts[i] * ") + 1 - (" * stops[i] * ")) / (" * steps[i] * "))" * (i == length(lpNests) ? "" : " * ")
-    end
-    preclause = ""
-    nthreadsclause = ""
-    instruction_count_expr = parfor.instruction_count_expr
-    if num_threads_mode == 1
-        if instruction_count_expr != nothing
-            insncount = from_expr(instruction_count_expr)
-            preclause = "unsigned _vnfntc = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n";
-            nthreadsclause = "num_threads(_vnfntc) "
-        end
-    elseif num_threads_mode == 2
-        if instruction_count_expr != nothing
-            insncount = from_expr(instruction_count_expr)
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
-        else
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n";
-        end
-        nthreadsclause = "num_threads(j2c_block_region_thread_count.getUsed()) "
-    elseif num_threads_mode == 3
-        if instruction_count_expr != nothing
-            insncount = from_expr(instruction_count_expr)
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n";
-        else
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n";
-        end
-        nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads(j2c_block_region_thread_count.getUsed()) ";
-    end
-
-    s *= rdsprolog * "{\n$preclause #pragma omp parallel $nthreadsclause $privatevars\n{\n"
+    s *= "{\n$preclause $rdsprolog #pragma omp parallel $nthreadsclause $privatevars\n{\n$rdsextra"
     s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     s *= loopheaders
     s
@@ -2163,13 +2217,9 @@ function from_parforstart_serial(args)
     rds = parfor.reductions
     rdvars = rdinis = ""
     dprintln(3,"reductions = ", rds);
-    if !isempty(rds)
-        rdvars = map((a)->from_expr(a.reductionVar), rds)
-        rdinis = map((a)->from_expr(a.reductionVarInit), rds)
-    end
     rdsprolog = ""
-    for i in 1:length(rds)
-        rdsprolog *= "$(rdvars[i]) = $(rdinis[i]);\n"
+    for rd in rds
+        rdsprolog *= from_expr(rd, from_reductionVarInit(rd.reductionVarInit, rd.reductionVar))
     end
 
     return rdsprolog*"\n{ {\n"*from_loopnest(ivs, starts, stops, steps)

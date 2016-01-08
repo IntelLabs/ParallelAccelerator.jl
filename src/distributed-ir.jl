@@ -40,6 +40,7 @@ import ..ParallelIR.isArrayType
 import ..ParallelIR.getParforNode
 import ..ParallelIR.isAllocation
 import ..ParallelIR.TypedExpr
+import ..ParallelIR.get_alloc_shape
 
 import ..ParallelIR.ISCAPTURED
 import ..ParallelIR.ISASSIGNED
@@ -164,10 +165,9 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
     # arrays written in parfors are ok for now
     
     dprintln(3,"DistIR arr info walk Expr node: ", node)
-    # length==8 since 1D only is supported for now
-    if head==:(=) && isAllocation(node.args[2]) && length(node.args[2].args)==8
+    if head==:(=) && isAllocation(node.args[2]) 
         arr = toSymGen(node.args[1])
-        state.arrs_dist_info[arr].dim_sizes = [node.args[2].args[7]] # 1D hack
+        state.arrs_dist_info[arr].dim_sizes = get_alloc_shape(node.args[2].args[2:end])
         dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
     elseif head==:parfor
         parfor = getParforNode(node)
@@ -179,8 +179,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         # keep mapping from parfors to arrays
         state.parfor_info[parfor.unique_id] = allArrs
         
-        # only 1D parfors supported for now
-        if length(parfor.arrays_read_past_index)!=0 || length(parfor.arrays_written_past_index)!=0 || length(parfor.loopNests)!=1
+        if length(parfor.arrays_read_past_index)!=0 || length(parfor.arrays_written_past_index)!=0 
             dprintln(2,"DistIR arr info walk parfor sequential: ", node)
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
@@ -191,7 +190,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
-             if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
+             if length(index)!=1 || index[1][end].name!=indexVariable.name
                 dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
@@ -199,7 +198,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
-             if length(index)!=1 || length(index[1])!=1 || index[1][1].name!=indexVariable.name
+             if length(index)!=1 || index[1][end].name!=indexVariable.name
                 dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
@@ -346,8 +345,9 @@ function from_assignment(node::Expr, state)
     if isAllocation(node.args[2])
         arr = node.args[1]
         if in(arr, state.dist_arrays)
+            shape = get_alloc_shape(node.args[2].args[2:end])
             # generate array division
-            old_size = node.args[2].args[7]
+            old_size = shape[end]
 
             div_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
             new_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
@@ -376,8 +376,8 @@ function from_parfor(node::Expr, state)
     parfor = node.args[1]
 
     if !in(state.seq_parfors, parfor.unique_id)
-        @assert length(parfor.loopNests)==1 "DistIR only 1D PIR loop supported now"
 
+        # TODO: assuming 1st loop nest is the last dimension
         loopnest = parfor.loopNests[1]
         # TODO: build a constant table and check the loop variables at this stage
         # @assert loopnest.lower==1 && loopnest.step==1 "DistIR only simple PIR loops supported now"
@@ -436,8 +436,9 @@ function from_call(node::Expr, state)
         dprintln(3,"DistIR data source for array: ", arr)
         
         dim_sizes = state.arrs_dist_info[arr].dim_sizes
-        @assert length(dim_sizes)==1 "Only 1D data source supported"
-        arr_tot_size = dim_sizes[1]
+        # simple 1D partitioning of last dimension, more general partitioning needed
+        # match common big data matrix reperesentation
+        arr_tot_size = dim_sizes[end]
         
         dsrc_start_var = symbol("__hps_data_source_start_"*string(getDistNewID(state)))
         dsrc_div_var = symbol("__hps_data_source_div_"*string(getDistNewID(state)))
@@ -469,9 +470,9 @@ function adjust_arrayrefs(stmt::Expr, loop_start_var::Symbol)
         topCall = stmt.args[2].args[1]
         #ref_args = stmt.args[2].args[2:end]
         if topCall.name==:unsafe_arrayref || topCall.name==:unsafe_arrayset
-            @assert length(stmt.args[2].args)==3 "DistIR only 1D parfor array access supported for now"
-            index_arg = stmt.args[2].args[3]
-            stmt.args[2].args[3] = :($(index_arg.name)-$loop_start_var+1)
+            # TODO: simply divide the last dimension, more general partitioning needed
+            index_arg = stmt.args[2].args[end]
+            stmt.args[2].args[end] = :($(index_arg.name)-$loop_start_var+1)
         end
     end
 end
