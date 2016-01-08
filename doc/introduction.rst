@@ -4,16 +4,23 @@
 Introduction
 *********
 
+*ParallelAccelerator* is a Julia package for speeding up
+compute-intensive Julia programs.  In particular, Julia code that
+makes heavy use of high-level array operations is a good candidate for
+speeding up with ParallelAccelerator.
 
-ParallelAccelerator package is a compiler framework that aggressively 
-optimizes compute-intensive Julia programs on top of the Julia compiler.
-It automatically eliminates overheads such as array bounds checking when
-it is safe to eliminate them. It also parallelizes and vectorizes many 
-data-parallel operations. Users can just add @acc macro before 
-their functions to accelerate them.
+With the ``@acc`` macro that ParallelAccelerator provides, users may
+specify parts of a program to accelerate.  ParallelAccelerator
+compiles these parts of the program to fast native code.  It
+automatically eliminates overheads such as array bounds checking when
+it is safe to do so.  It also parallelizes and vectorizes many
+data-parallel operations.
 
-ParallelAccelerator is part of the High Performance Scripting (HPS) project at Intel Labs.
+ParallelAccelerator is part of the High Performance Scripting (HPS)
+project at Intel Labs.
 
 Quick install (requires Julia 0.4)::
 
         Pkg.add("ParallelAccelerator") 
+
+Read on for more detailed installation and usage information.
