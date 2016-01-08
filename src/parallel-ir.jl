@@ -2156,7 +2156,7 @@ function fuse(body, body_index, cur, state)
     prev_parfor = getParforNode(prev)
     cur_parfor  = getParforNode(cur)
 
-    sym_to_type   = Dict{SymGen, DataType}()
+    sym_to_type = Dict{SymGen, DataType}()
 
     dprintln(2, "prev = ", prev)
     dprintln(2, "cur = ", cur)
@@ -2164,11 +2164,7 @@ function fuse(body, body_index, cur, state)
     dprintln(2, "cur.typ = ", cur.typ)
 
     prev_assignment = isAssignmentNode(prev)
-    cur_assignment  = isAssignmentNode(cur)
 
-    cur_input_set = getInputSet(cur_parfor)
-    dprintln(2, "cur_input_set = ", cur_input_set)
-    first_in = first(cur_input_set)
     out_correlation = getParforCorrelation(prev_parfor, state)
     if out_correlation == nothing
         dprintln(3, "Fusion will not happen because out_correlation = nothing")
@@ -2179,7 +2175,6 @@ function fuse(body, body_index, cur, state)
         dprintln(3, "Fusion will not happen because in_correlation = nothing")
         return false
     end
-    dprintln(3,"first_in = ", first_in)
     dprintln(3,"Fusion correlations ", out_correlation, " ", in_correlation)
 
     is_prev_multi = isFusionAssignment(prev)
@@ -4470,7 +4465,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
     dprintln(3,"Final ParallelIR = ", ast)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-    (new_vars.max_label, ast, ast.args[3].args)
+    (new_vars.max_label, ast, ast.args[3].args, new_vars.block_lives)
 end
 
 function addStatementsToBeginning(lambda :: Expr, stmts :: Array{Any,1})

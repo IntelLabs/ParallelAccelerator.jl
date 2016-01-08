@@ -679,13 +679,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     pre_statements  = Any[]
     post_statements = Any[]
 
-    # Make sure each input array is a SymbolNode
-    # Also, create indexed versions of those symbols for the loop body
-    for(i = 1:length(inputInfo))
-        push!(out_body, mk_assignment_expr(inputInfo[i].elementTemp, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-    end
-
-    # not used here?
+   # not used here?
     save_array_lens = AbstractString[]
     # generates loopnests and updates pre_statements
     loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
@@ -703,9 +697,19 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
     dprintln(3,"dl_inputs = ", dl_inputs)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    (max_label, nested_lambda, nested_body, body_lives) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    gensym_map  = mergeLambdaIntoOuterState(state, nested_lambda)
     nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
+
+    # Make sure each input array is a SymbolNode
+    # Also, create indexed versions of those symbols for the loop body
+    for(i = 1:length(inputInfo))
+        # If indexed_arrays[i] is not "use" in body_lives then we don't need to generate this statement.
+        if CompilerTools.LivenessAnalysis.is_use(toSymGen(indexed_arrays[i]), body_lives)
+            push!(out_body, mk_assignment_expr(indexed_arrays[i], mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
+        end
+    end
+
     state.max_label = max_label
     out_body = [out_body; nested_body...]
     dprintln(2,"typeof(out_body) = ",typeof(out_body))
