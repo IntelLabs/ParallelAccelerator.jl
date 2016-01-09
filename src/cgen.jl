@@ -203,7 +203,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "unbox", "tuple", "arraysize", "arraylen", "ccall",
             "arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
             "safe_arrayref", "safe_arrayset", "tupleref",
-            "call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", "nfields",
+            "call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", ":jl_alloc_array_3d", "nfields",
             "_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
             ":jl_array_ptr", "sizeof", "pointer", 
             # We also consider type casting here
@@ -1148,9 +1148,7 @@ function from_builtins(f, args)
         return from_ccall(args)
     elseif tgt == "arrayset"
         return from_arrayset(args)
-    elseif tgt == ":jl_alloc_array_1d" || tgt == ":jl_new_array"
-        return from_arrayalloc(args)
-    elseif tgt == ":jl_alloc_array_2d"
+    elseif tgt == ":jl_new_array" || tgt == ":jl_alloc_array_1d" || tgt == ":jl_alloc_array_2d" || tgt == ":jl_alloc_array_3d"
         return from_arrayalloc(args)
     elseif tgt == ":jl_array_ptr"
         return from_array_ptr(args)
