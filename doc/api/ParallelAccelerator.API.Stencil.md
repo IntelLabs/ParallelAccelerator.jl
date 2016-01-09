@@ -45,7 +45,7 @@ optimizations.
 
 
 *source:*
-[ParallelAccelerator/src/api-stencil.jl:142](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/api-stencil.jl)
+[ParallelAccelerator/src/api-stencil.jl:142](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/api-stencil.jl#L142)
 
 ## Internal
 
@@ -57,7 +57,7 @@ This function is a AstWalker callback.
 
 
 *source:*
-[ParallelAccelerator/src/api-stencil.jl:377](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/api-stencil.jl)
+[ParallelAccelerator/src/api-stencil.jl:377](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/api-stencil.jl#L377)
 
 ---
 
@@ -67,5 +67,5 @@ Translate all comprehension in an AST into equivalent code that uses cartesianar
 
 
 *source:*
-[ParallelAccelerator/src/api-stencil.jl:392](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/api-stencil.jl)
+[ParallelAccelerator/src/api-stencil.jl:392](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/api-stencil.jl#L392)
 

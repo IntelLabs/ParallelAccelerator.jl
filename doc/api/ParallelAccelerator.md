@@ -10,7 +10,7 @@ Called when the package is loaded to do initialization.
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:206](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:209](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L209)
 
 ---
 
@@ -21,7 +21,7 @@ It then calls the version above specifying the path.
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:185](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:185](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L185)
 
 ---
 
@@ -32,7 +32,7 @@ It will attempt to add a userimg.jl file to your Julia distribution and then re-
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:138](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:138](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L138)
 
 ---
 
@@ -43,7 +43,7 @@ This should be the root of the package.
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:126](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:126](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L126)
 
 ---
 
@@ -53,7 +53,7 @@ Return internal mode number by looking up environment variable "PROSPECT_MODE".
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:57](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:57](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L57)
 
 ---
 
@@ -65,5 +65,5 @@ getPseMode() is TASK_MODE.
 
 
 *source:*
-[ParallelAccelerator/src/ParallelAccelerator.jl:100](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/ParallelAccelerator.jl)
+[ParallelAccelerator/src/ParallelAccelerator.jl:100](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/ParallelAccelerator.jl#L100)
 

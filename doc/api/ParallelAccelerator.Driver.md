@@ -11,7 +11,7 @@ those defined in ParallelAccelerator.API.
 
 
 *source:*
-[ParallelAccelerator/src/driver.jl:98](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/driver.jl)
+[ParallelAccelerator/src/driver.jl:98](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/driver.jl#L98)
 
 ---
 
@@ -22,7 +22,7 @@ This is only used when PROSPECT_MODE is off.
 
 
 *source:*
-[ParallelAccelerator/src/driver.jl:107](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/driver.jl)
+[ParallelAccelerator/src/driver.jl:107](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/driver.jl#L107)
 
 ---
 
@@ -32,5 +32,5 @@ Pass for comprehension to cartesianarray translation.
 
 
 *source:*
-[ParallelAccelerator/src/driver.jl:114](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/driver.jl)
+[ParallelAccelerator/src/driver.jl:114](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/driver.jl#L114)
 

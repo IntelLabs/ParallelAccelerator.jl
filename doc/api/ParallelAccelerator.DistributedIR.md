@@ -11,7 +11,7 @@ If an array is used in any sequential parfor, it is not distributable.
 
 
 *source:*
-[ParallelAccelerator/src/distributed-ir.jl:233](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/distributed-ir.jl)
+[ParallelAccelerator/src/distributed-ir.jl:232](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/distributed-ir.jl#L232)
 
 ---
 
@@ -21,5 +21,5 @@ mark sequential arrays
 
 
 *source:*
-[ParallelAccelerator/src/distributed-ir.jl:161](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/distributed-ir.jl)
+[ParallelAccelerator/src/distributed-ir.jl:162](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/distributed-ir.jl#L162)
 

@@ -11,7 +11,7 @@ Return nothing If none is found.
 
 
 *source:*
-[ParallelAccelerator/src/domain-ir.jl:259](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/domain-ir.jl)
+[ParallelAccelerator/src/domain-ir.jl:262](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/domain-ir.jl#L262)
 
 ---
 
@@ -22,7 +22,7 @@ Return the last rhs If found, or the input variable itself otherwise.
 
 
 *source:*
-[ParallelAccelerator/src/domain-ir.jl:273](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/domain-ir.jl)
+[ParallelAccelerator/src/domain-ir.jl:276](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/domain-ir.jl#L276)
 
 ---
 
@@ -33,7 +33,7 @@ Return nothing If none is found.
 
 
 *source:*
-[ParallelAccelerator/src/domain-ir.jl:250](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/domain-ir.jl)
+[ParallelAccelerator/src/domain-ir.jl:253](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/domain-ir.jl#L253)
 
 ---
 
@@ -44,7 +44,7 @@ Return nothing If none is found.
 
 
 *source:*
-[ParallelAccelerator/src/domain-ir.jl:286](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/domain-ir.jl)
+[ParallelAccelerator/src/domain-ir.jl:289](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/domain-ir.jl#L289)
 
 ---
 
@@ -54,5 +54,5 @@ Update the definition of a variable.
 
 
 *source:*
-[ParallelAccelerator/src/domain-ir.jl:235](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/domain-ir.jl)
+[ParallelAccelerator/src/domain-ir.jl:238](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/domain-ir.jl#L238)
 

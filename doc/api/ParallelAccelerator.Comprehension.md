@@ -10,7 +10,7 @@ Translate all comprehension in an AST into equivalent code that uses cartesianar
 
 
 *source:*
-[ParallelAccelerator/src/comprehension.jl:82](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/comprehension.jl)
+[ParallelAccelerator/src/comprehension.jl:82](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/comprehension.jl#L82)
 
 ## Internal
 
@@ -22,7 +22,7 @@ Translate an ast whose head is :comprehension into equivalent code that uses car
 
 
 *source:*
-[ParallelAccelerator/src/comprehension.jl:35](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/comprehension.jl)
+[ParallelAccelerator/src/comprehension.jl:35](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/comprehension.jl#L35)
 
 ---
 
@@ -32,5 +32,5 @@ This function is a AstWalker callback.
 
 
 *source:*
-[ParallelAccelerator/src/comprehension.jl:64](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/comprehension.jl)
+[ParallelAccelerator/src/comprehension.jl:64](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/comprehension.jl#L64)
 

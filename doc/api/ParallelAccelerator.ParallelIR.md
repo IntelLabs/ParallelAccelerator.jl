@@ -19,7 +19,7 @@ The Domain IR callback will return "nothing" if the node isn't a Domain IR node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4876](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5229](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5229)
 
 ---
 
@@ -29,17 +29,18 @@ If set to non-zero, perform the phase where non-inplace maps are converted to in
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3816](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4139](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4139)
 
 ---
 
 <a id="method__pirnumsimplify.1" class="lexicon_definition"></a>
 #### PIRNumSimplify(x) [¶](#method__pirnumsimplify.1)
 Specify the number of passes over the AST that do things like hoisting and other rearranging to maximize fusion.
+DEPRECATED.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1672](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1950](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1950)
 
 ---
 
@@ -49,7 +50,7 @@ Debugging feature to specify the number of tasks to create and to stop thereafte
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1853](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2140](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2140)
 
 ---
 
@@ -62,7 +63,7 @@ Control how many parfor can be fused for testing purposes.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1667](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1944](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1944)
 
 ---
 
@@ -73,7 +74,7 @@ use a special assignment node like a move assignment in C++.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3842](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4165](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4165)
 
 ---
 
@@ -83,7 +84,7 @@ Control how blocks of code are made into tasks.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:589](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:589](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L589)
 
 ---
 
@@ -94,7 +95,7 @@ Differentiate between top-level arrays of statements and arrays of expression th
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2274](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2567](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2567)
 
 ---
 
@@ -104,7 +105,7 @@ Holds the information about a loop in a parfor node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:76](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:89](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L89)
 
 ---
 
@@ -116,7 +117,7 @@ makes it easier to associate related statements before and after the loop to the
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:174](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:333](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L333)
 
 ---
 
@@ -126,7 +127,7 @@ Holds the information about a reduction in a parfor node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:86](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:99](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L99)
 
 ## Internal
 
@@ -138,7 +139,7 @@ AstWalk callback that handles ParallelIR AST node types.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4724](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5054](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5054)
 
 ---
 
@@ -149,7 +150,7 @@ Return the equivalence class for the symbol.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:139](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:152](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L152)
 
 ---
 
@@ -159,7 +160,7 @@ Clear an equivalence class.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:153](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:166](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L166)
 
 ---
 
@@ -173,7 +174,7 @@ equivalence class, change it to now belong to the merge_to equivalence class.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:123](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:136](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L136)
 
 ---
 
@@ -183,7 +184,7 @@ If set to non-zero, perform the bubble-sort like reordering phase to coalesce mo
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3832](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4155](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4155)
 
 ---
 
@@ -193,7 +194,7 @@ If set to non-zero, perform the rearrangement phase that tries to moves alllocat
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3824](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4147](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4147)
 
 ---
 
@@ -203,7 +204,7 @@ This should pretty always be used instead of Expr(...) to form an expression as 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:67](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:80](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L80)
 
 ---
 
@@ -213,17 +214,17 @@ Given an array whose name is in "x", allocate a new equivalence class for this a
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:746](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:866](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L866)
 
 ---
 
 <a id="method__addunknownrange.1" class="lexicon_definition"></a>
-#### addUnknownRange(x::Array{Any, 1},  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__addunknownrange.1)
+#### addUnknownRange(x::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1},  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__addunknownrange.1)
 Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:755](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:876](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L876)
 
 ---
 
@@ -234,7 +235,7 @@ get the equivalence classes for the two arrays and merge those equivalence class
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:792](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:917](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L917)
 
 ---
 
@@ -244,17 +245,17 @@ Return one element array with element x.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4715](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5045](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5045)
 
 ---
 
 <a id="method__augment_sn.1" class="lexicon_definition"></a>
-#### augment_sn(dim::Int64,  index_vars,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) [¶](#method__augment_sn.1)
+#### augment_sn(dim::Int64,  index_vars,  range::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1}) [¶](#method__augment_sn.1)
 Make sure the index parameters to arrayref or arrayset are Int64 or SymbolNode.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:29](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:60](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L60)
 
 ---
 
@@ -264,7 +265,7 @@ Generate an instruction count estimate for a call instruction.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:352](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:352](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L352)
 
 ---
 
@@ -276,7 +277,7 @@ Extract just the dimension variables names into dim_names and then register the 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3277](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3577](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3577)
 
 ---
 
@@ -287,7 +288,7 @@ Returns the updated statement if something was modifed, else returns "nothing".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:951](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:950](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L950)
 
 ---
 
@@ -298,7 +299,7 @@ statement, else return the unmodified statement.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:970](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:969](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L969)
 
 ---
 
@@ -310,7 +311,7 @@ in the state when such a replacement is performed.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:919](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:918](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L918)
 
 ---
 
@@ -323,7 +324,7 @@ and if it is then it must be removed from copies.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2849](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3148](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3148)
 
 ---
 
@@ -333,7 +334,7 @@ AstWalk callback to count the number of static times that a symbol is assigne wi
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:920](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1197](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1197)
 
 ---
 
@@ -344,7 +345,7 @@ Presumes that for point "i" in the iteration space that only index "i" is access
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:124](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:124](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L124)
 
 ---
 
@@ -355,7 +356,7 @@ Presumes that for points "(i,j)" in the iteration space that only indices "(i,j)
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:134](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:134](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L134)
 
 ---
 
@@ -365,7 +366,7 @@ Takes a parfor and walks the body of the parfor and estimates the number of inst
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:557](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:557](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L557)
 
 ---
 
@@ -376,7 +377,7 @@ maps each array to the transitively lowered array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1840](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2127](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2127)
 
 ---
 
@@ -393,7 +394,7 @@ sym_to_type is an out parameter that maps symbols in the output mapping to their
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1774](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2061](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2061)
 
 ---
 
@@ -404,7 +405,7 @@ Returns a symbol node of the new variable.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:639](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:759](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L759)
 
 ---
 
@@ -414,7 +415,17 @@ Create a temporary variable that is parfor private to hold the value of an eleme
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:647](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:767](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L767)
+
+---
+
+<a id="method__createtempforarray.2" class="lexicon_definition"></a>
+#### createTempForArray(array_sn::Union{GenSym, Symbol, SymbolNode},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state,  temp_type) [¶](#method__createtempforarray.2)
+Create a temporary variable that is parfor private to hold the value of an element of an array.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:767](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L767)
 
 ---
 
@@ -424,17 +435,17 @@ Create a variable to hold the offset of a range offset from the start of the arr
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:322](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:452](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L452)
 
 ---
 
 <a id="method__createtempforrangedarray.1" class="lexicon_definition"></a>
-#### createTempForRangedArray(array_sn::Union{GenSym, Symbol, SymbolNode},  range::Array{Union{GenSym, SymbolNode}, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__createtempforrangedarray.1)
+#### createTempForRangedArray(array_sn::Union{GenSym, Symbol, SymbolNode},  range::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1},  unique_id::Int64,  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__createtempforrangedarray.1)
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:338](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:479](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L479)
 
 ---
 
@@ -444,7 +455,7 @@ Create an array access descriptor for "array".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:144](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:144](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L144)
 
 ---
 
@@ -454,7 +465,7 @@ AstWalk callback to determine the array equivalence classes.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3405](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3727](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3727)
 
 ---
 
@@ -464,7 +475,7 @@ Construct a topological sort of the dependence graph.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3863](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4186](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4186)
 
 ---
 
@@ -474,7 +485,7 @@ AstWalk callback for estimating the instruction count.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:474](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:474](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L474)
 
 ---
 
@@ -485,7 +496,7 @@ don't already have one and make sure they all share one equivalence class.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3215](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3516](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3516)
 
 ---
 
@@ -498,7 +509,7 @@ arrays have the same output dimensions because this will match the loop nest siz
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:745](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:959](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L959)
 
 ---
 
@@ -511,7 +522,27 @@ form where we have a parfor_start and parfor_end to delineate the parfor code.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-flatten.jl:94](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-flatten.jl)
+[ParallelAccelerator/src/parallel-ir-flatten.jl:94](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-flatten.jl#L94)
+
+---
+
+<a id="method__form_and_simplify.1" class="lexicon_definition"></a>
+#### form_and_simplify(ranges::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1}) [¶](#method__form_and_simplify.1)
+For each entry in ranges, form a range length expression and simplify them.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:1034](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1034)
+
+---
+
+<a id="method__form_and_simplify.2" class="lexicon_definition"></a>
+#### form_and_simplify(rd::ParallelAccelerator.ParallelIR.RangeData) [¶](#method__form_and_simplify.2)
+Convert one RangeData to some length expression and then simplify it.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:1010](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1010)
 
 ---
 
@@ -522,7 +553,7 @@ There are two arrays in the args to assertEqShape.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2604](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2901](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2901)
 
 ---
 
@@ -535,7 +566,7 @@ Eliminates the assignment of a=b if a is dead afterwards and b has no side effec
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2685](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2984](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2984)
 
 ---
 
@@ -545,7 +576,7 @@ Process a call AST node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2807](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3106](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3106)
 
 ---
 
@@ -555,7 +586,7 @@ The main ParallelIR function for processing some node in the AST.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4546](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4876](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4876)
 
 ---
 
@@ -565,7 +596,7 @@ Process a :lambda Expr.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:946](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1223](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1223)
 
 ---
 
@@ -584,7 +615,7 @@ c) Convert to task IR nodes if task mode enabled.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4208](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4535](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4535)
 
 ---
 
@@ -595,7 +626,7 @@ in the dictionary replace it with the corresponding value from the dict.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1829](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2116](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2116)
 
 ---
 
@@ -605,7 +636,7 @@ Test whether we can fuse the two most recent parfor statements and if so to perf
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1871](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2158](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2158)
 
 ---
 
@@ -615,7 +646,7 @@ Try to figure out the instruction count for a given call.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:398](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:398](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L398)
 
 ---
 
@@ -625,7 +656,7 @@ Returns the element type of an Array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:611](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:731](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L731)
 
 ---
 
@@ -635,7 +666,7 @@ Returns the element type of an Array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:604](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:724](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L724)
 
 ---
 
@@ -645,7 +676,7 @@ Returns the element type of an Array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:591](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:711](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L711)
 
 ---
 
@@ -655,7 +686,7 @@ Return the number of dimensions of an Array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:628](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:748](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L748)
 
 ---
 
@@ -665,7 +696,7 @@ Return the number of dimensions of an Array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:619](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:739](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L739)
 
 ---
 
@@ -678,7 +709,7 @@ the trailing dimensions.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:766](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:980](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L980)
 
 ---
 
@@ -688,7 +719,7 @@ Get the equivalence class of a domain IR input in inputInfo.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1747](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2024](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2024)
 
 ---
 
@@ -698,7 +729,7 @@ Get the variable which holds the length of the first input array to a parfor.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1438](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1715](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1715)
 
 ---
 
@@ -709,7 +740,7 @@ which symbols are needed at input and which symbols are purely local to the func
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:840](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:840](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L840)
 
 ---
 
@@ -719,7 +750,7 @@ Returns a Set with all the arrays read by this parfor.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1106](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1383](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1383)
 
 ---
 
@@ -729,7 +760,7 @@ Get the left-hand side of an assignment expression.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1077](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1354](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1354)
 
 ---
 
@@ -742,7 +773,7 @@ are the 4+ arguments to the expression.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1121](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1398](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1398)
 
 ---
 
@@ -752,7 +783,7 @@ Scan the body of a function in "stmts" and return the max label in a LabelNode A
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4026](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4349](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4349)
 
 ---
 
@@ -762,7 +793,7 @@ Find the basic block before the entry to a loop.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:5](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:5](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L5)
 
 ---
 
@@ -772,17 +803,17 @@ Return a correlation set for an array.  If the array was not previously added th
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:802](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:929](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L929)
 
 ---
 
 <a id="method__getoraddrangecorrelation.1" class="lexicon_definition"></a>
-#### getOrAddRangeCorrelation(ranges::Array{ParallelAccelerator.ParallelIR.RangeExprs, 1},  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__getoraddrangecorrelation.1)
+#### getOrAddRangeCorrelation(array,  ranges::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1},  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__getoraddrangecorrelation.1)
 Gets (or adds if absent) the range correlation for the given array of RangeExprs.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:813](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1071](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1071)
 
 ---
 
@@ -792,7 +823,7 @@ A new array is being created with an explicit size specification in dims.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:832](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1109](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1109)
 
 ---
 
@@ -802,7 +833,7 @@ Get the equivalence class of the first array who length is extracted in the pre-
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1740](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2017](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2017)
 
 ---
 
@@ -812,7 +843,18 @@ Get the parfor object from either a bare parfor or one part of an assignment.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1059](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1336](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1336)
+
+---
+
+<a id="method__getpastindex.1" class="lexicon_definition"></a>
+#### getPastIndex(arrays::Dict{Union{GenSym, Symbol}, Array{Array{Any, 1}, 1}}) [¶](#method__getpastindex.1)
+Look at the arrays that are accessed and see if they use a forward index, i.e.,
+an index that could be greater than 1.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:30](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L30)
 
 ---
 
@@ -822,7 +864,7 @@ Go through the body of a parfor and collect those Symbols, GenSyms, etc. that ar
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:898](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1175](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1175)
 
 ---
 
@@ -833,7 +875,7 @@ For each AST in a parfor body, if the node is an assignment or loop head node th
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:868](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1145](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1145)
 
 ---
 
@@ -843,7 +885,7 @@ Get the right-hand side of an assignment expression.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1070](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1347](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1347)
 
 ---
 
@@ -853,7 +895,7 @@ Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Ex
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2237](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2530](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2530)
 
 ---
 
@@ -864,7 +906,7 @@ context that the array should also be of length 1 and then return that single el
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4700](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5030](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5030)
 
 ---
 
@@ -874,7 +916,7 @@ If we need to generate a name and make sure it is unique then include an monoton
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:853](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1130](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1130)
 
 ---
 
@@ -887,7 +929,7 @@ or not.  Several common function calls that otherwise we wouldn't know are safe 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2547](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2840](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2840)
 
 ---
 
@@ -897,7 +939,7 @@ Returns true if the incoming AST node can be interpreted as a Symbol.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2218](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2511](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2511)
 
 ---
 
@@ -907,7 +949,7 @@ Try to hoist allocations outside the loop if possible.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3698](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4021](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4021)
 
 ---
 
@@ -917,7 +959,7 @@ Works with remove_no_deps below to move statements with no dependencies to the b
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3055](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3355](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3355)
 
 ---
 
@@ -927,7 +969,7 @@ Process an array of expressions that aren't from a :body Expr.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2288](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2581](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2581)
 
 ---
 
@@ -937,7 +979,7 @@ Returns true if the incoming type in "typ" is an array type.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:584](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:704](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L704)
 
 ---
 
@@ -947,7 +989,7 @@ Returns true if a given SymbolNode "x" is an Array type.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2316](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2609](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2609)
 
 ---
 
@@ -957,7 +999,7 @@ Is a node an arrayref node?
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1356](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1633](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1633)
 
 ---
 
@@ -967,7 +1009,7 @@ Is a node a call to arrayref.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1377](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1654](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1654)
 
 ---
 
@@ -977,7 +1019,7 @@ Is a node an arrayset node?
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1346](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1623](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1623)
 
 ---
 
@@ -987,7 +1029,7 @@ Is a node a call to arrayset.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1366](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1643](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1643)
 
 ---
 
@@ -997,7 +1039,7 @@ Is a node an assignment expression node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:987](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1264](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1264)
 
 ---
 
@@ -1007,7 +1049,7 @@ Is this a parfor node not part of an assignment statement.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1009](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1286](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1286)
 
 ---
 
@@ -1017,7 +1059,7 @@ Returns true if the given "ast" node is a DomainIR operation.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3882](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4205](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4205)
 
 ---
 
@@ -1029,7 +1071,7 @@ Check if an assignement is a fusion assignment.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1700](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1977](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1977)
 
 ---
 
@@ -1039,7 +1081,7 @@ Is a node a loophead expression node (a form of assignment).
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:998](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1275](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1275)
 
 ---
 
@@ -1049,7 +1091,7 @@ Is a node an assignment expression with a parfor node as the right-hand side.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1033](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1310](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1310)
 
 ---
 
@@ -1061,7 +1103,7 @@ Returns true if any variable in the collection "vars" is used in any statement w
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1716](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1993](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1993)
 
 ---
 
@@ -1071,7 +1113,7 @@ Returns true if the input node is an assignment node where the right-hand side i
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1589](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1866](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1866)
 
 ---
 
@@ -1081,7 +1123,7 @@ Returns true if input "a" is a tuple and each element of the tuple of isbits typ
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4493](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4823](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4823)
 
 ---
 
@@ -1092,7 +1134,7 @@ is identical to the dimenions of the inputs.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1086](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1363](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1363)
 
 ---
 
@@ -1102,7 +1144,7 @@ Form a Julia :lambda Expr from a DomainLambda.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4038](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4361](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4361)
 
 ---
 
@@ -1113,7 +1155,7 @@ variable to be parfor loop private and eventually go in an OMP private clause.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:659](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:781](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L781)
 
 ---
 
@@ -1123,7 +1165,7 @@ For a given start and stop index in some body and liveness information, form a s
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:759](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:759](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L759)
 
 ---
 
@@ -1134,7 +1176,7 @@ are next to each other and can be fused.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3926](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4249](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4249)
 
 ---
 
@@ -1144,7 +1186,7 @@ Pull the information from the inner lambda into the outer lambda.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1218](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1495](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1495)
 
 ---
 
@@ -1154,7 +1196,7 @@ If we somehow determine that two sets of correlations are actually the same leng
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:764](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:885](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L885)
 
 ---
 
@@ -1165,7 +1207,7 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:496](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:616](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L616)
 
 ---
 
@@ -1176,7 +1218,7 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:534](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:654](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L654)
 
 ---
 
@@ -1187,7 +1229,7 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:560](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:680](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L680)
 
 ---
 
@@ -1197,7 +1239,7 @@ Create an expression whose value is the length of the input array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:447](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:562](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L562)
 
 ---
 
@@ -1207,7 +1249,7 @@ Create an expression whose value is the length of the input array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:440](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:555](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L555)
 
 ---
 
@@ -1218,29 +1260,18 @@ If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:89](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L89)
 
 ---
 
 <a id="method__mk_arrayref1.2" class="lexicon_definition"></a>
-#### mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1}) [¶](#method__mk_arrayref1.2)
+#### mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1}) [¶](#method__mk_arrayref1.2)
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
-
----
-
-<a id="method__mk_arrayref1.3" class="lexicon_definition"></a>
-#### mk_arrayref1(num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) [¶](#method__mk_arrayref1.3)
-Return an expression that corresponds to getting the index_var index from the array array_name.
-If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
-
-
-*source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:54](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:89](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L89)
 
 ---
 
@@ -1251,29 +1282,18 @@ The paramater "inbounds" is true if this access is known to be within the bounds
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:194](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L194)
 
 ---
 
 <a id="method__mk_arrayset1.2" class="lexicon_definition"></a>
-#### mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1}) [¶](#method__mk_arrayset1.2)
+#### mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1}) [¶](#method__mk_arrayset1.2)
 Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
 The paramater "inbounds" is true if this access is known to be within the bounds of the array.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
-
----
-
-<a id="method__mk_arrayset1.3" class="lexicon_definition"></a>
-#### mk_arrayset1(num_dim_inputs,  array_name,  index_vars,  value,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range_var::Array{Union{GenSym, SymbolNode}, 1},  range::Array{ParallelAccelerator.ParallelIR.RangeData, 1}) [¶](#method__mk_arrayset1.3)
-Return a new AST node that corresponds to setting the index_var index from the array "array_name" with "value".
-The paramater "inbounds" is true if this access is known to be within the bounds of the array.
-
-
-*source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:85](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:194](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L194)
 
 ---
 
@@ -1284,7 +1304,7 @@ The left-hand side has to be a symbol node from which we extract the type so as 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:353](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:515](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L515)
 
 ---
 
@@ -1294,7 +1314,7 @@ Returns an expression to construct a :colon object that contains the start of a 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:878](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:878](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L878)
 
 ---
 
@@ -1304,7 +1324,7 @@ Returns an expression that convert "ex" into a another type "new_type".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:473](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:593](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L593)
 
 ---
 
@@ -1314,7 +1334,29 @@ Returns a :gotoifnot Expr given a condition "cond" and a label "goto_label".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:900](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:899](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L899)
+
+---
+
+<a id="method__mk_mask_arrayref1.1" class="lexicon_definition"></a>
+#### mk_mask_arrayref1(cur_dimension,  num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state) [¶](#method__mk_mask_arrayref1.1)
+Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:156](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L156)
+
+---
+
+<a id="method__mk_mask_arrayref1.2" class="lexicon_definition"></a>
+#### mk_mask_arrayref1(cur_dimension,  num_dim_inputs,  array_name,  index_vars,  inbounds,  state::ParallelAccelerator.ParallelIR.expr_state,  range::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1}) [¶](#method__mk_mask_arrayref1.2)
+Return an expression that corresponds to getting the index_var index from the array array_name.
+If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:156](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L156)
 
 ---
 
@@ -1324,7 +1366,7 @@ Returns a :next call Expr that gets the next element of an iteration range from 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:892](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:892](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L892)
 
 ---
 
@@ -1335,7 +1377,7 @@ In other words, returns an expression the equivalent of ParallelAccelerator.Para
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:465](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:585](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L585)
 
 ---
 
@@ -1346,7 +1388,7 @@ In other words, returns an expression the equivalent of ParallelAccelerator.Para
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:465](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:585](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L585)
 
 ---
 
@@ -1356,7 +1398,7 @@ The main routine that converts a mmap! AST node to a parfor AST node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:498](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:690](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L690)
 
 ---
 
@@ -1366,7 +1408,7 @@ The main routine that converts a mmap AST node to a parfor AST node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:789](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:1005](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L1005)
 
 ---
 
@@ -1376,7 +1418,7 @@ The main routine that converts a reduce AST node to a parfor AST node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:119](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:234](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L234)
 
 ---
 
@@ -1388,7 +1430,7 @@ If there are multiple outs then form a tuple of them and that tuple goes in :ret
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:338](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:500](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L500)
 
 ---
 
@@ -1398,7 +1440,7 @@ Returns an expression to get the start of an iteration range from a :colon objec
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:885](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:885](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L885)
 
 ---
 
@@ -1408,7 +1450,7 @@ Make a svec expression.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:487](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:607](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L607)
 
 ---
 
@@ -1418,7 +1460,7 @@ Return an expression which creates a tuple.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1151](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1428](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1428)
 
 ---
 
@@ -1428,7 +1470,7 @@ Create an expression which returns the index'th element of the tuple whose name 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:480](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:600](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L600)
 
 ---
 
@@ -1438,7 +1480,7 @@ Only used to create fake expression to force lhs to be seen as written rather th
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:370](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:532](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L532)
 
 ---
 
@@ -1450,7 +1492,7 @@ Only used to create fake expression to force lhs to be seen as written rather th
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3621](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3944](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3944)
 
 ---
 
@@ -1462,7 +1504,7 @@ we can safely change the mmap to mmap!.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3764](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4087](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4087)
 
 ---
 
@@ -1473,7 +1515,7 @@ This is true if the node is a GotoNode or a :gotoifnot Expr.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3910](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4233](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4233)
 
 ---
 
@@ -1483,7 +1525,7 @@ Forms a SymbolNode given a symbol in "name" and get the type of that symbol from
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1159](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1436](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1436)
 
 ---
 
@@ -1494,7 +1536,7 @@ domain IR AST nodes.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4067](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4390](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4390)
 
 ---
 
@@ -1504,7 +1546,19 @@ Returns the next usable label for the current function.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:738](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:858](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L858)
+
+---
+
+<a id="method__nonexactrangesearch.1" class="lexicon_definition"></a>
+#### nonExactRangeSearch(ranges::Array{Union{ParallelAccelerator.ParallelIR.MaskSelector, ParallelAccelerator.ParallelIR.RangeData, ParallelAccelerator.ParallelIR.SingularSelector}, 1},  range_correlations) [¶](#method__nonexactrangesearch.1)
+We can only do exact matches in the range correlation dict but there can still be non-exact matches
+where the ranges are different but equivalent in length.  In this function, we can the dictionary
+and look for equivalent ranges.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:1045](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1045)
 
 ---
 
@@ -1514,7 +1568,7 @@ Returns a single element of an array if there is only one or the array otherwise
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1860](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2147](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2147)
 
 ---
 
@@ -1524,7 +1578,7 @@ Given a parfor statement index in "parfor_index" in the "body"'s statements, cre
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:1190](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:1210](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L1210)
 
 ---
 
@@ -1534,7 +1588,7 @@ Debug print the parts of a DomainLambda.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4017](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4340](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4340)
 
 ---
 
@@ -1548,7 +1602,7 @@ For each ParallelIR specific node type, form an array of expressions that AliasA
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4884](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5237](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5237)
 
 ---
 
@@ -1562,7 +1616,7 @@ If we write a symbol, then form a fake mk_assignment_expr just to get liveness t
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2412](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2705](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2705)
 
 ---
 
@@ -1572,7 +1626,7 @@ Just call the AST walker for symbol for parallel IR nodes with no state.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:939](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1216](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1216)
 
 ---
 
@@ -1582,7 +1636,7 @@ Pretty print the args part of the "body" of a :lambda Expr at a given debug leve
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2327](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2620](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2620)
 
 ---
 
@@ -1592,7 +1646,7 @@ Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2340](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2633](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2633)
 
 ---
 
@@ -1602,7 +1656,7 @@ Apply a function "f" that takes the :body from the :lambda and returns a new :bo
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3295](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3596](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3596)
 
 ---
 
@@ -1612,17 +1666,17 @@ Compute size of a range.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:432](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:547](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L547)
 
 ---
 
 <a id="method__rangetorangedata.1" class="lexicon_definition"></a>
-#### rangeToRangeData(range::Expr,  pre_offsets::Array{Expr, 1},  arr,  range_num::Int64,  state) [¶](#method__rangetorangedata.1)
+#### rangeToRangeData(range::Expr,  arr,  range_num::Int64,  state) [¶](#method__rangetorangedata.1)
 Convert a :range Expr introduced by Domain IR into a Parallel IR data structure RangeData.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:354](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:495](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L495)
 
 ---
 
@@ -1634,7 +1688,7 @@ and outputs that parfor to the new function body as regular Julia loops.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:1156](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:1155](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L1155)
 
 ---
 
@@ -1647,7 +1701,7 @@ insert the body of the parfor into the new function body in "new_body".
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:1020](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:1019](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L1019)
 
 ---
 
@@ -1657,7 +1711,7 @@ Add to the map of symbol names to types.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1679](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1956](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1956)
 
 ---
 
@@ -1667,7 +1721,7 @@ Implements one of the main ParallelIR passes to remove assertEqShape AST nodes f
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2588](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:2885](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L2885)
 
 ---
 
@@ -1678,7 +1732,7 @@ This pass over the statements of the :body excludes such "nothing" statements fr
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3306](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3607](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3607)
 
 ---
 
@@ -1688,7 +1742,7 @@ An AstWalk callback that uses liveness information in "data" to remove dead stor
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2988](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3287](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3287)
 
 ---
 
@@ -1698,7 +1752,7 @@ removes extra allocations
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4363](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4693](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4693)
 
 ---
 
@@ -1711,7 +1765,7 @@ removes extra allocations
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3071](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3371](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3371)
 
 ---
 
@@ -1722,7 +1776,7 @@ Search a whole PIRParForAst object and replace one SymAllGen with another.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:216](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:378](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L378)
 
 ---
 
@@ -1732,7 +1786,7 @@ Return true if run_as_task_decrement would return true but don't update the run_
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:229](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:229](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L229)
 
 ---
 
@@ -1743,7 +1797,7 @@ original number run_as_tasks if the number of tasks created.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:215](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:215](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L215)
 
 ---
 
@@ -1753,7 +1807,7 @@ Convert the range(s) part of a :select Expr introduced by Domain IR into an arra
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:371](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-mk-parfor.jl)
+[ParallelAccelerator/src/parallel-ir-mk-parfor.jl:531](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-mk-parfor.jl#L531)
 
 ---
 
@@ -1764,7 +1818,7 @@ This is not currently implemented.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:1538](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:1558](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L1558)
 
 ---
 
@@ -1774,7 +1828,7 @@ Overload of Base.show to pretty print for parfor AST nodes.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:273](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:435](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L435)
 
 ---
 
@@ -1785,7 +1839,18 @@ for example, addition or subtraction by a constant.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:668](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:790](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L790)
+
+---
+
+<a id="method__simplify_internal.1" class="lexicon_definition"></a>
+#### simplify_internal(x::Expr,  state,  top_level_number::Int64,  is_top_level::Bool,  read::Bool) [¶](#method__simplify_internal.1)
+Do some simplification to expressions that are part of ranges.
+For example, the range 2:s-1 becomes a length (s-1)-2 which this function in turn transforms to s-3.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:946](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L946)
 
 ---
 
@@ -1797,7 +1862,7 @@ If we see a call to create an array, replace the length params with those in the
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1620](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1897](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1897)
 
 ---
 
@@ -1807,7 +1872,7 @@ AstWalk callback that does the work of substitute_arrayset on a node-by-node bas
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1388](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1665](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1665)
 
 ---
 
@@ -1817,7 +1882,7 @@ AstWalk callback that does the work of substitute_cur_body on a node-by-node bas
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1471](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1748](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1748)
 
 ---
 
@@ -1828,7 +1893,7 @@ If we see a call to create an array, replace the length params with those in the
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1652](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1929](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1929)
 
 ---
 
@@ -1842,7 +1907,7 @@ map_for_non_eliminated holds arrays for which we need to add a variable to save 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1433](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1710](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1710)
 
 ---
 
@@ -1856,7 +1921,7 @@ temp_map holds array names for which arrayrefs should be converted to a variable
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1575](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1852](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1852)
 
 ---
 
@@ -1867,7 +1932,7 @@ Also controls whether stencils or reduction can become tasks.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:278](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:278](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L278)
 
 ---
 
@@ -1878,7 +1943,7 @@ If we have a GenSym then we have to keep it.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2788](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3087](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3087)
 
 ---
 
@@ -1889,7 +1954,7 @@ This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol o
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:699](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:819](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L819)
 
 ---
 
@@ -1899,7 +1964,7 @@ Form a SymbolNode with the given typ if possible or a GenSym if that is what is 
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:718](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:838](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L838)
 
 ---
 
@@ -1909,7 +1974,7 @@ Convert a compressed LambdaStaticData format into the uncompressed AST format.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:914](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1191](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1191)
 
 ---
 
@@ -1919,7 +1984,17 @@ State to aide in the copy propagation phase.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2831](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3130](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3130)
+
+---
+
+<a id="type__delayedfunc.1" class="lexicon_definition"></a>
+#### ParallelAccelerator.ParallelIR.DelayedFunc [¶](#type__delayedfunc.1)
+Ad-hoc support to mimic closures when we want the arguments to be processed during AstWalk.
+
+
+*source:*
+[ParallelAccelerator/src/parallel-ir.jl:67](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L67)
 
 ---
 
@@ -1929,7 +2004,7 @@ Wraps the callback and opaque data passed from the user of ParallelIR's AstWalk.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:4707](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:5037](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L5037)
 
 ---
 
@@ -1939,7 +2014,7 @@ Holds information about domain operations part of a parfor node.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:95](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:108](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L108)
 
 ---
 
@@ -1950,7 +2025,7 @@ All array symbol in the same equivalence class are known to have the same shape.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:105](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:118](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L118)
 
 ---
 
@@ -1960,7 +2035,7 @@ Just used to hold a spot in an array to indicate the this is a special assignmen
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1690](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1967](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1967)
 
 ---
 
@@ -1973,7 +2048,7 @@ fully_analyzed to false.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:346](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:346](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L346)
 
 ---
 
@@ -1983,7 +2058,7 @@ Type used by mk_parfor_args... functions to hold information about input arrays.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:391](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:298](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L298)
 
 ---
 
@@ -1993,7 +2068,7 @@ A data type containing the information that CGen uses to generate a call to pert
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:197](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:197](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L197)
 
 ---
 
@@ -2006,7 +2081,7 @@ statements followed by parfor_end (also a top-level statement).
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:238](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:400](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L400)
 
 ---
 
@@ -2016,7 +2091,7 @@ Holds the information from one Domain IR :range Expr.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:377](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:182](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L182)
 
 ---
 
@@ -2026,7 +2101,7 @@ Holds liveness information for the remove_dead AstWalk phase.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:2981](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3280](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3280)
 
 ---
 
@@ -2036,7 +2111,7 @@ State for the remove_no_deps and insert_no_deps_beginning phases.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3041](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:3340](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L3340)
 
 ---
 
@@ -2046,7 +2121,7 @@ Store information about a section of a body that will be translated into a task.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:21](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:21](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L21)
 
 ---
 
@@ -2056,7 +2131,7 @@ Marks an assignment statement where the left-hand side can take over the storage
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:577](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:577](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L577)
 
 ---
 
@@ -2066,7 +2141,7 @@ Type for dependence graph creation and topological sorting.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:3848](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:4171](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L4171)
 
 ---
 
@@ -2076,7 +2151,7 @@ Structure for storing information about task formation.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:36](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:36](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L36)
 
 ---
 
@@ -2086,7 +2161,7 @@ Holds the data for substitute_cur_body AST walk.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1460](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1737](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1737)
 
 ---
 
@@ -2096,7 +2171,7 @@ Just to hold the "found" Bool that says whether a unsafe variant was replaced wi
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:907](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:906](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L906)
 
 ---
 
@@ -2106,7 +2181,7 @@ State passed around while converting an AST from domain to parallel IR.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:245](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:407](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L407)
 
 ---
 
@@ -2116,7 +2191,7 @@ A Julia representation of the argument metadata that will be passed to the runti
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:157](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:157](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L157)
 
 ---
 
@@ -2128,7 +2203,7 @@ dim_info describes which portion of the array is accessed for a given point in t
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:111](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:111](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L111)
 
 ---
 
@@ -2138,7 +2213,7 @@ A Julia representation of the grain size that will be passed to the runtime.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:178](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:178](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L178)
 
 ---
 
@@ -2153,7 +2228,7 @@ lower_bounds and upper_bounds can be expressions.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:56](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:56](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L56)
 
 ---
 
@@ -2165,7 +2240,7 @@ Up to 3 dimensional iteration space constructors are supported to make it easier
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir-task.jl:70](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir-task.jl)
+[ParallelAccelerator/src/parallel-ir-task.jl:70](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir-task.jl#L70)
 
 ---
 
@@ -2175,5 +2250,5 @@ Holds data for modifying arrayset calls.
 
 
 *source:*
-[ParallelAccelerator/src/parallel-ir.jl:1338](file:///home/etotoni/.julia/v0.4/ParallelAccelerator/src/parallel-ir.jl)
+[ParallelAccelerator/src/parallel-ir.jl:1615](https://github.com/IntelLabs/ParallelAccelerator.jl/tree/44944f13cdcd8839ae646ee3ca66dbafdec20db5/src/parallel-ir.jl#L1615)
 
