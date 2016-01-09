@@ -352,12 +352,12 @@ public:
 
     void getnonnested(uint64_t i, void *v) {
 //        std::cout << "non-nested ARRAYGET v = " << v << std::endl;
-        *((ELEMENT_TYPE*)v) = data[i - 1 - offsets[0]];
+        *((ELEMENT_TYPE*)v) = data[i - 1 + offsets[0]];
     }
 
     void getnested(uint64_t i, void *v) {
 //        std::cout << "nested ARRAYGET v = " << v << std::endl;
-        *((ELEMENT_TYPE**)v) = &data[i - 1 - offsets[0]];
+        *((ELEMENT_TYPE**)v) = &data[i - 1 + offsets[0]];
     }
 
     /*
@@ -730,7 +730,7 @@ FLUSH();
     }
 
     ELEMENT_TYPE& ARRAYELEM(uint64_t i) {
-        return data[i - 1 - offsets[0]];
+        return data[i - 1 + offsets[0]];
     }
 
     void ARRAYGET(uint64_t i, void *v) {
@@ -738,23 +738,23 @@ FLUSH();
     }
 
     void ARRAYSET(uint64_t i, void *v) {
-        data[i - 1 - offsets[0]] = *(ELEMENT_TYPE*)v;
+        data[i - 1 + offsets[0]] = *(ELEMENT_TYPE*)v;
     }
 
     ELEMENT_TYPE& ARRAYELEM(uint64_t i, uint64_t j) {
-        return data[((j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]];
+        return data[((j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]];
     }
 
     ELEMENT_TYPE& ARRAYELEM(uint64_t i, uint64_t j, uint64_t k) {
-        return data[(((k - 1 - offsets[2]) * max_size[1] + j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]];
+        return data[(((k - 1 + offsets[2]) * max_size[1] + j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]];
     }
 
     ELEMENT_TYPE& ARRAYELEM(uint64_t i, uint64_t j, uint64_t k, uint64_t l) {
-        return data[((((l - 1 - offsets[3]) * max_size[2] + k - 1 - offsets[2]) * max_size[1] + j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]];
+        return data[((((l - 1 + offsets[3]) * max_size[2] + k - 1 + offsets[2]) * max_size[1] + j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]];
     }
 
     ELEMENT_TYPE& ARRAYELEM(uint64_t i, uint64_t j, uint64_t k, uint64_t l, uint64_t m) {
-        return data[(((((m - 1 - offsets[4]) * max_size [3] + l - 1 - offsets[3]) * max_size[2] + k - 1 - offsets[2]) * max_size[1] + j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]];
+        return data[(((((m - 1 + offsets[4]) * max_size [3] + l - 1 + offsets[3]) * max_size[2] + k - 1 + offsets[2]) * max_size[1] + j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]];
     }
 
     // 0 based indice
@@ -762,7 +762,7 @@ FLUSH();
         uint64_t i = 0;
         for (int k = num_dim - 1; k >= 0; k--) {
            if (k < num_dim - 1) i *= max_size[k];
-           i += idx[k] - offsets[k];
+           i += idx[k] + offsets[k];
         }
         return data[i];
     }
@@ -771,22 +771,22 @@ FLUSH();
         uint64_t i = 0;
         for (int k = num_dim - 1; k >= 0; k--) {
            if (k < num_dim - 1) i *= max_size[k];
-           i += idx[k] - 1 - offsets[k];
+           i += idx[k] - 1 + offsets[k];
         }
         return data[i];
     }
 
     ELEMENT_TYPE& SAFEARRAYELEM(ELEMENT_TYPE d, uint64_t i) {
-        return ((i >= 1 && i <= ARRAYLEN()) ? data[i - 1 - offsets[0]] : d);
+        return ((i >= 1 && i <= ARRAYLEN()) ? data[i - 1 + offsets[0]] : d);
     }
 
     ELEMENT_TYPE SAFEARRAYELEM(ELEMENT_TYPE d, uint64_t i, uint64_t j) {
-        return ((i >= 1 && i <= dims[0] && j >= 1 && j <= dims[1]) ? data[((j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]] : d);
+        return ((i >= 1 && i <= dims[0] && j >= 1 && j <= dims[1]) ? data[((j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]] : d);
     }
 
     ELEMENT_TYPE SAFEARRAYELEM(ELEMENT_TYPE d, uint64_t i, uint64_t j, uint64_t k) {
         return ((i >= 1 && i <= dims[0] && j >= 1 && j <= dims[1] && k >= 1 && k <= dims[2]) ? 
-                data[(((k - 1 - offsets[2]) * max_size[1] + j - 1 - offsets[1]) * max_size[0]) + i - 1 - offsets[0]] : d);
+                data[(((k - 1 + offsets[2]) * max_size[1] + j - 1 + offsets[1]) * max_size[0]) + i - 1 + offsets[0]] : d);
     }
 
     j2c_array<ELEMENT_TYPE> reshape(uint64_t i) {
@@ -817,6 +817,31 @@ FLUSH();
         assert(i * j * k * l == ARRAYLEN());
         j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>::new_j2c_array_4d(data, i, j, k, l);
         x.refcount = refcount;
+        increment();
+        return x;
+    }
+
+    /*
+     * Take a slice at a given dimension at the given index. Return an array that
+     * shares the same data pointer, has the same rank, but of size 1 at the given 
+     * dimension. The dim argument must ranges from 1 to num_dim.
+     */
+    j2c_array<ELEMENT_TYPE> slice(uint64_t dim, uint64_t idx) {
+        assert(dim >= 1 && dim <= num_dim);
+        /* FIXME: unfortunately the following leaks memory */
+        int64_t *new_offsets = (int64_t*)malloc(sizeof(int64_t) * MAX_DIM);
+        int64_t *new_max_size = (int64_t*)malloc(sizeof(int64_t) * MAX_DIM);
+        int64_t new_dims[MAX_DIM];
+        for (int i = 0; i < num_dim; i++)
+        {
+            new_max_size[i] = max_size[i];
+            new_offsets[i] = (dim == i + 1) ? offsets[i] + idx - 1 : offsets[i];
+            new_dims[i] = (dim == i + 1) ? 1 : dims[i];
+        }
+        j2c_array<ELEMENT_TYPE> x = j2c_array<ELEMENT_TYPE>(data, num_dim, new_dims);
+        x.refcount = refcount;
+        x.offsets = new_offsets;
+        x.max_size = new_max_size;
         increment();
         return x;
     }
