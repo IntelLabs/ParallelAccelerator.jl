@@ -380,20 +380,17 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map, AstWalk)
     state.max_label = max_label
     assert(isa(temp_body,Array))
-    assert(length(temp_body) == 1)
-    temp_body = temp_body[1]
-    assert(typeof(temp_body) == Expr)
-    assert(temp_body.head == :tuple)
-    assert(length(temp_body.args) == 1)
-    temp_body = temp_body.args[1]
+    assert(length(temp_body) > 0)
+    assert(typeof(temp_body[end]) == Expr)
+    assert(temp_body[end].head == :tuple)
+    assert(length(temp_body[end].args) == 1)
+    temp_body[end] = mk_assignment_expr(reduction_output_snode, temp_body[end].args..., state)
+    #assert(length(temp_body.args) == 1)
+    #temp_body = temp_body.args[1]
 
     #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-    if isBareParfor(temp_body)
-        temp_body = top_level_expand_pre(Any[temp_body], state)
-        out_body = [reduce_body; temp_body] 
-    else
-        out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
-    end
+    temp_body = top_level_expand_pre(temp_body, state)
+    out_body = [reduce_body; temp_body] 
 
     fallthroughLabel = next_label(state)
     condExprs = Any[]
@@ -416,45 +413,12 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     dprintln(2,rws)
 
-    reduce_func = nothing
-
-    dprintln(3,"type of reduce_body = ", typeof(temp_body))
-    if typeof(temp_body) == Expr
-        dprintln(3,"head of reduce body = ", temp_body.head)
-
-        dprintln(3,"length(reduce_body.args) = ", length(temp_body.args))
-        for k = 1:length(temp_body.args)
-            dprintln(3,"reduce_body.args[", k, "] = ", temp_body.args[k], " type = ", typeof(temp_body.args[k]))
-        end
-        if temp_body.head == :call
-            dprintln(3,"Found a call")
-            if length(temp_body.args) != 3
-                throw(string("Non-binary reduction function used."))
-            end
-            op = temp_body.args[1]
-
-            if op == TopNode(:add_float) || op == TopNode(:add_int) || op == TopNode(:+)
-                reduce_func = :+
-            elseif op == TopNode(:mul_float) || op == TopNode(:mul_int) || op == TopNode(:*)
-                reduce_func = :*
-            elseif op == TopNode(:max) || op == TopNode(:min)
-                reduce_func = op.name
-            elseif op == TopNode(:|) 
-                reduce_func = :||
-            elseif op == TopNode(:&) 
-                reduce_func = :&&
-            end
-        end
-    end
-
-    if reduce_func == nothing
-        # throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
-        reduce_flatten_body = Any[]
-        flattenParfors(reduce_flatten_body, deepcopy(temp_body))
-        dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-        f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
-        reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_output_snode, atm])
-    end
+    # throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
+    reduce_flatten_body = Any[]
+    flattenParfors(reduce_flatten_body, deepcopy(temp_body))
+    dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
+    f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_output_snode, atm])
 
     #  makeLhsPrivate(out_body, state)
 

@@ -682,6 +682,9 @@ function from_assignment(args::Array{Any,1})
 
     lhsO = from_expr(lhs)
     rhsO = from_expr(rhs)
+    if lhsO == rhsO # skip x = x due to issue with j2c_array 
+        return ""
+    end
 
   if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
         if typeAvailable(rhs)
@@ -851,7 +854,7 @@ function from_getslice(args)
     s = ""
     src = from_expr(args[1])
     s *= src * ".slice("
-    idxs = String[]
+    idxs = Any[]
     i = 0
     for a in args[2:end]
         i = i + 1
