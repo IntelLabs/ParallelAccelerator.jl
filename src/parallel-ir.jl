@@ -277,9 +277,10 @@ function isequal(x :: Expr, y :: Expr)
     return isequal(x.head, y.head) && isequal(x.args, y.args)
 end
 
-function hash(x :: Array{Any,1})
-    return sum([hash(y) for y in x])
-end
+#function hash(x :: Array{Any,1})
+#dprintln(4, "hash array ", x)
+#    return sum([hash(y) for y in x])
+#end
 function isequal(x :: Array{Any,1}, y :: Array{Any,1})
     if length(x) != length(y)
        return false
@@ -2242,8 +2243,8 @@ function fuse(body, body_index, cur, state)
         out_correlation == in_correlation &&
         !reduction_var_used &&
         isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) &&
-        isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
-        assert(prev_num_dims == cur_num_dims)
+        isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur) &&
+        (prev_num_dims == cur_num_dims)
 
         dprintln(3, "Fusion will happen here.")
 
