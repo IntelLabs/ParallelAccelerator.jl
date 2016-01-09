@@ -1,8 +1,11 @@
+using Docile
 using Lexicon
 using ParallelAccelerator
 
 index = Index()
-update!(index, save("../doc/api/ParallelAccelerator.md",ParallelAccelerator))
-update!(index, save("../doc/api/DomainIR.md",ParallelAccelerator.DomainIR))
-update!(index, save("../doc/api/ParallelIR.md",ParallelAccelerator.ParallelIR))
+pa_mods = Docile.Collector.submodules(ParallelAccelerator)
+
+for mod in pa_mods
+    update!(index, save("../doc/api/$mod.md",mod))
+end
 save("../doc/api/api-index.md", index)
