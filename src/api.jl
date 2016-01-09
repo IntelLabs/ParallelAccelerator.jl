@@ -61,6 +61,15 @@ const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
 const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy, :pointer])
 
+# reduction across a dimension
+for f in reduce_operators
+    @eval begin
+        @noinline function ($f){T<:Number}(A::DenseArray{T}, x::Int)
+            (Base.$f)(A, x)
+        end
+    end
+end
+
 for f in unary_operators
     @eval begin
         @noinline function ($f){T<:Number}(A::DenseArray{T})

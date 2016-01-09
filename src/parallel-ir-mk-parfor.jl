@@ -118,6 +118,37 @@ function mk_arrayref1(num_dim_inputs,
         indsyms...)
 end
 
+# almost like mk_arraysref1, but only take index at the given slice_dim, while keeping
+# the rest as whole range selector Base.:(:). 
+function mk_arrayslice(num_dim_inputs, 
+                      array_name, 
+                      index_vars, 
+                      slice_dim,
+                      inbounds, 
+                      state     :: expr_state)
+    dprintln(3,"mk_arrayslice typeof(index_vars) = ", typeof(index_vars))
+    dprintln(3,"mk_arrayslice array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
+    elem_typ = getArrayElemType(array_name, state)
+    dprintln(3,"mk_arrayslice element type = ", elem_typ)
+
+    if inbounds
+        fname = :unsafe_arrayref
+    else
+        fname = :arrayref
+    end
+
+    indsyms = [ x == slice_dim ?  index_vars[x] : GlobalRef(Base, :(:))
+                for x = 1:length(index_vars) ]
+    dprintln(3,"mk_arrayslice indsyms = ", indsyms)
+
+    TypedExpr(
+        elem_typ,
+        :call,
+        TopNode(fname),
+        :($array_name),
+        indsyms...)
+end
+
 """
 Return an expression that corresponds to getting the index_var index from the array array_name.
 If "inbounds" is true then use the faster :unsafe_arrayref call that doesn't do a bounds check.
@@ -203,7 +234,7 @@ The main routine that converts a reduce AST node to a parfor AST node.
 function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # Make sure we get what we expect from domain IR.
     # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
-    assert(length(input_args) == 3)
+    assert(length(input_args) == 3 || length(input_args) == 4)
 
     zero_val    = input_args[1]   # The initial value of the reduction variable.
     input_array = input_args[2]   # The array expression to reduce.
@@ -215,9 +246,34 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     dl = input_args[3]            # Get the DomainLambda from the AST node's args.
     assert(isa(dl, DomainLambda))
 
+    red_dim = length(input_args) == 4 ? input_args[4] : 0 # check if the reduction is only along a given dimension
+
     dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val))
     dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
     dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
+    dprintln(3,"mk_parfor_args_from_reduce. red_dim = ", red_dim)
+
+    # special handling when zero_val is a DomainLambda
+    if isa(zero_val, DomainIR.DomainLambda)
+        assert(length(zero_val.inputs) == 1)
+        assert(length(zero_val.outputs) == 0)
+        # Call Domain IR to generate most of the body of the function (except for saving the output)
+        init_var = SymbolNode(symbol("temp_zero_val"), zero_val.inputs[1])
+        zero_val_inputs = [init_var]
+        (max_label, nested_lambda, zero_val_body) = nested_function_exprs(state.max_label, zero_val, zero_val_inputs)
+        gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+        zero_val_body = CompilerTools.LambdaHandling.replaceExprWithDict!(zero_val_body, gensym_map, AstWalk)
+        state.max_label = max_label
+        assert(isa(zero_val_body,Array))
+        dprintln(3, "zero_val_body = ", zero_val_body)
+        pop!(zero_val_body) # remove last Expr, which is Expr(:tuple)
+        zero_val_flatten_body = Any[]
+        zero_val_body = top_level_expand_pre(zero_val_body, state)
+        flattenParfors(zero_val_flatten_body, zero_val_body)
+        dprintln(3, "zero_val_flatten_body = ", zero_val_flatten_body)
+        f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(init_var.name, var)))
+        zero_val = DelayedFunc(f, Any[zero_val_flatten_body, init_var])
+    end
 
     # Verify the number of input arrays matches the number of input types in dl
     assert(length(dl.inputs) == 2)
@@ -227,7 +283,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
-    loopNests = Array(PIRLoopNest, num_dim_inputs)
+    loopNests = Array(PIRLoopNest, red_dim > 0 ? 1 : num_dim_inputs) # only 1 loopNest if red_dim > 0
 
     # Create variables to use for the loop indices.
     parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
@@ -239,8 +295,14 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     assert(argtyp <: SymNodeGen)
 
     reduce_body = Any[]
-    atm = createTempForArray(input_array, 1, state)
-    push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(num_dim_inputs, input_array, parfor_index_syms, true, state), state))
+    if red_dim == 0 
+        # full reduction?
+        atm = createTempForArray(input_array, 1, state)
+        push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(num_dim_inputs, input_array, parfor_index_syms, true, state), state))
+    else
+        atm = createTempForArray(input_array, 1, state, CompilerTools.LambdaHandling.getType(input_array, state.lambdaInfo))
+        push!(reduce_body, mk_assignment_expr(atm, mk_arrayslice(num_dim_inputs, input_array, parfor_index_syms, red_dim, true, state), state))
+    end
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     indexed_array = atm
@@ -289,11 +351,17 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         push!(save_array_lens, save_array_len)
-
-        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                                                        SymbolNode(symbol(save_array_start), Int),
-                                                        SymbolNode(symbol(save_array_len),Int),
-                                                        SymbolNode(symbol(save_array_step), Int))
+        loop_nest = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
+                                SymbolNode(symbol(save_array_start), Int),
+                                SymbolNode(symbol(save_array_len),Int),
+                                SymbolNode(symbol(save_array_step), Int))
+        if red_dim > 0
+            if red_dim == i
+               loopNests[1] = loop_nest
+            end
+        else
+            loopNests[num_dim_inputs - i + 1] = loop_nest
+        end
     end
 
     assert(length(dl.outputs) == 1)
@@ -309,7 +377,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     dl_inputs = [reduction_output_snode, atm]
     (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map)
+    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map, AstWalk)
     state.max_label = max_label
     assert(isa(temp_body,Array))
     assert(length(temp_body) == 1)
@@ -320,7 +388,12 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     temp_body = temp_body.args[1]
 
     #dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-    out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
+    if isBareParfor(temp_body)
+        temp_body = top_level_expand_pre(Any[temp_body], state)
+        out_body = [reduce_body; temp_body] 
+    else
+        out_body = [reduce_body; mk_assignment_expr(reduction_output_snode, temp_body, state)]
+    end
 
     fallthroughLabel = next_label(state)
     condExprs = Any[]
@@ -375,7 +448,12 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     end
 
     if reduce_func == nothing
-        throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
+        # throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
+        reduce_flatten_body = Any[]
+        flattenParfors(reduce_flatten_body, deepcopy(temp_body))
+        dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
+        f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+        reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_output_snode, atm])
     end
 
     #  makeLhsPrivate(out_body, state)

@@ -149,6 +149,7 @@ mk_mmap!(arrs, f) = Expr(:mmap!, arrs, f)
 # iteration indices shall be fed to the function f as extra parameters.
 mk_mmap!(arrs, f, withIndices) = Expr(:mmap!, arrs, f, withIndices)
 mk_reduce(zero, arr, f) = Expr(:reduce, zero, arr, f)
+mk_reduce(zero, arr, f, dim) = Expr(:reduce, zero, arr, f, dim) # reduce across a single dimension
 mk_mreduce(zero, arrs, f) = Expr(:mreduce, zero, arrs, f)
 mk_concat(dim, arr1, arr2) = Expr(:concat, dim, arr1, arr2)
 mk_concats(dim, arrs) = Expr(:concats, dim, arrs)
@@ -333,10 +334,8 @@ const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_i
 
 const opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
 const opsSymSet = Set{Symbol}(opsSym)
-const floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float,
-:eq_float, :ne_float, :lt_float, :le_float]))
-const sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int,
-:eq_int, :ne_int, :slt_int, :sle_int]))
+const floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float, :eq_float, :ne_float, :lt_float, :le_float]))
+const sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int, :eq_int, :ne_int, :slt_int, :sle_int]))
 
 const reduceSym = Symbol[:sum, :prod, :maximum, :minimum, :any, :all]
 const reduceVal = Symbol[:+, :*, :max, :min, :|, :&]
@@ -560,7 +559,7 @@ function show(io::IO, f::DomainLambda)
     print(io, "(")
     show(io, symNodes)
     print(io, ";")
-    show(io, f.linfo)
+    #show(io, f.linfo)
     print(io, ") -> (")
     show(io, body)
     print(io, ")::", f.outputs)
@@ -1116,10 +1115,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
         typ = translate_call_typefix(state, env, typ, fun, args) 
     elseif haskey(reduceOps, fun)
+        dprintln(env, "haskey reduceOps ", fun)
         args = normalize_args(state, env_, args)
-        if length(args)==1
-            return translate_call_reduce(state, env_, typ, fun, args)
-        end
+        expr = translate_call_reduce(state, env_, typ, fun, args)
     elseif is(fun, :arraysize)
         args = normalize_args(state, env_, args)
         dprintln(env,"got arraysize, args=", args)
@@ -1579,19 +1577,43 @@ end
 
 function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
     arr = args[1]
+    if length(args) > 2
+        error("DomainIR: expect only 1 or 2 arguments to reduction function ", fun, ", but got ", args)
+    end
     # element type is the same as typ
-    etyp = is(typ, Any) ? elmTypOf(typeOfOpr(state, arr)) : typ;
-    neutral = (reduceNeutrals[fun])(etyp)
+    arrtyp = typeOfOpr(state, arr)
+    etyp = elmTypOf(arrtyp) 
+    neutralelt = convert(etyp, (reduceNeutrals[fun])(etyp))
     fun = reduceOps[fun]
-    typs = Type[ etyp for arg in args] # just use etyp for input element types
-    opr, reorder = specializeOp(fun, typs)
-    # ignore reorder since it is always id function
-    f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
-    domF = DomainLambda([etyp, etyp], [etyp], f, LambdaInfo())
+    if length(args) == 2
+        etyp    = arrtyp.parameters[1]
+        num_dim = arrtyp.parameters[2]
+        red_dim = [args[2]]
+        dimExp = Any[ mk_expr(arrtyp, :call, TopNode(:select_value), 
+                         mk_expr(Bool, :call, TopNode(:eq_int), red_dim[1], dim), 
+                         1, mk_arraysize(arr, dim)) for dim = 1:num_dim ]
+        neutral = DomainLambda([arrtyp], [],  
+                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], mk_alloc(state, etyp, dimExp)),
+                                    mk_mmap!(lhs, DomainLambda([etyp], [etyp], (linfo, x) -> [Expr(:tuple, neutralelt)], LambdaInfo())),
+                                    Expr(:tuple) ], LambdaInfo())
+        opr, reorder = specializeOp(fun, [etyp])
+        # ignore reorder since it is always id function
+        f(linfo, as) = [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
+                                             (linfo,as)->[Expr(:tuple, mk_expr(etyp, :call, opr, as...))], LambdaInfo())))]
+        outtyp = arrtyp
+    else
+        red_dim = []
+        neutral = neutralelt
+        opr, reorder = specializeOp(fun, [etyp])
+        # ignore reorder since it is always id function
+        f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
+        outtyp = etyp
+    end
+    domF = DomainLambda([outtyp, outtyp], [outtyp], f, LambdaInfo())
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
-    expr = mk_reduce(convert(etyp, neutral), arr, domF)
-    expr.typ = etyp
+    expr = mk_reduce(neutral, arr, domF, red_dim...)
+    expr.typ = outtyp
     return expr
 end
 
@@ -1685,13 +1707,6 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             end
         elseif fun.name==:println || fun.name==:print # fix type for println
             typ = Void
-#-
-        elseif haskey(reduceOps, fun.name)
-            args = normalize_args(state, env_, args)
-            if length(args)==1
-                expr = translate_call_reduce(state, env_, typ, fun, args)
-            end
--#
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
@@ -1895,7 +1910,7 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
             args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
             return x
         elseif head == :reduce
-            assert(length(args) == 3)
+            assert(length(args) == 3 || length(args) == 4)
             for i = 1:3
                 args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
             end
@@ -1962,150 +1977,152 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
     elseif asttyp == DomainLambda
         dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
         return x
-        end
+    end
 
-        return CompilerTools.AstWalker.ASTWALK_RECURSE
-        end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
-        function AstWalk(ast :: ANY, callback, cbdata :: ANY)
-        dprintln(3,"DomainIR.AstWalk ", ast)
-        dw = DirWalk(callback, cbdata)
-        AstWalker.AstWalk(ast, AstWalkCallback, dw)
-        end
+function AstWalk(ast :: ANY, callback, cbdata :: ANY)
+    dprintln(3,"DomainIR.AstWalk ", ast)
+    dw = DirWalk(callback, cbdata)
+    AstWalker.AstWalk(ast, AstWalkCallback, dw)
+end
 
-        function dir_live_cb(ast :: ANY, cbdata :: ANY)
-        dprintln(4,"dir_live_cb ")
-        asttyp = typeof(ast)
-        if asttyp == Expr
+function dir_live_cb(ast :: ANY, cbdata :: ANY)
+    dprintln(4,"dir_live_cb ")
+    asttyp = typeof(ast)
+    if asttyp == Expr
         head = ast.head
         args = ast.args
         if head == :mmap
-        expr_to_process = Any[]
-        assert(isa(args[2], DomainLambda))
-        dl = args[2]
+            expr_to_process = Any[]
+            assert(isa(args[2], DomainLambda))
+            dl = args[2]
 
-        assert(length(args) == 2)
-        input_arrays = args[1]
-        for i = 1:length(input_arrays)
-            push!(expr_to_process, input_arrays[i])
-        end
-        for (v, d) in dl.linfo.escaping_defs
-            push!(expr_to_process, v)
-        end 
-
-        dprintln(3, ":mmap ", expr_to_process)
-        return expr_to_process
-    elseif head == :mmap!
-        expr_to_process = Any[]
-        assert(isa(args[2], DomainLambda))
-        dl = args[2]
-
-        assert(length(args) >= 2)
-        input_arrays = args[1]
-        for i = 1:length(input_arrays)
-            if i <= length(dl.outputs)
-                # We need both a read followed by a write.
-                push!(expr_to_process, input_arrays[i])
-                push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
-            else
-                # Need to make input_arrays[1] written?
+            assert(length(args) == 2)
+            input_arrays = args[1]
+            for i = 1:length(input_arrays)
                 push!(expr_to_process, input_arrays[i])
             end
-        end
-        for (v, d) in dl.linfo.escaping_defs
-            push!(expr_to_process, v)
-        end 
+            for (v, d) in dl.linfo.escaping_defs
+                push!(expr_to_process, v)
+            end 
 
-        dprintln(3, ":mmap! ", expr_to_process)
-        return expr_to_process
-    elseif head == :reduce
-        expr_to_process = Any[]
-
-        assert(length(args) == 3)
-        zero_val = args[1]
-        input_array = args[2]
-        dl = args[3]
-        push!(expr_to_process, zero_val)
-        push!(expr_to_process, input_array)
-        assert(isa(dl, DomainLambda))
-        for (v, d) in dl.linfo.escaping_defs
-            push!(expr_to_process, v)
-        end
-
-        dprintln(3, ":reduce ", expr_to_process)
-        return expr_to_process
-    elseif head == :stencil!
-        expr_to_process = Any[]
-
-        sbufs = args[3]
-        for i = 1:length(sbufs)
-            # sbufs both read and possibly written
-            push!(expr_to_process, sbufs[i])
-            push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
-        end
-
-        dl = args[4]
-        assert(isa(dl, DomainLambda))
-        for (v, d) in dl.linfo.escaping_defs
-            push!(expr_to_process, v)
-        end
-
-        dprintln(3, ":stencil! ", expr_to_process)
-        return expr_to_process
-    elseif head == :parallel_for
-        expr_to_process = Any[]
-
-        assert(length(args) == 3)
-        loopvars = args[1]
-        ranges = args[2]
-        escaping_defs = args[3].linfo.escaping_defs
-        push!(expr_to_process, loopvars)
-        append!(expr_to_process, ranges)
-        for (v, d) in escaping_defs
-            push!(expr_to_process, v)
-        end
-
-        dprintln(3, ":parallel_for ", expr_to_process)
-        return expr_to_process
-    elseif head == :assertEqShape
-        assert(length(args) == 2)
-        #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
-        expr_to_process = Any[]
-        push!(expr_to_process, symbol_or_gensym(args[1]))
-        push!(expr_to_process, symbol_or_gensym(args[2]))
-        return expr_to_process
-    elseif head == :assert
-        expr_to_process = Any[]
-        for i = 1:length(args)
-            push!(expr_to_process, args[i])
-        end
-        return expr_to_process
-    elseif head == :select
-        expr_to_process = Any[]
-        for i = 1:length(args)
-            push!(expr_to_process, args[i])
-        end
-        return expr_to_process
-    elseif head == :range
-        expr_to_process = Any[]
-        for i = 1:length(args)
-            push!(expr_to_process, args[i])
-        end
-        return expr_to_process
-    # arrayref only add read access
-    elseif head == :call
-        if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
+            dprintln(3, ":mmap ", expr_to_process)
+            return expr_to_process
+        elseif head == :mmap!
             expr_to_process = Any[]
-            for i = 2:length(args)
+            assert(isa(args[2], DomainLambda))
+            dl = args[2]
+
+            assert(length(args) >= 2)
+            input_arrays = args[1]
+            for i = 1:length(input_arrays)
+                if i <= length(dl.outputs)
+                    # We need both a read followed by a write.
+                    push!(expr_to_process, input_arrays[i])
+                    push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
+                else
+                    # Need to make input_arrays[1] written?
+                    push!(expr_to_process, input_arrays[i])
+                end
+            end
+            for (v, d) in dl.linfo.escaping_defs
+                push!(expr_to_process, v)
+            end 
+
+            dprintln(3, ":mmap! ", expr_to_process)
+            return expr_to_process
+        elseif head == :reduce
+            expr_to_process = Any[]
+
+            assert(length(args) == 3 || length(args) == 4)
+            zero_val = args[1]
+            input_array = args[2]
+            dl = args[3]
+            if !isa(zero_val, DomainLambda) 
+                push!(expr_to_process, zero_val)
+            end
+            push!(expr_to_process, input_array)
+            assert(isa(dl, DomainLambda))
+            for (v, d) in dl.linfo.escaping_defs
+                push!(expr_to_process, v)
+            end
+
+            dprintln(3, ":reduce ", expr_to_process)
+            return expr_to_process
+        elseif head == :stencil!
+            expr_to_process = Any[]
+
+            sbufs = args[3]
+            for i = 1:length(sbufs)
+                # sbufs both read and possibly written
+                push!(expr_to_process, sbufs[i])
+                push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
+            end
+
+            dl = args[4]
+            assert(isa(dl, DomainLambda))
+            for (v, d) in dl.linfo.escaping_defs
+                push!(expr_to_process, v)
+            end
+
+            dprintln(3, ":stencil! ", expr_to_process)
+            return expr_to_process
+        elseif head == :parallel_for
+            expr_to_process = Any[]
+
+            assert(length(args) == 3)
+            loopvars = args[1]
+            ranges = args[2]
+            escaping_defs = args[3].linfo.escaping_defs
+            push!(expr_to_process, loopvars)
+            append!(expr_to_process, ranges)
+            for (v, d) in escaping_defs
+                push!(expr_to_process, v)
+            end
+
+            dprintln(3, ":parallel_for ", expr_to_process)
+            return expr_to_process
+        elseif head == :assertEqShape
+            assert(length(args) == 2)
+            #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
+            expr_to_process = Any[]
+            push!(expr_to_process, symbol_or_gensym(args[1]))
+            push!(expr_to_process, symbol_or_gensym(args[2]))
+            return expr_to_process
+        elseif head == :assert
+            expr_to_process = Any[]
+            for i = 1:length(args)
                 push!(expr_to_process, args[i])
             end
             return expr_to_process
+        elseif head == :select
+            expr_to_process = Any[]
+            for i = 1:length(args)
+                push!(expr_to_process, args[i])
+            end
+            return expr_to_process
+        elseif head == :range
+            expr_to_process = Any[]
+            for i = 1:length(args)
+                push!(expr_to_process, args[i])
+            end
+            return expr_to_process
+        # arrayref only add read access
+        elseif head == :call
+            if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
+                expr_to_process = Any[]
+                for i = 2:length(args)
+                    push!(expr_to_process, args[i])
+                end
+                return expr_to_process
+            end
         end
+    elseif asttyp == KernelStat
+        return Any[]
     end
-elseif asttyp == KernelStat
-    return Any[]
-end
-return nothing
+    return nothing
 end
 
 function symbol_or_gensym(x)

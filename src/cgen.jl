@@ -218,7 +218,7 @@ _Intrinsics = [
         "box", "unbox",
         #arithmetic
         "neg_int", "add_int", "sub_int", "mul_int", "sle_int",
-        "xor_int", "and_int", "or_int",
+        "xor_int", "and_int", "or_int", "ne_int", "eq_int",
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
@@ -847,7 +847,32 @@ function from_safegetindex(args)
     s
 end
 
+function from_getslice(args)
+    s = ""
+    src = from_expr(args[1])
+    s *= src * ".slice("
+    idxs = String[]
+    i = 0
+    for a in args[2:end]
+        i = i + 1
+        if isa(a, GlobalRef) && a.name == :(:)
+        else
+            push!(idxs, string(i))
+            push!(idxs, from_expr(a))
+        end
+    end
+    for i in 1:length(idxs)
+        s *= idxs[i] * (i < length(idxs) ? "," : "")
+    end
+    s *= ")"
+    s
+end
+
 function from_getindex(args)
+    # if args has any range indexing, it is slicing
+    if any([isa(a, GlobalRef) && a.name == :(:) for a in args])
+       return from_getslice(args)
+    end
     s = ""
     src = from_expr(args[1])
     s *= src * ".ARRAYELEM("
@@ -1243,9 +1268,9 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
     elseif intr == "lt_float"
         return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
-    elseif intr == "eq_float"
+    elseif intr == "eq_float" || intr == "eq_int"
         return "($(from_expr(args[1]))) == ($(from_expr(args[2])))"
-    elseif intr == "ne_float"
+    elseif intr == "ne_float" || intr == "ne_int"
         return "($(from_expr(args[1]))) != ($(from_expr(args[2])))"
     elseif intr == "le_float"
         return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
@@ -2007,8 +2032,8 @@ function from_parforend(args)
             rdvtyp = toCtype(getSymType(rdv))
             rdvar = from_expr(rdv)
             rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
-            rdsepilog *= "const $rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
-            rdsepilog *= "$rdvar = " * from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
+            rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
+            rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
         end
         rdsepilog *= "}\n"
     end
@@ -2046,8 +2071,8 @@ function from_loopnest(ivs, starts, stops, steps)
     )
 end
 
-function from_reductionVarInit(reductionVarInit :: Function, a) 
-    from_expr(reductionVarInit(a))
+function from_reductionVarInit(reductionVarInit :: ParallelIR.DelayedFunc, a) 
+    from_exprs(ParallelIR.callDelayedFuncWith(reductionVarInit,a))
 end
 
 function from_reductionVarInit(reductionVarInit :: Any, a)
@@ -2058,8 +2083,8 @@ function from_reductionFunc(reductionFunc :: Symbol, a, b)
     from_expr(a) * " " * string(reductionFunc) * " " * from_expr(b)
 end
 
-function from_reductionFunc(reductionFunc :: Function, a, b) 
-    from_expr(reductionFunc(a, b))
+function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b) 
+    from_exprs(ParallelIR.callDelayedFuncWith(reductionFunc, a, b))
 end
 
 function from_reductionFunc(reductionFunc :: Any, a, b)

@@ -63,6 +63,19 @@ const ISPRIVATEPARFORLOOP = 32
 unique_num = 1
 
 """
+Ad-hoc support to mimic closures when we want the arguments to be processed during AstWalk.
+"""
+type DelayedFunc
+  func :: Function
+  args
+end
+
+function callDelayedFuncWith(f::DelayedFunc, args...)
+    full_args = vcat(f.args, Any[args...])
+    f.func(full_args...)
+end
+
+"""
 This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.
 """
 function TypedExpr(typ, rest...)
@@ -751,9 +764,11 @@ end
 """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state)
+function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state, temp_type = nothing)
     key = toSymGen(array_sn) 
-    temp_type = getArrayElemType(array_sn, state)
+    if temp_type == nothing
+        temp_type = getArrayElemType(array_sn, state)
+    end
     return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
@@ -5154,6 +5169,29 @@ function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number 
     for i = 1:length(x.dim)
         x.lower_bounds[i] = AstWalk(x.lower_bounds[i], dw.callback, dw.cbdata)
         x.upper_bounds[i] = AstWalk(x.upper_bounds[i], dw.callback, dw.cbdata)
+    end
+    return x
+end
+
+function AstWalkCallback(x :: DelayedFunc, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    dprintln(4,"PIR AstWalkCallback starting")
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(4,"PIR AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
+    if isa(dw.cbdata, rm_allocs_state) # skip traversal if it is for rm_allocs
+        return x
+    end
+    for i = 1:length(x.args)
+        y = x.args[i]
+        if isa(y, Array)
+            for j=1:length(y)
+                y[j] = AstWalk(y[j], dw.callback, dw.cbdata)
+            end
+        else
+            x.args[i] = AstWalk(x.args[i], dw.callback, dw.cbdata)
+        end
     end
     return x
 end
