@@ -23,31 +23,42 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module ReductionTest
 using ParallelAccelerator
-using Base.Test
 
-include("reduction.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
+#ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
 
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
+@acc function sum_A(col::Int)
+    A = ones(Int, col, col, col)
+    sum(A)
+end
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+@acc function sum_A_1(col::Int)
+    A = ones(Int, col, col, col)
+    B = sum(A, 1)
+    C = sum(B, 2)
+end
+
+function test1()
+    return sum_A(5) == @noacc sum_A(5)
+end
+
+function test2()
+    return sum_A_1(5) == @noacc sum_A_1(5)
+end
+
+
+end
+
+using ReductionTest
+println("Testing reductions...")
+
+@test ReductionTest.test1() 
+@test ReductionTest.test2()
+
+println("Done testing reductions.")
+
