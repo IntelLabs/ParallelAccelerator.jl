@@ -2005,10 +2005,9 @@ function AstWalk(ast :: ANY, callback, cbdata :: ANY)
     AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
 
-function dir_live_cb(ast :: ANY, cbdata :: ANY)
+function dir_live_cb(ast :: Expr, cbdata :: ANY)
     dprintln(4,"dir_live_cb ")
-    asttyp = typeof(ast)
-    if asttyp == Expr
+
         head = ast.head
         args = ast.args
         if head == :mmap
@@ -2136,10 +2135,18 @@ function dir_live_cb(ast :: ANY, cbdata :: ANY)
                 return expr_to_process
             end
         end
-    elseif asttyp == KernelStat
-        return Any[]
-    end
+
     return nothing
+end
+
+function dir_live_cb(ast :: KernelStat, cbdata :: ANY)
+    dprintln(4,"dir_live_cb ")
+    return Any[]
+end
+
+function dir_live_cb(ast :: ANY, cbdata :: ANY)
+    dprintln(4,"dir_live_cb ")
+return nothing
 end
 
 function symbol_or_gensym(x)
