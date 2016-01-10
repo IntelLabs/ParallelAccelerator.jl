@@ -1812,8 +1812,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
 end
 
 function from_expr(state::IRState, env::IREnv, ast::Expr)
-    local asttyp = typeof(ast)
-    dprint(env,"from_expr: ", asttyp)
+    dprint(env,"from_expr: Expr")
     local head = ast.head
     local args = ast.args
     local typ  = ast.typ
