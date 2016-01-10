@@ -2162,10 +2162,9 @@ function symbol_or_gensym(x)
     end
 end
 
-function dir_alias_cb(ast, state, cbdata)
+function dir_alias_cb(ast::Expr, state, cbdata)
     dprintln(4,"dir_alias_cb ")
-    asttyp = typeof(ast)
-    if asttyp == Expr
+    
         head = ast.head
         args = ast.args
         if head == :mmap
@@ -2227,7 +2226,11 @@ function dir_alias_cb(ast, state, cbdata)
         end
 
         return nothing
-    end
+    
+end
+
+function dir_alias_cb(ast::ANY, state, cbdata)
+dprintln(4,"dir_alias_cb ")
 end
 
 end
