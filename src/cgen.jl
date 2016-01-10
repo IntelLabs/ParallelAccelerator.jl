@@ -1586,7 +1586,7 @@ function from_parforend(args)
     end
     rdsinit = rdsepilog = ""
     rds = parfor.reductions
-    needs_custom_reduction = lstate.ompdepth <= 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    needs_custom_reduction = USE_OMP==1 && lstate.ompdepth <= 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     if needs_custom_reduction
         nthreadsvar = "_num_threads"
         rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
@@ -1600,7 +1600,7 @@ function from_parforend(args)
         end
         rdsepilog *= "}\n"
     end
-    s *= lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
+    s *= USE_OMP==1 && lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
     dprintln(3,"Parforend = ", s)
     lstate.ompdepth -= 1
     s
@@ -1749,7 +1749,7 @@ function from_parforstart(args)
     dprintln(3,"reductions = ", rds);
     lstate.ompdepth += 1
     # custom reduction only kicks in when omp parallel is produced, i.e., when ompdepth == 1
-    needs_custom_reduction = lstate.ompdepth == 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    needs_custom_reduction = USE_OMP==1 && lstate.ompdepth == 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     for rd in rds
         rdv = rd.reductionVar
         rdvtyp = toCtype(getSymType(rdv))
@@ -1771,7 +1771,7 @@ function from_parforstart(args)
     dprintln(3, "rdsclause = ", rdsclause)
 
     # Don't put openmp pragmas on nested parfors.
-    if lstate.ompdepth > 1
+    if USE_OMP==0 || lstate.ompdepth > 1
         # Still need to prepend reduction variable initialization for non-openmp loops.
         return rdsprolog * loopheaders
     end
@@ -1788,35 +1788,6 @@ function from_parforstart(args)
     s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
     s *= loopheaders
     s
-end
-
-function from_parforstart_serial(args)
-    parfor = args[1]
-    lpNests = parfor.loopNests
-    global lstate
-#   s = ""
-
-    ivs = map((a)->from_expr(a.indexVariable), lpNests)
-    starts = map((a)->from_expr(a.lower), lpNests)
-    stops = map((a)->from_expr(a.upper), lpNests)
-    steps = map((a)->from_expr(a.step), lpNests)
-
-    # Generate reduction initializers
-    rds = parfor.reductions
-    rdvars = rdinis = ""
-    dprintln(3,"reductions = ", rds);
-    rdsprolog = ""
-    for rd in rds
-        rdsprolog *= from_expr(rd, from_reductionVarInit(rd.reductionVarInit, rd.reductionVar))
-    end
-
-    return rdsprolog*"\n{ {\n"*from_loopnest(ivs, starts, stops, steps)
-
-#  s *= "{\n{\n" * mapfoldl(
-#           (i) -> "for ( $(ivs[i]) = $(starts[i]); $(ivs[i]) <= $(stops[i]); $(ivs[i]) += $(steps[i])) {\n",
-#           (a, b) -> "$a $b",
-#           1:length(lpNests))
-#   s
 end
 
 # TODO: Should simple objects be heap allocated ?
@@ -1934,11 +1905,7 @@ function from_expr(ast::Expr)
         s *= from_comparison(args)
 
     elseif head == :parfor_start
-    if USE_OMP==1
         s *= from_parforstart(args)
-  else
-        s *= from_parforstart_serial(args)
-  end
 
     elseif head == :parfor_end
         s *= from_parforend(args)
