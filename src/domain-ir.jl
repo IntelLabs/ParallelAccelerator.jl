@@ -1896,8 +1896,6 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         return ret
     end
 
-    local asttyp = typeof(x)
-    if asttyp == Expr
         local head = x.head
         local args = x.args
         local typ  = x.typ
@@ -1974,11 +1972,30 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         end
         x = Expr(head, args...)
         x.typ = typ
-    elseif asttyp == DomainLambda
-        dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
-        return x
-    end
 
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function AstWalkCallback(x :: DomainLambda, dw :: DirWalk, top_level_number, is_top_level, read)
+    dprintln(3,"DomainIR.AstWalkCallback ", x)
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
+    dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
+    return x
+end
+
+function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
+    dprintln(3,"DomainIR.AstWalkCallback ", x)
+    ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
+    dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
+    
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
