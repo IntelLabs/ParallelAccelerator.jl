@@ -46,41 +46,6 @@ import ParallelAccelerator.H5SizeArr_t
 # uncomment this line for using Debug.jl
 #using Debug
 
-#=
-type ASTDispatcher
-  nodes::Array{Any, 1}
-  dt::Dict{Any, Any}
-  m::Module
-    function ASTDispatcher()
-        d = Dict{Any, Any}()
-        n = [Expr, Symbol, SymbolNode, LineNumberNode, LabelNode,
-            GotoNode, TopNode, QuoteNode, NewvarNode,
-            isdefined(:GetfieldNode) ? GetfieldNode :
-                (isdefined(:GlobalRef) ? GlobalRef :
-                throw(string("Neither GetfieldNode or GlobalRef defined."))),
-            :block, :body, :new, :lambda, :(=), :call, :call1,
-            :return, :line, :gotoifnot, :parfor_start, :parfor_end,
-            :boundscheck, :loophead, :loopend]
-        for x in n
-            assert(isa(x, DataType) || isa(x, Symbol))
-            d[x] = symbol("from_" * lowercase(string(x)))
-        end
-        new(n, d, current_module())
-    end
-end
-
-
-function dispatch(a::ASTDispatcher, node::Any, args)
-    tgt = typeof(node)
-    if !haskey(a.dt, tgt)
-        #dumpSymbolTable(a.dt)
-        dprintln(3,"ERROR: Unexpected node: ", node, " with type = ", tgt)
-        throw("Could not dispatch node")
-    end
-    dprintln(3,"Dispatching to call: ", a.dt[tgt], " with args: ", args)
-    getfield(a.m, a.dt[tgt])(args)
-end
-=#
 
 type LambdaGlobalData
     #adp::ASTDispatcher
