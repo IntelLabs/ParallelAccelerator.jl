@@ -1887,7 +1887,7 @@ type DirWalk
     cbdata
 end
 
-function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
+function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_level, read)
     dprintln(3,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
     dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
