@@ -2164,73 +2164,73 @@ end
 
 function dir_alias_cb(ast::Expr, state, cbdata)
     dprintln(4,"dir_alias_cb ")
-    
-        head = ast.head
-        args = ast.args
-        if head == :mmap
-            # TODO: inspect the lambda body to rule out assignment?
-            return AliasAnalysis.next_node(state)
-        elseif head == :mmap!
-            dl :: DomainLambda = args[2]
-            # n_outputs = length(dl.outputs)
-            # assert(n_outputs == 1) 
-            # FIXME: fix it in case of multiple return!
-            tmp = args[1][1]
-            if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
-                tmp = tmp.args[1] 
-            end 
-            toSymGen(x) = isa(x, SymbolNode) ? x.name : x
-            return AliasAnalysis.lookup(state, toSymGen(tmp))
-        elseif head == :reduce
-            # TODO: inspect the lambda body to rule out assignment?
-            return AliasAnalysis.NotArray
-        elseif head == :stencil!
-            # args is a list of PIRParForAst nodes.
-            assert(length(args) > 0)
-            krnStat = args[1]
-            iterations = args[2]
-            bufs = args[3]
-            dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
-            if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
-                # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
-                for i = 1:min(krnStat.rotateNum, length(bufs))
-                    v = bufs[i]
-                    if isa(v, SymbolNode)
-                        AliasAnalysis.update_unknown(state, v.name)
-                    end
+
+    head = ast.head
+    args = ast.args
+    if head == :mmap
+        # TODO: inspect the lambda body to rule out assignment?
+        return AliasAnalysis.next_node(state)
+    elseif head == :mmap!
+        dl :: DomainLambda = args[2]
+        # n_outputs = length(dl.outputs)
+        # assert(n_outputs == 1) 
+        # FIXME: fix it in case of multiple return!
+        tmp = args[1][1]
+        if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
+            tmp = tmp.args[1] 
+        end 
+        toSymGen(x) = isa(x, SymbolNode) ? x.name : x
+        return AliasAnalysis.lookup(state, toSymGen(tmp))
+    elseif head == :reduce
+        # TODO: inspect the lambda body to rule out assignment?
+        return AliasAnalysis.NotArray
+    elseif head == :stencil!
+        # args is a list of PIRParForAst nodes.
+        assert(length(args) > 0)
+        krnStat = args[1]
+        iterations = args[2]
+        bufs = args[3]
+        dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
+        if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
+            # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
+            for i = 1:min(krnStat.rotateNum, length(bufs))
+                v = bufs[i]
+                if isa(v, SymbolNode)
+                    AliasAnalysis.update_unknown(state, v.name)
                 end
             end
-            return Any[] # empty array of Expr
-        elseif head == :parallel_for
-            # TODO: What should we do here?
-            return AliasAnalysis.NotArray
-        elseif head == :assertEqShape
-            return AliasAnalysis.NotArray
-        elseif head == :assert
-            return AliasAnalysis.NotArray 
-        elseif head == :select
-            return AliasAnalysis.next_node(state) 
-        elseif head == :ranges
-            return AliasAnalysis.NotArray
-        elseif is(head, :tomask)
-            toSymGen(x) = isa(x, SymbolNode) ? x.name : x
-            return AliasAnalysis.lookup(state, toSymGen(args[1]))
-        elseif is(head, :arraysize)
-            return AliasAnalysis.NotArray
-        elseif is(head, :tuple)
-            return AliasAnalysis.NotArray
-        elseif is(head, :alloc)
-            return AliasAnalysis.next_node(state)
-        elseif is(head, :copy)
-            return AliasAnalysis.next_node(state)
         end
+        return Any[] # empty array of Expr
+    elseif head == :parallel_for
+        # TODO: What should we do here?
+        return AliasAnalysis.NotArray
+    elseif head == :assertEqShape
+        return AliasAnalysis.NotArray
+    elseif head == :assert
+        return AliasAnalysis.NotArray 
+    elseif head == :select
+        return AliasAnalysis.next_node(state) 
+    elseif head == :ranges
+        return AliasAnalysis.NotArray
+    elseif is(head, :tomask)
+        toSymGen(x) = isa(x, SymbolNode) ? x.name : x
+        return AliasAnalysis.lookup(state, toSymGen(args[1]))
+    elseif is(head, :arraysize)
+        return AliasAnalysis.NotArray
+    elseif is(head, :tuple)
+        return AliasAnalysis.NotArray
+    elseif is(head, :alloc)
+        return AliasAnalysis.next_node(state)
+    elseif is(head, :copy)
+        return AliasAnalysis.next_node(state)
+    end
 
-        return nothing
-    
+    return nothing
+
 end
 
 function dir_alias_cb(ast::ANY, state, cbdata)
-dprintln(4,"dir_alias_cb ")
+    dprintln(4,"dir_alias_cb ")
 end
 
 end
