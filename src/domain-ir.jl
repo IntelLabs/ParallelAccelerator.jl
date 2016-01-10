@@ -1896,82 +1896,82 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
         return ret
     end
 
-        local head = x.head
-        local args = x.args
-        local typ  = x.typ
-        if head == :mmap || head == :mmap!
-            assert(length(args) >= 2)
-            input_arrays = args[1]
-            for i = 1:length(input_arrays)
-                args[1][i] = AstWalker.AstWalk(input_arrays[i], AstWalkCallback, dw)
-            end
-            args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
-            return x
-        elseif head == :reduce
-            assert(length(args) == 3 || length(args) == 4)
-            for i = 1:3
-                args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
-            end
-            return x
-        elseif head == :select 
-            # it is always in the form of select(arr, mask), where range can itself be ranges(range(...), ...))
-            assert(length(args) == 2)
-            args[1] = AstWalker.AstWalk(args[1], AstWalkCallback, dw)
-            assert(isa(args[2], Expr))
-            if args[2].head == :ranges
-                ranges = args[2].args
-            elseif args[2].head == :range || args[2].head == :tomask
-                ranges = Any[ args[2] ]
-            else
-                error("Unsupprted range object in select: ", args[2])
-            end
-            for i = 1:length(ranges)
-                # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
-                if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
-                    for j = 1:length(ranges[i].args)
-                        ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
-                    end
-                else
-                    assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
-                end
-            end
-            return x
-        elseif head == :stencil!
-            assert(length(args) == 4)
-            args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
-            for i in 1:length(args[3]) # buffer array
-                args[3][i] = AstWalker.AstWalk(args[3][i], AstWalkCallback, dw)
-            end
-            return x
-        elseif head == :parallel_for
-            map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[1])
-            map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[2])
-            args[3] = AstWalker.AstWalk(args[3], AstWalkCallback, dw)
-            return x
-        elseif head == :assertEqShape
-            assert(length(args) == 2)
-            for i = 1:length(args)
-                args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
-            end
-            return x
-        elseif head == :assert 
-            for i = 1:length(args)
-                AstWalker.AstWalk(args[i], AstWalkCallback, dw)
-            end
-            return x
-        elseif head == :select
-            for i = 1:length(args)
-                args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
-            end
-            return x
-        elseif head == :range
-            for i = 1:length(args)
-                args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
-            end
-            return x
+    local head = x.head
+    local args = x.args
+    local typ  = x.typ
+    if head == :mmap || head == :mmap!
+        assert(length(args) >= 2)
+        input_arrays = args[1]
+        for i = 1:length(input_arrays)
+            args[1][i] = AstWalker.AstWalk(input_arrays[i], AstWalkCallback, dw)
         end
-        x = Expr(head, args...)
-        x.typ = typ
+        args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
+        return x
+    elseif head == :reduce
+        assert(length(args) == 3 || length(args) == 4)
+        for i = 1:3
+            args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+        end
+        return x
+    elseif head == :select 
+        # it is always in the form of select(arr, mask), where range can itself be ranges(range(...), ...))
+        assert(length(args) == 2)
+        args[1] = AstWalker.AstWalk(args[1], AstWalkCallback, dw)
+        assert(isa(args[2], Expr))
+        if args[2].head == :ranges
+            ranges = args[2].args
+        elseif args[2].head == :range || args[2].head == :tomask
+            ranges = Any[ args[2] ]
+        else
+            error("Unsupprted range object in select: ", args[2])
+        end
+        for i = 1:length(ranges)
+            # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
+            if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
+                for j = 1:length(ranges[i].args)
+                    ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
+                end
+            else
+                assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
+            end
+        end
+        return x
+    elseif head == :stencil!
+        assert(length(args) == 4)
+        args[2] = AstWalker.AstWalk(args[2], AstWalkCallback, dw)
+        for i in 1:length(args[3]) # buffer array
+            args[3][i] = AstWalker.AstWalk(args[3][i], AstWalkCallback, dw)
+        end
+        return x
+    elseif head == :parallel_for
+        map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[1])
+        map!((a) -> AstWalker.AstWalk(a, AstWalkCallback, dw), args[2])
+        args[3] = AstWalker.AstWalk(args[3], AstWalkCallback, dw)
+        return x
+    elseif head == :assertEqShape
+        assert(length(args) == 2)
+        for i = 1:length(args)
+            args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+        end
+        return x
+    elseif head == :assert 
+        for i = 1:length(args)
+            AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+        end
+        return x
+    elseif head == :select
+        for i = 1:length(args)
+            args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+        end
+        return x
+    elseif head == :range
+        for i = 1:length(args)
+            args[i] = AstWalker.AstWalk(args[i], AstWalkCallback, dw)
+        end
+        return x
+    end
+    x = Expr(head, args...)
+    x.typ = typ
 
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
