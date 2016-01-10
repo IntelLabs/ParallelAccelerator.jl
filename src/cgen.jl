@@ -36,6 +36,7 @@ DebugMsg.init()
 
 using ..ParallelAccelerator
 import ..ParallelIR
+import ..ParallelIR.DelayedFunc
 import CompilerTools
 export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
@@ -1664,8 +1665,14 @@ function pattern_match_call_dist_init(f::Any)
     return ""
 end
 
+function pattern_match_reduce_sum(reductionFunc::DelayedFunc)
+    if reductionFunc.args[1][1].args[2].args[1]==TopNode(:add_float)
+        return true
+    end
+    return false
+end
 
-function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFunc::Symbol, output::Symbol)
+function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFunc::DelayedFunc, output::Symbol)
     if f.name==:hps_dist_reduce
         mpi_type = ""
         if var.typ==Float64
@@ -1681,7 +1688,7 @@ function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFu
         end
 
         mpi_func = ""
-        if reductionFunc==:+
+        if pattern_match_reduce_sum(reductionFunc)
             mpi_func = "MPI_SUM"
         else
             throw("CGen unsupported MPI reduction function")
