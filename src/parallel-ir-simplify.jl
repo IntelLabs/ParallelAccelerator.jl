@@ -123,25 +123,23 @@ end
 # insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
 # where they can't prevent fusion.
 """
-function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
     dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        dprintln(3,"node.head: ", node.head)
-    end
-    ntype = typeof(node)
+    dprintln(3,"node.head: ", node.head)
+    head = node.head
 
     if is_top_level
         dprintln(3,"remove_no_deps is_top_level")
 
-        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+        if head==:gotoifnot
             # Empty the state at the end or begining of a basic block
             data.dict_sym = Dict{SymGen,DictInfo}()
         end
 
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
         # Remove line number statements.
-        if ntype == LineNumberNode || (ntype == Expr && node.head == :line)
+        if head == :line
             return CompilerTools.AstWalker.ASTWALK_REMOVE
         end
         if live_info == nothing
@@ -263,6 +261,27 @@ function remove_no_deps(node :: ANY, data :: RemoveNoDepsState, top_level_number
         end
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_no_deps(node::Union{LabelNode,GotoNode}, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+    if is_top_level
+        # Empty the state at the end or begining of a basic block
+        data.dict_sym = Dict{SymGen,DictInfo}()
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
+function remove_no_deps(node :: LineNumberNode, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+    if is_top_level
+        # remove line number nodes
+        return CompilerTools.AstWalker.ASTWALK_REMOVE
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_no_deps(node::ANY, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
