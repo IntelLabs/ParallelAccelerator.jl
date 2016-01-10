@@ -270,11 +270,18 @@ end
 function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
     if f==:__hps_data_source_HDF5_read
         num::AbstractString = from_expr(id.id)
-        s =  "hsize_t CGen_HDF5_start_$num = $start;\n"
-        s *= "hsize_t CGen_HDF5_count_$num = $count;\n"
-        s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, &CGen_HDF5_start_$num, NULL, &CGen_HDF5_count_$num, NULL);\n"
+        # assuming 1st dimension is partitined
+        s =  "hsize_t CGen_HDF5_start_$num[data_ndim_$num];\n"
+        s *= "hsize_t CGen_HDF5_count_$num[data_ndim_$num];\n"
+        s *= "CGen_HDF5_start_$num[0] = $start;\n"
+        s *= "CGen_HDF5_count_$num[0] = $count;\n"
+        s *= "for(int i_CGen_dim=1; i_CGen_dim<data_ndim_$num; i_CGen_dim++) {\n"
+        s *= "CGen_HDF5_start_$num[i_CGen_dim] = 0;\n"
+        s *= "CGen_HDF5_count_$num[i_CGen_dim] = space_dims_0[i_CGen_dim];\n"
+        s *= "}\n"
+        s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, CGen_HDF5_start_$num, NULL, CGen_HDF5_count_$num, NULL);\n"
         s *= "assert(ret_$num != -1);\n"
-        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, &CGen_HDF5_count_$num, NULL);\n"
+        s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, CGen_HDF5_count_$num, NULL);\n"
         s *= "assert (mem_dataspace_$num != -1);\n"
         s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
         s *= "assert(xfer_plist_$num != -1);\n"
