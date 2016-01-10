@@ -2008,133 +2008,133 @@ end
 function dir_live_cb(ast :: Expr, cbdata :: ANY)
     dprintln(4,"dir_live_cb ")
 
-        head = ast.head
-        args = ast.args
-        if head == :mmap
-            expr_to_process = Any[]
-            assert(isa(args[2], DomainLambda))
-            dl = args[2]
+    head = ast.head
+    args = ast.args
+    if head == :mmap
+        expr_to_process = Any[]
+        assert(isa(args[2], DomainLambda))
+        dl = args[2]
 
-            assert(length(args) == 2)
-            input_arrays = args[1]
-            for i = 1:length(input_arrays)
+        assert(length(args) == 2)
+        input_arrays = args[1]
+        for i = 1:length(input_arrays)
+            push!(expr_to_process, input_arrays[i])
+        end
+        for (v, d) in dl.linfo.escaping_defs
+            push!(expr_to_process, v)
+        end 
+
+        dprintln(3, ":mmap ", expr_to_process)
+        return expr_to_process
+    elseif head == :mmap!
+        expr_to_process = Any[]
+        assert(isa(args[2], DomainLambda))
+        dl = args[2]
+
+        assert(length(args) >= 2)
+        input_arrays = args[1]
+        for i = 1:length(input_arrays)
+            if i <= length(dl.outputs)
+                # We need both a read followed by a write.
+                push!(expr_to_process, input_arrays[i])
+                push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
+            else
+                # Need to make input_arrays[1] written?
                 push!(expr_to_process, input_arrays[i])
             end
-            for (v, d) in dl.linfo.escaping_defs
-                push!(expr_to_process, v)
-            end 
-
-            dprintln(3, ":mmap ", expr_to_process)
-            return expr_to_process
-        elseif head == :mmap!
-            expr_to_process = Any[]
-            assert(isa(args[2], DomainLambda))
-            dl = args[2]
-
-            assert(length(args) >= 2)
-            input_arrays = args[1]
-            for i = 1:length(input_arrays)
-                if i <= length(dl.outputs)
-                    # We need both a read followed by a write.
-                    push!(expr_to_process, input_arrays[i])
-                    push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
-                else
-                    # Need to make input_arrays[1] written?
-                    push!(expr_to_process, input_arrays[i])
-                end
-            end
-            for (v, d) in dl.linfo.escaping_defs
-                push!(expr_to_process, v)
-            end 
-
-            dprintln(3, ":mmap! ", expr_to_process)
-            return expr_to_process
-        elseif head == :reduce
-            expr_to_process = Any[]
-
-            assert(length(args) == 3 || length(args) == 4)
-            zero_val = args[1]
-            input_array = args[2]
-            dl = args[3]
-            if !isa(zero_val, DomainLambda) 
-                push!(expr_to_process, zero_val)
-            end
-            push!(expr_to_process, input_array)
-            assert(isa(dl, DomainLambda))
-            for (v, d) in dl.linfo.escaping_defs
-                push!(expr_to_process, v)
-            end
-
-            dprintln(3, ":reduce ", expr_to_process)
-            return expr_to_process
-        elseif head == :stencil!
-            expr_to_process = Any[]
-
-            sbufs = args[3]
-            for i = 1:length(sbufs)
-                # sbufs both read and possibly written
-                push!(expr_to_process, sbufs[i])
-                push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
-            end
-
-            dl = args[4]
-            assert(isa(dl, DomainLambda))
-            for (v, d) in dl.linfo.escaping_defs
-                push!(expr_to_process, v)
-            end
-
-            dprintln(3, ":stencil! ", expr_to_process)
-            return expr_to_process
-        elseif head == :parallel_for
-            expr_to_process = Any[]
-
-            assert(length(args) == 3)
-            loopvars = args[1]
-            ranges = args[2]
-            escaping_defs = args[3].linfo.escaping_defs
-            push!(expr_to_process, loopvars)
-            append!(expr_to_process, ranges)
-            for (v, d) in escaping_defs
-                push!(expr_to_process, v)
-            end
-
-            dprintln(3, ":parallel_for ", expr_to_process)
-            return expr_to_process
-        elseif head == :assertEqShape
-            assert(length(args) == 2)
-            #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
-            expr_to_process = Any[]
-            push!(expr_to_process, symbol_or_gensym(args[1]))
-            push!(expr_to_process, symbol_or_gensym(args[2]))
-            return expr_to_process
-        elseif head == :assert
-            expr_to_process = Any[]
-            for i = 1:length(args)
-                push!(expr_to_process, args[i])
-            end
-            return expr_to_process
-        elseif head == :select
-            expr_to_process = Any[]
-            for i = 1:length(args)
-                push!(expr_to_process, args[i])
-            end
-            return expr_to_process
-        elseif head == :range
-            expr_to_process = Any[]
-            for i = 1:length(args)
-                push!(expr_to_process, args[i])
-            end
-            return expr_to_process
-        # arrayref only add read access
-        elseif head == :call
-            if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
-                expr_to_process = Any[]
-                for i = 2:length(args)
-                    push!(expr_to_process, args[i])
-                end
-                return expr_to_process
-            end
         end
+        for (v, d) in dl.linfo.escaping_defs
+            push!(expr_to_process, v)
+        end 
+
+        dprintln(3, ":mmap! ", expr_to_process)
+        return expr_to_process
+    elseif head == :reduce
+        expr_to_process = Any[]
+
+        assert(length(args) == 3 || length(args) == 4)
+        zero_val = args[1]
+        input_array = args[2]
+        dl = args[3]
+        if !isa(zero_val, DomainLambda) 
+            push!(expr_to_process, zero_val)
+        end
+        push!(expr_to_process, input_array)
+        assert(isa(dl, DomainLambda))
+        for (v, d) in dl.linfo.escaping_defs
+            push!(expr_to_process, v)
+        end
+
+        dprintln(3, ":reduce ", expr_to_process)
+        return expr_to_process
+    elseif head == :stencil!
+        expr_to_process = Any[]
+
+        sbufs = args[3]
+        for i = 1:length(sbufs)
+            # sbufs both read and possibly written
+            push!(expr_to_process, sbufs[i])
+            push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
+        end
+
+        dl = args[4]
+        assert(isa(dl, DomainLambda))
+        for (v, d) in dl.linfo.escaping_defs
+            push!(expr_to_process, v)
+        end
+
+        dprintln(3, ":stencil! ", expr_to_process)
+        return expr_to_process
+    elseif head == :parallel_for
+        expr_to_process = Any[]
+
+        assert(length(args) == 3)
+        loopvars = args[1]
+        ranges = args[2]
+        escaping_defs = args[3].linfo.escaping_defs
+        push!(expr_to_process, loopvars)
+        append!(expr_to_process, ranges)
+        for (v, d) in escaping_defs
+            push!(expr_to_process, v)
+        end
+
+        dprintln(3, ":parallel_for ", expr_to_process)
+        return expr_to_process
+    elseif head == :assertEqShape
+        assert(length(args) == 2)
+        #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
+        expr_to_process = Any[]
+        push!(expr_to_process, symbol_or_gensym(args[1]))
+        push!(expr_to_process, symbol_or_gensym(args[2]))
+        return expr_to_process
+    elseif head == :assert
+        expr_to_process = Any[]
+        for i = 1:length(args)
+            push!(expr_to_process, args[i])
+        end
+        return expr_to_process
+    elseif head == :select
+        expr_to_process = Any[]
+        for i = 1:length(args)
+            push!(expr_to_process, args[i])
+        end
+        return expr_to_process
+    elseif head == :range
+        expr_to_process = Any[]
+        for i = 1:length(args)
+            push!(expr_to_process, args[i])
+        end
+        return expr_to_process
+        # arrayref only add read access
+    elseif head == :call
+        if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
+            expr_to_process = Any[]
+            for i = 2:length(args)
+                push!(expr_to_process, args[i])
+            end
+            return expr_to_process
+        end
+    end
 
     return nothing
 end
@@ -2146,7 +2146,7 @@ end
 
 function dir_live_cb(ast :: ANY, cbdata :: ANY)
     dprintln(4,"dir_live_cb ")
-return nothing
+    return nothing
 end
 
 function symbol_or_gensym(x)
