@@ -293,6 +293,16 @@ function from_includes()
     if USE_OMP==1
         s *= "#include <omp.h>\n"
     end
+    if USE_DAAL==1
+        s *= """
+        #include "daal.h"
+
+        using namespace std;
+        using namespace daal;
+        using namespace daal::algorithms;
+        using namespace daal::data_management;
+        """
+    end
     s *= reduce(*, "", (
     blas_include,
     "#include <stdint.h>\n",
@@ -2245,7 +2255,9 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     if contains(string(ast),"HDF5") 
         global USE_HDF5 = 1
     end
-
+    if contains(string(ast),"__hps_kmeans")
+        global USE_DAAL = 1
+    end
     # Translate the body
     bod = from_expr(ast)
 
@@ -2564,6 +2576,13 @@ function getLinkCommand(outfile_name, lib)
       end
       #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5")
       push!(linkLibs,"-lhdf5")
+  end
+  if USE_DAAL==1
+    push!(linkLibs,"/opt/intel/daal/lib/intel64_lin/libdaal_core.a")
+    push!(linkLibs,"/opt/intel/daal/lib/intel64_lin/libdaal_thread.a")
+    push!(linkLibs,"-ltbb")
+    push!(linkLibs,"-liomp5")
+    push!(linkLibs,"-ldl")
   end
   if backend_compiler == USE_ICC
     comp = "icpc"
