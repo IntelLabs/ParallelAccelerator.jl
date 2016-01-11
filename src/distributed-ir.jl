@@ -78,6 +78,8 @@ end
 type ArrDistInfo
     isSequential::Bool      # can't be distributed; e.g. it is used in sequential code
     dim_sizes::Array{Union{SymAllGen,Int,Expr},1}      # sizes of array dimensions
+    # assuming only last dimension is partitioned
+    arr_id::Int # assign ID to distributed array to access partitioning info later
     
     function ArrDistInfo(num_dims::Int)
         new(false, zeros(Int64,num_dims))
@@ -204,8 +206,15 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
              end
         end
         return node
-    elseif head==:call && node.args[1]==:__hps_data_source_HDF5_read
-        # will be parallel IO
+    elseif head==:call
+        func = node.args[1]
+        if func==:__hps_data_source_HDF5_read
+            # will be parallel IO, intentionally do nothing
+        elseif func==:__hps_kmeans
+            # first array is cluster output and is sequential
+            # second array is input matrix and is parallel
+            state.arrs_dist_info[node.args[2]].isSequential = true
+        end
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
         rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
@@ -343,28 +352,39 @@ function from_assignment(node::Expr, state)
     @assert node.head==:(=) "DistributedIR invalid assignment head"
 
     if isAllocation(node.args[2])
-        arr = node.args[1]
+        arr = toSymGen(node.args[1])
         if in(arr, state.dist_arrays)
-            shape = get_alloc_shape(node.args[2].args[2:end])
+            dprintln(3,"DistIR allocation array: ", arr)
+            #shape = get_alloc_shape(node.args[2].args[2:end])
+            #old_size = shape[end]
+            dim_sizes = state.arrs_dist_info[arr].dim_sizes
             # generate array division
-            old_size = shape[end]
+            # simple 1D partitioning of last dimension, more general partitioning needed
+            # match common big data matrix reperesentation
+            arr_tot_size = dim_sizes[end]
 
-            div_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
-            new_size_var = symbol("__hps_size_"*string(getDistNewID(state)))
+            arr_id = getDistNewID(state)
+            state.arrs_dist_info[arr].arr_id = arr_id
+            darr_start_var = symbol("__hps_dist_arr_start_"*string(arr_id))
+            darr_div_var = symbol("__hps_dist_arr_div_"*string(arr_id))
+            darr_count_var = symbol("__hps_dist_arr_count_"*string(arr_id))
 
-            CompilerTools.LambdaHandling.addLocalVar(div_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-            CompilerTools.LambdaHandling.addLocalVar(new_size_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
-            div_size_expr = :($div_size_var = $old_size/__hps_num_pes)
-            new_size_expr = :($new_size_var = __hps_node_id==__hps_num_pes-1 ? $old_size-__hps_node_id*$div_size_var : $div_size_var)
 
-            node.args[2].args[7] = new_size_var
+            darr_div_expr = :($darr_div_var = $(arr_tot_size)/__hps_num_pes)
+            # zero-based index to match C interface of HDF5
+            darr_start_expr = :($darr_start_var = __hps_node_id*$darr_div_var) 
+            darr_count_expr = :($darr_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$darr_div_var : $darr_div_var)
 
-            res = [div_size_expr; new_size_expr; node]
+            node.args[2].args[7] = darr_count_var
 
-            #debug_size_print = :(println("size ",$new_size_var))
+            res = [darr_div_expr; darr_start_expr; darr_count_expr; node]
+            #debug_size_print = :(println("size ",$darr_count_var))
             #push!(res,debug_size_print)
-            return res 
+            return res
         end
     end
     return [node]
@@ -430,32 +450,19 @@ end
 
 function from_call(node::Expr, state)
     @assert node.head==:call "Invalid call node"
-    
-    if node.args[1]==:__hps_data_source_HDF5_read && in(node.args[3], state.dist_arrays)
+
+    func = node.args[1]
+    if func==:__hps_data_source_HDF5_read && in(node.args[3], state.dist_arrays)
         arr = node.args[3]
         dprintln(3,"DistIR data source for array: ", arr)
         
-        dim_sizes = state.arrs_dist_info[arr].dim_sizes
-        # simple 1D partitioning of last dimension, more general partitioning needed
-        # match common big data matrix reperesentation
-        arr_tot_size = dim_sizes[end]
+        arr_id = state.arrs_dist_info[arr].arr_id 
         
-        dsrc_start_var = symbol("__hps_data_source_start_"*string(getDistNewID(state)))
-        dsrc_div_var = symbol("__hps_data_source_div_"*string(getDistNewID(state)))
-        dsrc_count_var = symbol("__hps_data_source_count_"*string(getDistNewID(state)))
+        dsrc_start_var = symbol("__hps_dist_arr_start_"*string(arr_id)) 
+        dsrc_count_var = symbol("__hps_dist_arr_count_"*string(arr_id)) 
 
-        CompilerTools.LambdaHandling.addLocalVar(dsrc_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(dsrc_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(dsrc_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-
-
-        dsrc_div_expr = :($dsrc_div_var = $(arr_tot_size)/__hps_num_pes)
-        # zero-based index to match C interface of HDF5
-        dsrc_start_expr = :($dsrc_start_var = __hps_node_id*$dsrc_div_var) 
-        dsrc_count_expr = :($dsrc_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$dsrc_div_var : $dsrc_div_var)
-        
         push!(node.args, dsrc_start_var, dsrc_count_var)
-        return [dsrc_div_expr;dsrc_start_expr;dsrc_count_expr;node]
+        return [node]
     end
     return [node]
 end
