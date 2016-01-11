@@ -118,6 +118,7 @@ package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
 NERSC = 0
+USE_DAAL = 0
 #config file overrides backend_compiler variable
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
@@ -2518,11 +2519,11 @@ function compile(outfile_name)
 
   cgenOutput = "$generated_file_dir/$outfile_name.cpp"
 
-  if isDistributedMode()
-      println("Distributed-memory MPI mode.")
+  if isDistributedMode() && MPI.Comm_rank(MPI.COMM_WORLD)==0
+    println("Distributed-memory MPI mode.")
   end
 
-  if USE_OMP==0
+  if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
       println("OpenMP is not used.")
   end
 
