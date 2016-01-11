@@ -311,6 +311,174 @@ function pattern_match_call_dist_h5_size(f::Any, h5size_arr::Any, ind::Any)
     return ""
 end
 
+function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAllGen, 
+                                   num_clusters::SymAllGen, start::Symbol, count::Symbol, 
+                                   col_size::Union{SymAllGen,Int,Expr}, tot_row_size::Union{SymAllGen,Int,Expr})
+    s = ""
+    if f==:__hps_kmeans
+        c_arr = from_expr(arr)
+        c_num_clusters = from_expr(num_clusters)
+        c_col_size = from_expr(col_size)
+        c_tot_row_size = from_expr(tot_row_size)
+        
+        s *= """
+        byte   *nodeCentroids;
+        size_t CentroidsArchLength;
+        services::SharedPtr<NumericTable> centroids;
+        InputDataArchive centroidsDataArch;
+        int mpi_root = 0;
+        int rankId = __hps_node_id;
+
+        HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>($c_arr, $c_col_size, $count);
+        services::SharedPtr<NumericTable> dataTablePointer(dataTable);
+        kmeans::init::Distributed<step1Local,double,kmeans::init::randomDense>
+                       localInit($num_clusters, $c_tot_row_size, $start);
+        localInit.input.set(kmeans::init::data, dataTablePointer);
+        
+        /* Compute k-means */
+        localInit.compute();
+
+        /* Serialize partial results required by step 2 */
+        services::SharedPtr<byte> serializedData;
+        InputDataArchive dataArch;
+        localInit.getPartialResult()->serialize( dataArch );
+        size_t perNodeArchLength = dataArch.getSizeOfArchive();
+
+        /* Serialized data is of equal size on each node if each node called compute() equal number of times */
+        if (rankId == mpi_root)
+        {   
+            serializedData = services::SharedPtr<byte>( new byte[ perNodeArchLength * __hps_num_pes ] );
+        }   
+
+        byte *nodeResults = new byte[ perNodeArchLength ];
+        dataArch.copyArchiveToArray( nodeResults, perNodeArchLength );
+
+        /* Transfer partial results to step 2 on the root node */
+        MPI_Gather( nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(), perNodeArchLength, MPI_CHAR, mpi_root,
+                MPI_COMM_WORLD);
+
+        delete[] nodeResults;
+
+        if(rankId == mpi_root)
+        {   
+            /* Create an algorithm to compute k-means on the master node */
+            kmeans::init::Distributed<step2Master, double, kmeans::init::randomDense> masterInit($c_num_clusters);
+
+            for( size_t i = 0; i < __hps_num_pes ; i++ )
+            {   
+                /* Deserialize partial results from step 1 */
+                OutputDataArchive dataArch( serializedData.get() + perNodeArchLength * i, perNodeArchLength );
+
+                services::SharedPtr<kmeans::init::PartialResult> dataForStep2FromStep1 = services::SharedPtr<kmeans::init::PartialResult>(
+                                                                               new kmeans::init::PartialResult() );
+                dataForStep2FromStep1->deserialize(dataArch);
+
+                /* Set local partial results as input for the master-node algorithm */
+                masterInit.input.add(kmeans::init::partialResults, dataForStep2FromStep1 );
+        }
+
+        /* Merge and finalizeCompute k-means on the master node */
+        masterInit.compute();
+        masterInit.finalizeCompute();
+
+        centroids = masterInit.getResult()->get(kmeans::init::centroids);
+        }
+        for(int iter=0; iter<20; iter++) {
+        
+            if(rankId == mpi_root)
+            {
+                /*Retrieve the algorithm results and serialize them */
+                centroids->serialize( centroidsDataArch );
+                CentroidsArchLength = centroidsDataArch.getSizeOfArchive();
+            }
+
+             /* Get partial results from the root node */
+             MPI_Bcast( &CentroidsArchLength, sizeof(size_t), MPI_CHAR, mpi_root, MPI_COMM_WORLD );
+
+              nodeCentroids = new byte[ CentroidsArchLength ];
+
+            if(rankId == mpi_root)
+            {
+                centroidsDataArch.copyArchiveToArray( nodeCentroids, CentroidsArchLength );
+            }
+
+            MPI_Bcast( nodeCentroids, CentroidsArchLength, MPI_CHAR, mpi_root, MPI_COMM_WORLD );
+
+            /* Deserialize centroids data */
+            OutputDataArchive centroidsDataArch( nodeCentroids, CentroidsArchLength );
+
+            centroids = services::SharedPtr<NumericTable>( new HomogenNumericTable<double>() );
+
+            centroids->deserialize(centroidsDataArch);
+
+            /* Create an algorithm to compute k-means on local nodes */
+            kmeans::Distributed<step1Local> localAlgorithm($c_num_clusters);
+
+            /* Set the input data set to the algorithm */
+            localAlgorithm.input.set(kmeans::data,           dataTablePointer);
+            localAlgorithm.input.set(kmeans::inputCentroids, centroids);
+    
+            /* Compute k-means */
+            localAlgorithm.compute();
+
+            /* Serialize partial results required by step 2 */
+            services::SharedPtr<byte> serializedData;
+            InputDataArchive dataArch;
+            localAlgorithm.getPartialResult()->serialize( dataArch );
+            size_t perNodeArchLength = dataArch.getSizeOfArchive();
+
+            /* Serialized data is of equal size on each node if each node called compute() equal number of times */
+            if (rankId == mpi_root)
+            {
+                serializedData = services::SharedPtr<byte>( new byte[ perNodeArchLength * __hps_num_pes ] );
+            }
+            byte *nodeResults = new byte[ perNodeArchLength ];
+            dataArch.copyArchiveToArray( nodeResults, perNodeArchLength );
+
+            /* Transfer partial results to step 2 on the root node */
+            MPI_Gather( nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(), perNodeArchLength, MPI_CHAR, mpi_root,
+                        MPI_COMM_WORLD);
+
+            delete[] nodeResults;
+
+            if(rankId == mpi_root)
+            {
+               /* Create an algorithm to compute k-means on the master node */
+               kmeans::Distributed<step2Master> masterAlgorithm($c_num_clusters);
+
+               for( size_t i = 0; i < __hps_num_pes ; i++ )
+                {
+                    /* Deserialize partial results from step 1 */
+                    OutputDataArchive dataArch( serializedData.get() + perNodeArchLength * i, perNodeArchLength );
+
+                    services::SharedPtr<kmeans::PartialResult> dataForStep2FromStep1 = services::SharedPtr<kmeans::PartialResult>(
+                                                                               new kmeans::PartialResult() );
+                    dataForStep2FromStep1->deserialize(dataArch);
+
+                    /* Set local partial results as input for the master-node algorithm */
+                    masterAlgorithm.input.add(kmeans::partialResults, dataForStep2FromStep1 );
+                }
+
+                /* Merge and finalizeCompute k-means on the master node */
+                masterAlgorithm.compute();
+                masterAlgorithm.finalizeCompute();
+
+                /* Retrieve the algorithm results */
+                centroids = masterAlgorithm.getResult()->get(kmeans::centroids);
+            }
+            delete[] nodeCentroids;
+        }
+    """
+        
+    end
+    return s
+end
+
+function pattern_match_call_kmeans(f::ANY, cluster_out::ANY, arr::ANY, num_clusters::ANY, start::ANY, count::ANY, cols::ANY, rows::ANY)
+    return ""
+end
+
+
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
     s = ""
@@ -340,6 +508,9 @@ function pattern_match_call(ast::Array{Any, 1})
     # gemm calls have 6 args
     if(length(ast)==6)
         s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6])
+    end
+    if(length(ast)==8)
+        s = pattern_match_call_kmeans(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],ast[7],ast[8])
     end
     return s
 end

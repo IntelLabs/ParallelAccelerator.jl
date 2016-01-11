@@ -474,11 +474,11 @@ function from_call(node::Expr, state)
         
         arr_id = state.arrs_dist_info[arr].arr_id 
         
-        dsrc_start_var = symbol("__hps_dist_arr_start_"*string(arr_id)) 
+        dsrc_start_var = symbol("__hps_dist_arr_start_"*string(arr_id))
         dsrc_count_var = symbol("__hps_dist_arr_count_"*string(arr_id)) 
 
-
-        push!(node.args, dsrc_start_var, dsrc_count_var)
+        push!(node.args, dsrc_start_var, dsrc_count_var, 
+                state.arrs_dist_info[arr].dim_sizes[1], state.arrs_dist_info[arr].dim_sizes[end])
         return [node]
     end
     return [node]
