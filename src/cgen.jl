@@ -1586,8 +1586,8 @@ function from_parforend(args)
     end
     rdsinit = rdsepilog = ""
     rds = parfor.reductions
-    needs_custom_reduction = USE_OMP==1 && lstate.ompdepth <= 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
-    if needs_custom_reduction
+    parallel_reduction = USE_OMP==1 && lstate.ompdepth <= 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    if parallel_reduction
         nthreadsvar = "_num_threads"
         rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
         for rd in rds
@@ -1749,12 +1749,12 @@ function from_parforstart(args)
     dprintln(3,"reductions = ", rds);
     lstate.ompdepth += 1
     # custom reduction only kicks in when omp parallel is produced, i.e., when ompdepth == 1
-    needs_custom_reduction = USE_OMP==1 && lstate.ompdepth == 1 && any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
+    parallel_reduction = USE_OMP==1 && lstate.ompdepth == 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     for rd in rds
         rdv = rd.reductionVar
         rdvtyp = toCtype(getSymType(rdv))
         rdvar = from_expr(rdv)
-        if needs_custom_reduction
+        if parallel_reduction 
             rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
             rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
             rdsprolog *= "$rdvtyp &$rdvar = $(rdvar)_vec[rds_init_loop_var];\n"
@@ -1763,8 +1763,11 @@ function from_parforstart(args)
             rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
         else
             rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
-            rdop = string(rd.reductionFunc)
-            rdsclause *= "reduction($(rdop) : $(rdvar)) "
+            # parallel IR no longer produces reductionFunc as a symbol
+            #if isa(rd.reductionFunc, Symbol) 
+            #   rdop = string(rd.reductionFunc)
+            #   rdsclause *= "reduction($(rdop) : $(rdvar)) "
+            #end
         end
     end
     dprintln(3, "rdsprolog = ", rdsprolog)
