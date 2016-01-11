@@ -50,6 +50,8 @@ import ..ParallelIR.ISASSIGNEDONCE
 import ..ParallelIR.ISPRIVATEPARFORLOOP
 import ..ParallelIR.PIRReduction
 
+dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans])
+
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
@@ -206,11 +208,13 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
              end
         end
         return node
-    elseif head==:call
+    elseif head==:call && in(node.args[1], dist_ir_funcs)
         func = node.args[1]
         if func==:__hps_data_source_HDF5_read
+            dprintln(2,"DistIR arr info walk hdf5 read ", node)
             # will be parallel IO, intentionally do nothing
         elseif func==:__hps_kmeans
+            dprintln(2,"DistIR arr info walk kmeans ", node)
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
             state.arrs_dist_info[node.args[2]].isSequential = true
@@ -262,11 +266,11 @@ function checkParforsForDistribution(state::DistIrState)
             end
         end
     end
-    # all arrays of distributed parfors are distributable at this point 
-    for parfor_id in keys(state.parfor_info)
-        if !in(state.seq_parfors, parfor_id)
-            dprintln(2,"DistIR distributable parfor: ", parfor_id," arrays: ", state.parfor_info[parfor_id])
-            append!(state.dist_arrays, state.parfor_info[parfor_id])
+    # all arrays not marked sequential are distributable at this point 
+    for arr in keys(state.arrs_dist_info)
+        if state.arrs_dist_info[arr].isSequential==false
+            dprintln(2,"DistIR distributable parfor array: ", arr)
+            push!(state.dist_arrays, arr)
         end
     end
 end
@@ -450,16 +454,29 @@ end
 
 function from_call(node::Expr, state)
     @assert node.head==:call "Invalid call node"
+    dprintln(2,"DistIR from_call ", node)
 
     func = node.args[1]
-    if func==:__hps_data_source_HDF5_read && in(node.args[3], state.dist_arrays)
-        arr = node.args[3]
+    if func==:__hps_data_source_HDF5_read && in(toSymGen(node.args[3]), state.dist_arrays)
+        arr = toSymGen(node.args[3])
         dprintln(3,"DistIR data source for array: ", arr)
         
         arr_id = state.arrs_dist_info[arr].arr_id 
         
         dsrc_start_var = symbol("__hps_dist_arr_start_"*string(arr_id)) 
         dsrc_count_var = symbol("__hps_dist_arr_count_"*string(arr_id)) 
+
+        push!(node.args, dsrc_start_var, dsrc_count_var)
+        return [node]
+    elseif func==:__hps_kmeans && in(toSymGen(node.args[3]), state.dist_arrays)
+        arr = toSymGen(node.args[3])
+        dprintln(3,"DistIR kmeans call for array: ", arr)
+        
+        arr_id = state.arrs_dist_info[arr].arr_id 
+        
+        dsrc_start_var = symbol("__hps_dist_arr_start_"*string(arr_id)) 
+        dsrc_count_var = symbol("__hps_dist_arr_count_"*string(arr_id)) 
+
 
         push!(node.args, dsrc_start_var, dsrc_count_var)
         return [node]
