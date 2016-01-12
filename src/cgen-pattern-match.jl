@@ -327,7 +327,7 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
         size_t CentroidsArchLength;
         services::SharedPtr<NumericTable> centroids;
         InputDataArchive centroidsDataArch;
-        int nIterations = 5;
+        int nIterations = 10;
         int mpi_root = 0;
         int rankId = __hps_node_id;
 

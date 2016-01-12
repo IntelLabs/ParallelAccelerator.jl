@@ -2584,8 +2584,9 @@ function getLinkCommand(outfile_name, lib)
       push!(linkLibs,"-lhdf5")
   end
   if USE_DAAL==1
-    push!(linkLibs,"/opt/intel/daal/lib/intel64_lin/libdaal_core.a")
-    push!(linkLibs,"/opt/intel/daal/lib/intel64_lin/libdaal_thread.a")
+      DAALROOT=ENV["DAALROOT"]
+    push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_core.a")
+    push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_thread.a")
     push!(linkLibs,"-ltbb")
     push!(linkLibs,"-liomp5")
     push!(linkLibs,"-ldl")
