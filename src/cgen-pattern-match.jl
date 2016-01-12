@@ -385,7 +385,9 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
 
         centroids = masterInit.getResult()->get(kmeans::init::centroids);
         }
-        for(int iter=0; iter<nIterations; iter++) {
+        
+        for(int iter=0; iter<nIterations; iter++) 
+        {
         
             if(rankId == mpi_root)
             {
@@ -477,10 +479,18 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
         //std::cout<<centroids->getNumberOfColumns()<<std::endl;
         
         centroids->getBlockOfRows(0, $c_num_clusters, readOnly, block);
-        
-        int64_t res_dims[] = {$c_num_clusters, $c_col_size};
-        j2c_array<double> kmeans_out(block.getBlockPtr(),2,res_dims);
-        $c_cluster_out = kmeans_out
+        double* out_arr = block.getBlockPtr();
+        //std::cout<<"output ";
+        //for(int i=0; i<$c_col_size*$c_num_clusters; i++)
+        //{
+        //    std::cout<<" "<<out_arr[i];
+        //}
+        //std::cout<<std::endl;
+        int64_t res_dims[] = {$c_col_size,$c_num_clusters};
+        double* out_data = new double[$c_col_size*$c_num_clusters];
+        memcpy(out_data, block.getBlockPtr(), $c_col_size*$c_num_clusters*sizeof(double));
+        j2c_array<double> kmeans_out(out_data,2,res_dims);
+        $c_cluster_out = kmeans_out;
     """
         
     end
