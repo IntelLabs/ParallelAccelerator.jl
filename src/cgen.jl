@@ -191,13 +191,14 @@ _Intrinsics = [
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
         "le_float", "ne_float", "eq_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
-        "nan_dom_err", "lt_float", "slt_int", "abs_float", "select_value",
+        "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_sadd", "checked_smul", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
-        "cttz_int"
+        "cttz_int",
+        "zext_int"
 ]
 
 tokenXlate = Dict(
@@ -364,6 +365,9 @@ function from_decl(k::DataType)
         end
         s *= "} Tuple" * (!isempty(ptyp) ? mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", ptyp) : "") * ";\n"
         return s
+    elseif issubtype(k, AbstractString)
+        # Strings are handled by a speciall class in j2c-array.h.
+        return ""
     else
         if haskey(lstate.globalUDTs, k)
             lstate.globalUDTs[k] = 0
@@ -1083,7 +1087,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) & ($(from_expr(args[2])))"
     elseif intr == "sub_int"
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
-    elseif intr == "slt_int"
+    elseif intr == "slt_int" || intr == "ult_int"
         return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
     elseif intr == "sle_int"
         return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
@@ -1097,6 +1101,8 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
     elseif intr == "checked_smul"
         return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
+    elseif intr == "zext_int"
+        return "($(toCtype(args[1]))) ($(from_expr(args[2])))"
     elseif intr == "smod_int"
         m = from_expr(args[1])
         n = from_expr(args[2])

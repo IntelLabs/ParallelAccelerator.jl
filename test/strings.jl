@@ -23,32 +23,38 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module StringTest
 using ParallelAccelerator
-using Base.Test
 
-include("reduction.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
-include("strings.jl")
+# ParallelAccelerator.DomainIR.set_debug_level(4)
+# ParallelAccelerator.ParallelIR.set_debug_level(4)
+# ParallelAccelerator.CGen.set_debug_level(4)
+# ParallelAccelerator.set_debug_level(4)
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
+@acc function f1()
+    x = "hello"
+    y = x[3]
+    # FIXME: right now we can't handle returning Chars
+    return UInt8(y)
+end
 
-include("../examples/black-scholes/black-scholes.jl")
-include("../examples/opt-flow/opt-flow.jl")
+@acc function f2()
+    x = "hello"
+    return length(x)
+end
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+function test1()
+    return f1()
+end
+
+function test2()
+    return f2()
+end
+
+end
+
+println("Testing strings...")
+@test StringTest.test1() == 108 # ASCII 'l' is 108
+@test StringTest.test2() == 5
+println("Done testing strings...")
+

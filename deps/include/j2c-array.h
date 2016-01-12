@@ -1031,4 +1031,31 @@ bool j2c_alias_test(const std::array<j2c_array_interface *, N> &jai) {
     return false;
 }
 
+/*
+ * A class for representing Julia ASCIIStrings as j2c_arrays.
+ */
+class ASCIIString {
+ public:
+  j2c_array<uint8_t> data;
+
+  ASCIIString() { }
+
+  ASCIIString(const char* s) {
+    uint64_t string_len = strlen(s);
+    data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
+    strncpy((char *)data.data, s, string_len);
+  }
+
+  ASCIIString(const ASCIIString &s) {
+    data = s.data;
+  }
+
+  ASCIIString & operator=(const ASCIIString &rhs) {
+    uint64_t string_len = rhs.data.ARRAYLEN();
+    data = rhs.data;
+    return *this;
+  }
+
+};
+
 #endif /* PSE_ARRAY_H_ */
