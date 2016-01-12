@@ -320,19 +320,21 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
         c_num_clusters = from_expr(num_clusters)
         c_col_size = from_expr(col_size)
         c_tot_row_size = from_expr(tot_row_size)
+        c_cluster_out = from_expr(cluster_out)        
         
         s *= """
         byte   *nodeCentroids;
         size_t CentroidsArchLength;
         services::SharedPtr<NumericTable> centroids;
         InputDataArchive centroidsDataArch;
+        int nIterations = 5;
         int mpi_root = 0;
         int rankId = __hps_node_id;
 
-        HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>($c_arr, $c_col_size, $count);
+        HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>((double*)$c_arr.getData(), $c_col_size, $count);
         services::SharedPtr<NumericTable> dataTablePointer(dataTable);
         kmeans::init::Distributed<step1Local,double,kmeans::init::randomDense>
-                       localInit($num_clusters, $c_tot_row_size, $start);
+                       localInit($c_num_clusters, $c_tot_row_size, $start);
         localInit.input.set(kmeans::init::data, dataTablePointer);
         
         /* Compute k-means */
@@ -383,7 +385,7 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
 
         centroids = masterInit.getResult()->get(kmeans::init::centroids);
         }
-        for(int iter=0; iter<20; iter++) {
+        for(int iter=0; iter<nIterations; iter++) {
         
             if(rankId == mpi_root)
             {
@@ -468,6 +470,17 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
             }
             delete[] nodeCentroids;
         }
+        
+        BlockDescriptor<double> block;
+        
+        //std::cout<<centroids->getNumberOfRows()<<std::endl;
+        //std::cout<<centroids->getNumberOfColumns()<<std::endl;
+        
+        centroids->getBlockOfRows(0, $c_num_clusters, readOnly, block);
+        
+        int64_t res_dims[] = {$c_num_clusters, $c_col_size};
+        j2c_array<double> kmeans_out(block.getBlockPtr(),2,res_dims);
+        $c_cluster_out = kmeans_out
     """
         
     end
