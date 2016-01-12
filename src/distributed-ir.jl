@@ -383,7 +383,7 @@ function from_assignment(node::Expr, state)
             darr_start_expr = :($darr_start_var = __hps_node_id*$darr_div_var) 
             darr_count_expr = :($darr_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$darr_div_var : $darr_div_var)
 
-            node.args[2].args[7] = darr_count_var
+            node.args[2].args[end-1] = darr_count_var
 
             res = [darr_div_expr; darr_start_expr; darr_count_expr; node]
             #debug_size_print = :(println("size ",$darr_count_var))
