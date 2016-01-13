@@ -3307,8 +3307,10 @@ end
 function rm_allocs_live_cb(ast :: Expr, cbdata :: ANY)
     head = ast.head
     args = ast.args
+    dprintln(3, "rm_allocs_live_cb called with ast ", ast)
     if head == :(=) && isAllocation(args[2])
-        return pir_live_cb(args[2], cbdata)
+        dprintln(3, "rm_allocs_live_cb ignore allocation ", ast)
+        return Any[args[2]]
     end
     return pir_live_cb(ast,cbdata)
 end
