@@ -46,7 +46,13 @@ include("strings.jl")
 # good compromise that exercises much of ParallelAccelerator.
 
 include("../examples/black-scholes/black-scholes.jl")
+# black-scholes should have only 1 allocation and 1 parfor after optimization
+@test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
+
 include("../examples/pi/pi.jl")
+# pi should have no allocation and 1 parfor after optimization
+@test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
+
 include("../examples/opt-flow/opt-flow.jl")
 
 # Delete file left behind by opt-flow.
