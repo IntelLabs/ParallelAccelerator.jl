@@ -61,6 +61,9 @@ const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
 const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy, :pointer])
 
+@inline sum(A::DenseArray{Bool}) = sum(1 .* A)
+@inline sum(A::DenseArray{Bool}, x::Int) = sum(1 .* A, x)
+
 # reduction across a dimension
 for f in reduce_operators
     @eval begin
