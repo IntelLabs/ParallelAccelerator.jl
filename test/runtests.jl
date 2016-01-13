@@ -46,6 +46,7 @@ include("strings.jl")
 # good compromise that exercises much of ParallelAccelerator.
 
 include("../examples/black-scholes/black-scholes.jl")
+include("../examples/pi/pi.jl")
 include("../examples/opt-flow/opt-flow.jl")
 
 # Delete file left behind by opt-flow.
