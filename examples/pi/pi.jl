@@ -26,6 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
+#ParallelAccelerator.set_debug_level(3)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+
 @acc function calcPi(n::Int64)
     x = rand(n) .* 2.0 .- 1.0
     y = rand(n) .* 2.0 .- 1.0
@@ -59,7 +63,9 @@ Options:
     calcPi(100)
     println("SELFPRIMED ", toq())
 
+    tic()
     pi_val = calcPi(points)
+    time = toq()
     println("pi = ", pi_val)
     println("SELFTIMED ", time)
 
