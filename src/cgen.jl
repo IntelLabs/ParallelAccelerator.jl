@@ -31,7 +31,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module CGen
 
 import CompilerTools.DebugMsg
-import CompilerTools.LambdaHandling.SymAllGen
+using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 DebugMsg.init()
 
 using ..ParallelAccelerator
@@ -524,17 +525,6 @@ end
 function from_assignment_fix_tupple(lhs, rhs::ANY)
 end
 
-function toSymGen(x)
-    if isa(x, SymbolNode)
-        x.name
-    elseif isa(x, GenSym) || isa(x, Symbol) 
-        x   
-    else
-        error("Expecting Symbol, SymbolNode, or GenSym, but got ", x)
-    end 
-end
-
-
 
 function from_assignment(args::Array{Any,1})
     global lstate
@@ -618,22 +608,6 @@ function isArrayOfPrimitiveJuliaType(t::ANY)
     return false
 end
 
-
-function isArrayType(typ::DataType)
-    (typ<:Array) || (typ<:BitArray)
-end
-
-function isArrayType(typ::ANY)
-    return false
-end
-
-function isPtrType(typ::DataType)
-    typ<:Ptr
-end
-
-function isPtrType(typ::ANY)
-    return false
-end
 
 function toCtype(typ::Tuple)
     return "Tuple" * mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", typ)
