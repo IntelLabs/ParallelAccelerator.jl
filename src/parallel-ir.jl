@@ -3280,23 +3280,6 @@ function rm_allocs_live_cb(ast :: ANY, cbdata :: ANY)
 end
 
 
-
-"""
-Returns true if input "a" is a tuple and each element of the tuple of isbits type.
-"""
-function isbitstuple(a::Tuple)
-    for i in a
-        if !isbits(i)
-            return false
-        end
-    end
-    return true
-end
-
-function isbitstuple(a::Any)
-    return false
-end
-
 function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
     ast = uncompressed_ast(ast)
     return from_expr(ast, depth, state, top_level)

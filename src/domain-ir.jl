@@ -34,6 +34,7 @@ import CompilerTools.AstWalker
 using CompilerTools
 using CompilerTools.LivenessAnalysis
 using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using CompilerTools.AliasAnalysis
@@ -110,12 +111,6 @@ import ..H5SizeArr_t
 #    of buffers, in real implementation, it takes the set of index symbol
 #    nodes, as well as stride symbol nodes, in addition to the buffers.
 
-
-function TypedExpr(typ, rest...)
-    res = Expr(rest...)
-    res.typ = typ
-    res
-end
 
 mk_eltype(arr) = Expr(:eltype, arr)
 mk_ndim(arr) = Expr(:ndim, arr)
@@ -2103,8 +2098,8 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         assert(length(args) == 2)
         #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
         expr_to_process = Any[]
-        push!(expr_to_process, symbol_or_gensym(args[1]))
-        push!(expr_to_process, symbol_or_gensym(args[2]))
+        push!(expr_to_process, toSymGen(args[1]))
+        push!(expr_to_process, toSymGen(args[2]))
         return expr_to_process
     elseif head == :assert
         expr_to_process = Any[]
@@ -2146,19 +2141,6 @@ end
 function dir_live_cb(ast :: ANY, cbdata :: ANY)
     dprintln(4,"dir_live_cb ")
     return nothing
-end
-
-function symbol_or_gensym(x)
-    xtyp = typeof(x)
-    if xtyp == Symbol
-        return x
-    elseif xtyp == SymbolNode
-        return x.name
-    elseif xtyp == GenSym
-        return x
-    else
-        throw(string("Don't know how to convert ", x, " of type ", xtyp, " to a symbol or a GenSym"))
-    end
 end
 
 function dir_alias_cb(ast::Expr, state, cbdata)
