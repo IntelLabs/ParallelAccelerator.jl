@@ -35,6 +35,7 @@ DebugMsg.init()
 using CompilerTools.AstWalker
 import CompilerTools.ReadWriteSet
 using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 import ..ParallelIR
 import ..ParallelIR.isArrayType
 import ..ParallelIR.getParforNode
@@ -504,29 +505,6 @@ end
 function adjust_arrayrefs(stmt::Any, loop_start_var::Symbol)
 end
 
-function isCall(node::Expr)
-    return node.head==:call
-end
-
-function isCall(node::Any)
-    return false
-end
-
-function isTopNode(node::TopNode)
-    return true
-end
-
-function isTopNode(node::Any)
-    return false
-end
-
-function toSymGen(a::SymbolNode)
-    return a.name
-end
-
-function toSymGen(a::Any)
-    return a
-end
 
 function gen_dist_reductions(reductions::Array{PIRReduction,1}, state)
     res = Any[]

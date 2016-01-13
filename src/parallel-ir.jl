@@ -31,6 +31,7 @@ DebugMsg.init()
 
 using CompilerTools
 using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 using ..DomainIR
 using CompilerTools.AliasAnalysis
 import ..ParallelAccelerator
@@ -75,14 +76,6 @@ function callDelayedFuncWith(f::DelayedFunc, args...)
     f.func(full_args...)
 end
 
-"""
-This should pretty always be used instead of Expr(...) to form an expression as it forces the typ to be provided.
-"""
-function TypedExpr(typ, rest...)
-    res = Expr(rest...)
-    res.typ = typ
-    res
-end
 
 """
 Holds the information about a loop in a parfor node.
@@ -700,30 +693,10 @@ function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
 end
 
 """
-Returns true if the incoming type in "typ" is an array type.
-"""
-function isArrayType(typ)
-    return (typ.name == Array.name || typ.name == BitArray.name)
-end
-
-"""
-Returns the element type of an Array.
-"""
-function getArrayElemType(atyp :: DataType)
-    if atyp.name == Array.name
-        atyp.parameters[1]
-    elseif atyp.name == BitArray.name
-        Bool
-    else
-        assert(false)
-    end
-end
-
-"""
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: SymbolNode, state :: expr_state)
-    return getArrayElemType(array.typ)
+    return eltype(array.typ)
 end
 
 """
@@ -731,7 +704,7 @@ Returns the element type of an Array.
 """
 function getArrayElemType(array :: GenSym, state :: expr_state)
     atyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
-    return getArrayElemType(atyp)
+    return eltype(atyp)
 end
 
 """
@@ -812,26 +785,7 @@ function simpleIndex(dict)
     return true
 end
 
-"""
-In various places we need a SymGen type which is the union of Symbol and GenSym.
-This function takes a Symbol, SymbolNode, or GenSym and return either a Symbol or GenSym.
-"""
-function toSymGen(x :: Symbol)
-    return x
-end
 
-function toSymGen(x :: SymbolNode)
-    return x.name
-end
-
-function toSymGen(x :: GenSym)
-    return x
-end
-
-function toSymGen(x)
-    xtyp = typeof(x)
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSymGen and don't know what to do with it."))
-end
 
 """
 Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
@@ -2251,17 +2205,6 @@ include("parallel-ir-task.jl")
 include("parallel-ir-top-exprs.jl")
 include("parallel-ir-flatten.jl")
 
-
-"""
-Returns true if a given SymbolNode "x" is an Array type.
-"""
-function isArrayType(x :: SymbolNode)
-    the_type = x.typ
-    if typeof(the_type) == DataType
-        return isArrayType(x.typ)
-    end
-    return false
-end
 
 """
 Pretty print the args part of the "body" of a :lambda Expr at a given debug level in "dlvl".
