@@ -497,7 +497,7 @@ function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
         n = 0
         for i = 1:length(args)
             typ = typeOfOpr(state, args[i])
-            if isarray(typ) || isbitarray(typ)
+            if isArrayType(typ)
                 n = n + 1
             end
         end
@@ -575,7 +575,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, bod
     local repldict = Dict{SymGen, Any}()
     for i = 1:len
         local typ = typs[i]
-        if isarray(typ) || isbitarray(typ)
+        if isArrayType(typ)
             j = j + 1
             typs[j] = typ
             args_[j] = args[i]
@@ -1099,7 +1099,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     # end
 
     dprintln(env, "verifyMapOps -> ", verifyMapOps(state, fun, args))
-    if verifyMapOps(state, fun, args) && (isarray(typ) || isbitarray(typ)) 
+    if verifyMapOps(state, fun, args) && isArrayType(typ)
         return translate_call_map(state,env_,typ, fun, args)
     elseif is(fun, :cartesianarray)
         return translate_call_cartesianarray(state,env_,typ, args)
@@ -1240,7 +1240,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
             (start, step, final) = from_range(rExpr)
             return mk_expr(typ, :call, GlobalRef(Base, :add_int), start, mk_expr(typ, :call, GlobalRef(Base, :mul_int), mk_expr(typ, :call, GlobalRef(Base, :sub_int), args[2], 1), step))
         end
-    elseif isarray(arrTyp) || isbitarray(arrTyp)
+    elseif isArrayType(arrTyp)
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
       atyp = typeOfOpr(state, arr)
       expr = nothing
@@ -1260,7 +1260,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
                 args = Any[mk_select(arr, ranges), args[2]]
                 typs = Type[atyp, typeOfOpr(state, args[2])]
                 (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
-                elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+                elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
                 linfo = LambdaInfo()
                 for i=1:length(nonarrays)
                     # At this point, they are either symbol nodes, or constants
@@ -1288,7 +1288,7 @@ function translate_call_map(state, env, typ, fun, args::Array{Any,1})
         fun = :negate
     end
     typs = Type[ typeOfOpr(state, arg) for arg in args ]
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+    elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     opr, reorder = specializeOp(mapOps[fun], elmtyps)
     typs = reorder(typs)
     args = reorder(args)
@@ -1296,7 +1296,7 @@ function translate_call_map(state, env, typ, fun, args::Array{Any,1})
     (nonarrays, args, typs, f) = specialize(state, args, typs, 
     as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
     dprintln(env,"from_lambda: after specialize, typs=", typs)
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+    elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     # calculate escaping variables
     linfo = LambdaInfo()
     for i=1:length(nonarrays)
@@ -1377,7 +1377,7 @@ function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
     typs = Type[typeOfOpr(state, a) for a in args]
     (nonarrays, args, typs, f) = specialize(state, args, typs, 
     as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
-    elmtyps = Type[ (isarray(t) || isbitarray(t)) ? elmTypOf(t) : t for t in typs ]
+    elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     linfo = LambdaInfo()
     for i=1:length(nonarrays)
         # At this point, they are either symbol nodes, or constants
@@ -1410,7 +1410,7 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     local i
     for i = 2:nargs
         oprTyp = typeOfOpr(state, args[i])
-        if isarray(oprTyp) || isbitarray(oprTyp)
+        if isArrayType(oprTyp)
             push!(bufs, args[i])
             push!(bufstyp, oprTyp)
         else
