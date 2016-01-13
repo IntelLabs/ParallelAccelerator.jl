@@ -1581,15 +1581,21 @@ function from_parforend(args)
     if parallel_reduction
         nthreadsvar = "_num_threads"
         rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
+        rdscleanup = ""
         for rd in rds
             rdv = rd.reductionVar
-            rdvtyp = toCtype(getSymType(rdv))
+            rdvt = getSymType(rdv)
+            rdvtyp = toCtype(rdvt)
             rdvar = from_expr(rdv)
             rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
             rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
             rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
+            if isPrimitiveJuliaType(rdvt) 
+                rdscleanup *= "free($(rdvar)_vec);\n";
+            end
         end
-        rdsepilog *= "}\n"
+        rdsepilog *= "}\n" * rdscleanup
+
     end
     s *= USE_OMP==1 && lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
     dprintln(3,"Parforend = ", s)
@@ -1743,10 +1749,15 @@ function from_parforstart(args)
     parallel_reduction = USE_OMP==1 && lstate.ompdepth == 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     for rd in rds
         rdv = rd.reductionVar
-        rdvtyp = toCtype(getSymType(rdv))
+        rdvt = getSymType(rdv)
+        rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv)
         if parallel_reduction 
-            rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
+            if isPrimitiveJuliaType(rdvt) 
+                rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
+            else
+                rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
+            end
             rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
             rdsprolog *= "$rdvtyp &$rdvar = $(rdvar)_vec[rds_init_loop_var];\n"
             rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv) * "}\n"
