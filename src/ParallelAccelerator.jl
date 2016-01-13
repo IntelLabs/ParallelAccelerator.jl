@@ -52,6 +52,40 @@ const OFFLOAD2_MODE = 3
 const TASK_MODE = 4
 const THREADS_MODE = 5
 
+num_acc_allocs = 0
+num_acc_parfors = 0
+
+"""
+(internal) Sets the number of allocations left in the accelerated function after optimizations. 
+"""
+function set_num_acc_allocs(allocs::Int)
+    global num_acc_allocs = allocs
+    return
+end
+
+"""
+(internal) Sets the number of parfors generated for the accelerated function after optimizations.
+"""
+function set_num_acc_parfors(parfors::Int)
+    global num_acc_parfors = parfors
+    return
+end
+
+
+"""
+Returns the number of allocations left in the accelerated function after optimizations. 
+"""
+function get_num_acc_allocs()
+    return num_acc_allocs
+end
+
+"""
+Returns the number of parfors generated for the accelerated function after optimizations.
+"""
+function get_num_acc_parfors()
+    return num_acc_parfors
+end
+
 """
 Return internal mode number by looking up environment variable "PROSPECT_MODE".
 """

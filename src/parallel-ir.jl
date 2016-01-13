@@ -3138,10 +3138,48 @@ function from_root(function_name, ast :: Expr)
 
     remove_extra_allocs(ast)
 
+    set_pir_stats(ast)
+
     if pir_stop != 0
         throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     end
     ast
+end
+
+"""
+Returns true if input is assignment expression with allocation
+"""
+function isAllocationAssignment(node::Expr)
+    if node.head==:(=) && isAllocation(node.args[2])
+        return true
+    end
+    return false
+end
+
+function isAllocationAssignment(node::ANY)
+    return false
+end
+
+"""
+Calculates statistics (number of allocations and parfors)
+of the accelerated AST.
+"""
+function set_pir_stats(ast::Expr)
+    body = CompilerTools.LambdaHandling.getBody(ast)
+    allocs = 0
+    parfors = 0
+    # count number of high-level allocations and assignment
+    for expr in body.args
+        if isAllocationAssignment(expr)
+            allocs += 1
+        elseif isBareParfor(expr)
+            parfors +=1
+        end
+    end
+    # make stats available to user
+    ParallelAccelerator.set_num_acc_allocs(allocs);
+    ParallelAccelerator.set_num_acc_parfors(parfors);
+    return
 end
 
 type rm_allocs_state
