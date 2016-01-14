@@ -1578,7 +1578,7 @@ function from_parforend(args)
     rdsinit = rdsepilog = ""
     rds = parfor.reductions
     parallel_reduction = USE_OMP==1 && lstate.ompdepth <= 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
-    if parallel_reduction
+    if parallel_reduction && length(rds) > 0
         nthreadsvar = "_num_threads"
         rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
         rdscleanup = ""
