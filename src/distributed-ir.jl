@@ -129,7 +129,7 @@ function show(io::IO, pnode::ParallelAccelerator.DistributedIR.DistIrState)
     println(io,"")
 end
 
-function initDistState(linfo)
+function initDistState(linfo::LambdaInfo)
     state = DistIrState(linfo)
     
     #params = linfo.input_params

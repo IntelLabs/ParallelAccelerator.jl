@@ -2322,7 +2322,9 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         for bb in body_lives.basic_blocks
             all_defs = union(all_defs, bb[2].def)
         end
-        as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
+        # as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
+        # FIXME: is this correct?
+        as = CompilerTools.LivenessAnalysis.AccessSummary(all_defs, live_in_to_start_block)
 
         push!(expr_to_process, as)
 
