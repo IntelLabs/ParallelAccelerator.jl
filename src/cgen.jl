@@ -1733,7 +1733,7 @@ function from_parforstart(args)
         preclause *= "$nthreadsvar = j2c_block_region_thread_count.getUsed();\n"
         nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads($nthreadsvar) "
     else
-        preclause *= "$nthreadsvar = omp_get_num_threads();\n"
+        preclause *= "$nthreadsvar = omp_get_max_threads();\n"
         nthreadsclause = "num_threads($nthreadsvar) "
     end
     dprintln(3, "preclause = ", preclause)
