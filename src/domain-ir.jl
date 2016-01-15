@@ -823,7 +823,7 @@ function mmapRemoveDupArg!(expr)
     return expr
 end
 
-function pattern_match_hps_dist_calls(lhs::SymGen, rhs::Expr)
+function pattern_match_hps_dist_calls(state, env, lhs::SymGen, rhs::Expr)
     # example of data source call: 
     # :((top(typeassert))((top(convert))(Array{Float64,1},(ParallelAccelerator.API.__hps_data_source_HDF5)("/labels","./test.hdf5")),Array{Float64,1})::Array{Float64,1})
     if rhs.head==:call && length(rhs.args)>=2 && isCall(rhs.args[2])
@@ -881,7 +881,7 @@ function pattern_match_hps_dist_calls(lhs::SymGen, rhs::Expr)
     return Expr(:not_matched)
 end
 
-function pattern_match_hps_dist_calls(lhs::Any, rhs::Any)
+function pattern_match_hps_dist_calls(state, env, lhs::Any, rhs::Any)
     return Expr(:not_matched)
 end
 
@@ -897,7 +897,7 @@ function from_assignment(state, env, expr::Expr)
     lhs = toSymGen(lhs)
     
     # pattern match distributed calls that need domain-ir translation
-    matched = pattern_match_hps_dist_calls(lhs, rhs)
+    matched = pattern_match_hps_dist_calls(state, env, lhs, rhs)
     # matched is an expression, :not_matched head is used if not matched 
     if matched.head!=:not_matched
         return matched
