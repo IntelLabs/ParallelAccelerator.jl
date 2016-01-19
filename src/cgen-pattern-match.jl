@@ -280,7 +280,7 @@ function pattern_match_call_data_src_open(f::Symbol, id::GenSym, file_name::Unio
         file_name_str::AbstractString = from_expr(file_name)
         s = """
             MPI_File dsrc_txt_file_$num;
-            ierr_$num = MPI_File_open(MPI_COMM_WORLD, $file_name_str, MPI_MODE_RDONLY, MPI_INFO_NULL, &dsrc_txt_file_$num);
+            int ierr_$num = MPI_File_open(MPI_COMM_WORLD, $file_name_str, MPI_MODE_RDONLY, MPI_INFO_NULL, &dsrc_txt_file_$num);
             assert(ierr_$num==0);
             """
     end
@@ -409,8 +409,9 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
             // double *my_data = new double[total_data_size];
             int64_t CGen_txt_data_ind_$num = 0;
             
-            char CGen_txt_sep_char_$num[] = "\n";
+            char CGen_txt_sep_char_$num[] = \"\\n\";
             int64_t CGen_txt_curr_row_$num = 0;
+            double* CGen_txt_data_arr = (double*)$arr.getData();
             while(CGen_txt_curr_row_$num!=CGen_txt_count_$num)
             {
                 char* CGen_txt_line;
@@ -446,9 +447,9 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
                 for(int64_t i=0; i<CGen_txt_col_size_$num; i++)
                 {
                     if(i==0)
-                        $arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line,&CGen_txt_line);
+                        CGen_txt_data_arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line,&CGen_txt_line);
                     else
-                        $arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line+1,&CGen_txt_line);
+                        CGen_txt_data_arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line+1,&CGen_txt_line);
          //           std::cout<<$arr[CGen_txt_data_ind_$num-1]<<std::endl;
                 }
                 CGen_txt_curr_row_$num++;
@@ -852,6 +853,14 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
             MPI_Scan(&CGen_txt_num_lines_$num, &CGen_txt_curr_start_$num, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
             int64_t CGen_txt_curr_end_$num = CGen_txt_curr_start_$num;
             CGen_txt_curr_start_$num -= CGen_txt_num_lines_$num; // Scan is inclusive
+            if(CGen_txt_col_size_$num==1) {
+                $c_lhs = new uint64_t[1];
+                $c_lhs[0] = CGen_txt_tot_row_size_$num;
+            } else {
+                $c_lhs = new uint64_t[2];
+                $c_lhs[0] = CGen_txt_tot_row_size_$num;
+                $c_lhs[1] = CGen_txt_col_size_$num;
+            }
             """
     end
     return s
