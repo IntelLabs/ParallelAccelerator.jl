@@ -51,7 +51,7 @@ import ..ParallelIR.ISASSIGNEDONCE
 import ..ParallelIR.ISPRIVATEPARFORLOOP
 import ..ParallelIR.PIRReduction
 
-dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans])
+dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,:__hps_data_source_TXT_open,:__hps_data_source_TXT_read])
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -211,8 +211,8 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
         return node
     elseif head==:call && in(node.args[1], dist_ir_funcs)
         func = node.args[1]
-        if func==:__hps_data_source_HDF5_read
-            dprintln(2,"DistIR arr info walk hdf5 read ", node)
+        if func==:__hps_data_source_HDF5_read || func==:__hps_data_source_TXT_read
+            dprintln(2,"DistIR arr info walk data source read ", node)
             # will be parallel IO, intentionally do nothing
         elseif func==:__hps_kmeans
             dprintln(2,"DistIR arr info walk kmeans ", node)
@@ -458,7 +458,7 @@ function from_call(node::Expr, state)
     dprintln(2,"DistIR from_call ", node)
 
     func = node.args[1]
-    if func==:__hps_data_source_HDF5_read && in(toSymGen(node.args[3]), state.dist_arrays)
+    if (func==:__hps_data_source_HDF5_read || func==:__hps_data_source_TXT_read) && in(toSymGen(node.args[3]), state.dist_arrays)
         arr = toSymGen(node.args[3])
         dprintln(3,"DistIR data source for array: ", arr)
         

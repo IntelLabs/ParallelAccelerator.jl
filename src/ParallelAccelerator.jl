@@ -223,7 +223,11 @@ end
 # a hack to make accelerate function and DomainIR mutually recursive.
 _accelerate(function_name, signature) = accelerate(function_name, signature, 0)
 
+# data types for declaring size array for data sources
+# will be matched in CGen to proper C arrays
 type H5SizeArr_t
+end
+type SizeArr_t
 end
 
 include("api.jl")

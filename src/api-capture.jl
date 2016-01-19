@@ -102,12 +102,20 @@ function process_assignment(node, lhs::Symbol, rhs::Expr)
 
         node.args[1] = :($(node.args[1])::$arr_var_expr)
         source_typ = node.args[2].args[3]
-        @assert source_typ==:HDF5 "Only HDF5 data sources supported for now."
-        hdf_var_name = node.args[2].args[4]
-        hdf_file_name = node.args[2].args[5]
-
+        @assert source_typ==:HDF5 || source_typ==:TXT "Only HDF5 and TXT (text) data sources supported for now."
         call_name = symbol("__hps_data_source_$source_typ")
-        call = :($(call_name)($hdf_var_name,$hdf_file_name))
+        
+        call = Expr(:call)
+        
+        if source_typ==:HDF5
+            hdf_var_name = node.args[2].args[4]
+            hdf_file_name = node.args[2].args[5]
+            call = :($(call_name)($hdf_var_name,$hdf_file_name))
+        else
+            txt_file_name = node.args[2].args[4]
+            call = :($(call_name)($txt_file_name))
+        end
+        
         node.args[2] = call
 #=        arr_var_expr = node.args[2].args[2]
         dims = arr_var_expr.args[3]
