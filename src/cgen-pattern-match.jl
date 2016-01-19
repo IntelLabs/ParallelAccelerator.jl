@@ -318,140 +318,140 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
     elseif f==:__hps_data_source_TXT_read
         # assuming 1st dimension is partitined
         s = """
-            int64_t CGen_txt_start = $start;
-            int64_t CGen_txt_count = $count;
-            int64_t CGen_txt_end = $start+$count;
+            int64_t CGen_txt_start_$num = $start;
+            int64_t CGen_txt_count_$num = $count;
+            int64_t CGen_txt_end_$num = $start+$count;
             
             
-            // std::cout<<"rank: "<<__hps_node_id<<" start: "<<CGen_txt_start<<" end: "<<CGen_txt_end<<" columnSize: "<<CGen_txt_col_size<<std::endl;
+            // std::cout<<"rank: "<<__hps_node_id<<" start: "<<CGen_txt_start_$num<<" end: "<<CGen_txt_end_$num<<" columnSize: "<<CGen_txt_col_size_$num<<std::endl;
             // if data needs to be sent left
             // still call MPI_Send if first character is new line
-            int64_t CGen_txt_left_send_size = 0;
-            int64_t CGen_txt_tmp_curr_start = CGen_txt_curr_start;
-            if(CGen_txt_start>CGen_txt_curr_start)
+            int64_t CGen_txt_left_send_size_$num = 0;
+            int64_t CGen_txt_tmp_curr_start_$num = CGen_txt_curr_start_$num;
+            if(CGen_txt_start_$num>CGen_txt_curr_start_$num)
             {
-                while(CGen_txt_tmp_curr_start!=CGen_txt_start)
+                while(CGen_txt_tmp_curr_start_$num!=CGen_txt_start_$num)
                 {
-                    while(CGen_txt_buffer[CGen_txt_left_send_size]!='\n') 
-                        CGen_txt_left_send_size++;
-                    CGen_txt_left_send_size++; // account for \n
-                    CGen_txt_tmp_curr_start++;
+                    while(CGen_txt_buffer_$num[CGen_txt_left_send_size_$num]!='\n') 
+                        CGen_txt_left_send_size_$num++;
+                    CGen_txt_left_send_size_$num++; // account for \n
+                    CGen_txt_tmp_curr_start_$num++;
                 }
             }
-            MPI_Request CGen_txt_MPI_request1, CGen_txt_MPI_request2;
-            MPI_Status CGen_txt_MPI_status;
+            MPI_Request CGen_txt_MPI_request1_$num, CGen_txt_MPI_request2_$num;
+            MPI_Status CGen_txt_MPI_status_$num;
             // send left
             if(__hps_node_id!=0)
             {
-                MPI_Isend(&CGen_txt_left_send_size, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1);
-                MPI_Isend(CGen_txt_buffer, CGen_txt_left_send_size, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2);
-                // std::cout<<"rank: "<<__hps_node_id<<" sent left "<<CGen_txt_left_send_size<<std::endl;
+                MPI_Isend(&CGen_txt_left_send_size_$num, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1_$num);
+                MPI_Isend(CGen_txt_buffer_$num, CGen_txt_left_send_size_$num, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2_$num);
+                // std::cout<<"rank: "<<__hps_node_id<<" sent left "<<CGen_txt_left_send_size_$num<<std::endl;
             }
             
-            char* CGen_txt_right_buff = NULL;
-            int64_t CGen_txt_right_recv_size = 0;
+            char* CGen_txt_right_buff_$num = NULL;
+            int64_t CGen_txt_right_recv_size_$num = 0;
             // receive from right
             if(__hps_node_id!=__hps_num_pes-1)
             {
-                MPI_Recv(&CGen_txt_right_recv_size, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                CGen_txt_right_buff = new char[CGen_txt_right_recv_size];
-                MPI_Recv(CGen_txt_right_buff, CGen_txt_right_recv_size, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                // std::cout<<"rank: "<<__hps_node_id<<" received right "<<CGen_txt_right_recv_size<<std::endl;
+                MPI_Recv(&CGen_txt_right_recv_size_$num, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                CGen_txt_right_buff_$num = new char[CGen_txt_right_recv_size_$num];
+                MPI_Recv(CGen_txt_right_buff_$num, CGen_txt_right_recv_size_$num, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                // std::cout<<"rank: "<<__hps_node_id<<" received right "<<CGen_txt_right_recv_size_$num<<std::endl;
             }
             
             if(__hps_node_id!=0)
             {
-                MPI_Wait(&CGen_txt_MPI_request1, &CGen_txt_MPI_status);
-                MPI_Wait(&CGen_txt_MPI_request2, &CGen_txt_MPI_status);
+                MPI_Wait(&CGen_txt_MPI_request1_$num, &CGen_txt_MPI_status_$num);
+                MPI_Wait(&CGen_txt_MPI_request2_$num, &CGen_txt_MPI_status_$num);
             }
             
             // if data needs to be sent right
             // still call MPI_Send if first character is new line
-            int64_t CGen_txt_right_send_size = 0;
-            int64_t CGen_txt_tmp_curr_end = CGen_txt_curr_end;
-            if(__hps_node_id!=__hps_num_pes-1 && CGen_txt_curr_end>=CGen_txt_end)
+            int64_t CGen_txt_right_send_size_$num = 0;
+            int64_t CGen_txt_tmp_curr_end_$num = CGen_txt_curr_end_$num;
+            if(__hps_node_id!=__hps_num_pes-1 && CGen_txt_curr_end_$num>=CGen_txt_end_$num)
             {
-                while(CGen_txt_tmp_curr_end!=CGen_txt_end-1)
+                while(CGen_txt_tmp_curr_end_$num!=CGen_txt_end_$num-1)
                 {
                     // -1 to account for \0
-                    while(CGen_txt_buffer[CGen_txt_buff_size-CGen_txt_right_send_size-1]!='\n') 
-                        CGen_txt_right_send_size++;
-                    CGen_txt_tmp_curr_end--;
+                    while(CGen_txt_buffer_$num[CGen_txt_buff_size_$num-CGen_txt_right_send_size_$num-1]!='\n') 
+                        CGen_txt_right_send_size_$num++;
+                    CGen_txt_tmp_curr_end_$num--;
                     // corner case, last line doesn't have '\n'
-                    if (CGen_txt_tmp_curr_end!=CGen_txt_end-1)
-                        CGen_txt_right_send_size++; // account for \n
+                    if (CGen_txt_tmp_curr_end_$num!=CGen_txt_end_$num-1)
+                        CGen_txt_right_send_size_$num++; // account for \n
                 }
             }
             // send right
             if(__hps_node_id!=__hps_num_pes-1)
             {
-                MPI_Isend(&CGen_txt_right_send_size, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1);
-                MPI_Isend(CGen_txt_buffer+CGen_txt_buff_size-CGen_txt_right_send_size, CGen_txt_right_send_size, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2);
+                MPI_Isend(&CGen_txt_right_send_size_$num, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1_$num);
+                MPI_Isend(CGen_txt_buffer_$num+CGen_txt_buff_size_$num-CGen_txt_right_send_size_$num, CGen_txt_right_send_size_$num, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2_$num);
             }
-            char* CGen_txt_left_buff = NULL;
-            int64_t CGen_txt_left_recv_size = 0;
+            char* CGen_txt_left_buff_$num = NULL;
+            int64_t CGen_txt_left_recv_size_$num = 0;
             // receive from left
             if(__hps_node_id!=0)
             {
-                MPI_Recv(&CGen_txt_left_recv_size, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                CGen_txt_left_buff = new char[CGen_txt_left_recv_size];
-                MPI_Recv(CGen_txt_left_buff, CGen_txt_left_recv_size, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                // std::cout<<"rank: "<<__hps_node_id<<" received left "<<CGen_txt_left_recv_size<<std::endl;
+                MPI_Recv(&CGen_txt_left_recv_size_$num, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                CGen_txt_left_buff_$num = new char[CGen_txt_left_recv_size_$num];
+                MPI_Recv(CGen_txt_left_buff_$num, CGen_txt_left_recv_size_$num, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                // std::cout<<"rank: "<<__hps_node_id<<" received left "<<CGen_txt_left_recv_size_$num<<std::endl;
             }
             if(__hps_node_id!=__hps_num_pes-1)
             {
-                MPI_Wait(&CGen_txt_MPI_request1, &CGen_txt_MPI_status);
-                MPI_Wait(&CGen_txt_MPI_request2, &CGen_txt_MPI_status);
-                // std::cout<<"rank: "<<__hps_node_id<<" sent right "<<CGen_txt_right_send_size<<std::endl;
+                MPI_Wait(&CGen_txt_MPI_request1_$num, &CGen_txt_MPI_status_$num);
+                MPI_Wait(&CGen_txt_MPI_request2_$num, &CGen_txt_MPI_status_$num);
+                // std::cout<<"rank: "<<__hps_node_id<<" sent right "<<CGen_txt_right_send_size_$num<<std::endl;
             }
             
-            // int64_t total_data_size = (CGen_txt_end-CGen_txt_start)*CGen_txt_col_size;
+            // int64_t total_data_size = (CGen_txt_end_$num-CGen_txt_start_$num)*CGen_txt_col_size_$num;
             // double *my_data = new double[total_data_size];
-            int64_t CGen_txt_data_ind = 0;
+            int64_t CGen_txt_data_ind_$num = 0;
             
-            char CGen_txt_sep_char[] = "\n";
-            int64_t CGen_txt_curr_row = 0;
-            while(CGen_txt_curr_row!=CGen_txt_count)
+            char CGen_txt_sep_char_$num[] = "\n";
+            int64_t CGen_txt_curr_row_$num = 0;
+            while(CGen_txt_curr_row_$num!=CGen_txt_count_$num)
             {
                 char* CGen_txt_line;
-                if (CGen_txt_curr_row==0)
+                if (CGen_txt_curr_row_$num==0)
                 {
-                    CGen_txt_line = strtok(CGen_txt_buffer, CGen_txt_sep_char);
-                    if(CGen_txt_left_recv_size!=0)
+                    CGen_txt_line = strtok(CGen_txt_buffer_$num, CGen_txt_sep_char_$num);
+                    if(CGen_txt_left_recv_size_$num!=0)
                     {
                         char *CGen_txt_tmp_line;
-                        CGen_txt_tmp_line = new char[CGen_txt_left_recv_size+strlen(CGen_txt_line)];
-                        memcpy(CGen_txt_tmp_line, CGen_txt_left_buff, CGen_txt_left_recv_size);
-                        memcpy(CGen_txt_tmp_line+CGen_txt_left_recv_size, CGen_txt_line, strlen(CGen_txt_line));
+                        CGen_txt_tmp_line = new char[CGen_txt_left_recv_size_$num+strlen(CGen_txt_line)];
+                        memcpy(CGen_txt_tmp_line, CGen_txt_left_buff_$num, CGen_txt_left_recv_size_$num);
+                        memcpy(CGen_txt_tmp_line+CGen_txt_left_recv_size_$num, CGen_txt_line, strlen(CGen_txt_line));
                         CGen_txt_line = CGen_txt_tmp_line;
                     }
                 }
-                else if(CGen_txt_curr_row==CGen_txt_count-1)
+                else if(CGen_txt_curr_row_$num==CGen_txt_count_$num-1)
                 {
-                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char);
-                    if(CGen_txt_right_recv_size!=0)
+                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char_$num);
+                    if(CGen_txt_right_recv_size_$num!=0)
                     {
                         char *CGen_txt_tmp_line;
-                        CGen_txt_tmp_line = new char[CGen_txt_right_recv_size+strlen(CGen_txt_line)];
+                        CGen_txt_tmp_line = new char[CGen_txt_right_recv_size_$num+strlen(CGen_txt_line)];
                         memcpy(CGen_txt_tmp_line, CGen_txt_line, strlen(CGen_txt_line));
-                        memcpy(CGen_txt_tmp_line+strlen(CGen_txt_line), CGen_txt_right_buff, CGen_txt_right_recv_size);
+                        memcpy(CGen_txt_tmp_line+strlen(CGen_txt_line), CGen_txt_right_buff_$num, CGen_txt_right_recv_size_$num);
                         CGen_txt_line = CGen_txt_tmp_line;
                     }
                 }
                 else
                 {
-                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char);
+                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char_$num);
                 }
                 // parse line separately, not to change strtok's state
-                for(int64_t i=0; i<CGen_txt_col_size; i++)
+                for(int64_t i=0; i<CGen_txt_col_size_$num; i++)
                 {
                     if(i==0)
-                        $arr[CGen_txt_data_ind++] = strtod(CGen_txt_line,&CGen_txt_line);
+                        $arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line,&CGen_txt_line);
                     else
-                        $arr[CGen_txt_data_ind++] = strtod(CGen_txt_line+1,&CGen_txt_line);
-         //           std::cout<<$arr[CGen_txt_data_ind-1]<<std::endl;
+                        $arr[CGen_txt_data_ind_$num++] = strtod(CGen_txt_line+1,&CGen_txt_line);
+         //           std::cout<<$arr[CGen_txt_data_ind_$num-1]<<std::endl;
                 }
-                CGen_txt_curr_row++;
+                CGen_txt_curr_row_$num++;
             }
             
             MPI_File_close(&dsrc_txt_file_$num);
@@ -796,62 +796,62 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
         num = from_expr(rhs.args[2].id)
         c_lhs = from_expr(lhs)
         s = """
-            MPI_Offset CGen_txt_tot_file_size;
-            MPI_Offset CGen_txt_buff_size;
-            MPI_Offset CGen_txt_offset_start;
-            MPI_Offset CGen_txt_offset_end;
+            MPI_Offset CGen_txt_tot_file_size_$num;
+            MPI_Offset CGen_txt_buff_size_$num;
+            MPI_Offset CGen_txt_offset_start_$num;
+            MPI_Offset CGen_txt_offset_end_$num;
         
             /* divide file read */
-            MPI_File_get_size(dsrc_txt_file_$num, &CGen_txt_tot_file_size);
-            CGen_txt_buff_size = CGen_txt_tot_file_size/__hps_num_pes;
-            CGen_txt_offset_start = __hps_node_id * CGen_txt_buff_size;
-            CGen_txt_offset_end   = CGen_txt_offset_start + CGen_txt_buff_size - 1;
+            MPI_File_get_size(dsrc_txt_file_$num, &CGen_txt_tot_file_size_$num);
+            CGen_txt_buff_size_$num = CGen_txt_tot_file_size_$num/__hps_num_pes;
+            CGen_txt_offset_start_$num = __hps_node_id * CGen_txt_buff_size_$num;
+            CGen_txt_offset_end_$num   = CGen_txt_offset_start_$num + CGen_txt_buff_size_$num - 1;
             if (__hps_node_id == __hps_num_pes-1)
-                CGen_txt_offset_end = CGen_txt_tot_file_size;
-            CGen_txt_buff_size =  CGen_txt_offset_end - CGen_txt_offset_start + 1;
+                CGen_txt_offset_end_$num = CGen_txt_tot_file_size_$num;
+            CGen_txt_buff_size_$num =  CGen_txt_offset_end_$num - CGen_txt_offset_start_$num + 1;
         
-            char* CGen_txt_buffer = new char[CGen_txt_buff_size+1];
+            char* CGen_txt_buffer_$num = new char[CGen_txt_buff_size_$num+1];
         
-            MPI_File_read_at_all(dsrc_txt_file_$num, CGen_txt_offset_start, CGen_txt_buffer, CGen_txt_buff_size, MPI_CHAR, MPI_STATUS_IGNORE);
-            CGen_txt_buffer[CGen_txt_buff_size] = '\0';
+            MPI_File_read_at_all(dsrc_txt_file_$num, CGen_txt_offset_start_$num, CGen_txt_buffer_$num, CGen_txt_buff_size_$num, MPI_CHAR, MPI_STATUS_IGNORE);
+            CGen_txt_buffer_$num[CGen_txt_buff_size_$num] = '\0';
             
             // make sure new line is there for last line
-            if(__hps_node_id == __hps_num_pes-1 && CGen_txt_buffer[CGen_txt_buff_size-2]!='\n') 
-                CGen_txt_buffer[CGen_txt_buff_size-1]='\n';
+            if(__hps_node_id == __hps_num_pes-1 && CGen_txt_buffer_$num[CGen_txt_buff_size_$num-2]!='\n') 
+                CGen_txt_buffer_$num[CGen_txt_buff_size_$num-1]='\n';
             
             // count number of new lines
-            int64_t CGen_txt_num_lines = 0;
-            int64_t CGen_txt_char_index = 0;
-            while (CGen_txt_buffer[CGen_txt_char_index]!='\0') {
-                if(CGen_txt_buffer[CGen_txt_char_index]=='\n')
-                    CGen_txt_num_lines++;
-                CGen_txt_char_index++;
+            int64_t CGen_txt_num_lines_$num = 0;
+            int64_t CGen_txt_char_index_$num = 0;
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0') {
+                if(CGen_txt_buffer_$num[CGen_txt_char_index_$num]=='\n')
+                    CGen_txt_num_lines_$num++;
+                CGen_txt_char_index_$num++;
             }
         
-            // std::cout<<"rank: "<<__hps_node_id<<" lines: "<<CGen_txt_num_lines<<" startChar: "<<CGen_txt_buffer[0]<<std::endl;
+            // std::cout<<"rank: "<<__hps_node_id<<" lines: "<<CGen_txt_num_lines_$num<<" startChar: "<<CGen_txt_buffer_$num[0]<<std::endl;
             // get total number of rows
-            int64_t tot_row_size=0;
-            MPI_Allreduce(&CGen_txt_num_lines, &tot_row_size, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
-            // std::cout<<"total rows: "<<tot_row_size<<std::endl;
+            int64_t CGen_txt_tot_row_size_$num=0;
+            MPI_Allreduce(&CGen_txt_num_lines_$num, &CGen_txt_tot_row_size_$num, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
+            // std::cout<<"total rows: "<<CGen_txt_tot_row_size_$num<<std::endl;
             
             // count number of values in a column
-            // 1D data has CGen_txt_col_size==1
-            int64_t CGen_txt_col_size = 1;
-            CGen_txt_char_index = 0;
-            while (CGen_txt_buffer[CGen_txt_char_index]!='\0' && CGen_txt_buffer[CGen_txt_char_index]!='\n')
-                CGen_txt_char_index++;
-            CGen_txt_char_index++;
-            while (CGen_txt_buffer[CGen_txt_char_index]!='\0' && CGen_txt_buffer[CGen_txt_char_index]!='\n') {
-                if(CGen_txt_buffer[CGen_txt_char_index]==',')
-                    CGen_txt_col_size++;
-                CGen_txt_char_index++;
+            // 1D data has CGen_txt_col_size_$num==1
+            int64_t CGen_txt_col_size_$num = 1;
+            CGen_txt_char_index_$num = 0;
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\n')
+                CGen_txt_char_index_$num++;
+            CGen_txt_char_index_$num++;
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\n') {
+                if(CGen_txt_buffer_$num[CGen_txt_char_index_$num]==',')
+                    CGen_txt_col_size_$num++;
+                CGen_txt_char_index_$num++;
             }
             
             // prefix sum to find current global starting line on this node
-            int64_t CGen_txt_curr_start = 0;
-            MPI_Scan(&CGen_txt_num_lines, &CGen_txt_curr_start, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
-            int64_t CGen_txt_curr_end = CGen_txt_curr_start;
-            CGen_txt_curr_start -= CGen_txt_num_lines; // Scan is inclusive
+            int64_t CGen_txt_curr_start_$num = 0;
+            MPI_Scan(&CGen_txt_num_lines_$num, &CGen_txt_curr_start_$num, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
+            int64_t CGen_txt_curr_end_$num = CGen_txt_curr_start_$num;
+            CGen_txt_curr_start_$num -= CGen_txt_num_lines_$num; // Scan is inclusive
             """
     end
     return s
