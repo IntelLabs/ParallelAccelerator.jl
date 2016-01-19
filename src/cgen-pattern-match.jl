@@ -332,7 +332,7 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
             {
                 while(CGen_txt_tmp_curr_start_$num!=CGen_txt_start_$num)
                 {
-                    while(CGen_txt_buffer_$num[CGen_txt_left_send_size_$num]!='\n') 
+                    while(CGen_txt_buffer_$num[CGen_txt_left_send_size_$num]!=\'\\n\') 
                         CGen_txt_left_send_size_$num++;
                     CGen_txt_left_send_size_$num++; // account for \n
                     CGen_txt_tmp_curr_start_$num++;
@@ -374,10 +374,10 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
                 while(CGen_txt_tmp_curr_end_$num!=CGen_txt_end_$num-1)
                 {
                     // -1 to account for \0
-                    while(CGen_txt_buffer_$num[CGen_txt_buff_size_$num-CGen_txt_right_send_size_$num-1]!='\n') 
+                    while(CGen_txt_buffer_$num[CGen_txt_buff_size_$num-CGen_txt_right_send_size_$num-1]!=\'\\n\') 
                         CGen_txt_right_send_size_$num++;
                     CGen_txt_tmp_curr_end_$num--;
-                    // corner case, last line doesn't have '\n'
+                    // corner case, last line doesn't have \'\\n\'
                     if (CGen_txt_tmp_curr_end_$num!=CGen_txt_end_$num-1)
                         CGen_txt_right_send_size_$num++; // account for \n
                 }
@@ -813,17 +813,17 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
             char* CGen_txt_buffer_$num = new char[CGen_txt_buff_size_$num+1];
         
             MPI_File_read_at_all(dsrc_txt_file_$num, CGen_txt_offset_start_$num, CGen_txt_buffer_$num, CGen_txt_buff_size_$num, MPI_CHAR, MPI_STATUS_IGNORE);
-            CGen_txt_buffer_$num[CGen_txt_buff_size_$num] = '\0';
+            CGen_txt_buffer_$num[CGen_txt_buff_size_$num] = \'\\0\';
             
             // make sure new line is there for last line
-            if(__hps_node_id == __hps_num_pes-1 && CGen_txt_buffer_$num[CGen_txt_buff_size_$num-2]!='\n') 
-                CGen_txt_buffer_$num[CGen_txt_buff_size_$num-1]='\n';
+            if(__hps_node_id == __hps_num_pes-1 && CGen_txt_buffer_$num[CGen_txt_buff_size_$num-2]!=\'\\n\') 
+                CGen_txt_buffer_$num[CGen_txt_buff_size_$num-1]=\'\\n\';
             
             // count number of new lines
             int64_t CGen_txt_num_lines_$num = 0;
             int64_t CGen_txt_char_index_$num = 0;
-            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0') {
-                if(CGen_txt_buffer_$num[CGen_txt_char_index_$num]=='\n')
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!=\'\\0\') {
+                if(CGen_txt_buffer_$num[CGen_txt_char_index_$num]==\'\\n\')
                     CGen_txt_num_lines_$num++;
                 CGen_txt_char_index_$num++;
             }
@@ -838,10 +838,10 @@ function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
             // 1D data has CGen_txt_col_size_$num==1
             int64_t CGen_txt_col_size_$num = 1;
             CGen_txt_char_index_$num = 0;
-            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\n')
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!=\'\\0\' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!=\'\\n\')
                 CGen_txt_char_index_$num++;
             CGen_txt_char_index_$num++;
-            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\0' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!='\n') {
+            while (CGen_txt_buffer_$num[CGen_txt_char_index_$num]!=\'\\0\' && CGen_txt_buffer_$num[CGen_txt_char_index_$num]!=\'\\n\') {
                 if(CGen_txt_buffer_$num[CGen_txt_char_index_$num]==',')
                     CGen_txt_col_size_$num++;
                 CGen_txt_char_index_$num++;
