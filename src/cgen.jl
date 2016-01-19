@@ -43,6 +43,8 @@ export setvectorizationlevel, generate, from_root, writec, compile, link, set_in
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.isDistributedMode
 import ParallelAccelerator.H5SizeArr_t
+import ParallelAccelerator.SizeArr_t
+
 
 # uncomment this line for using Debug.jl
 #using Debug
@@ -74,7 +76,8 @@ type LambdaGlobalData
             Bool    =>  "bool",
             Char    =>  "char",
             Void    =>  "void",
-            H5SizeArr_t => "hsize_t*"
+            H5SizeArr_t => "hsize_t*",
+            SizeArr_t => "uint64_t*"
     )
 
         #new(ASTDispatcher(), [], Dict(), Dict(), [], [])

@@ -241,6 +241,9 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
+"""
+Generate code for HDF5 file open
+"""
 function pattern_match_call_data_src_open(f::Symbol, id::GenSym, data_var::Union{SymAllGen,AbstractString}, file_name::Union{SymAllGen,AbstractString}, arr::Symbol)
     s = ""
     if f==:__hps_data_source_HDF5_open
@@ -267,9 +270,34 @@ function pattern_match_call_data_src_open(f::Any, v::Any, rf::Any, o::Any, arr::
     return ""
 end
 
-function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
-    if f==:__hps_data_source_HDF5_read
+"""
+Generate code for text file open (no variable name input)
+"""
+function pattern_match_call_data_src_open(f::Symbol, id::GenSym, file_name::Union{SymAllGen,AbstractString}, arr::Symbol)
+    s = ""
+    if f==:__hps_data_source_TXT_open
         num::AbstractString = from_expr(id.id)
+        file_name_str::AbstractString = from_expr(file_name)
+        s = """
+            MPI_File dsrc_txt_file_$num;
+            ierr_$num = MPI_File_open(MPI_COMM_WORLD, $file_name_str, MPI_MODE_RDONLY, MPI_INFO_NULL, &dsrc_txt_file_$num);
+            assert(ierr_$num==0);
+            """
+    end
+    return s
+end
+
+function pattern_match_call_data_src_open(f::Any, rf::Any, o::Any, arr::Any)
+    return ""
+end
+
+
+
+function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, start::Symbol, count::Symbol)
+    s = ""
+    num::AbstractString = from_expr(id.id)
+    
+    if f==:__hps_data_source_HDF5_read    
         # assuming 1st dimension is partitined
         s =  "hsize_t CGen_HDF5_start_$num[data_ndim_$num];\n"
         s *= "hsize_t CGen_HDF5_count_$num[data_ndim_$num];\n"
@@ -287,27 +315,165 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
         s *= "assert(xfer_plist_$num != -1);\n"
         s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr.getData());\n"
         s *= "assert(ret_$num != -1);\n"
-
-        return s
-    else
-        return ""
+    elseif f==:__hps_data_source_TXT_read
+        # assuming 1st dimension is partitined
+        s = """
+            int64_t CGen_txt_start = $start;
+            int64_t CGen_txt_count = $count;
+            int64_t CGen_txt_end = $start+$count;
+            
+            
+            // std::cout<<"rank: "<<__hps_node_id<<" start: "<<CGen_txt_start<<" end: "<<CGen_txt_end<<" columnSize: "<<CGen_txt_col_size<<std::endl;
+            // if data needs to be sent left
+            // still call MPI_Send if first character is new line
+            int64_t CGen_txt_left_send_size = 0;
+            int64_t CGen_txt_tmp_curr_start = CGen_txt_curr_start;
+            if(CGen_txt_start>CGen_txt_curr_start)
+            {
+                while(CGen_txt_tmp_curr_start!=CGen_txt_start)
+                {
+                    while(CGen_txt_buffer[CGen_txt_left_send_size]!='\n') 
+                        CGen_txt_left_send_size++;
+                    CGen_txt_left_send_size++; // account for \n
+                    CGen_txt_tmp_curr_start++;
+                }
+            }
+            MPI_Request CGen_txt_MPI_request1, CGen_txt_MPI_request2;
+            MPI_Status CGen_txt_MPI_status;
+            // send left
+            if(__hps_node_id!=0)
+            {
+                MPI_Isend(&CGen_txt_left_send_size, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1);
+                MPI_Isend(CGen_txt_buffer, CGen_txt_left_send_size, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2);
+                // std::cout<<"rank: "<<__hps_node_id<<" sent left "<<CGen_txt_left_send_size<<std::endl;
+            }
+            
+            char* CGen_txt_right_buff = NULL;
+            int64_t CGen_txt_right_recv_size = 0;
+            // receive from right
+            if(__hps_node_id!=__hps_num_pes-1)
+            {
+                MPI_Recv(&CGen_txt_right_recv_size, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                CGen_txt_right_buff = new char[CGen_txt_right_recv_size];
+                MPI_Recv(CGen_txt_right_buff, CGen_txt_right_recv_size, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                // std::cout<<"rank: "<<__hps_node_id<<" received right "<<CGen_txt_right_recv_size<<std::endl;
+            }
+            
+            if(__hps_node_id!=0)
+            {
+                MPI_Wait(&CGen_txt_MPI_request1, &CGen_txt_MPI_status);
+                MPI_Wait(&CGen_txt_MPI_request2, &CGen_txt_MPI_status);
+            }
+            
+            // if data needs to be sent right
+            // still call MPI_Send if first character is new line
+            int64_t CGen_txt_right_send_size = 0;
+            int64_t CGen_txt_tmp_curr_end = CGen_txt_curr_end;
+            if(__hps_node_id!=__hps_num_pes-1 && CGen_txt_curr_end>=CGen_txt_end)
+            {
+                while(CGen_txt_tmp_curr_end!=CGen_txt_end-1)
+                {
+                    // -1 to account for \0
+                    while(CGen_txt_buffer[CGen_txt_buff_size-CGen_txt_right_send_size-1]!='\n') 
+                        CGen_txt_right_send_size++;
+                    CGen_txt_tmp_curr_end--;
+                    // corner case, last line doesn't have '\n'
+                    if (CGen_txt_tmp_curr_end!=CGen_txt_end-1)
+                        CGen_txt_right_send_size++; // account for \n
+                }
+            }
+            // send right
+            if(__hps_node_id!=__hps_num_pes-1)
+            {
+                MPI_Isend(&CGen_txt_right_send_size, 1, MPI_LONG_LONG_INT, __hps_node_id+1, 0, MPI_COMM_WORLD, &CGen_txt_MPI_request1);
+                MPI_Isend(CGen_txt_buffer+CGen_txt_buff_size-CGen_txt_right_send_size, CGen_txt_right_send_size, MPI_CHAR, __hps_node_id+1, 1, MPI_COMM_WORLD, &CGen_txt_MPI_request2);
+            }
+            char* CGen_txt_left_buff = NULL;
+            int64_t CGen_txt_left_recv_size = 0;
+            // receive from left
+            if(__hps_node_id!=0)
+            {
+                MPI_Recv(&CGen_txt_left_recv_size, 1, MPI_LONG_LONG_INT, __hps_node_id-1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                CGen_txt_left_buff = new char[CGen_txt_left_recv_size];
+                MPI_Recv(CGen_txt_left_buff, CGen_txt_left_recv_size, MPI_CHAR, __hps_node_id-1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                // std::cout<<"rank: "<<__hps_node_id<<" received left "<<CGen_txt_left_recv_size<<std::endl;
+            }
+            if(__hps_node_id!=__hps_num_pes-1)
+            {
+                MPI_Wait(&CGen_txt_MPI_request1, &CGen_txt_MPI_status);
+                MPI_Wait(&CGen_txt_MPI_request2, &CGen_txt_MPI_status);
+                // std::cout<<"rank: "<<__hps_node_id<<" sent right "<<CGen_txt_right_send_size<<std::endl;
+            }
+            
+            // int64_t total_data_size = (CGen_txt_end-CGen_txt_start)*CGen_txt_col_size;
+            // double *my_data = new double[total_data_size];
+            int64_t CGen_txt_data_ind = 0;
+            
+            char CGen_txt_sep_char[] = "\n";
+            int64_t CGen_txt_curr_row = 0;
+            while(CGen_txt_curr_row!=CGen_txt_count)
+            {
+                char* CGen_txt_line;
+                if (CGen_txt_curr_row==0)
+                {
+                    CGen_txt_line = strtok(CGen_txt_buffer, CGen_txt_sep_char);
+                    if(CGen_txt_left_recv_size!=0)
+                    {
+                        char *CGen_txt_tmp_line;
+                        CGen_txt_tmp_line = new char[CGen_txt_left_recv_size+strlen(CGen_txt_line)];
+                        memcpy(CGen_txt_tmp_line, CGen_txt_left_buff, CGen_txt_left_recv_size);
+                        memcpy(CGen_txt_tmp_line+CGen_txt_left_recv_size, CGen_txt_line, strlen(CGen_txt_line));
+                        CGen_txt_line = CGen_txt_tmp_line;
+                    }
+                }
+                else if(CGen_txt_curr_row==CGen_txt_count-1)
+                {
+                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char);
+                    if(CGen_txt_right_recv_size!=0)
+                    {
+                        char *CGen_txt_tmp_line;
+                        CGen_txt_tmp_line = new char[CGen_txt_right_recv_size+strlen(CGen_txt_line)];
+                        memcpy(CGen_txt_tmp_line, CGen_txt_line, strlen(CGen_txt_line));
+                        memcpy(CGen_txt_tmp_line+strlen(CGen_txt_line), CGen_txt_right_buff, CGen_txt_right_recv_size);
+                        CGen_txt_line = CGen_txt_tmp_line;
+                    }
+                }
+                else
+                {
+                    CGen_txt_line = strtok(NULL, CGen_txt_sep_char);
+                }
+                // parse line separately, not to change strtok's state
+                for(int64_t i=0; i<CGen_txt_col_size; i++)
+                {
+                    if(i==0)
+                        $arr[CGen_txt_data_ind++] = strtod(CGen_txt_line,&CGen_txt_line);
+                    else
+                        $arr[CGen_txt_data_ind++] = strtod(CGen_txt_line+1,&CGen_txt_line);
+         //           std::cout<<$arr[CGen_txt_data_ind-1]<<std::endl;
+                }
+                CGen_txt_curr_row++;
+            }
+            
+            MPI_File_close(&dsrc_txt_file_$num);
+            """
     end
+    return s
 end
 
 function pattern_match_call_data_src_read(f::Any, v::Any, rf::Any, o::Any, arr::Any)
     return ""
 end
 
-function pattern_match_call_dist_h5_size(f::Symbol, h5size_arr::GenSym, ind::Union{Int64,SymAllGen})
+function pattern_match_call_dist_h5_size(f::Symbol, size_arr::GenSym, ind::Union{Int64,SymAllGen})
     s = ""
-    if f==:__hps_get_H5_dim_size
-        dprintln(3,"match dist_h5_size ",f," ", h5size_arr, " ",ind)
-        s = from_expr(h5size_arr)*"["*from_expr(ind)*"-1]"
+    if f==:__hps_get_H5_dim_size || f==:__hps_get_TXT_dim_size
+        dprintln(3,"match dist_dim_size ",f," ", size_arr, " ",ind)
+        s = from_expr(size_arr)*"["*from_expr(ind)*"-1]"
     end
     return s
 end
 
-function pattern_match_call_dist_h5_size(f::Any, h5size_arr::Any, ind::Any)
+function pattern_match_call_dist_h5_size(f::Any, size_arr::Any, ind::Any)
     return ""
 end
 
@@ -514,8 +680,11 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     if(length(ast)==4)
         s = pattern_match_call_dist_reduce(ast[1],ast[2],ast[3], ast[4])
+        # text file read
+        s *= pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4])
     end
     if(length(ast)==5)
+        # HDF5 open
         s = pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4], ast[5])
         s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
     end
@@ -613,19 +782,79 @@ end
 
 function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
     dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
+    s = ""
+    local num::AbstractString
     if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size
-        num::AbstractString = from_expr(rhs.args[2].id)
-        
+        num = from_expr(rhs.args[2].id)
         s = "hid_t space_id_$num = H5Dget_space(dataset_id_$num);\n"    
         s *= "assert(space_id_$num != -1);\n"    
         s *= "hsize_t data_ndim_$num = H5Sget_simple_extent_ndims(space_id_$num);\n"
         s *= "hsize_t space_dims_$num[data_ndim_$num];\n"    
         s *= "H5Sget_simple_extent_dims(space_id_$num, space_dims_$num, NULL);\n"
-        # only 1D for now
         s *= from_expr(lhs)*" = space_dims_$num;"
-        return s
+    elseif rhs.head==:call && rhs.args[1]==:__hps_data_source_TXT_size
+        num = from_expr(rhs.args[2].id)
+        c_lhs = from_expr(lhs)
+        s = """
+            MPI_Offset CGen_txt_tot_file_size;
+            MPI_Offset CGen_txt_buff_size;
+            MPI_Offset CGen_txt_offset_start;
+            MPI_Offset CGen_txt_offset_end;
+        
+            /* divide file read */
+            MPI_File_get_size(dsrc_txt_file_$num, &CGen_txt_tot_file_size);
+            CGen_txt_buff_size = CGen_txt_tot_file_size/__hps_num_pes;
+            CGen_txt_offset_start = __hps_node_id * CGen_txt_buff_size;
+            CGen_txt_offset_end   = CGen_txt_offset_start + CGen_txt_buff_size - 1;
+            if (__hps_node_id == __hps_num_pes-1)
+                CGen_txt_offset_end = CGen_txt_tot_file_size;
+            CGen_txt_buff_size =  CGen_txt_offset_end - CGen_txt_offset_start + 1;
+        
+            char* CGen_txt_buffer = new char[CGen_txt_buff_size+1];
+        
+            MPI_File_read_at_all(dsrc_txt_file_$num, CGen_txt_offset_start, CGen_txt_buffer, CGen_txt_buff_size, MPI_CHAR, MPI_STATUS_IGNORE);
+            CGen_txt_buffer[CGen_txt_buff_size] = '\0';
+            
+            // make sure new line is there for last line
+            if(__hps_node_id == __hps_num_pes-1 && CGen_txt_buffer[CGen_txt_buff_size-2]!='\n') 
+                CGen_txt_buffer[CGen_txt_buff_size-1]='\n';
+            
+            // count number of new lines
+            int64_t CGen_txt_num_lines = 0;
+            int64_t CGen_txt_char_index = 0;
+            while (CGen_txt_buffer[CGen_txt_char_index]!='\0') {
+                if(CGen_txt_buffer[CGen_txt_char_index]=='\n')
+                    CGen_txt_num_lines++;
+                CGen_txt_char_index++;
+            }
+        
+            // std::cout<<"rank: "<<__hps_node_id<<" lines: "<<CGen_txt_num_lines<<" startChar: "<<CGen_txt_buffer[0]<<std::endl;
+            // get total number of rows
+            int64_t tot_row_size=0;
+            MPI_Allreduce(&CGen_txt_num_lines, &tot_row_size, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
+            // std::cout<<"total rows: "<<tot_row_size<<std::endl;
+            
+            // count number of values in a column
+            // 1D data has CGen_txt_col_size==1
+            int64_t CGen_txt_col_size = 1;
+            CGen_txt_char_index = 0;
+            while (CGen_txt_buffer[CGen_txt_char_index]!='\0' && CGen_txt_buffer[CGen_txt_char_index]!='\n')
+                CGen_txt_char_index++;
+            CGen_txt_char_index++;
+            while (CGen_txt_buffer[CGen_txt_char_index]!='\0' && CGen_txt_buffer[CGen_txt_char_index]!='\n') {
+                if(CGen_txt_buffer[CGen_txt_char_index]==',')
+                    CGen_txt_col_size++;
+                CGen_txt_char_index++;
+            }
+            
+            // prefix sum to find current global starting line on this node
+            int64_t CGen_txt_curr_start = 0;
+            MPI_Scan(&CGen_txt_num_lines, &CGen_txt_curr_start, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
+            int64_t CGen_txt_curr_end = CGen_txt_curr_start;
+            CGen_txt_curr_start -= CGen_txt_num_lines; // Scan is inclusive
+            """
     end
-    return ""
+    return s
 end
 
 function isTopNode(a::TopNode)
