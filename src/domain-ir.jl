@@ -380,16 +380,24 @@ function isbitarray(typ)
     (isarray(typ) && is(eltype(typ), Bool))
 end
 
-function isunitrange(typ)
-    isa(typ, DataType) && is(typ.name, UnitRange.name)
+function isUnitRange(typ::DataType)
+    is(typ.name, UnitRange.name)
 end
 
-function issteprange(typ)
-    isa(typ, DataType) && is(typ.name, StepRange.name)
+function isUnitRange(typ::ANY)
+    return false
+end
+
+function isStepRange(typ::DataType)
+    is(typ.name, StepRange.name)
+end
+
+function isStepRange(typ::ANY)
+    return false
 end
 
 function isrange(typ)
-    isunitrange(typ) || issteprange(typ)
+    isUnitRange(typ) || isStepRange(typ)
 end
 
 function ismask(state, r::SymbolNode)
@@ -428,8 +436,11 @@ function remove_typenode(expr)
 end
 =#
 
-function from_range(rhs)
-    if isa(rhs, Expr) && is(rhs.head, :new) && isunitrange(rhs.args[1]) &&
+function from_range(rhs::Expr)
+    start = 1
+    step = 1
+    final = 1
+    if is(rhs.head, :new) && isUnitRange(rhs.args[1]) &&
         isa(rhs.args[3], Expr) && is(rhs.args[3].head, :call) &&
         isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
         is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
@@ -439,7 +450,7 @@ function from_range(rhs)
         start = rhs.args[2]
         step  = 1 # FIXME: could be wrong here!
         final = rhs.args[3].args[3]
-    elseif isa(rhs, Expr) && is(rhs.head, :new) && issteprange(rhs.args[1])
+    elseif is(rhs.head, :new) && isStepRange(rhs.args[1])
         assert(length(rhs.args) == 4)
         start = rhs.args[2]
         step  = rhs.args[3]
@@ -448,6 +459,11 @@ function from_range(rhs)
         error("expect Expr(:new, UnitRange, ...) or Expr(:new, StepRange, ...) but got ", rhs)
     end
     return (start, step, final)
+end
+
+function from_range(rhs::ANY)
+    error("expect Expr(:new, UnitRange, ...) or Expr(:new, StepRange, ...) but got ", rhs)
+    return (1,1,1)
 end
 
 function rangeToMask(state, r::Int, arraysize)
@@ -460,7 +476,7 @@ function rangeToMask(state, r::SymAllGen, arraysize)
     typ = getType(r, state.linfo)
     if isbitarray(typ)
         mk_tomask(r)
-    elseif isunitrange(typ)
+    elseif isUnitRange(typ)
         r = lookupConstDefForArg(state, r)
         (start, step, final) = from_range(r)
         mk_range(state, start, step, final)
@@ -1426,7 +1442,7 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
         if isIntType(typeOfOpr(state, args[2]))
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
             mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
-        elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
+        elseif isa(args[2], SymbolNode) && (isUnitRange(args[2].typ) || isStepRange(args[2].typ))
             def = lookupConstDefForArg(state, args[2])
             (start, step, final) = from_range(def)
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
