@@ -410,6 +410,8 @@ function ismask(state, r::Any)
     return isrange(typ) || isbitarray(typ)
 end
 
+# never used!
+#=
 function remove_typenode(expr)
     if isa(expr, Expr)
         if is(expr.head, :(::))
@@ -424,6 +426,7 @@ function remove_typenode(expr)
     end
     expr
 end
+=#
 
 function from_range(rhs)
     if isa(rhs, Expr) && is(rhs.head, :new) && isunitrange(rhs.args[1]) &&
@@ -1918,9 +1921,13 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :call)
         return from_call(state, env, ast)
         # TODO: catch domain IR result here
-    elseif is(head, :call1)
-        return from_call(state, env, ast)
+    # legacy v0.3
+    #elseif is(head, :call1)
+    #    return from_call(state, env, ast)
         # TODO?: tuple
+    # legacy v0.3
+    # :method is not expected here
+    #=
     elseif is(head, :method)
         # change it to assignment
         ast.head = :(=)
@@ -1931,6 +1938,7 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
             ast.args[i-1] = args[i]
         end
         return from_assignment(state, env, ast)
+    =#
     elseif is(head, :line)
         # skip
     elseif is(head, :new)
