@@ -367,17 +367,29 @@ end
 include("domain-ir-stencil.jl")
 
 
-function istupletyp(typ)
-    isa(typ, DataType) && is(typ.name, Tuple.name)
+function istupletyp(typ::DataType)
+    is(typ.name, Tuple.name)
 end
 
-function isarray(typ)
-    isa(typ, DataType) && is(typ.name, Array.name)
+function istupletyp(typ::ANY)
+    false
 end
 
-function isbitarray(typ)
-    (isa(typ, DataType) && is(typ.name, BitArray.name)) ||
+function isarray(typ::DataType)
+    is(typ.name, Array.name)
+end
+
+function isarray(typ::ANY)
+    return false
+end
+
+function isbitarray(typ::DataType)
+    is(typ.name, BitArray.name) ||
     (isarray(typ) && is(eltype(typ), Bool))
+end
+
+function isbitarray(typ::ANY)
+    false
 end
 
 function isUnitRange(typ::DataType)
@@ -623,19 +635,22 @@ function typeOfOpr(state :: IRState, x)
     CompilerTools.LivenessAnalysis.typeOfOpr(x, state.linfo)
 end
 
-# get elem type T from an Array{T} type
-function elmTypOf(x)
-    if isarray(x)
-        return x.parameters[1] 
-    elseif isa(x, Expr) && x.head == :call && x.args[1] == TopNode(:apply_type) && x.args[2] == :Array
+"""
+get elem type T from an Array{T} type
+"""
+function elmTypOf(x::DataType)
+    @assert isarray(x) || isbitarray(x) "expect Array type"
+    return eltype(x)
+end
+
+function elmTypOf(x::Expr)
+    if x.head == :call && x.args[1] == TopNode(:apply_type) && x.args[2] == :Array
         return x.args[3] # element type
-    elseif isbitarray(x)
-        return Bool
     else
         error("expect Array type, but got ", x)
     end
+    return DataType
 end
-
 
 # A simple integer arithmetic simplifier that does three things:
 # 1. inline constant definitions.
