@@ -365,10 +365,6 @@ end
 
 include("domain-ir-stencil.jl")
 
-function isinttyp(typ)
-    is(typ, Int64)  || is(typ, Int32)  || is(typ, Int16)  || is(typ, Int8)  || 
-    is(typ, UInt64) || is(typ, UInt32) || is(typ, UInt16) || is(typ, UInt8)
-end
 
 function istupletyp(typ)
     isa(typ, DataType) && is(typ.name, Tuple.name)
@@ -464,7 +460,7 @@ function rangeToMask(state, r::SymAllGen, arraysize)
         r = lookupConstDefForArg(state, r)
         (start, step, final) = from_range(r)
         mk_range(state, start, step, final)
-    elseif isinttyp(typ) 
+    elseif isIntType(typ) 
         #mk_range(state, r, convert(typ, 1), r)
         r
     else
@@ -1383,8 +1379,8 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
             dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
             error("Unhandled bound in checkbounds: ", args[2])
         end
-    elseif isinttyp(typ)
-        if isinttyp(typeOfOpr(state, args[2]))
+    elseif isIntType(typ)
+        if isIntType(typeOfOpr(state, args[2]))
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
             mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
         elseif isa(args[2], SymbolNode) && (isunitrange(args[2].typ) || issteprange(args[2].typ))
