@@ -1153,6 +1153,29 @@ function translate_call_alloc(state, env_, typ, typ_arg, args_in)
     return expr
 end
 
+function translate_call_rangeshortcut(state, arg1::GenSym, arg2::QuoteNode)
+
+    if arg2.value==:stop || arg2.value==:start || arg2.value==:step
+        rTyp = getType(arg1, state.linfo)
+        rExpr = lookupConstDefForArg(state, arg1)
+        if isrange(rTyp) && isa(rExpr, Expr)
+            (start, step, final) = from_range(rExpr)
+            fname = arg2.value
+            if is(fname, :stop) 
+                return final
+            elseif is(fname, :start)
+                return start
+            else
+                return step
+            end
+        end
+    end
+    return Expr(:null)
+end
+
+function translate_call_rangeshortcut(state, arg1::ANY, arg2::ANY)
+    return Expr(:null)
+end
 
 """
  translate a function call to domain IR if it matches Symbol.
@@ -1165,6 +1188,7 @@ end
 """
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
+    #local expr::Expr
     expr = Expr(:null)
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
@@ -1198,24 +1222,14 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         typ = isa(args[1], Type) ? args[1] : eval(args[1]) 
     elseif is(fun, :getindex) || is(fun, :setindex!) 
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
-    elseif is(fun, :getfield) && length(args) == 2 && isa(args[1], GenSym) && 
-        (args[2] == QuoteNode(:stop) || args[2] == QuoteNode(:start) || args[2] == QuoteNode(:step))
+    elseif is(fun, :getfield) && length(args) == 2
         # Shortcut range object access
-        rTyp = getType(args[1], state.linfo)
-        rExpr = lookupConstDefForArg(state, args[1])
-        if isrange(rTyp) && isa(rExpr, Expr)
-            (start, step, final) = from_range(rExpr)
-            fname = args[2].value
-            if is(fname, :stop) 
-                return final
-            elseif is(fname, :start)
-                return start
-            else
-                return step
-            end
-        end
+        expr = translate_call_rangeshortcut(state, args[1],args[2])
     elseif in(fun, ignoreSet)
     else
+        # this is deprecated from Julia v0.3 I think
+        # git log -S'' src/domain-ir.jl shows initial commit, coverage coesn't show any usage
+        #=
         args_typ = map(x -> typeOfOpr(state, x), args)
         dprintln(3,"args = ", args, " args_typ = ", args_typ)
         if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
@@ -1238,6 +1252,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         else
             dprintln(env,"function call not translated: ", fun, ", typeof(fun)=", typeof(fun), " head = ", head, " oldfun = ", oldfun, ", args typ=", args_typ)
         end
+        =#
+        dprintln(env,"function call not translated: ", fun, ", typeof(fun)=Symbol head = ", head, " oldfun = ", oldfun)
     end
 
     if expr.head==:null
