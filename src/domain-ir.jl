@@ -1142,6 +1142,18 @@ function getElemTypeFromAllocExp(typExp::GlobalRef)
     return eval(typExp)
 end
 
+function translate_call_alloc(state, env_, typ, typ_arg, args_in)
+    typExp::Union{QuoteNode,DataType,GlobalRef}
+    typExp = lookupConstDefForArg(state, typ_arg)
+    elemTyp::DataType = getElemTypeFromAllocExp(typExp)
+    args = normalize_args(state, env_, args_in)
+
+    expr::Expr = mk_alloc(state, elemTyp, args)
+    expr.typ = typ
+    return expr
+end
+
+
 """
  translate a function call to domain IR if it matches Symbol.
  things handled as Symbols are: 
@@ -1181,13 +1193,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         expr = mk_arraysize(args...)
         expr.typ = typ
     elseif is(fun, :alloc) || is(fun, :Array)
-        typExp::Union{QuoteNode,DataType,GlobalRef}
-        typExp = lookupConstDefForArg(state, args[1])
-        elemTyp::DataType = getElemTypeFromAllocExp(typExp)
-        args = normalize_args(state, env_, args[2:end])
-
-        expr = mk_alloc(state, elemTyp, args)
-        expr.typ = typ
+        return translate_call_alloc(state, env_, typ, args[1], args[2:end])
     elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
         typ = isa(args[1], Type) ? args[1] : eval(args[1]) 
     elseif is(fun, :getindex) || is(fun, :setindex!) 
