@@ -1130,13 +1130,27 @@ function inline_select(env, state, arr)
     return arr
 end
 
-# translate a function call to domain IR if it matches Symbol.
-# things handled as Symbols are: 
-#    those captured in ParallelAPI, or
-#    those that can be TopNode, or
-#    those from Core.Intrinsics, or
-#    those that are DomainIR specific, such as :alloc, or
-#    a few exceptions.
+function getElemTypeFromAllocExp(typExp::QuoteNode)
+    return typExp.value
+end
+
+function getElemTypeFromAllocExp(typExp::DataType)
+    return typExp
+end
+
+function getElemTypeFromAllocExp(typExp::GlobalRef)
+    return eval(typExp)
+end
+
+"""
+ translate a function call to domain IR if it matches Symbol.
+ things handled as Symbols are: 
+    those captured in ParallelAPI, or
+    those that can be TopNode, or
+    those from Core.Intrinsics, or
+    those that are DomainIR specific, such as :alloc, or
+    a few exceptions.
+"""
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
     expr = nothing
@@ -1167,18 +1181,11 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         expr = mk_arraysize(args...)
         expr.typ = typ
     elseif is(fun, :alloc) || is(fun, :Array)
+        typExp::Union{QuoteNode,DataType,GlobalRef}
         typExp = lookupConstDefForArg(state, args[1])
+        elemTyp::DataType = getElemTypeFromAllocExp(typExp)
         args = normalize_args(state, env_, args[2:end])
-        if isa(typExp, QuoteNode) 
-            elemTyp = typExp.value 
-        elseif isa(typExp, DataType)
-            elemTyp = typExp
-        elseif isa(typExp, GlobalRef)
-            elemTyp = eval(typExp)
-        else
-            error("Expect QuoteNode or DataType, but got typExp = ", typExp)
-        end
-        assert(isa(elemTyp, DataType))
+
         expr = mk_alloc(state, elemTyp, args)
         expr.typ = typ
     elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
