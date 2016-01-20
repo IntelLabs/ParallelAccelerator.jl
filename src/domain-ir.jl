@@ -1170,11 +1170,13 @@ function translate_call_rangeshortcut(state, arg1::GenSym, arg2::QuoteNode)
             end
         end
     end
-    return Expr(:null)
+    #return Expr(:null)
+    return nothing
 end
 
 function translate_call_rangeshortcut(state, arg1::ANY, arg2::ANY)
-    return Expr(:null)
+    #return Expr(:null)
+    return nothing
 end
 
 """
@@ -1189,7 +1191,8 @@ end
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
     #local expr::Expr
-    expr = Expr(:null)
+    # expr = Expr(:null)
+    expr = nothing
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
     #if isa(fun, GlobalRef) && fun.mod == Main
@@ -1256,7 +1259,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         dprintln(env,"function call not translated: ", fun, ", typeof(fun)=Symbol head = ", head, " oldfun = ", oldfun)
     end
 
-    if expr.head==:null
+    #if expr.head==:null
+    if isa(expr, Void)
         if !is(fun, :ccall)
             if is(fun, :box) && isa(oldargs[2], Expr) # fix the type of arg[2] to be arg[1]
               oldargs[2].typ = typ
