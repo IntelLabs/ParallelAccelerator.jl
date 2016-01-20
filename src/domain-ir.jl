@@ -1165,7 +1165,7 @@ end
 """
 function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
-    expr = nothing
+    expr = Expr(:null)
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
     #if isa(fun, GlobalRef) && fun.mod == Main
@@ -1240,7 +1240,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         end
     end
 
-    if isa(expr, Void)
+    if expr.head==:null
         if !is(fun, :ccall)
             if is(fun, :box) && isa(oldargs[2], Expr) # fix the type of arg[2] to be arg[1]
               oldargs[2].typ = typ
