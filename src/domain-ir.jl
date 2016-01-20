@@ -746,8 +746,10 @@ mul(x,       y)      = mul_expr(x, y)
 mk_alloc(state, typ, s) = mk_alloc(typ, simplify(state, s))
 mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(state, step), simplify(state, final))
 
-# :lambda expression
-# (:lambda, {param, meta@{localvars, types, freevars}, body})
+"""
+ :lambda expression
+ (:lambda, {param, meta@{localvars, types, freevars}, body})
+"""
 function from_lambda(state, env, expr::Expr)
     local env_ = nextEnv(env)
     local head = expr.head
@@ -766,10 +768,12 @@ function from_lambda(state, env, expr::Expr)
     return lambdaInfoToLambdaExpr(linfo, body)
 end
 
-# sequence of expressions {expr, ...}
-# unlike from_body, from_exprs do not emit the input expressions
-# as statements to the state, while still allowing side effects
-# of emitting statements durinfg the translation of these expressions.
+"""
+ sequence of expressions {expr, ...}
+ unlike from_body, from_exprs do not emit the input expressions
+ as statements to the state, while still allowing side effects
+ of emitting statements durinfg the translation of these expressions.
+"""
 function from_exprs(state::IRState, env::IREnv, ast::Array{Any,1})
     local env_ = nextEnv(env)
     local len  = length(ast)
@@ -780,10 +784,12 @@ function from_exprs(state::IRState, env::IREnv, ast::Array{Any,1})
     return body
 end
 
-# :body expression (:body, {expr, ... })
-# Unlike from_exprs, from_body treats every expr in the body
-# as separate statements, and emit them (after translation)
-# to the state one by one.
+"""
+ :body expression (:body, {expr, ... })
+ Unlike from_exprs, from_body treats every expr in the body
+ as separate statements, and emit them (after translation)
+ to the state one by one.
+"""
 function from_body(state, env, expr::Any)
     local env_ = nextEnv(env)
     # So long as :body immediate nests with :lambda, we do not
