@@ -326,7 +326,8 @@ const mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
 const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
 
-const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
+# legacy v0.3
+# const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
 
 const opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
 const opsSymSet = Set{Symbol}(opsSym)
@@ -1208,8 +1209,9 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         return translate_call_runstencil(state,env_,args)
     elseif is(fun, :parallel_for)
         return translate_call_parallel_for(state,env_,args)
-    elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
-        typ = translate_call_typefix(state, env, typ, fun, args) 
+# legacy v0.3
+#    elseif in(fun, topOpsTypeFix) && is(typ, Any) && length(args) > 0
+#        typ = translate_call_typefix(state, env, typ, fun, args) 
     elseif haskey(reduceOps, fun)
         dprintln(env, "haskey reduceOps ", fun)
         args = normalize_args(state, env_, args)
@@ -1272,6 +1274,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     return expr
 end
 
+# legacy v0.3
+#=
 function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
     dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
     local typ1    
@@ -1306,6 +1310,7 @@ function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
     dprintln(env,"fix type ", typ, " => ", typ1)
     return typ1
 end
+=#
 
 function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
     dprintln(env, "got getindex or setindex!")
@@ -1400,6 +1405,8 @@ function translate_call_map(state, env, typ, fun, args::Array{Any,1})
     return expr
 end
 
+# legacy v0.3
+#=
 function translate_call_checkbounds(state, env, args::Array{Any,1})
     args = normalize_args(state, env, args)
     typ = typeOfOpr(state, args[1])
@@ -1429,8 +1436,10 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
     end
     return expr
 end
+=#
 
 # this is legacy v0.3 call
+#=
 function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
     etyp = elmTypOf(typ)
     args = normalize_args(state, env, args)
@@ -1471,6 +1480,7 @@ function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
     expr.typ = typ
     return expr
 end
+=#
 
 function translate_call_runstencil(state, env, args::Array{Any,1})
     # we handle the following runStencil form:
@@ -1763,16 +1773,20 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             dprintln(env,"got copy, args=", args)
             expr = mk_copy(args[1])
             expr.typ = typ
+    # legacy v0.3
+    #=
         elseif is(fun.name, :checkbounds)
             dprintln(env, "got ", fun.name, " args = ", args)
             if length(args) == 2
                 expr = translate_call_checkbounds(state,env_,args) 
             end
+    =#
         elseif is(fun.name, :getindex) || is(fun.name, :setindex!) # not a domain operator, but still, sometimes need to shortcut it
             expr = translate_call_getsetindex(state,env_,typ,fun,args)
-        elseif is(fun.name, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
-               is(fun.name, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
-            expr = translate_call_assign_bool(state,env_,typ,fun.name, args) 
+    # legacy v0.3
+    #    elseif is(fun.name, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
+    #           is(fun.name, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
+    #        expr = translate_call_assign_bool(state,env_,typ,fun.name, args) 
         elseif is(fun.name, :fill!)
             return translate_call_fill!(state, env_, typ, args)
         elseif is(fun.name, :_getindex!) # see if we can turn getindex! back into getindex
