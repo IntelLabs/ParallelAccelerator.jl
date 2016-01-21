@@ -33,6 +33,24 @@ type KernelStat
   borderSty :: Symbol          # Symbol :oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound
   rotateNum :: Int             # number of buffers that is affected by rotation
   modified  :: Array{Int,1}    # which buffer is modified
+  initialized :: Bool             # whether this object is initialized
+  
+  KernelStat() = new(0,Int[],Int[],GenSym[], GenSym[], GenSym[], :-, 0, Int[], false)
+end
+
+function set_kernel_stat(stat::KernelStat, dimension::Int, shapeMax::Array{Int,1}, 
+                         shapeMin::Array{Int,1}, bufSym::Array{GenSym,1}, idxSym::Array{GenSym,1}, 
+                         strideSym::Array{GenSym,1}, borderSty :: Symbol, rotateNum :: Int, modified::Array{Int,1})
+    stat.dimension = dimension
+    stat.shapeMax = shapeMax
+    stat.shapeMin = shapeMin
+    stat.bufSym = bufSym
+    stat.idxSym = idxSym
+    stat.strideSym = strideSym
+    stat.borderSty = borderSty
+    stat.rotateNum = rotateNum
+    stat.modified = modified
+    stat.initialized = true
 end
 
 supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound])
@@ -48,7 +66,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   dprintln(3, "typeof krn = ", typeof(krn), " ", krn.head, " :: ", typeof(krn.head), " ", object_id(krn.head), " ", object_id(:lambda)) 
   assert(isa(krn, Expr))
   assert(is(krn.head, :lambda))
-  local stat = ()
+  local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms::Array{Symbol,1} = krn.args[1] # parameter of the kernel lambda
   local narrs = length(arrSyms)
@@ -63,81 +81,12 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
     bufSyms[i] = addGenSym(bufTyps[i], state.linfo)
     arrSymDict[arrSyms[i]] = bufSyms[i]
   end
-  local bufSymSet = Set{GenSym}(bufSyms)
-  local expr = krn.args[3]
-  assert(isa(expr, Expr) && expr.head == :body)
-  # warn(string("got arrSymDict = ", arrSymDict))
-  # traverse expr to fix types, and places where arrSyms is refernced
-  function traverse(expr)
-    # recurse
-    # warn(string("expr=", expr, ", head=", expr.head, " args=", expr.args))
-    for i = 1:length(expr.args)
-      e = expr.args[i]
-      if isa(e, Expr)
-        traverse(e)
-      elseif isa(e, Symbol) && haskey(arrSymDict, e)
-        expr.args[i] = arrSymDict[e]
-      elseif isa(e, SymbolNode) && haskey(arrSymDict, e.name)
-        expr.args[i] = arrSymDict[e.name]
-      end
-    end
-    # fix assignment and fill in variable type
-    if is(expr.head, :(=))
-      lhs = expr.args[1]
-      if isa(lhs, SymbolNode) lhs = lhs.name end
-      rhs = expr.args[2]
-      typ = typeOfOpr(state, rhs)
-      expr.typ = typ
-      # warn(string("lhs=",lhs, " typ=",typ))
-      updateDef(state, lhs, rhs)
-    end
-    # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are SymGen.
-    if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
-       (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
-        is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
-       isa(expr.args[2], GenSym) && in(expr.args[2], bufSymSet)
-      local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
-      #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
-      bufSym = expr.args[2]
-      elmTyp = elmTypOf(getType(bufSym, state.linfo))
-      local idxOffset = isGet ? 2 : 3
-      local dim = length(expr.args) - idxOffset
-      assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
-      if is(stat, ())         # create stat if not already exists
-        local idxSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
-        local strideSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
-        stat = KernelStat(dim, zeros(dim), zeros(dim), bufSyms, idxSym, strideSym, borderSty, 0, Int[])
-      else                    # if stat already exists, check if the dimension matches
-        assert(dim == stat.dimension)
-      end
-      for i = 1:dim           # update extents and index calculation in expr
-        local idx = Int(expr.args[idxOffset+i])
-        stat.shapeMax[i] = max(idx, stat.shapeMax[i])
-        stat.shapeMin[i] = min(idx, stat.shapeMin[i])
-        expr.args[idxOffset+i] = mk_expr(Int, :call, TopNode(:add_int), stat.idxSym[i], idx)
-      end
-      # local idx1D = nDimTo1Dim(expr.args[(idxOffset+1):end], stat.strideSym)
-      expr.args = isGet ? [ TopNode(:unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
-                          [ TopNode(:unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
-      # fix numerical coercion when converting setindex! into unsafe_arrayset
-      if is(expr.args[1].name, :unsafe_arrayset)
-          if typeOfOpr(state, expr.args[3]) != elmTyp 
-            expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, symbol(string(elmTyp))), expr.args[3])
-          end
-      end
 
-      if !isGet
-        v = expr.args[2]
-        if isa(v, SymbolNode) v = v.name end
-        for i = 1:length(stat.bufSym)
-          if stat.bufSym[i] == v
-            push!(stat.modified, i)
-          end
-        end
-      end
-    end
-  end
-  traverse(expr)
+  local expr::Expr = krn.args[3]
+  assert(expr.head == :body)
+  # warn(string("got arrSymDict = ", arrSymDict))
+  
+  traverse(state, expr, bufSyms, arrSymDict, stat, borderSty)
   # remove LineNumberNode, :line, and tuple assignment from expr
   #warn(string("kernel expr = ", expr))
   body = Array(Any, 0)
@@ -178,7 +127,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
     lastExpr.args = Any[ nothing ]
   end 
   krnExpr = expr
-  assert(stat != ())            # check if stat is indeed created
+  assert(stat.initialized)            # check if stat is indeed created
 
   # The genBody function returns the kernel computation.
   # It is supposed to be part of DomainLambda, and will have
@@ -215,6 +164,79 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   #end
   # warn(string("return from analyze kernel: ", (stat, state.linfo, krnExpr)))
   return stat, genBody
+end
+
+"""
+ traverse expr to fix types, and places where arrSyms is refernced
+"""
+function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
+  # recurse
+  # warn(string("expr=", expr, ", head=", expr.head, " args=", expr.args))
+  for i = 1:length(expr.args)
+    e = expr.args[i]
+    if isa(e, Expr)
+      traverse(state, e, bufSyms, arrSymDict, stat, borderSty)
+    elseif isa(e, Symbol) && haskey(arrSymDict, e)
+      expr.args[i] = arrSymDict[e]
+    elseif isa(e, SymbolNode) && haskey(arrSymDict, e.name)
+      expr.args[i] = arrSymDict[e.name]
+    end
+  end
+  # fix assignment and fill in variable type
+  if is(expr.head, :(=))
+    lhs = expr.args[1]
+    if isa(lhs, SymbolNode) lhs = lhs.name end
+    rhs = expr.args[2]
+    typ = typeOfOpr(state, rhs)
+    expr.typ = typ
+    # warn(string("lhs=",lhs, " typ=",typ))
+    updateDef(state, lhs, rhs)
+  end
+  # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are SymGen.
+  if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
+     (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
+      is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
+     isa(expr.args[2], GenSym) && in(expr.args[2], bufSyms)
+    local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
+    #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
+    bufSym = expr.args[2]
+    elmTyp = elmTypOf(getType(bufSym, state.linfo))
+    local idxOffset = isGet ? 2 : 3
+    local dim = length(expr.args) - idxOffset
+    assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
+    if !stat.initialized         # create stat if not already exists
+      local idxSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
+      local strideSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
+      set_kernel_stat(stat, dim, zeros(Int,dim), zeros(Int,dim), bufSyms, idxSym, strideSym, borderSty, 0, Int[])
+    else                    # if stat already exists, check if the dimension matches
+      assert(dim == stat.dimension)
+    end
+    for i = 1:dim           # update extents and index calculation in expr
+      local idx = Int(expr.args[idxOffset+i])
+      stat.shapeMax[i] = max(idx, stat.shapeMax[i])
+      stat.shapeMin[i] = min(idx, stat.shapeMin[i])
+      expr.args[idxOffset+i] = mk_expr(Int, :call, TopNode(:add_int), stat.idxSym[i], idx)
+    end
+    # local idx1D = nDimTo1Dim(expr.args[(idxOffset+1):end], stat.strideSym)
+    expr.args = isGet ? [ TopNode(:unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
+                        [ TopNode(:unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
+    # fix numerical coercion when converting setindex! into unsafe_arrayset
+    if is(expr.args[1].name, :unsafe_arrayset)
+        if typeOfOpr(state, expr.args[3]) != elmTyp 
+          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, symbol(string(elmTyp))), expr.args[3])
+        end
+    end
+
+    if !isGet
+      v = expr.args[2]
+      if isa(v, SymbolNode) v = v.name end
+      for i = 1:length(stat.bufSym)
+        if stat.bufSym[i] == v
+          push!(stat.modified, i)
+        end
+      end
+    end
+  end
 end
 
 # Helper function to join Symbols into Expr
