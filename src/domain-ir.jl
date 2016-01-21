@@ -1542,7 +1542,7 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     @assert nargs >= 3 "runstencil needs at least a function, and two buffers"
     local iterations = 1               # default
     local borderExp = nothing          # default
-    local kernelExp = args[1]
+    local kernelExp_var::SymNodeGen = args[1]
     local bufs = Any[]
     local bufstyp = Any[]
     local i
@@ -1565,8 +1565,8 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
         iterations = args[i]
         borderExp = args[i+1]
     end
-    assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
-    kernelExp = lookupConstDefForArg(state, kernelExp)
+    # assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
+    kernelExp = lookupConstDefForArg(state, kernelExp_var)
     dprintln(env, "stencil kernelExp = ", kernelExp)
     dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
     assert(isa(kernelExp, LambdaStaticData))
@@ -1635,7 +1635,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # This allows us to cast the return type, but inference still needs to be
     # called on the mapExp ast.
     # These types are sometimes GlobalRefs, and must be evaled into Type
-    etys = [ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
+    etys = DataType[ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
     dprintln(env, "etys = ", etys)
     @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
     ast = from_expr("anonymous", env.cur_module, ast)

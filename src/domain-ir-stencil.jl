@@ -37,10 +37,12 @@ end
 
 supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wraparound])
 
-# Analyze a stencil kernel specified as a lambda expression.
-# Return both the kernel stat, and the modified kernel LHS expression.
-# Note that the input kernel is modified in-place.
-# NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
+"""
+ Analyze a stencil kernel specified as a lambda expression.
+ Return both the kernel stat, and the modified kernel LHS expression.
+ Note that the input kernel is modified in-place.
+ NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
+"""
 function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, borderSty::Symbol)
   #assert(krn.head == symbol("->"))
   dprintln(3, "typeof krn = ", typeof(krn), " ", krn.head, " :: ", typeof(krn.head), " ", object_id(krn.head), " ", object_id(:lambda)) 
@@ -48,15 +50,16 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   assert(is(krn.head, :lambda))
   local stat = ()
   # warn(string("krn.args[1]=", krn.args[1]))
-  local arrSyms = krn.args[1] # parameter of the kernel lambda
+  local arrSyms::Array{Symbol,1} = krn.args[1] # parameter of the kernel lambda
   local narrs = length(arrSyms)
   local bufSyms = Array(GenSym, narrs)
   local arrSymDict = Dict{Symbol,GenSym}()
   for i in 1:length(arrSyms)
-    if isa(arrSyms[i], Expr) && arrSyms[i].head == :(::) # Expr in the form (x :: t).
-      arrSyms[i] = arrSyms[i].args[1]
-    end
-    assert(isa(arrSyms[i], Symbol))
+    # this case is not possible since krn is a type inferred AST and not LambdaStaticData
+    # if isa(arrSyms[i], Expr) && arrSyms[i].head == :(::) # Expr in the form (x :: t).
+    #  arrSyms[i] = arrSyms[i].args[1]
+    #end
+    # assert(isa(arrSyms[i], Symbol))
     bufSyms[i] = addGenSym(bufTyps[i], state.linfo)
     arrSymDict[arrSyms[i]] = bufSyms[i]
   end
@@ -233,17 +236,22 @@ function mapReduceWith(as, bs, mapf, redf)
   return e
 end
 
-# Returns a KernelStat object and a DomainLambda after analyzing the input
-# kernel specification that has the source in the form of a -> a[...] + ...
-# It expects krn to be of Expr(:lambda, ...) type.
-function mkStencilLambda(state_, bufs, kernelExp, borderExp)
+"""
+ Returns a KernelStat object and a DomainLambda after analyzing the input
+ kernel specification that has the source in the form of a -> a[...] + ...
+ It expects krn to be of Expr(:lambda, ...) type.
+ Border specification in runStencil can only be Symbols.
+"""
+function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
   local linfo = lambdaExprToLambdaInfo(kernelExp)
   local typs = Type[ typeOfOpr(state_, a) for a in bufs ]
   local state = newState(linfo, Dict(), state_)
   local stat, genBody
-  if !(isa(borderExp, QuoteNode))
-    error("Border specification in runStencil can only be Symbols.")
-  end
+  
+  #if !(isa(borderExp, QuoteNode))
+  #  error("Border specification in runStencil can only be Symbols.")
+  #end
+  
   borderSty = borderExp.value 
   if !in(borderSty, supportedBorderStyle)
     error("Expect stencil border style to be one of ", supportedBorderStyle, ", but got ", borderSty)
