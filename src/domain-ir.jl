@@ -1359,7 +1359,7 @@ function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
 end
 =#
 
-function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
+function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{Any,1})
     dprintln(env, "got getindex or setindex!")
     args = normalize_args(state, env, args)
     arr = args[1]
@@ -1600,12 +1600,12 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     nargs = length(args)
     args = normalize_args(state, env, args)
     assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
-    local dimExp = args[end]     # last argument is the dimension tuple
-    assert(isa(dimExp, SymbolNode) || isa(dimExp, GenSym))
-    dimExp = lookupConstDefForArg(state, dimExp)
-    dprintln(env, "dimExp = ", dimExp, " head = ", dimExp.head, " args = ", dimExp.args)
-    assert(isa(dimExp, Expr) && is(dimExp.head, :call) && is(dimExp.args[1], TopNode(:tuple)))
-    dimExp = dimExp.args[2:end]
+    local dimExp_var::SymNodeGen = args[end]     # last argument is the dimension tuple
+    
+    dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
+    dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
+    assert(isa(dimExp_e, Expr) && is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
+    dimExp = dimExp_e.args[2:end]
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
     local mapExp = args[1]     # first argument is the lambda
@@ -1829,7 +1829,7 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, 
             end
     =#
         elseif is(fun.name, :getindex) || is(fun.name, :setindex!) # not a domain operator, but still, sometimes need to shortcut it
-            expr = translate_call_getsetindex(state,env_,typ,fun,args)
+            expr = translate_call_getsetindex(state,env_,typ,fun.name,args)
     # legacy v0.3
     #    elseif is(fun.name, :assign_bool_scalar_1d!) || # args = (array, scalar_value, bitarray)
     #           is(fun.name, :assign_bool_vector_1d!)    # args = (array, getindex_bool_1d(array, bitarray), bitarray)
