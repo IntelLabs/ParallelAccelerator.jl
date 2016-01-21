@@ -534,7 +534,7 @@ function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
     end     
 end
 
-function specializeOp(opr, argstyp)
+function specializeOp(opr::Symbol, argstyp)
     reorder = x -> x # default no reorder
     if opr == :>= 
         opr = :<=
@@ -790,7 +790,7 @@ end
  as separate statements, and emit them (after translation)
  to the state one by one.
 """
-function from_body(state, env, expr::Any)
+function from_body(state, env, expr::Expr)
     local env_ = nextEnv(env)
     # So long as :body immediate nests with :lambda, we do not
     # need to create new state.
@@ -798,8 +798,8 @@ function from_body(state, env, expr::Any)
     local body = expr.args
     local typ  = expr.typ
     for i = 1:length(body)
-        expr = from_expr(state, env_, body[i])
-        emitStmt(state, expr)
+        stmt = from_expr(state, env_, body[i])
+        emitStmt(state, stmt)
     end
     # fix return type
     n = length(state.stmts)
@@ -817,7 +817,7 @@ function from_body(state, env, expr::Any)
     return mk_expr(typ, head, state.stmts...)
 end
 
-function mmapRemoveDupArg!(expr)
+function mmapRemoveDupArg!(expr::Expr)
     head = expr.head 
     @assert head==:mmap || head==:mmap! "Input to mmapRemoveDupArg!() must be :mmap or :mmap!"
     arr = expr.args[1]
@@ -1054,6 +1054,8 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     end
 end
 
+# legacy v0.3
+#=
 function normalize_callname(state::IRState, env, fun::Symbol, args)
     if is(fun, :broadcast!)
         dst = lookupConstDefForArg(state, args[2])
@@ -1098,6 +1100,7 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
     end
     return (fun, args)
 end
+=#
 
 function normalize_callname(state::IRState, env, fun::TopNode, args)
     fun = fun.name
@@ -1140,34 +1143,38 @@ end
 
 # if a definition of arr is getindex(a, ...), return select(a, ranges(...))
 # otherwise return arr unchanged.
-function inline_select(env, state, arr)
+function inline_select(env, state, arr::SymbolNode)
     range_extra = Any[]
-    if isa(arr, SymbolNode) 
-        # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
-        def = lookupConstDef(state, arr.name)
-        if !isa(def, Void)  
-            if isa(def, Expr) && is(def.head, :call) 
-                target_arr = arr
-                if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
-                    target_arr = def.args[2]
-                    range_extra = def.args[3:end]
-                elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
-                    error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
-                end
-                dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
-                if length(range_extra) > 0
-                    # if all ranges are int, then it is not a selection
-                    if any(Bool[ismask(state,r) for r in range_extra])
-                        ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
-                      dprintln(env, "inline-select: converted to ranges = ", ranges)
-                      arr = mk_select(target_arr, ranges)
-                    else
-                      dprintln(env, "inline-select: skipped")
-                    end
+
+    # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
+    def = lookupConstDef(state, arr.name)
+    if !isa(def, Void)  
+        if isa(def, Expr) && is(def.head, :call) 
+            target_arr = arr
+            if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
+                target_arr = def.args[2]
+                range_extra = def.args[3:end]
+            elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
+                error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
+            end
+            dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
+            if length(range_extra) > 0
+                # if all ranges are int, then it is not a selection
+                if any(Bool[ismask(state,r) for r in range_extra])
+                    ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
+                  dprintln(env, "inline-select: converted to ranges = ", ranges)
+                  arr = mk_select(target_arr, ranges)
+                else
+                  dprintln(env, "inline-select: skipped")
                 end
             end
         end
     end
+
+    return arr
+end
+
+function inline_select(env, state, arr::ANY)
     return arr
 end
 
@@ -1406,7 +1413,7 @@ function translate_call_getsetindex(state, env, typ, fun, args::Array{Any,1})
     return mk_expr(typ, :call, fun, args...)
 end
 
-function translate_call_map(state, env, typ, fun, args::Array{Any,1})
+function translate_call_map(state, env, typ, fun::Symbol, args::Array{Any,1})
     # TODO: check for unboxed array type
     args = normalize_args(state, env, args)
     etyp = elmTypOf(typ) 
