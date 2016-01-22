@@ -1676,7 +1676,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # This allows us to cast the return type, but inference still needs to be
     # called on the mapExp ast.
     # These types are sometimes GlobalRefs, and must be evaled into Type
-    etys = DataType[ isa(t, GlobalRef) ? eval(t) : t for t in args[2:end-1] ]
+    etys = DataType[ eval_dataType(t) for t in args[2:end-1] ]
     dprintln(env, "etys = ", etys)
     @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
     ast = from_expr("anonymous", env.cur_module, ast)
@@ -1706,12 +1706,12 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     assert(is(lastExp.head, :return))
     # dprintln(env, "fixReturn: lastExp = ", lastExp)
     args1 = lastExp.args[1]
-    args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
+    args1_typ::Type = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
     # lastExp may be returning a tuple
     if istupletyp(args1_typ)
         # create tmp variables to store results
         local tvar = args1
-        local typs = args1_typ.parameters
+        local typs::SimpleVector = args1_typ.parameters
         local nvar = length(typs)
         local retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
         local retExprs = Array(Expr, length(retNodes))
