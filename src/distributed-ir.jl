@@ -165,7 +165,7 @@ end
 """
 mark sequential arrays
 """
-function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, read)
+function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_top_level, read)
     head = node.head
     # arrays written in parfors are ok for now
     
@@ -236,7 +236,7 @@ function get_arr_dist_info(node::Expr, state, top_level_number, is_top_level, re
 end
 
 
-function get_arr_dist_info(ast::Any, state, top_level_number, is_top_level, read)
+function get_arr_dist_info(ast::Any, state::DistIrState, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 """
@@ -309,7 +309,7 @@ function eqSize(a::Any, b::Any)
 end
 
 # nodes are :body of AST
-function from_toplevel_body(nodes::Array{Any,1}, state)
+function from_toplevel_body(nodes::Array{Any,1}, state::DistIrState)
     res::Array{Any,1} = genDistributedInit(state)
     for node in nodes
         new_exprs = from_expr(node, state)
@@ -319,7 +319,7 @@ function from_toplevel_body(nodes::Array{Any,1}, state)
 end
 
 
-function from_expr(node::Expr, state)
+function from_expr(node::Expr, state::DistIrState)
     head = node.head
     if head==:(=)
         return from_assignment(node, state)
@@ -334,12 +334,12 @@ function from_expr(node::Expr, state)
 end
 
 
-function from_expr(node::Any, state)
+function from_expr(node::Any, state::DistIrState)
     return [node]
 end
 
 # generates initialization code for distributed execution
-function genDistributedInit(state)
+function genDistributedInit(state::DistIrState)
     initCall = Expr(:call,TopNode(:hps_dist_init))
     numPesCall = Expr(:call,TopNode(:hps_dist_num_pes))
     nodeIdCall = Expr(:call,TopNode(:hps_dist_node_id))
@@ -353,7 +353,7 @@ function genDistributedInit(state)
     return Any[initCall; num_pes_assign; node_id_assign]
 end
 
-function from_assignment(node::Expr, state)
+function from_assignment(node::Expr, state::DistIrState)
     @assert node.head==:(=) "DistributedIR invalid assignment head"
 
     if isAllocation(node.args[2])

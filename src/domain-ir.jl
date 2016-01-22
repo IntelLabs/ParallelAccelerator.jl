@@ -1566,15 +1566,15 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
         borderExp = args[i+1]
     end
     # assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
-    kernelExp = lookupConstDefForArg(state, kernelExp_var)
-    dprintln(env, "stencil kernelExp = ", kernelExp)
+    kernelExp_lsd::LambdaStaticData = lookupConstDefForArg(state, kernelExp_var)
+    dprintln(env, "stencil kernelExp = ", kernelExp_lsd)
     dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
-    assert(isa(kernelExp, LambdaStaticData))
+    
     # TODO: better infer type here
-    (ast, ety) = lambdaTypeinf(kernelExp, tuple(bufstyp...))
+    (ast, ety) = lambdaTypeinf(kernelExp_lsd, tuple(bufstyp...))
     #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
     dprintln(env, "type inferred AST = ", ast)
-    kernelExp = from_expr(state, env, ast)
+    kernelExp::Expr = from_expr(state, env, ast)
     if is(borderExp, nothing)
         borderExp = QuoteNode(:oob_skip)
     else
@@ -1592,6 +1592,28 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     return expr
 end
 
+function cartesianarray_getMapExp(state, env, inMap::GlobalRef, argstyp)
+    @assert inMap.mod==Main || inMap.mod==ParallelAccelerator
+    return cartesianarray_getMapExp(inMap.name)
+end
+
+function cartesianarray_getMapExp(state, env, inMap::SymNodeGen, argstyp)
+    return lookupConstDefForArg(state, inMap)
+end
+
+function cartesianarray_getMapExp(state, env, inMap::Symbol, argstyp)
+    @assert !is(env.cur_module, nothing) && (isdefined(env.cur_module, inMap) || isdefined(ParallelAccelerator, inMap)) && !isdefined(Base, inMap) "only handle functions in current or Main module"
+    local m
+    if(isdefined(ParallelAccelerator, inMap))
+        m = methods(getfield(ParallelAccelerator, inMap), tuple(argstyp...))
+    else
+        m = methods(getfield(env.cur_module, inMap), tuple(argstyp...))
+    end
+    dprintln(env,"function for cartesianarray: ", inMap, " methods=", m, " argstyp=", argstyp)
+    assert(length(m) > 0)
+    return m[1].func.code
+end
+
 
 function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # equivalent to creating an array first, then map! with indices.
@@ -1604,30 +1626,16 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
-    assert(isa(dimExp_e, Expr) && is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
+    assert(is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
     dimExp = dimExp_e.args[2:end]
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
-    local mapExp = args[1]     # first argument is the lambda
+    
+    local mapExp::LambdaStaticData = cartesianarray_getMapExp(state, env, args[1], argstyp)     # first argument is the lambda
     #println("mapExp ", mapExp)
     #dump(mapExp,1000)
-    if isa(mapExp, GlobalRef) && (mapExp.mod == Main  || mapExp.mod == ParallelAccelerator)
-        mapExp = mapExp.name
-    end
-    if isa(mapExp, Symbol) && !is(env.cur_module, nothing) && (isdefined(env.cur_module, mapExp) || isdefined(ParallelAccelerator, mapExp)) && !isdefined(Base, mapExp) # only handle functions in current or Main module
 
-        if(isdefined(ParallelAccelerator, mapExp))
-            m = methods(getfield(ParallelAccelerator, mapExp), tuple(argstyp...))
-        else
-            m = methods(getfield(env.cur_module, mapExp), tuple(argstyp...))
-        end
-        dprintln(env,"function for cartesianarray: ", mapExp, " methods=", m, " argstyp=", argstyp)
-        assert(length(m) > 0)
-        mapExp = m[1].func.code
-    elseif isa(mapExp, SymbolNode) || isa(mapExp, GenSym)
-        mapExp = lookupConstDefForArg(state, mapExp)
-    end
-    @assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
+    #@assert isa(mapExp, LambdaStaticData) "mapExp is not LambdaStaticData"*dump(mapExp)
     # call typeinf since Julia doesn't do it for us
     # and we can figure out the element type from mapExp's return type
     (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
@@ -1652,16 +1660,16 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         tmpNodes[i] = tmparr
     end
     # produce a DomainLambda
-    body = ast.args[3]
+    body::Expr = ast.args[3]
     params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
     # dprintln(env, "params = ", params)
     #locals = metaToVarDef(ast.args[2][2])
     #escapes = metaToVarDef(ast.args[2][3])
     linfo = lambdaExprToLambdaInfo(ast)
-    assert(isa(body, Expr) && is(body.head, :body))
+    assert(is(body.head, :body))
     # fix the return in body
-    lastExp = body.args[end]
-    assert(isa(lastExp, Expr) && is(lastExp.head, :return))
+    lastExp::Expr = body.args[end]
+    assert(is(lastExp.head, :return))
     # dprintln(env, "fixReturn: lastExp = ", lastExp)
     args1 = lastExp.args[1]
     args1_typ = CompilerTools.LivenessAnalysis.typeOfOpr(args1, linfo)
