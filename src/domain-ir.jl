@@ -1098,7 +1098,7 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
                 fun = get(state.defs, fun, nothing)
             end
             if isa(fun, GlobalRef)
-                func = eval(fun)  # should give back a function
+                func = getfield(fun.mod, fun.name)  # should give back a function
                 assert(isa(func, Function))
                 fun = fun.name
             end
@@ -1201,7 +1201,7 @@ function getElemTypeFromAllocExp(typExp::DataType)
 end
 
 function getElemTypeFromAllocExp(typExp::GlobalRef)
-    return eval(typExp)
+    return getfield(typExp.mod, typExp.name)
 end
 
 function translate_call_alloc(state, env_, typ, typ_arg, args_in)
@@ -1246,19 +1246,7 @@ end
 A hack to avoid eval() since it affects type inference significantly
 """
 function eval_dataType(typ::GlobalRef)
-    out::Type = Any
-    if typ.name==:Float32
-        out = Float32
-    elseif typ.name==:Float64
-        out = Float64
-    elseif typ.name==:Int32
-        out = Int32
-    elseif typ.name==:Int64
-        out = Int64
-    else
-        throw("Type not recognized statically")
-    end
-    return out
+    return getfield(typ.mod, typ.name)
 end
 
 function eval_dataType(typ::DataType)
@@ -1341,7 +1329,7 @@ function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, old
                 # translate getfield call to getfieldNode
                 local m
                 try
-                    m = eval(Main, args[1]) # FIXME: the use of Main is not exactly correct here!
+                    m = getfield(Main, args[1]) # FIXME: the use of Main is not exactly correct here!
                 catch err
                     dprintln(env,"module name ", args[1], " fails to resolve")
                     throw(err)
@@ -1374,7 +1362,7 @@ function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
     dprintln(env, " args = ", args, " type(args[1]) = ", typeof(args[1]))
     local typ1    
     if is(fun, :cat_t)
-        typ1 = isa(args[2], GlobalRef) ? eval(args[2]) : args[2]
+        typ1 = isa(args[2], GlobalRef) ? getfield(args[2].mod, args[2].name) : args[2]
         @assert (isa(typ1, DataType)) "expect second argument to cat_t to be a type"
         dim1 = args[1]
         @assert (isa(dim1, Int)) "expect first argument to cat_t to be constant"
@@ -1382,7 +1370,7 @@ function translate_call_typefix(state, env, typ, fun, args::Array{Any,1})
     else
         a1 = args[1]
         if typeof(a1) == GlobalRef
-            a1 = eval(a1)
+            a1 = getfield(a1.mod, a1.name)
         end
         typ1 = typeOfOpr(state, a1)
         if is(fun, :fptrunc)
@@ -1686,11 +1674,8 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # call typeinf since Julia doesn't do it for us
     # and we can figure out the element type from mapExp's return type
     (ast, ety) = lambdaTypeinf(mapExp, tuple(argstyp...))
-    # Element type is specified as an argument to cartesianarray
-    # This allows us to cast the return type, but inference still needs to be
-    # called on the mapExp ast.
-    # These types are sometimes GlobalRefs, and must be evaled into Type
-    etys = DataType[ eval_dataType(t) for t in args[2:end-1] ]
+    # instead of inspecting args for return type, look at etyp is good enough.
+    etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
     ast = from_expr("anonymous", env.cur_module, ast)
