@@ -1661,7 +1661,8 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     end
     # produce a DomainLambda
     body::Expr = ast.args[3]
-    params = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
+    # varargs can have Expr with head :(...) as parameter but it is not supported yet
+    params::Array{Symbol,1} = ast.args[1]
     # dprintln(env, "params = ", params)
     #locals = metaToVarDef(ast.args[2][2])
     #escapes = metaToVarDef(ast.args[2][3])
