@@ -1229,6 +1229,29 @@ function translate_call_rangeshortcut(state, arg1::ANY, arg2::ANY)
 end
 
 """
+A hack to avoid eval() since it affects type inference significantly
+"""
+function eval_dataType(typ::GlobalRef)
+    out::Type = Any
+    if typ.name==:Float32
+        out = Float32
+    elseif typ.name==:Float64
+        out = Float64
+    elseif typ.name==:Int32
+        out = Int32
+    elseif typ.name==:Int64
+        out = Int64
+    else
+        throw("Type not recognized statically")
+    end
+    return out
+end
+
+function eval_dataType(typ::DataType)
+    return typ
+end
+
+"""
  translate a function call to domain IR if it matches Symbol.
  things handled as Symbols are: 
     those captured in ParallelAPI, or
@@ -1272,8 +1295,13 @@ function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::S
         return arr_size_expr
     elseif is(fun, :alloc) || is(fun, :Array)
         return translate_call_alloc(state, env_, typ, args[1], args[2:end])
-    elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
-        typ = isa(args[1], Type) ? args[1] : eval(args[1]) 
+    elseif is(fun, :sitofp) # typefix hack!
+        typ = args[1]
+    elseif is(fun, :fpext) # typefix hack!
+        #println("TYPEFIX ",fun," ",args)
+        # a hack to avoid eval
+        # typ = eval(args[1])
+        typ = eval_dataType(args[1]) 
     elseif is(fun, :getindex) || is(fun, :setindex!) 
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
     elseif is(fun, :getfield) && length(args) == 2
