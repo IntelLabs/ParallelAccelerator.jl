@@ -53,6 +53,11 @@ function ns_to_sec(x)
     x / 1000000000.0
 end
 
+num_threads_mode = 0
+function PIRNumThreadsMode(x)
+    global num_threads_mode = x
+end
+
 
 const ISCAPTURED = 1
 const ISASSIGNED = 2
@@ -2201,7 +2206,7 @@ function intermediate_from_exprs(ast::Array{Any,1}, depth, state)
     return res 
 end
 
-include("parallel-ir-task.jl")
+#include("parallel-ir-task.jl")
 include("parallel-ir-top-exprs.jl")
 include("parallel-ir-flatten.jl")
 
@@ -2350,6 +2355,8 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
     elseif head == :parfor_end
         # Intentionally do nothing
         return Any[]
+    # task mode commented out
+    #=
     elseif head == :insert_divisible_task
         # Is this right?  Do I need pir_range stuff here too?
         dprintln(4,"pir_live_cb for :insert_divisible_task")
@@ -2367,6 +2374,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         end
 
         return expr_to_process
+    =#
     elseif head == :loophead
         dprintln(4,"pir_live_cb for :loophead")
         assert(length(args) == 3)
@@ -3142,9 +3150,9 @@ function from_root(function_name, ast :: Expr)
 
     set_pir_stats(ast)
 
-    if pir_stop != 0
-        throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-    end
+    #if pir_stop != 0
+    #    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
+    #end
     ast
 end
 
@@ -3646,7 +3654,8 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-
+# task mode commeted out
+#=
 function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     dprintln(4,"PIR AstWalkCallback starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
@@ -3661,6 +3670,7 @@ function AstWalkCallback(x :: pir_range_actual, dw :: DirWalk, top_level_number 
     end
     return x
 end
+=#
 
 function AstWalkCallback(x :: DelayedFunc, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     dprintln(4,"PIR AstWalkCallback starting")

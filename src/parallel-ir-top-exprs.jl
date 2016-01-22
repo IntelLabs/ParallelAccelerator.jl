@@ -149,7 +149,7 @@ function top_level_expand_pre(body, state)
             end
             the_parfor.postParFor = Any[]
             push!(the_parfor.postParFor, 0)
-            createInstructionCountEstimate(the_parfor, state)
+            #createInstructionCountEstimate(the_parfor, state)
         elseif isBareParfor(body[i])
             rhs = body[i]
             the_parfor = rhs.args[1]
@@ -165,7 +165,7 @@ function top_level_expand_pre(body, state)
 
             the_parfor.postParFor = Any[]
             push!(the_parfor.postParFor, 0)
-            createInstructionCountEstimate(the_parfor, state)
+            #createInstructionCountEstimate(the_parfor, state)
         else
             push!(expanded_body, body[i])
         end
@@ -173,6 +173,8 @@ function top_level_expand_pre(body, state)
     return expanded_body
 end
 
+# task mode commented out
+#=
 function top_level_mk_task_graph(body, state, new_lives, loop_info)
     task_start = time_ns()
 
@@ -596,6 +598,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
     return body
 end
 
+
 function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol,Array{Any,1}}, state, newLambdaInfo, next_available_label)
     # Only handle 1D loophead right now.
 
@@ -772,6 +775,7 @@ end
 function process_cur_task(cur_task::Any, new_body, state)
     push!(new_body, cur_task)
 end
+=#
 
 # TOP_LEVEL
 # sequence of expressions
@@ -790,9 +794,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     # TASK GRAPH
 
-    if polyhedral != 0
+    #if polyhedral != 0
         # Anand: you can insert code here.
-    end
+    #end
 
     expand_start = time_ns()
 
@@ -826,13 +830,17 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     dprintln(3,"new_lives = ", new_lives)
     dprintln(3,"loop_info = ", loop_info)
 
+    # task mode commented out
+    #=
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
         dprintln(3, "Entering top_level_mk_task_graph.")
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
+    
     expanded_body = Any[]
 
+    
     max_label   = getMaxLabel(0, body)
     LoopEndDict = Dict{Symbol,Array{Any,1}}()
 
@@ -856,6 +864,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     end
 
     body = expanded_body
+    =#
 
     return body
 end
