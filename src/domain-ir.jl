@@ -297,7 +297,7 @@ function emitStmt(state::IRState, stmt)
 end
 
 type IREnv
-    cur_module  :: Union{Module, Void}
+    cur_module  :: Module
     debugLevel  :: Int
     debugIndent :: Int
 end
@@ -1011,6 +1011,20 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     result
 end
 
+function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
+    translate_call_globalref(state, env, typ, head, oldfun, oldargs, fun, args)
+end
+
+function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::Symbol, args)
+    translate_call_symbol(state, env, typ, head, oldfun, oldargs, fun, args)
+end
+
+function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::ANY, args)
+    dprintln(3,"unrecognized fun type ",fun, " args ", args)
+    oldargs = normalize_args(state, env, oldargs)
+    mk_expr(typ, head, oldfun, oldargs...)
+end
+
 # turn Exprs in args into variable names, and put their definition into state
 # anything of void type in the argument is omitted in return value.
 function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
@@ -1260,7 +1274,7 @@ end
     those that are DomainIR specific, such as :alloc, or
     a few exceptions.
 """
-function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
+function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
     local expr::Expr
     expr = Expr(:null)
@@ -1317,7 +1331,7 @@ function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::S
         #=
         args_typ = map(x -> typeOfOpr(state, x), args)
         dprintln(3,"args = ", args, " args_typ = ", args_typ)
-        if !is(env.cur_module, nothing) && isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
+        if isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
             dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
             _accelerate(getfield(env.cur_module, fun), tuple(args_typ...))
             oldfun = GlobalRef(env.cur_module, fun)
@@ -1607,7 +1621,7 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     (ast, ety) = lambdaTypeinf(kernelExp_lsd, tuple(bufstyp...))
     #etys = isa(ety, Tuple) ? Type [ t for t in ety ] : Type[ ety ]
     dprintln(env, "type inferred AST = ", ast)
-    kernelExp::Expr = from_expr(state, env, ast)
+    kernelExp::Expr = from_expr_tiebreak(state, env, ast)
     if is(borderExp, nothing)
         borderExp = QuoteNode(:oob_skip)
     else
@@ -1635,7 +1649,7 @@ function cartesianarray_getMapExp(state, env, inMap::SymNodeGen, argstyp)
 end
 
 function cartesianarray_getMapExp(state, env, inMap::Symbol, argstyp)
-    @assert !is(env.cur_module, nothing) && (isdefined(env.cur_module, inMap) || isdefined(ParallelAccelerator, inMap)) && !isdefined(Base, inMap) "only handle functions in current or Main module"
+    @assert (isdefined(env.cur_module, inMap) || isdefined(ParallelAccelerator, inMap)) && !isdefined(Base, inMap) "only handle functions in current or Main module"
     local m
     if(isdefined(ParallelAccelerator, inMap))
         m = methods(getfield(ParallelAccelerator, inMap), tuple(argstyp...))
@@ -1840,7 +1854,7 @@ function translate_call_parallel_for(state, env, args::Array{Any,1})
 end
 
 # translate a function call to domain IR if it matches GlobalRef.
-function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::GlobalRef, args)
+function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
@@ -1850,7 +1864,7 @@ function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::G
     # end
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
-        expr = translate_call(state, env, typ, head, fun, oldargs, fun.name, args)
+        expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
     elseif is(fun.mod, Base) 
         if is(fun.name, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
             opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
@@ -1927,12 +1941,6 @@ function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::G
     return expr
 end
 
-function translate_call(state, env, typ, head, oldfun, oldargs, fun::ANY, args)
-    dprintln(3,"unrecognized fun type ",fun, " args ", args)
-    oldargs = normalize_args(state, env, oldargs)
-    expr = mk_expr(typ, head, oldfun, oldargs...)
-end
-
 function from_return(state, env, expr)
     local env_ = nextEnv(env)
     local head = expr.head
@@ -1943,13 +1951,19 @@ function from_return(state, env, expr)
     return mk_expr(typ, head, args...)
 end
 
+function from_expr_tiebreak(state::IRState, env::IREnv, ast :: Expr)
+    asts::Array{Any,1} = [ast]
+    res::Array{Any,1} = [from_expr(state, env, ast) for ast in asts ]
+    return res[1]
+end
+
 function from_expr(function_name::AbstractString, cur_module :: Module, ast :: Expr)
     dprintln(2,"DomainIR translation function = ", function_name, " on:")
     dprintln(2,ast)
-    ast = from_expr(emptyState(), newEnv(cur_module), ast)
+    res = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast) 
     dprintln(2,"DomainIR translation returns:")
-    dprintln(2,ast)
-    return ast
+    dprintln(2,res)
+    return res
 end
 
 function from_expr(state::IRState, env::IREnv, ast::LambdaStaticData)
