@@ -1202,7 +1202,8 @@ function translate_call_alloc(state, env_, typ, typ_arg, args_in)
 end
 
 function translate_call_rangeshortcut(state, arg1::GenSym, arg2::QuoteNode)
-
+    local ret::Union{SymAllGen,Expr,Int}
+    ret = Expr(:null)
     if arg2.value==:stop || arg2.value==:start || arg2.value==:step
         rTyp = getType(arg1, state.linfo)
         rExpr = lookupConstDefForArg(state, arg1)
@@ -1210,21 +1211,21 @@ function translate_call_rangeshortcut(state, arg1::GenSym, arg2::QuoteNode)
             (start, step, final) = from_range(rExpr)
             fname = arg2.value
             if is(fname, :stop) 
-                return final
+                ret = final
             elseif is(fname, :start)
-                return start
+                ret = start
             else
-                return step
+                ret = step
             end
         end
     end
     #return Expr(:null)
-    return nothing
+    return ret
 end
 
 function translate_call_rangeshortcut(state, arg1::ANY, arg2::ANY)
-    #return Expr(:null)
-    return nothing
+    return Expr(:null)
+    #return nothing
 end
 
 """
@@ -1236,11 +1237,11 @@ end
     those that are DomainIR specific, such as :alloc, or
     a few exceptions.
 """
-function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
+function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
-    #local expr::Expr
-    # expr = Expr(:null)
-    expr = nothing
+    local expr::Expr
+    expr = Expr(:null)
+    #expr = nothing
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
     #if isa(fun, GlobalRef) && fun.mod == Main
@@ -1262,12 +1263,13 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
     elseif haskey(reduceOps, fun)
         dprintln(env, "haskey reduceOps ", fun)
         args = normalize_args(state, env_, args)
-        expr = translate_call_reduce(state, env_, typ, fun, args)
+        return translate_call_reduce(state, env_, typ, fun, args)
     elseif is(fun, :arraysize)
         args = normalize_args(state, env_, args)
         dprintln(env,"got arraysize, args=", args)
-        expr = mk_arraysize(args...)
-        expr.typ = typ
+        arr_size_expr::Expr = mk_arraysize(args...)
+        arr_size_expr.typ = typ
+        return arr_size_expr
     elseif is(fun, :alloc) || is(fun, :Array)
         return translate_call_alloc(state, env_, typ, args[1], args[2:end])
     elseif is(fun, :sitofp) || is(fun, :fpext) # typefix hack!
@@ -1276,7 +1278,10 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
     elseif is(fun, :getfield) && length(args) == 2
         # Shortcut range object access
-        expr = translate_call_rangeshortcut(state, args[1],args[2])
+        range_out::Union{SymAllGen,Expr,Int} = translate_call_rangeshortcut(state, args[1],args[2])
+        if range_out!=Expr(:null)
+            return range_out
+        end
     elseif in(fun, ignoreSet)
     else
         # this is deprecated from Julia v0.3 I think
@@ -1308,8 +1313,8 @@ function translate_call(state, env, typ, head, oldfun, oldargs, fun::Symbol, arg
         dprintln(env,"function call not translated: ", fun, ", typeof(fun)=Symbol head = ", head, " oldfun = ", oldfun)
     end
 
-    #if expr.head==:null
-    if isa(expr, Void)
+    if expr.head==:null
+    #if isa(expr, Void)
         if !is(fun, :ccall)
             if is(fun, :box) && isa(oldargs[2], Expr) # fix the type of arg[2] to be arg[1]
               oldargs[2].typ = typ
@@ -1376,7 +1381,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
     elseif isArrayType(arrTyp)
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
       atyp = typeOfOpr(state, arr)
-      expr = nothing
+      expr = Expr(:null)
       dprintln(env, "ranges = ", ranges)
       try 
         if any(Bool[ ismask(state, range) for range in ranges])
@@ -1446,7 +1451,7 @@ function translate_call_map(state, env, typ, fun::Symbol, args::Array{Any,1})
         end
         args[i] = arg_
     end
-    expr = endswith(string(fun), '!') ? mk_mmap!(args, domF) : mk_mmap(args, domF)
+    expr::Expr = endswith(string(fun), '!') ? mk_mmap!(args, domF) : mk_mmap(args, domF)
     expr = mmapRemoveDupArg!(expr)
     expr.typ = typ
     return expr
@@ -1711,7 +1716,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         ret
     end
     domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
-    expr = mk_mmap!(tmpNodes, domF, true)
+    expr::Expr = mk_mmap!(tmpNodes, domF, true)
     expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
     return expr
 end
@@ -1807,7 +1812,7 @@ function translate_call_parallel_for(state, env, args::Array{Any,1})
 end
 
 # translate a function call to domain IR if it matches GlobalRef.
-function translate_call(state, env, typ, head, oldfun, oldargs, fun::GlobalRef, args)
+function translate_call(state, env, typ::DataType, head, oldfun, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
     dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
