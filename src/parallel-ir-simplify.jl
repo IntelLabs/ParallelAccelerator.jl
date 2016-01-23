@@ -148,7 +148,10 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
             dprintln(3,"remove_no_deps live_info = ", live_info)
             dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
-            if isAssignmentNode(node)
+            if isa(node, Number) || isa(node, SymAllGen)
+                dprintln(3,"Eliminating dead node: ", node)
+                return CompilerTools.AstWalker.ASTWALK_REMOVE
+            elseif isAssignmentNode(node)
                 dprintln(3,"Is an assignment node.")
                 lhs = node.args[1]
                 dprintln(4,lhs)
@@ -548,15 +551,15 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
-        elseif rhs.args[1] == TopNode(:arraylen)
+        elseif rhs.args[1] == TopNode(:arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
-            assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-            array_param_type = array_param.typ         # get its type
+            assert(isa(array_param, SymbolNode) || isa(array_param, GenSym)) # should be a SymbolNode or GenSym
+            array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.lambdaInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
                 dim_symbols = [getSName(lhs)]
-                dprintln(3,"Adding symbol correlation from arraylen, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+                dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(isa(array_param, SymbolNode) ? array_param.name : array_param, state, dim_symbols)
             end
         elseif rhs.args[1] == TopNode(:arraysize)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.

@@ -198,7 +198,8 @@ _Intrinsics = [
         "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
-        "checked_ssub", "checked_sadd", "checked_smul", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
+        "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int", 
+        "checked_smul", "checked_sdiv_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
@@ -808,7 +809,7 @@ function from_ccall(args)
     end
 
     if isa(fun, QuoteNode)
-        s = from_expr(fun)
+        s = from_symbol(fun)
     elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
         s = canonicalize(string(fun.args[2]))
         dprintln(3,"ccall target: ", s)
@@ -1082,9 +1083,9 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
     elseif intr == "shl_int"
         return "($(from_expr(args[1]))) << ($(from_expr(args[2])))"
-    elseif intr == "checked_ssub"
+    elseif intr == "checked_ssub" || intr == "checked_ssub_int"
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
-    elseif intr == "checked_sadd"
+    elseif intr == "checked_sadd" || intr == "checked_sadd_int"
         return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
     elseif intr == "checked_smul"
         return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
@@ -1094,7 +1095,7 @@ function from_intrinsic(f :: ANY, args)
         m = from_expr(args[1])
         n = from_expr(args[2])
         return "((($m) % ($n) + ($n)) % $n)"
-    elseif intr == "srem_int"
+    elseif intr == "srem_int" || intr == "checked_srem_int"
         return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
@@ -1141,7 +1142,7 @@ function from_intrinsic(f :: ANY, args)
         return "sqrt(" * from_expr(args[1]) * ")"
     elseif intr == "sub_float"
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
-    elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int"
+    elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
     elseif intr == "sitofp"
         return from_expr(args[1]) * from_expr(args[2])
@@ -1317,19 +1318,17 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
     #case 1:
     if is(f.name, :getfield) && isa(args[2], QuoteNode)
         dprintln(3,"Case 1: args[2] is ", args[2])
-        s = args[2].value
+        fname = args[2].value
         if isa(args[1], Module)
             M = args[1]
-        elseif (args[2] == QuoteNode(:im) || args[2] == QuoteNode(:re)) &&
+        elseif (fname == :im || fname == :re) &&
                (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
                 (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
-            func = args[2] == QuoteNode(:re) ? "real" : "imag";
+            func = fname == :re ? "real" : "imag";
             t = func * "(" * from_expr(args[1]) * ")"
         else
             #case 2:
-            M = ""
-            s = ""
-            t = from_expr(args[1]) * "." * from_expr(args[2])
+            t = from_expr(args[1]) * "." * string(fname)
             #M, _s = resolveCallTarget([args[1]])
         end
         dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
@@ -1921,7 +1920,7 @@ function from_expr(ast::Expr)
     elseif head == :insert_divisible_task
         s *= from_insert_divisible_task(args)
 
-    elseif head == :boundscheck
+    elseif head == :boundscheck || head == :inbounds
         # Nothing
     elseif head == :assert
         # Nothing
@@ -1977,7 +1976,9 @@ function from_expr(ast::TopNode)
 end
 
 function from_expr(ast::QuoteNode)
-    s = from_quotenode(ast)
+    # All QuoteNode should have been explicitly handled, otherwise we ignore them.
+    # s = from_quotenode(ast)
+    return ""
 end
 
 function from_expr(ast::NewvarNode)

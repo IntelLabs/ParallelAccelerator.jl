@@ -278,6 +278,10 @@ function lookupConstDefForArg(state::IRState, s::Any)
     is(s, nothing) ? s1 : s
 end
 
+function lookupConstDefForArg(state::Void, s::Any)
+    return nothing
+end
+
 """
 Look up a definition of a variable throughout nested states until a definition is found.
 Return nothing If none is found.
@@ -702,16 +706,16 @@ function simplify(state, expr)
 end
 
 isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
-add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_sadd), x, y)
-sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:checked_ssub), x, y)
-mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:checked_smul), x, y))
+add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:add_int), x, y)
+sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:sub_int), x, y)
+mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:mul_int), x, y))
 sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, TopNode(:sdiv_int), x, y)
 neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
 isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
 isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
-isAddExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :add_int) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd))
-isSubExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sub_int) || isTopNodeOrGlobalRef(x.args[1], :checked_ssub))
-isMulExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :mul_int) || isTopNodeOrGlobalRef(x.args[1], :checked_smul))
+isAddExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :add_int) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd_int))
+isSubExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sub_int) || isTopNodeOrGlobalRef(x.args[1], :checked_ssub) || isTopNodeOrGlobalRef(x.args[1], :checked_ssub_int))
+isMulExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :mul_int) || isTopNodeOrGlobalRef(x.args[1], :checked_smul) || isTopNodeOrGlobalRef(x.args[1], :checked_smul_int))
 isAddExprInt(x::Expr) = isAddExpr(x) && isa(x.args[3], Int)
 isMulExprInt(x::Expr) = isMulExpr(x) && isa(x.args[3], Int)
 isAddExpr(x::ANY) = false
@@ -726,7 +730,7 @@ add(x::Expr, y)      = isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add
 add(x,       y::Expr)= add(y, x)
 add(x,       y)      = add_expr(x, y)
 neg(x::Int)          = -x
-neg(x::Expr)         = isNegExpr(x) ? x.args[3] : 
+neg(x::Expr)         = isNegExpr(x) ? x.args[2] : 
                        (isAddExpr(x) ? add(neg(x.args[2]), neg(x.args[3])) :
                        (isMulExpr(x) ? mul(x.args[2], neg(x.args[3])) : neg_expr(x)))
 neg(x)               = neg_expr(x)
@@ -1131,7 +1135,7 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
                     dprintln(env, "found tuple arg: ", args[i])
                     def = lookupConstDefForArg(state, args[i])
                     dprintln(env, "definition: ", def)
-                    if isa(def, Expr) && is(def.head, :call) && is(def.args[1], TopNode(:tuple))
+                    if isa(def, Expr) && is(def.head, :call) && (is(def.args[1], GlobalRef(Base, :tuple)) || is(def.args[1], TopNode(:tuple)))
                         dprintln(env, "definition is inlined")
                         for j = 1:length(def.args) - 1
                             push!(realArgs, def.args[j + 1])

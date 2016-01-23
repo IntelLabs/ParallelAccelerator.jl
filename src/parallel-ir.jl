@@ -3267,7 +3267,7 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::TopNode, arr::SymAllGen
 end
 
 function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::SymAllGen, rest_args::Array{Any,1})
-    if func==GlobalRef(Base,:arraylen) && in(arr, keys(state.removed_arrs))
+    if (func==GlobalRef(Base,:arraylen) || func==GlobalRef(Core.Intrinsics, :arraylen)) && in(arr, keys(state.removed_arrs))
         shape = state.removed_arrs[arr]
         dim = length(shape)
         dprintln(3, "arraylen found")
