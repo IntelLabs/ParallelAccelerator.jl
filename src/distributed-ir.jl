@@ -51,7 +51,7 @@ import ..ParallelIR.ISASSIGNEDONCE
 import ..ParallelIR.ISPRIVATEPARFORLOOP
 import ..ParallelIR.PIRReduction
 
-dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,:__hps_data_source_TXT_open,:__hps_data_source_TXT_read])
+dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,:__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression])
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -218,6 +218,12 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
             dprintln(2,"DistIR arr info walk kmeans ", node)
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
+            state.arrs_dist_info[node.args[2]].isSequential = true
+        elseif func==:__hps_LinearRegression
+            dprintln(2,"DistIR arr info walk LinearRegression ", node)
+            # first array is cluster output and is sequential
+            # second array is input matrix and is parallel
+            # third array is responses and is parallel
             state.arrs_dist_info[node.args[2]].isSequential = true
         end
     # arrays written in sequential code are not distributed
@@ -480,6 +486,25 @@ function from_call(node::Expr, state)
 
         push!(node.args, dsrc_start_var, dsrc_count_var, 
                 state.arrs_dist_info[arr].dim_sizes[1], state.arrs_dist_info[arr].dim_sizes[end])
+        return [node]
+    elseif func==:__hps_LinearRegression && in(toSymGen(node.args[3]), state.dist_arrays) && in(toSymGen(node.args[4]), state.dist_arrays)
+        arr1 = toSymGen(node.args[3])
+        arr2 = toSymGen(node.args[4])
+        dprintln(3,"DistIR LinearRegression call for arrays: ", arr1," ", arr2)
+        
+        arr1_id = state.arrs_dist_info[arr1].arr_id 
+        arr2_id = state.arrs_dist_info[arr2].arr_id 
+        
+        dsrc_start_var1 = symbol("__hps_dist_arr_start_"*string(arr1_id))
+        dsrc_count_var1 = symbol("__hps_dist_arr_count_"*string(arr1_id)) 
+        
+        dsrc_start_var2 = symbol("__hps_dist_arr_start_"*string(arr2_id))
+        dsrc_count_var2 = symbol("__hps_dist_arr_count_"*string(arr2_id)) 
+
+        push!(node.args, dsrc_start_var1, dsrc_count_var1,
+                state.arrs_dist_info[arr1].dim_sizes[1], state.arrs_dist_info[arr1].dim_sizes[end])
+        push!(node.args, dsrc_start_var2, dsrc_count_var2,
+                state.arrs_dist_info[arr2].dim_sizes[1], state.arrs_dist_info[arr2].dim_sizes[end])
         return [node]
     end
     return [node]

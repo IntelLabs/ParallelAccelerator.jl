@@ -954,6 +954,10 @@ function pattern_match_hps_dist_calls(state, env, lhs::SymGen, rhs::Expr)
                 dprintln(env,"kmeans found ", inner_call)
                 lib_call = mk_call(:__hps_kmeans, [lhs,inner_call.args[2], inner_call.args[3]])
                 return lib_call 
+            elseif isa(inner_call.args[1],GlobalRef) && inner_call.args[1].name==:__hps_LinearRegression
+                dprintln(env,"LinearRegression found ", inner_call)
+                lib_call = mk_call(:__hps_LinearRegression, [lhs,inner_call.args[2], inner_call.args[3]])
+                return lib_call 
             end
         end
     end
