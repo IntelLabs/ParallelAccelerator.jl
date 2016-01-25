@@ -305,8 +305,9 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
         s *= "CGen_HDF5_count_$num[0] = $count;\n"
         s *= "for(int i_CGen_dim=1; i_CGen_dim<data_ndim_$num; i_CGen_dim++) {\n"
         s *= "CGen_HDF5_start_$num[i_CGen_dim] = 0;\n"
-        s *= "CGen_HDF5_count_$num[i_CGen_dim] = space_dims_0[i_CGen_dim];\n"
+        s *= "CGen_HDF5_count_$num[i_CGen_dim] = space_dims_$num[i_CGen_dim];\n"
         s *= "}\n"
+        #s *= "std::cout<<\"read size \"<<CGen_HDF5_start_$num[0]<<\" \"<<CGen_HDF5_count_$num[0]<<\" \"<<CGen_HDF5_start_$num[1]<<\" \"<<CGen_HDF5_count_$num[1]<<std::endl;\n"
         s *= "ret_$num = H5Sselect_hyperslab(space_id_$num, H5S_SELECT_SET, CGen_HDF5_start_$num, NULL, CGen_HDF5_count_$num, NULL);\n"
         s *= "assert(ret_$num != -1);\n"
         s *= "hid_t mem_dataspace_$num = H5Screate_simple (data_ndim_$num, CGen_HDF5_count_$num, NULL);\n"
@@ -692,14 +693,14 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             HomogenNumericTable<double>* responseTable = new HomogenNumericTable<double>((double*)$c_responses.getData(), $c_col_size_responses, $count_responses);
             services::SharedPtr<NumericTable> trainData(dataTable);
             services::SharedPtr<NumericTable> trainDependentVariables(responseTable);
-            
+            services::SharedPtr<linear_regression::training::Result> trainingResult; 
         
             /* Create an algorithm object to train the multiple linear regression model based on the local-node data */
-            training::Distributed<step1Local, double, training::qrDense> localAlgorithm;
+            linear_regression::training::Distributed<step1Local, double, linear_regression::training::qrDense> localAlgorithm;
         
             /* Pass a training data set and dependent values to the algorithm */
-            localAlgorithm.input.set(training::data, trainData);
-            localAlgorithm.input.set(training::dependentVariables, trainDependentVariables);
+            localAlgorithm.input.set(linear_regression::training::data, trainData);
+            localAlgorithm.input.set(linear_regression::training::dependentVariables, trainDependentVariables);
         
             /* Train the multiple linear regression model on local nodes */
             localAlgorithm.compute();
@@ -713,7 +714,7 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             /* Serialized data is of equal size on each node if each node called compute() equal number of times */
             if (rankId == mpi_root)
             {
-                serializedData = services::SharedPtr<byte>( new byte[ perNodeArchLength * nBlocks ] );
+                serializedData = services::SharedPtr<byte>( new byte[ perNodeArchLength * __hps_num_pes] );
             }
         
             byte *nodeResults = new byte[ perNodeArchLength ];
@@ -728,19 +729,19 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             if(rankId == mpi_root)
             {
                 /* Create an algorithm object to build the final multiple linear regression model on the master node */
-                training::Distributed<step2Master, double, training::qrDense> masterAlgorithm;
+                linear_regression::training::Distributed<step2Master, double, linear_regression::training::qrDense> masterAlgorithm;
         
-                for( size_t i = 0; i < nBlocks ; i++ )
+                for( size_t i = 0; i < __hps_num_pes; i++ )
                 {
                     /* Deserialize partial results from step 1 */
                     OutputDataArchive dataArch( serializedData.get() + perNodeArchLength * i, perNodeArchLength );
         
-                    services::SharedPtr<training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<training::PartialResult>
-                                                                               ( new training::PartialResult() );
+                    services::SharedPtr<linear_regression::training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<linear_regression::training::PartialResult>
+                                                                               ( new linear_regression::training::PartialResult() );
                     dataForStep2FromStep1->deserialize(dataArch);
         
                     /* Set the local multiple linear regression model as input for the master-node algorithm */
-                    masterAlgorithm.input.add(training::partialModels, dataForStep2FromStep1);
+                    masterAlgorithm.input.add(linear_regression::training::partialModels, dataForStep2FromStep1);
                 }
         
                 /* Merge and finalizeCompute the multiple linear regression model on the master node */
@@ -749,8 +750,8 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
         
                 /* Retrieve the algorithm results */
                 trainingResult = masterAlgorithm.getResult();
-                // printNumericTable(trainingResult->get(training::model)->getBeta(), "Linear Regression coefficients:");
-                trainingCoeffsTable = trainingResult->get(training::model)->getBeta();
+                // printNumericTable(trainingResult->get(linear_regression::training::model)->getBeta(), "Linear Regression coefficients:");
+                trainingCoeffsTable = trainingResult->get(linear_regression::training::model)->getBeta();
             }
             BlockDescriptor<double> block;
         
