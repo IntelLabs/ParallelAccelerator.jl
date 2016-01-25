@@ -664,7 +664,122 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
     return s
 end
 
+
 function pattern_match_call_kmeans(f::ANY, cluster_out::ANY, arr::ANY, num_clusters::ANY, start::ANY, count::ANY, cols::ANY, rows::ANY)
+    return ""
+end
+
+function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, points::SymAllGen, 
+                                   responses::SymAllGen, start_points::Symbol, count_points::Symbol, 
+                                   col_size_points::Union{SymAllGen,Int,Expr}, tot_row_size_points::Union{SymAllGen,Int,Expr},
+                                   start_responses::Symbol, count_responses::Symbol, 
+                                   col_size_responses::Union{SymAllGen,Int,Expr}, tot_row_size_responses::Union{SymAllGen,Int,Expr})
+    s = ""
+    if f==:__hps_LinearRegression
+        c_points = from_expr(points)
+        c_responses = from_expr(responses)
+        c_col_size_points = from_expr(col_size_points)
+        c_tot_row_size_points = from_expr(tot_row_size_points)
+        c_col_size_responses = from_expr(col_size_responses)
+        c_tot_row_size_responses = from_expr(tot_row_size_responses)
+        c_coeff_out = from_expr(coeff_out)
+        s = """
+            assert($c_tot_row_size_points==$c_tot_row_size_responses);
+            int mpi_root = 0;
+            int rankId = __hps_node_id;
+            
+            HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>((double*)$c_points.getData(), $c_col_size_points, $count_points);
+            HomogenNumericTable<double>* responseTable = new HomogenNumericTable<double>((double*)$c_responses.getData(), $c_col_size_responses, $count_responses);
+            services::SharedPtr<NumericTable> trainData(dataTable);
+            services::SharedPtr<NumericTable> trainDependentVariables(responseTable);
+            
+        
+            /* Create an algorithm object to train the multiple linear regression model based on the local-node data */
+            training::Distributed<step1Local, double, training::qrDense> localAlgorithm;
+        
+            /* Pass a training data set and dependent values to the algorithm */
+            localAlgorithm.input.set(training::data, trainData);
+            localAlgorithm.input.set(training::dependentVariables, trainDependentVariables);
+        
+            /* Train the multiple linear regression model on local nodes */
+            localAlgorithm.compute();
+        
+            /* Serialize partial results required by step 2 */
+            services::SharedPtr<byte> serializedData;
+            InputDataArchive dataArch;
+            localAlgorithm.getPartialResult()->serialize( dataArch );
+            size_t perNodeArchLength = dataArch.getSizeOfArchive();
+        
+            /* Serialized data is of equal size on each node if each node called compute() equal number of times */
+            if (rankId == mpi_root)
+            {
+                serializedData = services::SharedPtr<byte>( new byte[ perNodeArchLength * nBlocks ] );
+            }
+        
+            byte *nodeResults = new byte[ perNodeArchLength ];
+            dataArch.copyArchiveToArray( nodeResults, perNodeArchLength );
+        
+            /* Transfer partial results to step 2 on the root node */
+            MPI_Gather( nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(), perNodeArchLength, MPI_CHAR, mpi_root,
+                        MPI_COMM_WORLD);
+        
+            delete[] nodeResults;
+            services::SharedPtr<NumericTable> trainingCoeffsTable;
+            if(rankId == mpi_root)
+            {
+                /* Create an algorithm object to build the final multiple linear regression model on the master node */
+                training::Distributed<step2Master, double, training::qrDense> masterAlgorithm;
+        
+                for( size_t i = 0; i < nBlocks ; i++ )
+                {
+                    /* Deserialize partial results from step 1 */
+                    OutputDataArchive dataArch( serializedData.get() + perNodeArchLength * i, perNodeArchLength );
+        
+                    services::SharedPtr<training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<training::PartialResult>
+                                                                               ( new training::PartialResult() );
+                    dataForStep2FromStep1->deserialize(dataArch);
+        
+                    /* Set the local multiple linear regression model as input for the master-node algorithm */
+                    masterAlgorithm.input.add(training::partialModels, dataForStep2FromStep1);
+                }
+        
+                /* Merge and finalizeCompute the multiple linear regression model on the master node */
+                masterAlgorithm.compute();
+                masterAlgorithm.finalizeCompute();
+        
+                /* Retrieve the algorithm results */
+                trainingResult = masterAlgorithm.getResult();
+                // printNumericTable(trainingResult->get(training::model)->getBeta(), "Linear Regression coefficients:");
+                trainingCoeffsTable = trainingResult->get(training::model)->getBeta();
+            }
+            BlockDescriptor<double> block;
+        
+            //std::cout<<trainingCoeffsTable->getNumberOfRows()<<std::endl;
+            //std::cout<<trainingCoeffsTable->getNumberOfColumns()<<std::endl;
+        
+            trainingCoeffsTable->getBlockOfRows(0, $c_col_size_responses, readOnly, block);
+            double* out_arr = block.getBlockPtr();
+            
+            // assuming intercept is required
+            int64_t coeff_size = $c_col_size_points+1;
+            //std::cout<<"output ";
+            //for(int i=0; i<coeff_size*$c_col_size_responses; i++)
+            //{
+            //    std::cout<<" "<<out_arr[i];
+            //}
+            //std::cout<<std::endl;
+            
+            int64_t res_dims[] = {coeff_size,$c_col_size_responses};
+            double* out_data = new double[coeff_size*$c_col_size_responses];
+            memcpy(out_data, block.getBlockPtr(), coeff_size*$c_col_size_responses*sizeof(double));
+            j2c_array<double> linear_regression_out(out_data,2,res_dims);
+            $c_coeff_out = linear_regression_out;
+            """
+    end
+end
+
+function pattern_match_call_linear_regression(f::ANY, coeff_out::ANY, arr::ANY, num_clusters::ANY, 
+          start::ANY, count::ANY, cols::ANY, rows::ANY, start2::ANY, count2::ANY, cols2::ANY, rows2::ANY)
     return ""
 end
 
@@ -704,6 +819,9 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     if(length(ast)==8)
         s = pattern_match_call_kmeans(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],ast[7],ast[8])
+    end
+    if(length(ast)==12)
+        s = pattern_match_call_linear_regression(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],ast[7],ast[8],ast[9],ast[10],ast[11],ast[12])
     end
     return s
 end
