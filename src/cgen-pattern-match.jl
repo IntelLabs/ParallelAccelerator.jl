@@ -752,14 +752,14 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
                 trainingResult = masterAlgorithm.getResult();
                 // printNumericTable(trainingResult->get(linear_regression::training::model)->getBeta(), "Linear Regression coefficients:");
                 trainingCoeffsTable = trainingResult->get(linear_regression::training::model)->getBeta();
-            }
-            BlockDescriptor<double> block;
+            
+                BlockDescriptor<double> block;
         
             //std::cout<<trainingCoeffsTable->getNumberOfRows()<<std::endl;
             //std::cout<<trainingCoeffsTable->getNumberOfColumns()<<std::endl;
         
-            trainingCoeffsTable->getBlockOfRows(0, $c_col_size_responses, readOnly, block);
-            double* out_arr = block.getBlockPtr();
+                trainingCoeffsTable->getBlockOfRows(0, $c_col_size_responses, readOnly, block);
+                double* out_arr = block.getBlockPtr();
             
             // assuming intercept is required
             int64_t coeff_size = $c_col_size_points+1;
@@ -770,11 +770,12 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             //}
             //std::cout<<std::endl;
             
-            int64_t res_dims[] = {coeff_size,$c_col_size_responses};
-            double* out_data = new double[coeff_size*$c_col_size_responses];
-            memcpy(out_data, block.getBlockPtr(), coeff_size*$c_col_size_responses*sizeof(double));
-            j2c_array<double> linear_regression_out(out_data,2,res_dims);
-            $c_coeff_out = linear_regression_out;
+                int64_t res_dims[] = {coeff_size,$c_col_size_responses};
+                double* out_data = new double[coeff_size*$c_col_size_responses];
+                memcpy(out_data, block.getBlockPtr(), coeff_size*$c_col_size_responses*sizeof(double));
+                j2c_array<double> linear_regression_out(out_data,2,res_dims);
+                $c_coeff_out = linear_regression_out;
+            }
             """
     end
 end
