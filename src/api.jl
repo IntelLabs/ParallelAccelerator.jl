@@ -89,9 +89,6 @@ for f in unary_map_operators
         @noinline function ($f){T<:Number}(A::T)
             (Base.$f)(A)
         end
-        @inline function ($f)(A...)
-            (Base.$f)(A...)
-        end
     end
 end
 
