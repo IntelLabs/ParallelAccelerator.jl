@@ -94,8 +94,7 @@ function process_assignment(node, lhs::Symbol, rhs::Expr)
     if rhs.head ==:call && rhs.args[1]==:DataSource
         arr_var_expr = node.args[2].args[2]
         
-        @assert arr_var_expr.args[1]==:Array || arr_var_expr.args[1]==:Matrix 
-                || arr_var_expr.args[1]==:Vector "Data sources need Vector or Array or Matrix as type"
+        @assert arr_var_expr.args[1]==:Array || arr_var_expr.args[1]==:Matrix || arr_var_expr.args[1]==:Vector "Data sources need Vector or Array or Matrix as type"
         
         if arr_var_expr.args[1]==:Matrix
             dims = 2 # Matrix type is 2D array
