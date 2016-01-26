@@ -778,6 +778,7 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             }
             """
     end
+    return s
 end
 
 function pattern_match_call_linear_regression(f::ANY, coeff_out::ANY, arr::ANY, num_clusters::ANY, 
@@ -900,9 +901,10 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
             }
             """
     end
+    return s
 end
 
-function pattern_match_call_naive_bayes(f::ANY, coeff_out::ANY, arr::ANY, arr2::ANY, numClass::Any 
+function pattern_match_call_naive_bayes(f::ANY, coeff_out::ANY, arr::ANY, arr2::ANY, numClass::Any, 
           start::ANY, count::ANY, cols::ANY, rows::ANY, start2::ANY, count2::ANY, cols2::ANY, rows2::ANY)
     return ""
 end
