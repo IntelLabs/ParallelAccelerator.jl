@@ -51,7 +51,8 @@ import ..ParallelIR.ISASSIGNEDONCE
 import ..ParallelIR.ISPRIVATEPARFORLOOP
 import ..ParallelIR.PIRReduction
 
-dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,:__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression])
+dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,
+                        :__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression, :__hps_NaiveBayes])
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -219,8 +220,8 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
             state.arrs_dist_info[node.args[2]].isSequential = true
-        elseif func==:__hps_LinearRegression
-            dprintln(2,"DistIR arr info walk LinearRegression ", node)
+        elseif func==:__hps_LinearRegression || func==:__hps_NaiveBayes
+            dprintln(2,"DistIR arr info walk LinearRegression/NaiveBayes ", node)
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
             # third array is responses and is parallel
@@ -487,10 +488,10 @@ function from_call(node::Expr, state)
         push!(node.args, dsrc_start_var, dsrc_count_var, 
                 state.arrs_dist_info[arr].dim_sizes[1], state.arrs_dist_info[arr].dim_sizes[end])
         return [node]
-    elseif func==:__hps_LinearRegression && in(toSymGen(node.args[3]), state.dist_arrays) && in(toSymGen(node.args[4]), state.dist_arrays)
+    elseif (func==:__hps_LinearRegression || func==:__hps_NaiveBayes) && in(toSymGen(node.args[3]), state.dist_arrays) && in(toSymGen(node.args[4]), state.dist_arrays)
         arr1 = toSymGen(node.args[3])
         arr2 = toSymGen(node.args[4])
-        dprintln(3,"DistIR LinearRegression call for arrays: ", arr1," ", arr2)
+        dprintln(3,"DistIR LinearRegression/NaiveBayes call for arrays: ", arr1," ", arr2)
         
         arr1_id = state.arrs_dist_info[arr1].arr_id 
         arr2_id = state.arrs_dist_info[arr2].arr_id 

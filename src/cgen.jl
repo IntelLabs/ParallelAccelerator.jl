@@ -2250,7 +2250,7 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     if contains(string(ast),"HDF5") 
         global USE_HDF5 = 1
     end
-    if contains(string(ast),"__hps_kmeans") || contains(string(ast),"__hps_LinearRegression")
+    if contains(string(ast),"__hps_kmeans") || contains(string(ast),"__hps_LinearRegression") || contains(string(ast),"__hps_NaiveBayes")
         global USE_DAAL = 1
     end
     # Translate the body
