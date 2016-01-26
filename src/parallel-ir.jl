@@ -1463,9 +1463,8 @@ end
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
 function createRetTupleType(rets :: Array{Union{SymbolNode, GenSym},1}, unique_id :: Int64, state :: expr_state)
     # Form the type of the tuple var.
-    tt = Expr(:tuple)
-    tt.args = map( x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), rets)
-    temp_type = eval(tt)
+    tt_args = [ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in rets]
+    temp_type = Tuple{tt_args...}
 
     new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
     new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
