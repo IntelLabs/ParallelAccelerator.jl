@@ -785,6 +785,127 @@ function pattern_match_call_linear_regression(f::ANY, coeff_out::ANY, arr::ANY, 
     return ""
 end
 
+function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points::SymAllGen, 
+                                   labels::SymAllGen, num_classes::Union{SymAllGen,Int,Expr}, start_points::Symbol, count_points::Symbol, 
+                                   col_size_points::Union{SymAllGen,Int,Expr}, tot_row_size_points::Union{SymAllGen,Int,Expr},
+                                   start_labels::Symbol, count_labels::Symbol, 
+                                   col_size_labels::Union{SymAllGen,Int,Expr}, tot_row_size_labels::Union{SymAllGen,Int,Expr})
+    s = ""
+    if f==:__hps_NaiveBayes
+        c_points = from_expr(points)
+        c_labels = from_expr(labels)
+        c_col_size_points = from_expr(col_size_points)
+        c_tot_row_size_points = from_expr(tot_row_size_points)
+        c_col_size_labels = from_expr(col_size_labels)
+        c_tot_row_size_labels = from_expr(tot_row_size_labels)
+        c_coeff_out = from_expr(coeff_out)
+        c_num_classes = from_expr(num_classes)
+        
+        s = """
+            assert($c_tot_row_size_points==$c_tot_row_size_labels);
+            int mpi_root = 0;
+            int rankId = __hps_node_id;
+            
+            HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>((double*)$c_points.getData(), $c_col_size_points, $count_points);
+            HomogenNumericTable<double>* responseTable = new HomogenNumericTable<double>((double*)$c_labels.getData(), $c_col_size_labels, $count_labels);
+            services::SharedPtr<NumericTable> trainData(dataTable);
+            services::SharedPtr<NumericTable> trainGroundTruth(responseTable);
+            services::SharedPtr<multinomial_naive_bayes::training::Result> trainingResult; 
+        
+        
+            /* Create an algorithm object to train the Na__ve Bayes model based on the local-node data */
+            multinomial_naive_bayes::training::Distributed<step1Local> localAlgorithm($c_num_classes);
+        
+            /* Pass a training data set and dependent values to the algorithm */
+            localAlgorithm.input.set(multinomial_naive_bayes::classifier::training::data,   trainData);
+            localAlgorithm.input.set(multinomial_naive_bayes::classifier::training::labels, trainGroundTruth);
+        
+            /* Train the Na__ve Bayes model on local nodes */
+            localAlgorithm.compute();
+        
+            /* Serialize partial results required by step 2 */
+            services::SharedPtr<byte> serializedData;
+            InputDataArchive dataArch;
+            localAlgorithm.getPartialResult()->serialize(dataArch);
+            size_t perNodeArchLength = dataArch.getSizeOfArchive();
+        
+            /* Serialized data is of equal size on each node if each node called compute() equal number of times */
+            if (rankId == mpi_root)
+            {
+                serializedData = services::SharedPtr<byte>(new byte[perNodeArchLength * __hps_num_pes]);
+            }
+        
+            byte *nodeResults = new byte[perNodeArchLength];
+            dataArch.copyArchiveToArray( nodeResults, perNodeArchLength );
+        
+            /* Transfer partial results to step 2 on the root node */
+            MPI_Gather( nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(), perNodeArchLength, MPI_CHAR, mpi_root,
+                        MPI_COMM_WORLD);
+        
+            delete[] nodeResults;
+        
+            if(rankId == mpi_root)
+            {
+                /* Create an algorithm object to build the final Na__ve Bayes model on the master node */
+                multinomial_naive_bayes::training::Distributed<step2Master> masterAlgorithm($c_num_classes);
+        
+                for(size_t i = 0; i < __hps_num_pes ; i++)
+                {
+                    /* Deserialize partial results from step 1 */
+                    OutputDataArchive dataArch(serializedData.get() + perNodeArchLength * i, perNodeArchLength);
+        
+                    services::SharedPtr<multinomial_naive_bayes::classifier::training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<multinomial_naive_bayes::classifier::training::PartialResult>
+                                                                               (new multinomial_naive_bayes::classifier::training::PartialResult());
+                    dataForStep2FromStep1->deserialize(dataArch);
+        
+                    /* Set the local Na__ve Bayes model as input for the master-node algorithm */
+                    masterAlgorithm.input.add(multinomial_naive_bayes::classifier::training::partialModels, dataForStep2FromStep1);
+                }
+        
+                /* Merge and finalizeCompute the Na__ve Bayes model on the master node */
+                masterAlgorithm.compute();
+                masterAlgorithm.finalizeCompute();
+        
+                /* Retrieve the algorithm results */
+                trainingResult = masterAlgorithm.getResult();
+                
+                trainingLogpTable = trainingResult->get(multinomial_naive_bayes::training::model)->getLogP();
+                trainingLogThetaTable = trainingResult->get(multinomial_naive_bayes::training::model)->getLogTheta();
+            
+                BlockDescriptor<double> block1, block2;
+            
+                std::cout<<trainingLogThetaTable->getNumberOfRows()<<std::endl;
+                std::cout<<trainingLogThetaTable->getNumberOfColumns()<<std::endl;
+                std::cout<<trainingLogpTable->getNumberOfRows()<<std::endl;
+                std::cout<<trainingLogpTable->getNumberOfColumns()<<std::endl;
+        
+                trainingLogpTable->getBlockOfRows(0, $c_num_class, readOnly, block1);
+                trainingLogThetaTable->getBlockOfRows(0, $c_num_class, readOnly, block2);
+                double* out_arr1 = block1.getBlockPtr();
+                double* out_arr2 = block2.getBlockPtr();
+            
+            //std::cout<<"output ";
+            //for(int i=0; i<coeff_size*$c_col_size_labels; i++)
+            //{
+            //    std::cout<<" "<<out_arr[i];
+            //}
+            //std::cout<<std::endl;
+            
+                int64_t res_dims[] = {$c_num_classes+1,$c_num_classes};
+                double* out_data = new double[$c_num_classes*($c_num_classes+1)];
+                memcpy(out_data, block1.getBlockPtr(), $c_num_classes*sizeof(double));
+                memcpy(out_data+$c_num_classes, block2.getBlockPtr(), $c_num_classes*$c_num_classes*sizeof(double));
+                j2c_array<double> naive_bayes_out(out_data,2,res_dims);
+                $c_coeff_out = naive_bayes_out;
+            }
+            """
+    end
+end
+
+function pattern_match_call_naive_bayes(f::ANY, coeff_out::ANY, arr::ANY, arr2::ANY, numClass::Any 
+          start::ANY, count::ANY, cols::ANY, rows::ANY, start2::ANY, count2::ANY, cols2::ANY, rows2::ANY)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1})
     dprintln(3,"pattern matching ",ast)
@@ -824,6 +945,9 @@ function pattern_match_call(ast::Array{Any, 1})
     end
     if(length(ast)==12)
         s = pattern_match_call_linear_regression(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],ast[7],ast[8],ast[9],ast[10],ast[11],ast[12])
+    end
+    if(length(ast)==13)
+        s = pattern_match_call_naive_bayes(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],ast[7],ast[8],ast[9],ast[10],ast[11],ast[12],ast[13])
     end
     return s
 end
