@@ -1694,7 +1694,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # dprintln(env, "ast = ", ast)
     # create tmp arrays to store results
     arrtyps = Type[ Array{t, ndim} for t in etys ]
-    tmpNodes = Array(GenSym, length(arrtyps))
+    tmpNodes = Array(Any, length(arrtyps))
     # allocate the tmp array
     for i = 1:length(arrtyps)
         arrdef = type_expr(arrtyps[i], mk_alloc(state, etys[i], dimExp))
