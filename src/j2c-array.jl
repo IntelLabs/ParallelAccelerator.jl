@@ -29,7 +29,7 @@ export to_j2c_array, from_j2c_array, j2c_array_delete
 import ..DomainIR.isarray
 import ..getPackageRoot
 
-eval(x) = Core.eval(J2CArray, x)
+#eval(x) = Core.eval(J2CArray, x)
 
 package_root = getPackageRoot()
 dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")

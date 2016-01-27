@@ -632,7 +632,7 @@ function toCtype(typ::DataType)
         return "std::complex<float>"
     elseif typ == Complex128
         return "std::complex<double>"
-    elseif in(:parameters, fieldnames(typ)) && length(typ.parameters) != 0
+    elseif length(typ.parameters) != 0
         # For parameteric types, for now assume we have equivalent C++
         # implementations
         btyp, ptyps = parseParametricType(typ)

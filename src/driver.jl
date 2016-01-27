@@ -197,7 +197,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
  
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
-  proxy_sym = symbol(proxy_name)
+  proxy_sym = gensym(proxy_name)
   dprintln(2, "ParallelAccelerator.accelerate for ", proxy_name)
   dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
   dprintln(2, "dyn_lib = ", dyn_lib)
@@ -218,12 +218,12 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   extra_inits = Array(Any, 0)
   j2c_array = gensym("j2c_arr")
 
-  @eval begin
+  j2c_array_new = 
     # Create a new j2c array object with element size in bytes and given dimension.
     # It will share the data pointer of the given inp array, and if inp is nothing,
     # the j2c array will allocate fresh memory to hold data.
     # NOTE: when elem_bytes is 0, it means the elements must be j2c array type
-    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
+    @eval (elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple) -> begin
       # note that C interface mandates Int64 for dimension data
       _dims = Int64[ convert(Int64, x) for x in dims ]
       _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
@@ -233,7 +233,6 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
             convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
     end
-  end
 
   for i = 1:length(sig_dims)
     arg = original_args[i]

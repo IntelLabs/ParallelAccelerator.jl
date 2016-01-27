@@ -113,9 +113,11 @@ for f in binary_operators
             (Base.$f)(A, B)
         end
     end
-    @eval begin
-        @inline function ($f)(args...)
-            (Base.$f)(args...)
+    if f != :- && f != :+
+        @eval begin
+            @inline function ($f)(args...)
+                (Base.$f)(args...)
+            end
         end
     end
 end
