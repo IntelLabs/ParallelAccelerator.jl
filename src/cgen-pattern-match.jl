@@ -491,6 +491,7 @@ function pattern_match_call_kmeans(f::Symbol, cluster_out::SymAllGen, arr::SymAl
         c_cluster_out = from_expr(cluster_out)        
         
         s *= """
+        services::Environment::getInstance()->setNumberOfThreads(omp_get_max_threads());
         byte   *nodeCentroids;
         size_t CentroidsArchLength;
         services::SharedPtr<NumericTable> centroids;
@@ -688,6 +689,7 @@ function pattern_match_call_linear_regression(f::Symbol, coeff_out::SymAllGen, p
             assert($c_tot_row_size_points==$c_tot_row_size_responses);
             int mpi_root = 0;
             int rankId = __hps_node_id;
+            services::Environment::getInstance()->setNumberOfThreads(omp_get_max_threads());
             
             HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>((double*)$c_points.getData(), $c_col_size_points, $count_points);
             HomogenNumericTable<double>* responseTable = new HomogenNumericTable<double>((double*)$c_responses.getData(), $c_col_size_responses, $count_responses);
@@ -806,6 +808,7 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
             assert($c_tot_row_size_points==$c_tot_row_size_labels);
             int mpi_root = 0;
             int rankId = __hps_node_id;
+            services::Environment::getInstance()->setNumberOfThreads(omp_get_max_threads());
             
             HomogenNumericTable<double>* dataTable = new HomogenNumericTable<double>((double*)$c_points.getData(), $c_col_size_points, $count_points);
             HomogenNumericTable<double>* responseTable = new HomogenNumericTable<double>((double*)$c_labels.getData(), $c_col_size_labels, $count_labels);
