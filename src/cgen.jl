@@ -151,7 +151,7 @@ include_rand = false
 
 insertAliasCheck = true
 function set_alias_check(val)
-    dprintln(3, "set_alias_check =", val)
+    @dprintln(3, "set_alias_check =", val)
     global insertAliasCheck = val
 end
 
@@ -428,7 +428,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         v = vars[k] # v is a VarDef
         lstate.symboltable[k] = v.typ
         if v.typ == Any
-            dprintln(1, "Variable with Any type: ", v)
+            @dprintln(1, "Variable with Any type: ", v)
         end
         @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
         #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
@@ -443,8 +443,8 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
     end
     bod = from_expr(args[3])
-    dprintln(3,"lambda params = ", params)
-    dprintln(3,"lambda vars = ", vars)
+    @dprintln(3,"lambda params = ", params)
+    @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
 
     for k in keys(lstate.symboltable)
@@ -466,7 +466,7 @@ end
 function from_exprs(args::Array)
     s = ""
     for a in args
-        dprintln(3, "from_exprs working on = ", a)
+        @dprintln(3, "from_exprs working on = ", a)
         se = from_expr(a)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
@@ -475,16 +475,16 @@ end
 
 
 function dumpSymbolTable(a::Dict{Any, Any})
-    dprintln(3,"SymbolTable: ")
+    @dprintln(3,"SymbolTable: ")
     for x in keys(a)
-        dprintln(3,x, " ==> ", a[x])
+        @dprintln(3,x, " ==> ", a[x])
     end
 end
 
 function dumpDecls(a::Array{Dict{Any, ASCIIString}})
     for x in a
         for k in keys(x)
-            dprintln(3,x[k], " ", k)
+            @dprintln(3,x[k], " ", k)
         end
     end
 end
@@ -521,7 +521,7 @@ end
 function from_assignment_fix_tupple(lhs, rhs::Expr)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
   if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
-    dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
+    @dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
     lstate.tupleTable[lhs] = rhs.args[2:end]
   end
 end
@@ -569,7 +569,7 @@ function from_assignment(args::Array{Any,1})
         elseif isPrimitiveJuliaType(typeof(rhsO))
             lstate.symboltable[lhs] = typeof(rhs0)
         else
-            dprintln(3,"Unknown type in assignment: ", args)
+            @dprintln(3,"Unknown type in assignment: ", args)
             throw("FATAL error....exiting")
         end
         # Try to refine type for certain stmts with a call in the rhs
@@ -579,10 +579,10 @@ function from_assignment(args::Array{Any,1})
             m, f, t = resolveCallTarget(rhs.args)
             f = string(f)
             if f == "fpext"
-                dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
+                @dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
                 lstate.symboltable[lhs] = eval(rhs.args[2])
-                dprintln(3,"Emitting :", rhs.args[2])
-                dprintln(3,"Set type to : ", lstate.symboltable[lhs])
+                @dprintln(3,"Emitting :", rhs.args[2])
+                @dprintln(3,"Set type to : ", lstate.symboltable[lhs])
             end
         end
     end
@@ -794,15 +794,15 @@ end
 
 
 function from_ccall(args)
-    dprintln(3,"ccall args:")
-    dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
-    dprintln(3,"return type: ", args[2])
-    dprintln(3,"input types tuple: ", args[3])
-    dprintln(3,"inputs tuple: ", args[4:end])
+    @dprintln(3,"ccall args:")
+    @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
+    @dprintln(3,"return type: ", args[2])
+    @dprintln(3,"input types tuple: ", args[3])
+    @dprintln(3,"inputs tuple: ", args[4:end])
     for i in 1:length(args)
-        dprintln(3,args[i])
+        @dprintln(3,args[i])
     end
-    dprintln(3,"End of ccall args")
+    @dprintln(3,"End of ccall args")
     fun = args[1]
     if isInlineable(fun, args)
         return from_inlineable(fun, args)
@@ -812,7 +812,7 @@ function from_ccall(args)
         s = from_symbol(fun)
     elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
         s = canonicalize(string(fun.args[2]))
-        dprintln(3,"ccall target: ", s)
+        @dprintln(3,"ccall target: ", s)
     else
         throw("Invalid ccall format...")
     end
@@ -831,7 +831,7 @@ function from_ccall(args)
         s *= mapfoldl(from_expr, (a, b)-> "$a, $b", to_fold)
     end
     s *= ")"
-    dprintln(3,"from_ccall: ", s)
+    @dprintln(3,"from_ccall: ", s)
     s
 end
 
@@ -847,7 +847,7 @@ function istupletyp(typ)
 end
 
 function from_getfield(args)
-    dprintln(3,"from_getfield args are: ", args)
+    @dprintln(3,"from_getfield args are: ", args)
     tgt = from_expr(args[1])
     if isa(args[1], SymbolNode)
       args1typ = args[1].typ
@@ -874,15 +874,15 @@ function from_getfield(args)
 end
 
 function from_nfields(arg::Union{Symbol,GenSym})
-    dprintln(3,"Arg is: ", arg)
-    dprintln(3,"Arg type = ", typeof(arg))
+    @dprintln(3,"Arg is: ", arg)
+    @dprintln(3,"Arg type = ", typeof(arg))
     #string(nfields(args[1].typ))
     string(nfields(lstate.symboltable[arg]))
 end
 
 function from_nfields(arg::SymbolNode)
-    dprintln(3,"Arg is: ", arg)
-    dprintln(3,"Arg type = ", typeof(arg))
+    @dprintln(3,"Arg is: ", arg)
+    @dprintln(3,"Arg type = ", typeof(arg))
     string(nfields(arg.typ))
 end
 
@@ -946,17 +946,17 @@ function get_alloc_shape(args, dims)
 end
 
 function from_arrayalloc(args)
-    dprintln(3,"Array alloc args:")
-    map((i)->dprintln(3,args[i]), 1:length(args))
-    dprintln(3,"----")
-    dprintln(3,"Parsing array type: ", args[4])
+    @dprintln(3,"Array alloc args:")
+    map((i)->@dprintln(3,args[i]), 1:length(args))
+    @dprintln(3,"----")
+    @dprintln(3,"Parsing array type: ", args[4])
     typ, dims = parseArrayType(args[4])
-    dprintln(3,"Array alloc typ = ", typ)
-    dprintln(3,"Array alloc dims = ", dims)
+    @dprintln(3,"Array alloc typ = ", typ)
+    @dprintln(3,"Array alloc dims = ", dims)
     typ = toCtype(typ)
-    dprintln(3,"Array alloc after ctype conversion typ = ", typ)
+    @dprintln(3,"Array alloc after ctype conversion typ = ", typ)
     shape = get_alloc_shape(args, dims)
-    dprintln(3,"Array alloc shape = ", shape)
+    @dprintln(3,"Array alloc shape = ", shape)
     return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
 end
 
@@ -1031,12 +1031,12 @@ function from_builtins(f, args)
         fval = getfield(Base, f)
         if isa(fval, DataType)
             # handle type casting
-            dprintln(3, "found a typecast: ", fval, "(", args, ")")
+            @dprintln(3, "found a typecast: ", fval, "(", args, ")")
             return from_typecast(fval, args)
         end
     end
 
-    dprintln(3,"Compiling ", string(f))
+    @dprintln(3,"Compiling ", string(f))
     throw("Unimplemented builtin")
 end
 
@@ -1055,7 +1055,7 @@ end
 
 function from_intrinsic(f :: ANY, args)
     intr = string(f)
-    dprintln(3,"Intrinsic ", intr, ", args are ", args)
+    @dprintln(3,"Intrinsic ", intr, ", args are ", args)
 
     if intr == "mul_int"
         return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
@@ -1149,7 +1149,7 @@ function from_intrinsic(f :: ANY, args)
     elseif intr == "fptosi"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "fptrunc" || intr == "fpext"
-        dprintln(3,"Args = ", args)
+        @dprintln(3,"Args = ", args)
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "trunc_llvm" || intr == "trunc"
         return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
@@ -1166,23 +1166,23 @@ function from_intrinsic(f :: ANY, args)
     elseif intr == "powf" || intr == "powf_llvm"
         return "powf(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
     elseif intr == "nan_dom_err"
-        dprintln(3,"nan_dom_err is: ")
+        @dprintln(3,"nan_dom_err is: ")
         for i in 1:length(args)
-            dprintln(3,args[i])
+            @dprintln(3,args[i])
         end
         #return "assert(" * "isNan(" * from_expr(args[1]) * ") && !isNan(" * from_expr(args[2]) * "))"
         return from_expr(args[1])
     elseif intr in ["checked_trunc_uint", "checked_trunc_sint"]
         return "$(from_expr(args[1])) $(from_expr(args[2]))"
     else
-        dprintln(3,"Intrinsic ", intr, " is known but no translation available")
+        @dprintln(3,"Intrinsic ", intr, " is known but no translation available")
         throw("Unhandled Intrinsic...")
     end
 end
 
 function from_inlineable(f, args)
-    dprintln(3,"Checking if ", f, " can be inlined")
-    dprintln(3,"Args are: ", args)
+    @dprintln(3,"Checking if ", f, " can be inlined")
+    @dprintln(3,"Args are: ", args)
     if has(_operators, string(f))
         if length(args) == 1
           return "(" * string(f) * from_expr(args[1]) * ")"
@@ -1235,13 +1235,13 @@ function from_ref(args)
 end
 
 function from_call1(ast::Array{Any, 1})
-    dprintln(3,"Call1 args")
+    @dprintln(3,"Call1 args")
     s = ""
     for i in 2:length(ast)
         s *= from_expr(ast[i])
-        dprintln(3,ast[i])
+        @dprintln(3,ast[i])
     end
-    dprintln(3,"Done with call1 args")
+    @dprintln(3,"Done with call1 args")
     s
 end
 
@@ -1260,7 +1260,7 @@ function resolveCallTarget(ast::Array{Any, 1})
     #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
     #   M = args[1].value; s = args[1].name; t = ""
 
-    dprintln(3,"Trying to resolve target with args: ", ast)
+    @dprintln(3,"Trying to resolve target with args: ", ast)
     return resolveCallTarget(ast[1], ast[2:end])
 end
 
@@ -1296,7 +1296,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
                 M = eval(f.args[2])
             end
         end
-        dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
+        @dprintln(3,"Case 0: Returning M = ", M, " s = ", s, " t = ", t)
     end
     return M, s, t
 end
@@ -1311,13 +1311,13 @@ end
     
     
 function resolveCallTarget(f::TopNode, args::Array{Any, 1})
-    dprintln(3,"Trying to resolve target with args: ", args)
+    @dprintln(3,"Trying to resolve target with args: ", args)
     M = ""
     t = ""
     s = ""
     #case 1:
     if is(f.name, :getfield) && isa(args[2], QuoteNode)
-        dprintln(3,"Case 1: args[2] is ", args[2])
+        @dprintln(3,"Case 1: args[2] is ", args[2])
         fname = args[2].value
         if isa(args[1], Module)
             M = args[1]
@@ -1331,16 +1331,16 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
             t = from_expr(args[1]) * "." * string(fname)
             #M, _s = resolveCallTarget([args[1]])
         end
-        dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
+        @dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
         return resolveCallTarget(f)
 
     # case 3:
     elseif isInlineable(f.name, args)
         t = from_inlineable(f.name, args)
-        dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
+        @dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
-    dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
+    @dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
     return M, s, t
 end
 
@@ -1354,13 +1354,13 @@ function from_call(ast::Array{Any, 1})
 
     pat_out = pattern_match_call(ast)
     if pat_out != ""
-        dprintln(3, "pattern matched: ",ast)
+        @dprintln(3, "pattern matched: ",ast)
         return pat_out
     end
 
-    dprintln(3,"Compiling call: ast = ", ast, " args are: ")
+    @dprintln(3,"Compiling call: ast = ", ast, " args are: ")
     for i in 1:length(ast)
-        dprintln(3,"Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
+        @dprintln(3,"Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
     end
     # Try and find the target of the call
     mod, fun, t = resolveCallTarget(ast)
@@ -1376,16 +1376,16 @@ function from_call(ast::Array{Any, 1})
     end
 
     args = ast[2:end]
-    dprintln(3,"mod is: ", mod)
-    dprintln(3,"fun is: ", fun)
-    dprintln(3,"call Args are: ", args)
+    @dprintln(3,"mod is: ", mod)
+    @dprintln(3,"fun is: ", fun)
+    @dprintln(3,"call Args are: ", args)
 
     if isInlineable(fun, args)
-        dprintln(3,"Doing with inlining ", fun, "(", args, ")")
+        @dprintln(3,"Doing with inlining ", fun, "(", args, ")")
         fs = from_inlineable(fun, args)
         return fs
     end
-    dprintln(3,"Not inlinable")
+    @dprintln(3,"Not inlinable")
     funStr = "_" * string(fun)
 
     # If we have previously compiled this function
@@ -1410,8 +1410,8 @@ function from_call(ast::Array{Any, 1})
 
 
     s = ""
-    map((i)->dprintln(3,i[2]), lstate.worklist)
-    map((i)->dprintln(3,i), lstate.compiledfunctions)
+    map((i)->@dprintln(3,i[2]), lstate.worklist)
+    map((i)->@dprintln(3,i), lstate.compiledfunctions)
     s *= "_" * from_expr(fun) * "("
     argTyps = []
     for a in 1:length(args)
@@ -1428,22 +1428,22 @@ function from_call(ast::Array{Any, 1})
         end
     end
     s *= ")"
-    dprintln(3,"Finished translating call : ", s)
-    dprintln(3,ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
+    @dprintln(3,"Finished translating call : ", s)
+    @dprintln(3,ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
     if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function) || isa(fun, TopNode) || isa(fun, GlobalRef))
         #=
-        dprintln(3,"Worklist is: ")
+        @dprintln(3,"Worklist is: ")
         for i in 1:length(lstate.worklist)
             ast, name, typs = lstate.worklist[i]
-            dprintln(3,name);
+            @dprintln(3,name);
         end
-        dprintln(3,"Compiled Functions are: ")
+        @dprintln(3,"Compiled Functions are: ")
         for i in 1:length(lstate.compiledfunctions)
             name = lstate.compiledfunctions[i]
-            dprintln(3,name);
+            @dprintln(3,name);
         end
         =#
-        dprintln(3,"Inserting: ", fun, " : ", "_" * canonicalize(fun), " : ", arrayToTuple(argTyps))
+        @dprintln(3,"Inserting: ", fun, " : ", "_" * canonicalize(fun), " : ", arrayToTuple(argTyps))
         insert(fun, mod, "_" * canonicalize(fun), arrayToTuple(argTyps))
     end
     s
@@ -1457,7 +1457,7 @@ end
 
 function from_return(args)
     global inEntryPoint
-    dprintln(3,"Return args are: ", args)
+    @dprintln(3,"Return args are: ", args)
     retExp = ""
     if length(args) == 0
         return "return"
@@ -1490,7 +1490,7 @@ end
 function from_gotonode(ast, exp = "")
     labelId = ast.label
     s = ""
-    dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
+    @dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
     if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
         s *= "if (!(" * from_expr(exp) * ")) "
     end
@@ -1502,7 +1502,7 @@ function from_gotoifnot(args)
     exp = args[1]
     labelId = args[2]
     s = ""
-    dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
+    @dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
     if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
         s *= "if (!(" * from_expr(exp) * ")) "
     end
@@ -1512,7 +1512,7 @@ end
 #=
 function from_goto(exp, labelId)
     s = ""
-    dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
+    @dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
     if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
         s *= "if (!(" * from_expr(exp) * ")) "
     end
@@ -1526,7 +1526,7 @@ function from_if(args)
     true_exp = args[2]
     false_exp = args[3]
     s = ""
-    dprintln(3,"Compiling if: ", exp, " ", true_exp," ", false_exp)
+    @dprintln(3,"Compiling if: ", exp, " ", true_exp," ", false_exp)
     s *= from_expr(exp) * "?" * from_expr(true_exp) * ":" * from_expr(false_exp)
     s
 end
@@ -1537,7 +1537,7 @@ function from_comparison(args)
     comp = args[2]
     right = args[3]
     s = ""
-    dprintln(3,"Compiling comparison: ", left, " ", comp," ", right)
+    @dprintln(3,"Compiling comparison: ", left, " ", comp," ", right)
     s *= from_expr(left) * "$comp" * from_expr(right)
     s
 end
@@ -1545,7 +1545,7 @@ end
 function from_globalref(ast)
     mod = ast.mod
     name = ast.name
-    dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
+    @dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
     # handle global constant
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
@@ -1600,7 +1600,7 @@ function from_parforend(args)
 
     end
     s *= USE_OMP==1 && lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
-    dprintln(3,"Parforend = ", s)
+    @dprintln(3,"Parforend = ", s)
     lstate.ompdepth -= 1
     s
 end
@@ -1612,13 +1612,13 @@ end
 #TODO: Implement task mode support here
 function from_insert_divisible_task(args)
     inserttasknode = args[1]
-    dprintln(3,"Ranges: ", inserttasknode.ranges)
-    dprintln(3,"Args: ", inserttasknode.args)
-    dprintln(3,"Task Func: ", inserttasknode.task_func)
-    dprintln(3,"Join Func: ", inserttasknode.join_func)
-    dprintln(3,"Task Options: ", inserttasknode.task_options)
-    dprintln(3,"Host Grain Size: ", inserttasknode.host_grain_size)
-    dprintln(3,"Phi Grain Size: ", inserttasknode.phi_grain_size)
+    @dprintln(3,"Ranges: ", inserttasknode.ranges)
+    @dprintln(3,"Args: ", inserttasknode.args)
+    @dprintln(3,"Task Func: ", inserttasknode.task_func)
+    @dprintln(3,"Join Func: ", inserttasknode.join_func)
+    @dprintln(3,"Task Options: ", inserttasknode.task_options)
+    @dprintln(3,"Host Grain Size: ", inserttasknode.host_grain_size)
+    @dprintln(3,"Phi Grain Size: ", inserttasknode.phi_grain_size)
     throw("Task mode is not supported yet")
 end
 
@@ -1666,7 +1666,7 @@ function from_parforstart(args)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
 
-    dprintln(3,"from_parforstart args: ",args);
+    @dprintln(3,"from_parforstart args: ",args);
 
     parfor  = args[1]
     lpNests = parfor.loopNests
@@ -1693,10 +1693,10 @@ function from_parforstart(args)
     stops = map((a)->from_expr(a.upper), lpNests)
     steps = map((a)->from_expr(a.step), lpNests)
 
-    dprintln(3,"ivs ",ivs);
-    dprintln(3,"starts ", starts);
-    dprintln(3,"stops ", stops);
-    dprintln(3,"steps ", steps);
+    @dprintln(3,"ivs ",ivs);
+    @dprintln(3,"starts ", starts);
+    @dprintln(3,"stops ", stops);
+    @dprintln(3,"steps ", steps);
 
     # Generate the actual loop nest
     loopheaders = from_loopnest(ivs, starts, stops, steps)
@@ -1738,14 +1738,14 @@ function from_parforstart(args)
         preclause *= "$nthreadsvar = omp_get_max_threads();\n"
         nthreadsclause = "num_threads($nthreadsvar) "
     end
-    dprintln(3, "preclause = ", preclause)
-    dprintln(3, "nthreadsvar = ", nthreadsvar)
-    dprintln(3, "nthreadsclause = ", nthreadsclause)
+    @dprintln(3, "preclause = ", preclause)
+    @dprintln(3, "nthreadsvar = ", nthreadsvar)
+    @dprintln(3, "nthreadsclause = ", nthreadsclause)
     # Generate initializers and OpenMP clauses for reductions
     rds = parfor.reductions
     # non-symbol reductionFunc is not supported by OpenMP
     rdsextra = rdsprolog = rdsclause = ""
-    dprintln(3,"reductions = ", rds);
+    @dprintln(3,"reductions = ", rds);
     lstate.ompdepth += 1
     # custom reduction only kicks in when omp parallel is produced, i.e., when ompdepth == 1
     parallel_reduction = USE_OMP==1 && lstate.ompdepth == 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
@@ -1774,8 +1774,8 @@ function from_parforstart(args)
             #end
         end
     end
-    dprintln(3, "rdsprolog = ", rdsprolog)
-    dprintln(3, "rdsclause = ", rdsclause)
+    @dprintln(3, "rdsprolog = ", rdsprolog)
+    @dprintln(3, "rdsclause = ", rdsclause)
 
     # Don't put openmp pragmas on nested parfors.
     if USE_OMP==0 || lstate.ompdepth > 1
@@ -1784,10 +1784,10 @@ function from_parforstart(args)
     end
 
     # Check if there are private vars and emit the |private| clause
-    dprintln(3,"Private Vars: ")
-    dprintln(3,"-----")
-    dprintln(3,private_vars)
-    dprintln(3,"-----")
+    @dprintln(3,"Private Vars: ")
+    @dprintln(3,"-----")
+    @dprintln(3,private_vars)
+    @dprintln(3,"-----")
     privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
 
 
@@ -1802,11 +1802,11 @@ end
 function from_new(args)
     s = ""
     typ = args[1] #type of the object
-    dprintln(3,"from_new args = ", args)
+    @dprintln(3,"from_new args = ", args)
     if isa(typ, DataType)
         if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
-            dprintln(3, "new complex number")
+            @dprintln(3, "new complex number")
             s = toCtype(typ) * "(" * from_expr(args[2]) * ", " * from_expr(args[3]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
@@ -1854,13 +1854,13 @@ function from_expr(ast::Expr)
     args = ast.args
     typ = ast.typ
 
-    dprintln(4, "from_expr = ", ast)
+    @dprintln(4, "from_expr = ", ast)
     if head == :block
-        dprintln(3,"Compiling block")
+        @dprintln(3,"Compiling block")
         s *= from_exprs(args)
 
     elseif head == :body
-        dprintln(3,"Compiling body")
+        @dprintln(3,"Compiling body")
         if include_rand
             s *= "std::default_random_engine cgen_rand_generator;\n"
             s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
@@ -1869,46 +1869,46 @@ function from_expr(ast::Expr)
         s *= from_exprs(args)
 
     elseif head == :new
-        dprintln(3,"Compiling new")
+        @dprintln(3,"Compiling new")
         s *= from_new(args)
 
     elseif head == :lambda
-        dprintln(3,"Compiling lambda")
+        @dprintln(3,"Compiling lambda")
         s *= from_lambda(ast, args)
 
     elseif head == :(=)
-        dprintln(3,"Compiling assignment ", ast)
+        @dprintln(3,"Compiling assignment ", ast)
         s *= from_assignment(args)
 
     elseif head == :(&)
-        dprintln(3, "Compiling ref")
+        @dprintln(3, "Compiling ref")
         s *= from_ref(args)
 
     elseif head == :call
-        dprintln(3,"Compiling call")
+        @dprintln(3,"Compiling call")
         s *= from_call(args)
 
     elseif head == :call1
-        dprintln(3,"Compiling call1")
+        @dprintln(3,"Compiling call1")
         s *= from_call1(args)
 
     elseif head == :return
-        dprintln(3,"Compiling return")
+        @dprintln(3,"Compiling return")
         s *= from_return(args)
 
     elseif head == :line
         s *= from_line(args)
 
     elseif head == :gotoifnot
-        dprintln(3,"Compiling gotoifnot : ", args)
+        @dprintln(3,"Compiling gotoifnot : ", args)
         s *= from_gotoifnot(args)
     # :if and :comparison should only come from ?: expressions we generate
     # normal ifs should be inlined to gotoifnot
     elseif head == :if
-        dprintln(3,"Compiling if : ", args)
+        @dprintln(3,"Compiling if : ", args)
         s *= from_if(args)
     elseif head == :comparison
-        dprintln(3,"Compiling comparison : ", args)
+        @dprintln(3,"Compiling comparison : ", args)
         s *= from_comparison(args)
 
     elseif head == :parfor_start
@@ -1944,7 +1944,7 @@ function from_expr(ast::Expr)
         #Nothing
 
     else
-        dprintln(3,"Unknown head in expression: ", head)
+        @dprintln(3,"Unknown head in expression: ", head)
         throw("Unknown head")
     end
     s
@@ -2040,7 +2040,7 @@ end
 function from_expr(ast::ANY)
     #s *= dispatch(lstate.adp, ast, ast)
     asttyp = typeof(ast)
-    dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
+    @dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
     throw(string("CGen Error: Could not translate node: ", ast, " with type: ", asttyp))
 end
 
@@ -2088,11 +2088,11 @@ end
 function from_formalargs(params, vararglist, unaliased=false)
     s = ""
     ql = unaliased ? "__restrict" : ""
-    dprintln(3,"Compiling formal args: ", params)
+    @dprintln(3,"Compiling formal args: ", params)
     dumpSymbolTable(lstate.symboltable)
     for p in 1:length(params)
-        dprintln(3,"Doing param $p: ", params[p])
-        dprintln(3,"Type is: ", typeof(params[p]))
+        @dprintln(3,"Doing param $p: ", params[p])
+        @dprintln(3,"Type is: ", typeof(params[p]))
         if get(lstate.symboltable, params[p], false) != false
             ptyp = toCtype(lstate.symboltable[params[p]])
             s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
@@ -2102,7 +2102,7 @@ function from_formalargs(params, vararglist, unaliased=false)
         # We may have a varags expression
         elseif isa(params[p], Expr)
             assert(isa(params[p].args[1], Symbol))
-            dprintln(3,"varargs type: ", params[p], lstate.symboltable[params[p].args[1]])
+            @dprintln(3,"varargs type: ", params[p], lstate.symboltable[params[p].args[1]])
             varargtyp = lstate.symboltable[params[p].args[1]]
             for i in 1:length(varargtyp.types)
                 vtyp = varargtyp.types[i]
@@ -2121,7 +2121,7 @@ function from_formalargs(params, vararglist, unaliased=false)
             throw("Could not translate formal argument: " * string(params[p]))
         end
     end
-    dprintln(3,"Formal args are: ", s)
+    @dprintln(3,"Formal args are: ", s)
     s
 end
 
@@ -2130,14 +2130,14 @@ function from_newvarnode(args...)
 end
 
 function from_callee(ast::Expr, functionName::ASCIIString)
-    dprintln(3,"Ast = ", ast)
-    dprintln(3,"Starting processing for $ast")
+    @dprintln(3,"Ast = ", ast)
+    @dprintln(3,"Starting processing for $ast")
     typ = toCtype(body(ast).typ)
-    dprintln(3,"Return type of body = $typ")
+    @dprintln(3,"Return type of body = $typ")
     params  =   ast.args[1]
     env     =   ast.args[2]
     bod     =   ast.args[3]
-    dprintln(3,"Body type is ", bod.typ)
+    @dprintln(3,"Body type is ", bod.typ)
     f = Dict(ast => functionName)
     bod = from_expr(ast)
     args = from_formalargs(params, [], false)
@@ -2155,7 +2155,7 @@ end
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
-    dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
+    @dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
         params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
@@ -2164,9 +2164,9 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
     retParams = length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
         [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
-    dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
+    @dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
     actualParams = params * ((length(params) > 0 && length(retParams) > 0) ? ", " : "") * retParams
-    dprintln(3, " actualParams = (", actualParams, ")")
+    @dprintln(3, " actualParams = (", actualParams, ")")
     wrapperParams = "int run_where"
     if length(args) > 0
         wrapperParams *= ", $args"
@@ -2240,11 +2240,11 @@ function check_params(emitunaliasedroots, params)
     for k in params
         if isa(k, Expr) # If k is a vararg expression
             canAliasCheck = false
-            dprintln(3,"vararg expr: ", k, k.args[1], k.head)
+            @dprintln(3,"vararg expr: ", k, k.args[1], k.head)
             if isa(k.args[1], Symbol) && haskey(lstate.symboltable, k.args[1])
                 push!(vararglist, (k.args[1], lstate.symboltable[k.args[1]]))
-                dprintln(3,lstate.symboltable[k.args[1]])
-                dprintln(3,vararglist)
+                @dprintln(3,lstate.symboltable[k.args[1]])
+                @dprintln(3,vararglist)
             end
         else
             assert(typeof(k) == Symbol)
@@ -2261,10 +2261,10 @@ function check_params(emitunaliasedroots, params)
             end
         end
     end
-    dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
+    @dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
     if canAliasCheck && num_array_params > 0
         alias_check = "j2c_alias_test<" * string(num_array_params) * ">({{" * array_list * "}})"
-        dprintln(3,"alias_check = ", alias_check)
+        @dprintln(3,"alias_check = ", alias_check)
     else
         alias_check = nothing
     end
@@ -2291,10 +2291,10 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     # of the roots
     emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 
-    dprintln(3,"vectorizationlevel = ", vectorizationlevel)
-    dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
-    dprintln(1,"Ast = ", ast)
-    dprintln(3,"functionName = ", functionName)
+    @dprintln(3,"vectorizationlevel = ", vectorizationlevel)
+    @dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
+    @dprintln(1,"Ast = ", ast)
+    @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
     params = ast.args[1]
@@ -2309,7 +2309,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     vararg_bod, args, argsunal, alias_check = check_params(emitunaliasedroots, params)
     bod = vararg_bod * bod
 
-    dprintln(3,"returnType = ", returnType)
+    @dprintln(3,"returnType = ", returnType)
     if istupletyp(returnType)
         returnType = tuple(returnType.parameters...)
     elseif returnType == Void
@@ -2336,7 +2336,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     args *= comma * retargs
     argsunal *= comma * retargs
     
-    dprintln(3, "args = (", args, ")")
+    @dprintln(3, "args = (", args, ")")
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
@@ -2360,8 +2360,8 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     global inEntryPoint
     inEntryPoint = false
     global lstate
-    dprintln(1,"Ast = ", ast)
-    dprintln(3,"functionName = ", functionName)
+    @dprintln(1,"Ast = ", ast)
+    @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
     params = ast.args[1]
@@ -2376,13 +2376,13 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     # Create an entry point that will be called by the Julia code.
     rtyp = toCtype(returnType)
 
-    dprintln(3, "args = (", args, ")")
+    @dprintln(3, "args = (", args, ")")
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     forwarddecl = "$rtyp $functionName($args);\n"
     push!(lstate.compiledfunctions, functionName)
     c = hdr * forwarddecl * s 
     if length(array_types_in_sig) > 0
-        dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
+        @dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
     end
     forwarddecl, c
 end
@@ -2393,25 +2393,25 @@ function insert(func::Any, mod::Any, name, typs)
         return
     end
     target = resolveFunction(func, mod, typs)
-    dprintln(3,"Resolved function ", func, " : ", name, " : ", typs)
+    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs)
     insert(target, name, typs)
 end
 
 function insert(func::TopNode, name, typs)
     target = eval(func)
-    dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
+    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
     insert(target, name, typs)
 end
 
 function insert(func::SymbolNode, name, typs)
     target = eval(func)
-    dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
+    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
     insert(target, name, typs)
 end
 
 function insert(func::Symbol, name, typs)
     target = resolveFunction(func, typs)
-    dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
+    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
     insert(target, name, typs)
 end
 
@@ -2420,7 +2420,7 @@ function insert(func::Function, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
-        dprintln(3, "Adding function ", name, " to worklist.")
+        @dprintln(3, "Adding function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end
@@ -2430,7 +2430,7 @@ function insert(func::IntrinsicFunction, name, typs)
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
     if !has(lstate.compiledfunctions, name)
-        dprintln(3, "Adding intrinsic function ", name, " to worklist.")
+        @dprintln(3, "Adding intrinsic function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
 end
@@ -2442,13 +2442,13 @@ function from_worklist()
     global lstate
     while !isempty(lstate.worklist)
         a, fname, typs = splice!(lstate.worklist, 1)
-        dprintln(3,"Checking if we compiled ", fname, " before")
-        dprintln(3,lstate.compiledfunctions)
+        @dprintln(3,"Checking if we compiled ", fname, " before")
+        @dprintln(3,lstate.compiledfunctions)
         if has(lstate.compiledfunctions, fname)
-            dprintln(3,"Yes, skipping compilation...")
+            @dprintln(3,"Yes, skipping compilation...")
             continue
         end
-        dprintln(3,"No, compiling it now")
+        @dprintln(3,"No, compiling it now")
         empty!(lstate.symboltable)
         empty!(lstate.ompprivatelist)
         if isa(a, Symbol)
@@ -2457,15 +2457,15 @@ function from_worklist()
         if length(a) != 1
             error("Error: expect 1 AST for ", a, " with signature ", types, " but got: ", length(a))
         else
-            dprintln(3,"============ Compiling AST for ", fname, " ============")
+            @dprintln(3,"============ Compiling AST for ", fname, " ============")
             fi, si = from_root_nonentry(a[1], fname, Dict{DataType,Int64}())
-            dprintln(3,"============== C++ after compiling ", fname, " ===========")
-            dprintln(3,si)
-            dprintln(3,"============== End of C++ for ", fname, " ===========")
-            dprintln(3,"Adding ", fname, " to compiledFunctions")
-            dprintln(3,lstate.compiledfunctions)
-            dprintln(3,"Added ", fname, " to compiledFunctions")
-            dprintln(3,lstate.compiledfunctions)
+            @dprintln(3,"============== C++ after compiling ", fname, " ===========")
+            @dprintln(3,si)
+            @dprintln(3,"============== End of C++ for ", fname, " ===========")
+            @dprintln(3,"Adding ", fname, " to compiledFunctions")
+            @dprintln(3,lstate.compiledfunctions)
+            @dprintln(3,"Added ", fname, " to compiledFunctions")
+            @dprintln(3,lstate.compiledfunctions)
             f *= fi
             s *= si
         end
@@ -2490,7 +2490,7 @@ function writec(s, outfile_name=nothing; with_headers=false)
     cgenOutput = "$generated_file_dir/$outfile_name.cpp"
     cf = open(cgenOutput, "w")
     write(cf, s)
-    dprintln(3,"Done committing CGen code")
+    @dprintln(3,"Done committing CGen code")
     close(cf)
     return outfile_name
 end
@@ -2563,7 +2563,7 @@ function compile(outfile_name)
 
   full_outfile_name = `$generated_file_dir/$outfile_name.o`
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
-  dprintln(1,compileCommand)
+  @dprintln(1,compileCommand)
   run(compileCommand)
 end
 
@@ -2628,9 +2628,9 @@ end
 function link(outfile_name)
   lib = "$generated_file_dir/lib$outfile_name.so.1.0"
   linkCommand = getLinkCommand(outfile_name, lib)
-  dprintln(1,linkCommand)
+  @dprintln(1,linkCommand)
   run(linkCommand)
-  dprintln(3,"Done CGen linking")
+  @dprintln(3,"Done CGen linking")
   return lib
 end
 

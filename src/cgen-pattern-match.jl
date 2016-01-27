@@ -35,13 +35,13 @@ function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     isComplex = typ <: Complex
     isInt = typ <: Integer
     if in(fun.name,libm_math_functions) && (isFloat || isDouble || isComplex)
-        dprintln(3,"FOUND ", fun.name)
+        @dprintln(3,"FOUND ", fun.name)
         s = string(fun.name)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
     if is(fun.name,:abs) && (isFloat || isDouble || isComplex || isInt)
-      dprintln(3,"FOUND ", fun.name)
+      @dprintln(3,"FOUND ", fun.name)
       fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"
     end
@@ -469,7 +469,7 @@ end
 function pattern_match_call_dist_h5_size(f::Symbol, size_arr::GenSym, ind::Union{Int64,SymAllGen})
     s = ""
     if f==:__hps_get_H5_dim_size || f==:__hps_get_TXT_dim_size
-        dprintln(3,"match dist_dim_size ",f," ", size_arr, " ",ind)
+        @dprintln(3,"match dist_dim_size ",f," ", size_arr, " ",ind)
         s = from_expr(size_arr)*"["*from_expr(ind)*"-1]"
     end
     return s
@@ -910,7 +910,7 @@ function pattern_match_call_naive_bayes(f::ANY, coeff_out::ANY, arr::ANY, arr2::
 end
 
 function pattern_match_call(ast::Array{Any, 1})
-    dprintln(3,"pattern matching ",ast)
+    @dprintln(3,"pattern matching ",ast)
     s = ""
     if length(ast)==1
          s = pattern_match_call_dist_init(ast[1])
@@ -959,7 +959,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
     if rhs.head==:call && (checkTopNodeName(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
-        dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
+        @dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
         is_typed::Bool = checkTopNodeName(rhs.args[1],:typed_hvcat)
         
@@ -1015,7 +1015,7 @@ function from_assignment_match_cat_t(lhs, rhs::ANY)
 end
 
 function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
-    dprintln(3, "assignment pattern match dist ",lhs," = ",rhs)
+    @dprintln(3, "assignment pattern match dist ",lhs," = ",rhs)
     if rhs.head==:call && length(rhs.args)==1 && isTopNode(rhs.args[1])
         dist_call = rhs.args[1].name
         if dist_call ==:hps_dist_num_pes
@@ -1028,7 +1028,7 @@ function from_assignment_match_dist(lhs::Symbol, rhs::Expr)
 end
 
 function from_assignment_match_dist(lhs::GenSym, rhs::Expr)
-    dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
+    @dprintln(3, "assignment pattern match dist2: ",lhs," = ",rhs)
     s = ""
     local num::AbstractString
     if rhs.head==:call && rhs.args[1]==:__hps_data_source_HDF5_size

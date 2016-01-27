@@ -234,7 +234,7 @@ Update the definition of a variable.
 """
 function updateDef(state::IRState, s::SymAllGen, rhs)
     s = isa(s, SymbolNode) ? s.name : s
-    #dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
+    #@dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
     @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
     (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
     (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
@@ -296,7 +296,7 @@ function lookupDefInAllScopes(state::IRState, s::SymAllGen)
 end
 
 function emitStmt(state::IRState, stmt)
-    dprintln(2,"emit stmt: ", stmt)
+    @dprintln(2,"emit stmt: ", stmt)
     push!(state.stmts, stmt)
 end
 
@@ -557,7 +557,7 @@ function specializeOp(opr::Symbol, argstyp)
             typ = atyp
         end
     end
-    dprintln(2, "specializeOp opsSymSet[", opr, "] = ", in(opr, opsSymSet), " typ=", typ)
+    @dprintln(2, "specializeOp opsSymSet[", opr, "] = ", in(opr, opsSymSet), " typ=", typ)
     if in(opr, opsSymSet)
         try
             # TODO: use subtype checking here?
@@ -850,8 +850,8 @@ function mmapRemoveDupArg!(expr::Expr)
         end
     end
     if (!hasDup) return expr end
-    dprintln(3, "MMRD: expr was ", expr)
-    dprintln(3, "MMRD:  ", newarr, newinp, indices)
+    @dprintln(3, "MMRD: expr was ", expr)
+    @dprintln(3, "MMRD:  ", newarr, newinp, indices)
     expr.args[1] = newarr
     expr.args[2] = DomainLambda(newinp, f.outputs,
     (linfo, args) -> begin
@@ -861,7 +861,7 @@ function mmapRemoveDupArg!(expr::Expr)
         end
         f.genBody(linfo, dupargs)
     end, f.linfo)
-    dprintln(3, "MMRD: expr becomes ", expr)
+    @dprintln(3, "MMRD: expr becomes ", expr)
     return expr
 end
 
@@ -1032,7 +1032,7 @@ function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, f
 end
 
 function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::ANY, args)
-    dprintln(3,"unrecognized fun type ",fun, " args ", args)
+    @dprintln(3,"unrecognized fun type ",fun, " args ", args)
     oldargs = normalize_args(state, env, oldargs)
     mk_expr(typ, head, oldfun, oldargs...)
 end
@@ -1047,7 +1047,7 @@ function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
         local arg = in_args[i]
         if isa(arg, Expr) && arg.typ == Void
             # do not produce new assignment for Void values
-            dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
+            @dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
             emitStmt(state, arg)
         elseif isa(arg, Expr) || isa(arg, LambdaStaticData)
             typ = isa(arg, Expr) ? arg.typ : Any
@@ -1330,7 +1330,7 @@ function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, old
         # git log -S'' src/domain-ir.jl shows initial commit, coverage coesn't show any usage
         #=
         args_typ = map(x -> typeOfOpr(state, x), args)
-        dprintln(3,"args = ", args, " args_typ = ", args_typ)
+        @dprintln(3,"args = ", args, " args_typ = ", args_typ)
         if isdefined(env.cur_module, fun) && !isdefined(Base, fun) # only handle functions in Main module
             dprintln(env,"function to offload: ", fun, " methods=", methods(getfield(env.cur_module, fun)))
             _accelerate(getfield(env.cur_module, fun), tuple(args_typ...))
@@ -1510,7 +1510,7 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
         if isarray(typ_second_arg) || isbitarray(typ_second_arg)
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
         else
-            dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
+            @dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
             error("Unhandled bound in checkbounds: ", args[2])
         end
     elseif isIntType(typ)
@@ -1744,14 +1744,14 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     function bodyF(plinfo, args)
         #bt = backtrace() ;
         #s = sprint(io->Base.show_backtrace(io, bt))
-        #dprintln(3, "bodyF backtrace ")
-        #dprintln(3, s)
+        #@dprintln(3, "bodyF backtrace ")
+        #@dprintln(3, s)
         ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
-        #dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+        #@dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
-        # dprintln(2,"cartesianarray idict = ", ldict)
+        # @dprintln(2,"cartesianarray idict = ", ldict)
         ret = replaceExprWithDict(body, ldict).args
-        #dprintln(2,"cartesianarray ret = ", ret)
+        #@dprintln(2,"cartesianarray ret = ", ret)
         ret
     end
     domF = DomainLambda(vcat(etys, argstyp), etys, bodyF, linfo)
@@ -1955,11 +1955,11 @@ function from_expr_tiebreak(state::IRState, env::IREnv, ast :: Expr)
 end
 
 function from_expr(function_name::AbstractString, cur_module :: Module, ast :: Expr)
-    dprintln(2,"DomainIR translation function = ", function_name, " on:")
-    dprintln(2,ast)
+    @dprintln(2,"DomainIR translation function = ", function_name, " on:")
+    @dprintln(2,ast)
     res = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast) 
-    dprintln(2,"DomainIR translation returns:")
-    dprintln(2,res)
+    @dprintln(2,"DomainIR translation returns:")
+    @dprintln(2,res)
     return res
 end
 
@@ -1983,7 +1983,7 @@ function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
             return def
         end
     end
-    dprintln(2, " not handled ", ast)
+    @dprintln(2, " not handled ", ast)
     return ast
 end
 
@@ -1997,7 +1997,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
             return def
         end
     end
-    dprintln(2, " not handled ", ast)
+    @dprintln(2, " not handled ", ast)
     return ast
 end
 
@@ -2006,7 +2006,7 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     local head = ast.head
     local args = ast.args
     local typ  = ast.typ
-    dprintln(2, " :", head)
+    @dprintln(2, " :", head)
     if is(head, :lambda)
         return from_lambda(state, env, ast)
     elseif is(head, :body)
@@ -2073,7 +2073,7 @@ function from_expr(state::IRState, env::IREnv, ast::LabelNode)
 end
 
 function from_expr(state::IRState, env::IREnv, ast::ANY)
-    dprintln(2, " not handled ", ast)
+    @dprintln(2, " not handled ", ast)
     return ast
 end
 
@@ -2083,9 +2083,9 @@ type DirWalk
 end
 
 function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ", x)
+    @dprintln(3,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -2120,7 +2120,7 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_leve
             error("Unsupprted range object in select: ", args[2])
         end
         for i = 1:length(ranges)
-            # dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
+            # @dprintln(3, "ranges[i] = ", ranges[i], " ", typeof(ranges[i]))
             if ((isa(ranges[i], Expr) && (ranges[i].head == :range || ranges[i].head == :tomask)))
                 for j = 1:length(ranges[i].args)
                     ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
@@ -2172,20 +2172,20 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_leve
 end
 
 function AstWalkCallback(x :: DomainLambda, dw :: DirWalk, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ", x)
+    @dprintln(3,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
-    dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
+    @dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
     return x
 end
 
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ", x)
+    @dprintln(3,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -2194,13 +2194,13 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
 end
 
 function AstWalk(ast :: ANY, callback, cbdata :: ANY)
-    dprintln(3,"DomainIR.AstWalk ", ast)
+    @dprintln(3,"DomainIR.AstWalk ", ast)
     dw = DirWalk(callback, cbdata)
     AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
 
 function dir_live_cb(ast :: Expr, cbdata :: ANY)
-    dprintln(4,"dir_live_cb ")
+    @dprintln(4,"dir_live_cb ")
 
     head = ast.head
     args = ast.args
@@ -2218,7 +2218,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end 
 
-        dprintln(3, ":mmap ", expr_to_process)
+        @dprintln(3, ":mmap ", expr_to_process)
         return expr_to_process
     elseif head == :mmap!
         expr_to_process = Any[]
@@ -2241,7 +2241,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end 
 
-        dprintln(3, ":mmap! ", expr_to_process)
+        @dprintln(3, ":mmap! ", expr_to_process)
         return expr_to_process
     elseif head == :reduce
         expr_to_process = Any[]
@@ -2259,7 +2259,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end
 
-        dprintln(3, ":reduce ", expr_to_process)
+        @dprintln(3, ":reduce ", expr_to_process)
         return expr_to_process
     elseif head == :stencil!
         expr_to_process = Any[]
@@ -2277,7 +2277,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end
 
-        dprintln(3, ":stencil! ", expr_to_process)
+        @dprintln(3, ":stencil! ", expr_to_process)
         return expr_to_process
     elseif head == :parallel_for
         expr_to_process = Any[]
@@ -2292,11 +2292,11 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end
 
-        dprintln(3, ":parallel_for ", expr_to_process)
+        @dprintln(3, ":parallel_for ", expr_to_process)
         return expr_to_process
     elseif head == :assertEqShape
         assert(length(args) == 2)
-        #dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
+        #@dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
         expr_to_process = Any[]
         push!(expr_to_process, toSymGen(args[1]))
         push!(expr_to_process, toSymGen(args[2]))
@@ -2334,17 +2334,17 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
 end
 
 function dir_live_cb(ast :: KernelStat, cbdata :: ANY)
-    dprintln(4,"dir_live_cb ")
+    @dprintln(4,"dir_live_cb ")
     return Any[]
 end
 
 function dir_live_cb(ast :: ANY, cbdata :: ANY)
-    dprintln(4,"dir_live_cb ")
+    @dprintln(4,"dir_live_cb ")
     return nothing
 end
 
 function dir_alias_cb(ast::Expr, state, cbdata)
-    dprintln(4,"dir_alias_cb ")
+    @dprintln(4,"dir_alias_cb ")
 
     head = ast.head
     args = ast.args
@@ -2371,7 +2371,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         krnStat = args[1]
         iterations = args[2]
         bufs = args[3]
-        dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
+        @dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
         if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
             # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
             for i = 1:min(krnStat.rotateNum, length(bufs))
@@ -2411,7 +2411,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
 end
 
 function dir_alias_cb(ast::ANY, state, cbdata)
-    dprintln(4,"dir_alias_cb ")
+    @dprintln(4,"dir_alias_cb ")
 end
 
 end

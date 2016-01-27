@@ -276,13 +276,13 @@ Returns true if the "node" is a parfor and the task limit hasn't been exceeded.
 Also controls whether stencils or reduction can become tasks.
 """
 function taskableParfor(node)
-    dprintln(3,"taskableParfor for: ", node)
+    @dprintln(3,"taskableParfor for: ", node)
     if limit_task == 0
-        dprintln(3,"task limit exceeded so won't convert parfor to task")
+        @dprintln(3,"task limit exceeded so won't convert parfor to task")
         return false
     end
     if isParforAssignmentNode(node) || isBareParfor(node)
-        dprintln(3,"Found parfor node, stencil: ", stencil_tasks, " reductions: ", reduce_tasks)
+        @dprintln(3,"Found parfor node, stencil: ", stencil_tasks, " reductions: ", reduce_tasks)
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
             return true
         end
@@ -353,7 +353,7 @@ function call_instruction_count(args, state :: eic_state, debug_level)
     func  = args[1]
     fargs = args[2:end]
 
-    dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
+    @dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
     sig_expr = Expr(:tuple)
     sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.lambdaInfo), fargs)
     signature = eval(sig_expr)
@@ -421,17 +421,17 @@ function generate_instr_count(function_name, signature)
     ftyp = typeof(function_name)
 
     if ftyp != Function
-        dprintln(3,"generate_instr_count: instead of Function, got ", ftyp, " ", function_name)
+        @dprintln(3,"generate_instr_count: instead of Function, got ", ftyp, " ", function_name)
     end
 
     if ftyp == IntrinsicFunction
-        dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
+        @dprintln(3, "generate_instr_count: found IntrinsicFunction = ", function_name)
         call_costs[(function_name, signature)] = nothing
         return call_costs[(function_name, signature)]
     end
 
     if typeof(function_name) != Function || !isgeneric(function_name)
-        dprintln(3, "generate_instr_count: function_name is not a Function = ", function_name)
+        @dprintln(3, "generate_instr_count: function_name is not a Function = ", function_name)
         call_costs[(function_name, signature)] = nothing
         return call_costs[(function_name, signature)]
     end
@@ -444,11 +444,11 @@ function generate_instr_count(function_name, signature)
 
     ct = ParallelAccelerator.Driver.code_typed(function_name, signature)      # get information about code for the given function and signature
 
-    dprintln(2,"generate_instr_count ", function_name, " ", signature)
+    @dprintln(2,"generate_instr_count ", function_name, " ", signature)
     state = eic_state(0, true, nothing)
     # Try to estimate the instruction count for the other function.
     AstWalk(ct[1], estimateInstrCount, state)
-    dprintln(2,"instruction count estimate for parfor = ", state)
+    @dprintln(2,"instruction count estimate for parfor = ", state)
     # If so then cache the result.
     if state.fully_analyzed
         call_costs[(function_name, signature)] = state.non_calls
@@ -459,7 +459,7 @@ function generate_instr_count(function_name, signature)
 end
 
 function process_function_name(function_name::Union{Expr,GlobalRef})
-    dprintln(3,"eval'ing", typeof(function_name), "to Function")
+    @dprintln(3,"eval'ing", typeof(function_name), "to Function")
     function_name = eval(function_name)
     return function_name
 end
@@ -506,7 +506,7 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
     elseif head == :the_exception
         state.fully_analyzed = false
     else
-        dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
+        @dprintln(1,"instruction count estimator: unknown Expr head :", head, " ", ast)
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -545,7 +545,7 @@ function estimateInstrCount(ast::Any, state :: eic_state, top_level_number, is_t
     if isbits(asttyp)
         # skip
     else
-        dprintln(1,"instruction count estimator: unknown AST (", asttyp, ",", ast, ")")
+        @dprintln(1,"instruction count estimator: unknown AST (", asttyp, ",", ast, ")")
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -556,7 +556,7 @@ Takes a parfor and walks the body of the parfor and estimates the number of inst
 """
 function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state :: expr_state)
     if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
-        dprintln(2,"instruction count estimate for parfor = ", the_parfor)
+        @dprintln(2,"instruction count estimate for parfor = ", the_parfor)
         new_state = eic_state(0, true, state.lambdaInfo)
         for i = 1:length(the_parfor.body)
             AstWalk(the_parfor.body[i], estimateInstrCount, new_state)
@@ -567,7 +567,7 @@ function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.Parall
         else
             the_parfor.instruction_count_expr = nothing
         end
-        dprintln(2,"instruction count estimate for parfor = ", the_parfor.instruction_count_expr)
+        @dprintln(2,"instruction count estimate for parfor = ", the_parfor.instruction_count_expr)
     end
 end
 
@@ -635,7 +635,7 @@ function divide_work(assignments :: Array{ParallelAccelerator.ParallelIR.pir_ran
                      start_thread, end_thread, dims, index)
     num_threads = (end_thread - start_thread) + 1
 
-#    dprintln(3,"divide_work num_threads = ", num_threads, " build = ", build, " start = ", start_thread, " end = ", end_thread, " dims = ", dims, " index = ", index)
+#    @dprintln(3,"divide_work num_threads = ", num_threads, " build = ", build, " start = ", start_thread, " end = ", end_thread, " dims = ", dims, " index = ", index)
     assert(num_threads >= 1)
     if num_threads == 1
         assert(length(build) <= length(dims))
@@ -659,7 +659,7 @@ function divide_work(assignments :: Array{ParallelAccelerator.ParallelIR.pir_ran
         threadstart = start_thread
         threadend   = end_thread
 
-#        dprintln(3, "total = ", total_len, " percentage = ", percentage, " divisions = ", divisions_for_this_dim)
+#        @dprintln(3, "total = ", total_len, " percentage = ", percentage, " divisions = ", divisions_for_this_dim)
         for i = 1:divisions_for_this_dim
             (ls, le, chunkstart)  = chunk(chunkstart,  chunkend,  divisions_for_this_dim - i + 1)
             (ts, te, threadstart) = chunk(threadstart, threadend, divisions_for_this_dim - i + 1)
@@ -670,9 +670,9 @@ function divide_work(assignments :: Array{ParallelAccelerator.ParallelIR.pir_ran
 end
 
 function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual, numtotal :: Int)
-#    dprintln(3, "divide_fis space = ", full_iteration_space, " numtotal = ", numtotal)
+#    @dprintln(3, "divide_fis space = ", full_iteration_space, " numtotal = ", numtotal)
     dims = sort(dimlength[dimlength(i, full_iteration_space.upper_bounds[i] - full_iteration_space.lower_bounds[i] + 1)  for i = 1:full_iteration_space.dim], by=x->x.len, rev=true)
-#    dprintln(3, "dims = ", dims)
+#    @dprintln(3, "dims = ", dims)
     assignments = Array(ParallelAccelerator.ParallelIR.pir_range_actual, numtotal)
     divide_work(assignments, isf_range[], 1, numtotal, dims, 1)
     return assignments
@@ -759,7 +759,7 @@ For a given start and stop index in some body and liveness information, form a s
 function makeTasks(start_index, stop_index, body, bb_live_info, state, task_graph_mode)
     task_list = Any[]
     seq_accum = Any[]
-    dprintln(3,"makeTasks starting")
+    @dprintln(3,"makeTasks starting")
 
     # ONE_AT_A_TIME mode should only have parfors in the list of things to replace so we assert if we see a non-parfor in this mode.
     # SEQUENTIAL_TASKS mode bunches up all non-parfors into one sequential task.  Maybe it would be better to do one sequential task per non-parfor stmt?
@@ -784,12 +784,12 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
             if length(seq_accum) > 0
                 assert(task_graph_mode == SEQUENTIAL_TASKS)
                 st = seqTask(seq_accum, bb_live_info.statements, body, state)
-                dprintln(3,"Adding sequential task to task_list. ", st)
+                @dprintln(3,"Adding sequential task to task_list. ", st)
                 push!(task_list, st)
                 seq_accum = Any[]
             end
             ptt = parforToTask(j, bb_live_info.statements, body, state)
-            dprintln(3,"Adding parfor task to task_list. ", ptt)
+            @dprintln(3,"Adding parfor task to task_list. ", ptt)
             push!(task_list, ptt)
         else
             # is not a parfor node
@@ -798,7 +798,7 @@ function makeTasks(start_index, stop_index, body, bb_live_info, state, task_grap
                 # Collect the non-parfor stmts in a batch to be turned into one sequential task.
                 push!(seq_accum, body[j])
             else
-                dprintln(3,"Adding non-parfor node to task_list. ", body[j])
+                @dprintln(3,"Adding non-parfor node to task_list. ", body[j])
                 # MULTI_PARFOR_SEQ_NO mode.
                 # Just add the non-parfor stmts directly to the output statements.
                 push!(task_list, body[j])
@@ -844,10 +844,10 @@ function getIO(stmt_ids, bb_statements)
     stmts_for_ids = filter(x -> in(x.tls.index, stmt_ids) , bb_statements)
     # Make sure that we found a statement for every statement ID.
     if length(stmt_ids) != length(stmts_for_ids)
-        dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
-        dprintln(0,"length(stmts_for_ids) = ", length(stmts_for_ids))
-        dprintln(0,"stmt_ids = ", stmt_ids)
-        dprintln(0,"stmts_for_ids = ", stmts_for_ids)
+        @dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
+        @dprintln(0,"length(stmts_for_ids) = ", length(stmts_for_ids))
+        @dprintln(0,"stmt_ids = ", stmt_ids)
+        @dprintln(0,"stmts_for_ids = ", stmts_for_ids)
         assert(length(stmt_ids) == length(stmts_for_ids))
     end
     # The initial set of inputs is those variables "use"d by the first statement.
@@ -948,14 +948,14 @@ Remove unsafe array access Symbols from the incoming "stmt".
 Returns the updated statement if something was modifed, else returns "nothing".
 """
 function convertUnsafe(stmt)
-    dprintln(3,"convertUnsafe: ", stmt)
+    @dprintln(3,"convertUnsafe: ", stmt)
     state = cuw_state() 
     # Uses AstWalk to do the pattern match and replace.
     res = AstWalk(stmt, convertUnsafeWalk, state)
     # state.found is set if the callback convertUnsafeWalk found and replaced an unsafe variant.
     if state.found
-        dprintln(3, "state.found ", state, " ", res)
-        dprintln(3,"Replaced unsafe: ", res)
+        @dprintln(3, "state.found ", state, " ", res)
+        @dprintln(3,"Replaced unsafe: ", res)
         return res
     else
         return nothing
@@ -983,7 +983,7 @@ function first_unless(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
        ) || 
        (pound == (gs0.stop + gs0.step))
       )
-    dprintln(4,"first_unless res = ", res)
+    @dprintln(4,"first_unless res = ", res)
     return res
 end
 
@@ -1002,7 +1002,7 @@ function second_unless(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
          (pound == (gs0.stop + gs0.step))
         )
       ) 
-    dprintln(4,"second_unless res = ", res)
+    @dprintln(4,"second_unless res = ", res)
     return res
 end
 
@@ -1017,16 +1017,16 @@ If the incoming loop nest level is more than the number of loops nests in the pa
 insert the body of the parfor into the new function body in "new_body".
 """
 function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaInfo)
-    dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
+    @dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
     if loop_nest_level > length(the_parfor.loopNests)
         # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
         # For each statement in the parfor body.
         for i = 1:length(the_parfor.body)
-            dprintln(3, "Body index ", i)
+            @dprintln(3, "Body index ", i)
             # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
             # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
             cu_res = convertUnsafe(the_parfor.body[i])
-            dprintln(3, "cu_res = ", cu_res)
+            @dprintln(3, "cu_res = ", cu_res)
             if cu_res != nothing
                 push!(new_body, Expr(:boundscheck, false)) 
                 push!(new_body, cu_res)
@@ -1154,7 +1154,7 @@ and outputs that parfor to the new function body as regular Julia loops.
 """
 function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaInfo)
     max_label = getMaxLabel(0, the_parfor.body)
-    dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
+    @dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
     recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaInfo)
     nothing
@@ -1167,7 +1167,7 @@ pre-statements and post-statements are already elevated by this point.  We repla
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
 function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
-    dprintln(2,"Flattening ", the_parfor)
+    @dprintln(2,"Flattening ", the_parfor)
 
     private_set = getPrivateSet(the_parfor.body)
     private_array = collect(private_set)
@@ -1211,7 +1211,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     assert(typeof(body[parfor_index]) == Expr)
     assert(body[parfor_index].head == :parfor)  # Make sure we got a parfor node to convert.
     the_parfor = body[parfor_index].args[1]     # Get the PIRParForAst object from the :parfor Expr.
-    dprintln(3,"parforToTask = ", the_parfor)
+    @dprintln(3,"parforToTask = ", the_parfor)
 
     # Create an array of the reduction vars used in this parfor.
     reduction_vars = Symbol[]
@@ -1222,9 +1222,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # The call to getIO determines which variables are live at input to this parfor, live at output from this parfor
     # or just used exclusively in the parfor.  These latter become local variables.
     in_vars , out, locals = getIO([parfor_index], bb_statements)
-    dprintln(3,"in_vars = ", in_vars)
-    dprintln(3,"out_vars = ", out)
-    dprintln(3,"local_vars = ", locals)
+    @dprintln(3,"in_vars = ", in_vars)
+    @dprintln(3,"out_vars = ", out)
+    @dprintln(3,"local_vars = ", locals)
 
     # Convert Set to Array
     in_array_names   = Any[]
@@ -1283,14 +1283,14 @@ function parforToTask(parfor_index, bb_statements, body, state)
         push!(arg_types, ARG_OPT_ACCUMULATOR)
     end
 
-    dprintln(3,"in_array_names = ", in_array_names)
-    dprintln(3,"modified_symbols = ", modified_symbols)
-    dprintln(3,"io_symbols = ", io_symbols)
-    dprintln(3,"reduction_vars = ", reduction_vars)
-    dprintln(3,"locals_array = ", locals_array)
-    dprintln(3,"gensyms = ", gensyms)
-    dprintln(3,"gensyms_table = ", gensyms_table)
-    dprintln(3,"arg_types = ", arg_types)
+    @dprintln(3,"in_array_names = ", in_array_names)
+    @dprintln(3,"modified_symbols = ", modified_symbols)
+    @dprintln(3,"io_symbols = ", io_symbols)
+    @dprintln(3,"reduction_vars = ", reduction_vars)
+    @dprintln(3,"locals_array = ", locals_array)
+    @dprintln(3,"gensyms = ", gensyms)
+    @dprintln(3,"gensyms_table = ", gensyms_table)
+    @dprintln(3,"arg_types = ", arg_types)
 
     # Will hold GenSym's that would become parameters but can't so need to be made
     # into symbols.
@@ -1305,7 +1305,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
                      map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), io_symbols);
                      map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), reduction_vars)]
 
-    dprintln(3,"gsmap = ", gsmap)
+    @dprintln(3,"gsmap = ", gsmap)
     # Add gsmap to gensyms_table so that the GenSyms in the body can be translated to
     # the corresponding new input parameter name.
     for gsentry in gsmap
@@ -1329,9 +1329,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
         map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), modified_symbols);
         map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), io_symbols);
         map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), reduction_vars)])
-    dprintln(3,"all_arg_names = ", all_arg_names)
-    dprintln(3,"all_arg_type = ", all_arg_type)
-    dprintln(3,"args_var = ", args_var)
+    @dprintln(3,"all_arg_names = ", all_arg_names)
+    @dprintln(3,"all_arg_type = ", all_arg_type)
+    @dprintln(3,"args_var = ", args_var)
 
     unique_node_id = get_unique_num()
 
@@ -1343,11 +1343,11 @@ function parforToTask(parfor_index, bb_statements, body, state)
     task_func = @eval function ($task_func_sym)($(all_arg_names...))
         throw(string("Some task function's body was not replaced."))
     end
-    dprintln(3,"task_func = ", task_func)
+    @dprintln(3,"task_func = ", task_func)
 
     # DON'T DELETE.  Forces function into existence.
     unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
-    dprintln(3, "unused_ct = ", unused_ct)
+    @dprintln(3, "unused_ct = ", unused_ct)
 
     newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
     CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
@@ -1387,7 +1387,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
         end
     end
 
-    dprintln(3, "Before recreation or flattening")
+    @dprintln(3, "Before recreation or flattening")
 
     # Add the parfor stmt to the task function body.
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
@@ -1406,10 +1406,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
         ret_tt = Expr(:tuple)
         ret_tt.args = map(x -> x.reductionVar.typ, the_parfor.reductions)
         ret_types = eval(ret_tt)
-        dprintln(3, "ret_types = ", ret_types)
+        @dprintln(3, "ret_types = ", ret_types)
 
         ret_names = map(x -> x.reductionVar.name, the_parfor.reductions)
-        dprintln(3, "ret_names = ", ret_names)
+        @dprintln(3, "ret_names = ", ret_names)
 
         push!(task_body.args, TypedExpr(ret_types, :return, mk_tuple_expr(ret_names, ret_types)))
     else
@@ -1421,17 +1421,17 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # Create the new :lambda Expr for the task function.
     code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
 
-    dprintln(3, "New task = ", code)
+    @dprintln(3, "New task = ", code)
 
     m = methods(task_func, all_arg_type)
     if length(m) < 1
         error("Method for ", task_func_name, " is not found")
     else
-        dprintln(3,"New ", task_func_name, " = ", m)
+        @dprintln(3,"New ", task_func_name, " = ", m)
     end
     def = m[1].func.code
-    dprintln(3, "def = ", def, " type = ", typeof(def))
-    dprintln(3, "tfunc = ", def.tfunc)
+    @dprintln(3, "def = ", def, " type = ", typeof(def))
+    @dprintln(3, "tfunc = ", def.tfunc)
     def.tfunc[2] = ccall(:jl_compress_ast, Any, (Any,Any), def, code)
 
     m = methods(task_func, all_arg_type)
@@ -1441,7 +1441,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
         ccall(:set_j2c_task_arg_types, Void, (Ptr{UInt8}, Cint, Ptr{Cint}), task_func_name, length(arg_types), arg_types)
     end
     precompile(task_func, all_arg_type)
-    dprintln(3, "def post = ", def, " type = ", typeof(def))
+    @dprintln(3, "def post = ", def, " type = ", typeof(def))
 
     if DEBUG_LVL >= 3
         task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
@@ -1483,10 +1483,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
             end
  
             fstring = string(fstring, ")\nend\n")
-            dprintln(3, "Reduction function for threads mode = ", fstring)
+            @dprintln(3, "Reduction function for threads mode = ", fstring)
             fparse  = parse(fstring)
             feval   = eval(fparse)
-            dprintln(3, "Reduction function for threads done.")
+            @dprintln(3, "Reduction function for threads done.")
             end
         else
             # The name of the new reduction function.
@@ -1529,15 +1529,15 @@ function parforToTask(parfor_index, bb_statements, body, state)
                 c_reduction_func = string(c_reduction_func, "*((", the_types[i], "*)accumulator[", i-1, "]) = *((", the_types[i], "*)accumulator[", i-1, "]) ", this_op, " *((", the_types[i], "*)new_reduction_vars[", i-1, "]);\n")
             end
             c_reduction_func = string(c_reduction_func, "}\n")
-            dprintln(3,"Created reduction function is:")
-            dprintln(3,c_reduction_func)
+            @dprintln(3,"Created reduction function is:")
+            @dprintln(3,c_reduction_func)
 
             # Tell CGen to put this reduction function directly into the C code.
             ccall(:set_j2c_add_c_code, Void, (Ptr{UInt8},), c_reduction_func)
         end
     end
 
-    dprintln(3,"End of parforToTask")
+    @dprintln(3,"End of parforToTask")
 
     ret = TaskInfo(task_func,     # The task function that we just generated of type Function.
                     task_func_sym, # The task function's Symbol name.

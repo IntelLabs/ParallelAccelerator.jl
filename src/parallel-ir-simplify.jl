@@ -28,7 +28,7 @@ Try to hoist allocations outside the loop if possible.
 """
 function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
     for l in domLoop.loops
-        dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
+        @dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
         headBlk = lives.cfg.basic_blocks[ l.head ]
         tailBlk = lives.cfg.basic_blocks[ l.back_edge ]
         if length(headBlk.preds) != 2
@@ -46,11 +46,11 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
         preHead = preBlk.statements[end].index
         head = headBlk.statements[1].index
         tail = tailBlk.statements[1].index
-        dprintln(3, "HA: line before head is ", ast[preHead-1])
+        @dprintln(3, "HA: line before head is ", ast[preHead-1])
         # Is iterating through statement indices this way safe?
         for i = head:tail
             if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
-                dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
+                @dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
                 lhs = ast[i].args[1]
                 rhs = ast[i].args[2]
                 if isa(lhs, SymbolNode) lhs = lhs.name end
@@ -65,14 +65,14 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                                     break
                                 end
                             end
-                            dprintln(3, "HA: found correlation dimension ", d, " ", ok, " ", length(rhs.args)-6)
+                            @dprintln(3, "HA: found correlation dimension ", d, " ", ok, " ", length(rhs.args)-6)
                             if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
                                 rhs.args = rhs.args[1:6]
                                 for s in d
                                     push!(rhs.args, SymbolNode(s, Int))
                                     push!(rhs.args, 0)
                                 end
-                                dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
+                                @dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
                                 ast = [ ast[1:preHead-1], ast[i], ast[preHead:i-1], ast[i+1:end] ]
                                 break
                             end
@@ -124,13 +124,13 @@ end
 # where they can't prevent fusion.
 """
 function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
-    dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
-    dprintln(3,"node.head: ", node.head)
+    @dprintln(3,"remove_no_deps starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"remove_no_deps node = ", node, " type = ", typeof(node))
+    @dprintln(3,"node.head: ", node.head)
     head = node.head
 
     if is_top_level
-        dprintln(3,"remove_no_deps is_top_level")
+        @dprintln(3,"remove_no_deps is_top_level")
 
         if head==:gotoifnot
             # Empty the state at the end or begining of a basic block
@@ -143,48 +143,48 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
             return CompilerTools.AstWalker.ASTWALK_REMOVE
         end
         if live_info == nothing
-            dprintln(3,"remove_no_deps no live_info")
+            @dprintln(3,"remove_no_deps no live_info")
         else
-            dprintln(3,"remove_no_deps live_info = ", live_info)
-            dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
+            @dprintln(3,"remove_no_deps live_info = ", live_info)
+            @dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
             if isa(node, Number) || isa(node, SymAllGen)
-                dprintln(3,"Eliminating dead node: ", node)
+                @dprintln(3,"Eliminating dead node: ", node)
                 return CompilerTools.AstWalker.ASTWALK_REMOVE
             elseif isAssignmentNode(node)
-                dprintln(3,"Is an assignment node.")
+                @dprintln(3,"Is an assignment node.")
                 lhs = node.args[1]
-                dprintln(4,lhs)
+                @dprintln(4,lhs)
                 rhs = node.args[2]
-                dprintln(4,rhs)
+                @dprintln(4,rhs)
 
                 if isa(rhs, Expr) && (is(rhs.head, :parfor) || is(rhs.head, :mmap!))
                     # Always keep parfor assignment in order to work with fusion
-                    dprintln(3, "keep assignment due to parfor or mmap! node")
+                    @dprintln(3, "keep assignment due to parfor or mmap! node")
                     return node
                 end
                 if isa(lhs, SymAllGen)
                     lhs_sym = toSymGen(lhs)
-                    dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
+                    @dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
                         data.change = true
-                        dprintln(3,"remove_no_deps lhs is NOT live out")
+                        @dprintln(3,"remove_no_deps lhs is NOT live out")
                         if hasNoSideEffects(rhs)
-                            dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+                            @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
                             # Just eliminate the assignment but keep the rhs
-                            dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym)
+                            @dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym)
                             return rhs
                         end
                     else
-                        dprintln(3,"remove_no_deps lhs is live out")
+                        @dprintln(3,"remove_no_deps lhs is live out")
                         if isa(rhs, SymAllGen)
                             rhs_sym = toSymGen(rhs)
-                            dprintln(3,"remove_no_deps rhs is symbol ", rhs_sym)
+                            @dprintln(3,"remove_no_deps rhs is symbol ", rhs_sym)
                             if !in(rhs_sym, live_info.live_out)
-                                dprintln(3,"remove_no_deps rhs is NOT live out")
+                                @dprintln(3,"remove_no_deps rhs is NOT live out")
                                 if haskey(data.dict_sym, rhs_sym)
                                     di = data.dict_sym[rhs_sym]
                                     di_live = di.live_info
@@ -194,26 +194,26 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                                         prev_expr.args[1] = lhs_sym
                                         delete!(data.dict_sym, rhs_sym)
                                         data.dict_sym[lhs_sym] = DictInfo(di_live, prev_expr)
-                                        dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
-                                        dprintln(3,"New expr = ", prev_expr)
+                                        @dprintln(3,"Lhs is live but rhs is not so substituting rhs for lhs ", lhs_sym, " => ", rhs_sym)
+                                        @dprintln(3,"New expr = ", prev_expr)
                                         return CompilerTools.AstWalker.ASTWALK_REMOVE
                                     else
                                         delete!(data.dict_sym, rhs_sym)
-                                        dprintln(3,"Lhs is live but rhs is not.  However, lhs is read between def of rhs and current statement so not substituting.")
+                                        @dprintln(3,"Lhs is live but rhs is not.  However, lhs is read between def of rhs and current statement so not substituting.")
                                     end
                                 end
                             else
-                                dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
+                                @dprintln(3,"Lhs and rhs are live so forgetting assignment ", lhs_sym, " ", rhs_sym)
                                 delete!(data.dict_sym, rhs_sym)
                             end
                         else
                             data.dict_sym[lhs_sym] = DictInfo(live_info, node)
-                            dprintln(3,"Remembering assignment for symbol ", lhs_sym, " ", rhs)
+                            @dprintln(3,"Remembering assignment for symbol ", lhs_sym, " ", rhs)
                         end
                     end
                 end
             else
-                dprintln(3,"Not an assignment node.")
+                @dprintln(3,"Not an assignment node.")
             end
 
             for j = live_info.use
@@ -224,15 +224,15 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
             #
             # If this statement defines some variable.
             if !isempty(live_info.def)
-                dprintln(3, "Checking if the statement is hoistable.")
-                dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
+                @dprintln(3, "Checking if the statement is hoistable.")
+                @dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
                 # Assume that hoisting is safe until proven otherwise.
                 dep_only_on_parameter = true
                 # Look at all the variables on which this statement depends.
                 # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
                 for i in live_info.use
                     if !in(i, data.hoistable_scalars)
-                        dprintln(3, "Could not hoist because the statement depends on :", i)
+                        @dprintln(3, "Could not hoist because the statement depends on :", i)
                         dep_only_on_parameter = false
                         break
                     end
@@ -241,17 +241,17 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                 if dep_only_on_parameter 
                     # If this statement is defined in more than one place then it isn't hoistable.
                     for i in live_info.def 
-                        dprintln(3,"Checking if ", i, " is multiply defined.")
-                        dprintln(4,"data.lives = ", data.lives)
+                        @dprintln(3,"Checking if ", i, " is multiply defined.")
+                        @dprintln(4,"data.lives = ", data.lives)
                         if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
-                            dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
+                            @dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
                             dep_only_on_parameter = false
                             break
                         end
                     end
 
                     if dep_only_on_parameter 
-                        dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
+                        @dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
                         push!(data.top_level_no_deps, node)
                         # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
                         for i in live_info.def
@@ -315,39 +315,39 @@ end
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
 function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_level, read)
-    dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
+    @dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
     if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
+        @dprintln(3,"node.head = ", node.head)
     end
     ntype = typeof(node)
 
     if is_top_level
-        dprintln(3,"remove_dead is_top_level")
+        @dprintln(3,"remove_dead is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
         if live_info != nothing
-            dprintln(3,"remove_dead live_info = ", live_info)
-            dprintln(3,"remove_dead live_info.use = ", live_info.use)
+            @dprintln(3,"remove_dead live_info = ", live_info)
+            @dprintln(3,"remove_dead live_info.use = ", live_info.use)
 
             if isAssignmentNode(node)
-                dprintln(3,"Is an assignment node.")
+                @dprintln(3,"Is an assignment node.")
                 lhs = node.args[1]
-                dprintln(4,lhs)
+                @dprintln(4,lhs)
                 rhs = node.args[2]
-                dprintln(4,rhs)
+                @dprintln(4,rhs)
 
                 if typeof(lhs) == SymbolNode || typeof(lhs) == Symbol
                     lhs_sym = getSName(lhs)
-                    dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
+                    @dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
-                        dprintln(3,"remove_dead lhs is NOT live out")
+                        @dprintln(3,"remove_dead lhs is NOT live out")
                         if hasNoSideEffects(rhs)
-                            dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
+                            @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
                             # Just eliminate the assignment but keep the rhs
-                            dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym, " rhs = ", rhs)
+                            @dprintln(3,"Eliminating dead variable but keeping rhs, dead = ", lhs_sym, " rhs = ", rhs)
                             return rhs
                         end
                     end
@@ -379,34 +379,34 @@ that in copies as copies[a] = b.  Then, later in the basic block if you see the 
 and if it is then it must be removed from copies.
 """
 function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
-    dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
+    @dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
     if typeof(node) == Expr
-        dprintln(3,"node.head = ", node.head)
+        @dprintln(3,"node.head = ", node.head)
     end
     ntype = typeof(node)
 
     if is_top_level
-        dprintln(3,"copy_propagate is_top_level")
+        @dprintln(3,"copy_propagate is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
 
         if live_info != nothing
             # Remove elements from data.copies if the original RHS is modified by this statement.
             # For each symbol modified by this statement...
             for def in live_info.def
-                dprintln(4,"Symbol ", def, " is modifed by current statement.")
+                @dprintln(4,"Symbol ", def, " is modifed by current statement.")
                 # For each copy we currently have recorded.
                 for copy in data.copies
-                    dprintln(4,"Current entry in data.copies = ", copy)
+                    @dprintln(4,"Current entry in data.copies = ", copy)
                     # If the rhs of the copy is modified by the statement.
                     if def == copy[2]
-                        dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
+                        @dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
                         # Then remove the lhs = rhs entry from copies.
                         delete!(data.copies, copy[1])
                     elseif def == copy[1]
                         # LHS is def.  We can maintain the mapping if RHS is dead.
                         if in(copy[2], live_info.live_out)
-                            dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
+                            @dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
                             # Then remove the lhs = rhs entry from copies.
                             delete!(data.copies, copy[1])
                         end
@@ -419,14 +419,14 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             # Only copy propagate within a basic block.  this is now a new basic block.
             data.copies = Dict{SymGen, SymGen}() 
         elseif isAssignmentNode(node)
-            dprintln(3,"Is an assignment node.")
+            @dprintln(3,"Is an assignment node.")
             lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
-            dprintln(4,lhs)
+            @dprintln(4,lhs)
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
-            dprintln(4,rhs)
+            @dprintln(4,rhs)
 
             if isa(rhs, SymAllGen)
-                dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
+                @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
                 data.copies[toSymGen(lhs)] = toSymGen(rhs)
             end
@@ -444,7 +444,7 @@ function copy_propagate_helper(node::Union{Symbol,GenSym},
                                read)
 
     if haskey(data.copies, node)
-        dprintln(3,"Replacing ", node, " with ", data.copies[node])
+        @dprintln(3,"Replacing ", node, " with ", data.copies[node])
         return data.copies[node]
     end
 
@@ -458,7 +458,7 @@ function copy_propagate_helper(node::SymbolNode,
                                read)
 
     if haskey(data.copies, node.name)
-        dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
+        @dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
         tmp_node = data.copies[node.name]
         return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
     end
@@ -472,26 +472,26 @@ function copy_propagate_helper(node::DomainLambda,
                                is_top_level,
                                read)
 
-    dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
+    @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
     intersection_dict = Dict{SymGen,Any}()
     # For each statement in this basic block of the form "A = B".
     for copy in data.copies
         # If the DomainLambda has an escaping def of the left-hand side.
         if haskey(node.linfo.escaping_defs, copy[1])
             ed = node.linfo.escaping_defs[copy[1]]
-            dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
+            @dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
             if typeof(copy[2]) == Symbol
                 ed.name = copy[2]
                 intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
                 delete!(node.linfo.escaping_defs, copy[1])
                 node.linfo.escaping_defs[copy[2]] = ed
             else
-                dprintln(3, "copy_progation didn't replace in DomainLambda since rhs is GenSym")
+                @dprintln(3, "copy_progation didn't replace in DomainLambda since rhs is GenSym")
             end
         end
     end
-    dprintln(3,"Intersection dict = ", intersection_dict)
-    dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
+    @dprintln(3,"Intersection dict = ", intersection_dict)
+    @dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
     if !isempty(intersection_dict)
         origBody      = node.genBody
         newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
@@ -512,12 +512,12 @@ end
 
 
 function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
-    dprintln(4,lhs)
-    dprintln(4,rhs)
+    @dprintln(4,lhs)
+    @dprintln(4,rhs)
 
     if rhs.head == :assertEqShape
         # assertEqShape lets us know that the array mentioned in the assertEqShape node must have the same shape.
-        dprintln(3,"Creating array length assignment from assertEqShape")
+        @dprintln(3,"Creating array length assignment from assertEqShape")
         from_assertEqShape(rhs, state)
     elseif rhs.head == :alloc
         # Here an array on the left-hand side is being created from size specification on the right-hand side.
@@ -525,30 +525,30 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         sizes = rhs.args[2]
         n = length(sizes)
         assert(n >= 1 && n <= 3)
-        dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
+        @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
         checkAndAddSymbolCorrelation(lhs, state, sizes)            
     elseif rhs.head == :call
-        dprintln(3, "Detected call rhs in from_assignment.")
-        dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
+        @dprintln(3, "Detected call rhs in from_assignment.")
+        @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
         if length(rhs.args) > 1
-            dprintln(3, " arg2 = ", rhs.args[2])
+            @dprintln(3, " arg2 = ", rhs.args[2])
         end
         if rhs.args[1] == TopNode(:ccall)
             # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
             if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
                 dim1 = rhs.args[7]
-                dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+                @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
                 checkAndAddSymbolCorrelation(lhs, state, [dim1])            
             elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
                 dim1 = rhs.args[7]
                 dim2 = rhs.args[9]
-                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+                @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
             elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
                 dim1 = rhs.args[7]
                 dim2 = rhs.args[9]
                 dim3 = rhs.args[11]
-                dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
+                @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
         elseif rhs.args[1] == TopNode(:arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
@@ -558,7 +558,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.lambdaInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
                 dim_symbols = [getSName(lhs)]
-                dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
+                @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(isa(array_param, SymbolNode) ? array_param.name : array_param, state, dim_symbols)
             end
         elseif rhs.args[1] == TopNode(:arraysize)
@@ -572,10 +572,10 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 for dim_i = 1:array_dims
                     push!(dim_symbols, lhs[dim_i])
                 end
-                dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
+                @dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
             elseif length(rhs.args) == 3
-                dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
+                @dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
             else
                 throw(string("arraysize AST node didn't have 2 or 3 arguments."))
             end
@@ -583,11 +583,11 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
     elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
         # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
         rhs_corr = extractArrayEquivalencies(rhs, state)
-        dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
+        @dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
         if rhs_corr != nothing && isa(lhs, SymAllGen)
             lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state) 
             merge_correlations(state, lhs_corr, rhs_corr)
-            dprintln(3,"Correlations after map merge into lhs")
+            @dprintln(3,"Correlations after map merge into lhs")
             print_correlations(3, state)
         end
     end
@@ -623,9 +623,9 @@ end
 AstWalk callback to determine the array equivalence classes.
 """
 function create_equivalence_classes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-    dprintln(3,"node.head: ", node.head)
+    @dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    @dprintln(3,"node.head: ", node.head)
     print_correlations(3, state)
 
     if node.head == :lambda
@@ -639,11 +639,11 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
 
     # We can only extract array equivalences from top-level statements.
     if is_top_level
-        dprintln(3,"create_equivalence_classes is_top_level")
+        @dprintln(3,"create_equivalence_classes is_top_level")
 
         if isAssignmentNode(node)
             # Here the node is an assignment.
-            dprintln(3,"Is an assignment node.")
+            @dprintln(3,"Is an assignment node.")
             create_equivalence_classes_assignment(node.args[1], node.args[2], state)
         else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
@@ -656,9 +656,9 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
 end
 
 function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
-    dprintln(3,"Not an assignment or expr node.")
+    @dprintln(3,"create_equivalence_classes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
+    @dprintln(3,"Not an assignment or expr node.")
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -679,19 +679,19 @@ function extractArrayEquivalencies(node :: Expr, state)
     # First arg is an array of input arrays to the mmap!
     input_arrays = input_args[1]
     len_input_arrays = length(input_arrays)
-    dprintln(2,"Number of input arrays: ", len_input_arrays)
-    dprintln(3,"input_arrays =  ", input_arrays)
+    @dprintln(2,"Number of input arrays: ", len_input_arrays)
+    @dprintln(3,"input_arrays =  ", input_arrays)
     assert(len_input_arrays > 0)
 
     # Second arg is a DomainLambda
     ftype = typeof(input_args[2])
-    dprintln(2,"extractArrayEquivalencies function = ",input_args[2])
+    @dprintln(2,"extractArrayEquivalencies function = ",input_args[2])
     if(ftype != DomainLambda)
         throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
     end
 
 #    if !isa(input_arrays[1], SymAllGen)
-#        dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
+#        @dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
 #        return nothing
 #    end
 
@@ -700,7 +700,7 @@ function extractArrayEquivalencies(node :: Expr, state)
         push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
 #    num_dim_inputs = findSelectedDimensions(inputInfo, state)
-    dprintln(3, "inputInfo = ", inputInfo)
+    @dprintln(3, "inputInfo = ", inputInfo)
 
     main_length_correlation = getCorrelation(inputInfo[1], state)
     # Get the correlation set of the first input array.
@@ -709,7 +709,7 @@ function extractArrayEquivalencies(node :: Expr, state)
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
     for i = 2:length(inputInfo)
-        dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
+        @dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
         this_correlation = getCorrelation(inputInfo[i], state)
         # Verify that all the inputs are the same size by verifying they are in the same correlation set.
         if this_correlation != main_length_correlation
@@ -717,7 +717,7 @@ function extractArrayEquivalencies(node :: Expr, state)
         end
     end
 
-    dprintln(3,"extractArrayEq result")
+    @dprintln(3,"extractArrayEq result")
     print_correlations(3, state)
     return main_length_correlation
 end
@@ -740,7 +740,7 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
         push!(dim_names, dim_array[i].name)
     end
 
-    dprintln(3, "Will establish array length correlation for const size lhs = ", lhs, " dims = ", dim_names)
+    @dprintln(3, "Will establish array length correlation for const size lhs = ", lhs, " dims = ", dim_names)
     getOrAddSymbolCorrelation(lhs, state, dim_names)
     return true
 end
@@ -765,22 +765,22 @@ Create array equivalences from an assertEqShape AST node.
 There are two arrays in the args to assertEqShape.
 """
 function from_assertEqShape(node::Expr, state)
-    dprintln(3,"from_assertEqShape ", node)
+    @dprintln(3,"from_assertEqShape ", node)
     a1 = node.args[1]    # first array to compare
     a2 = node.args[2]    # second array to compare
     a1_corr = getOrAddArrayCorrelation(toSymGen(a1), state)  # get the length set of the first array
     a2_corr = getOrAddArrayCorrelation(toSymGen(a2), state)  # get the length set of the second array
     if a1_corr == a2_corr
         # If they are the same then return an empty array so that the statement is eliminated.
-        dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
+        @dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)
         return true
     else
-        dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations")
+        @dprintln(3,"a1 = ", a1, " ", a1_corr, " a2 = ", a2, " ", a2_corr, " correlations")
         print_correlations(3, state)
         # If assertEqShape is called on e.g., inputs, then we can't statically eliminate the assignment
         # but if the assert doesn't fire then we do thereafter know that the arrays are in the same length set.
         merge_correlations(state, a1_corr, a2_corr)
-        dprintln(3,"assertEqShape NOT statically verified.  Merge correlations")
+        @dprintln(3,"assertEqShape NOT statically verified.  Merge correlations")
         print_correlations(3, state)
         return false
     end

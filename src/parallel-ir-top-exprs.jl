@@ -35,7 +35,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
     for i = 1:len
         # Record the top-level statement number in the processing state.
         state.top_level_number = i
-        dprintln(2,"Processing top-level ast #",i," depth=",depth)
+        @dprintln(2,"Processing top-level ast #",i," depth=",depth)
 
         # Convert the current expression.
         new_exprs = from_expr(ast[i], depth, state, true)
@@ -45,22 +45,22 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
             # If this isn't the first statement processed that created something.
             if length(body) != 0
                 last_node = body[end]
-                dprintln(3, "Should fuse?")
-                dprintln(3, "new = ", new_exprs[1])
-                dprintln(3, "last = ", last_node)
+                @dprintln(3, "Should fuse?")
+                @dprintln(3, "new = ", new_exprs[1])
+                @dprintln(3, "last = ", last_node)
 
                 # See if the previous expression is a parfor.
                 is_last_parfor = isParforAssignmentNode(last_node)    || isBareParfor(last_node)
                 # See if the new expression is a parfor.
                 is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
-                dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
+                @dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
 
                 if is_last_parfor && !is_new_parfor
                     simple = false
                     for j = 1:length(new_exprs)
                         e = new_exprs[j]
                         if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (e.args[2].args[1] == TopNode(:box))
-                            dprintln(3, "box operation detected")
+                            @dprintln(3, "box operation detected")
                             simple = true
                         else
                             simple = false
@@ -68,7 +68,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
                         end
                     end
                     if simple
-                        dprintln(3, "insert into pre_next_parfor")
+                        @dprintln(3, "insert into pre_next_parfor")
                         append!(pre_next_parfor, new_exprs)
                         continue
                     end
@@ -76,11 +76,11 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
 
                 # If both are parfors then try to fuse them.
                 if is_new_parfor && is_last_parfor
-                    dprintln(3,"Starting fusion ", fuse_number)
+                    @dprintln(3,"Starting fusion ", fuse_number)
                     new_exprs[1]
                     fuse_number = fuse_number + 1
                     if length(pre_next_parfor) > 0
-                        dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
+                        @dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
                         new_parfor = getParforNode(new_exprs[1])
                         new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
                     end
@@ -120,7 +120,7 @@ function top_level_expand_pre(body, state)
     for i = 1:length(body)
         if isParforAssignmentNode(body[i])
             parfor_assignment = body[i]
-            dprintln(3,"Expanding a parfor assignment node")
+            @dprintln(3,"Expanding a parfor assignment node")
 
             the_parfor = getParforNode(parfor_assignment)
             lhs = getLhsFromAssignment(parfor_assignment)
@@ -189,7 +189,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         bb_num = CompilerTools.LivenessAnalysis.find_bb_for_statement(i, new_lives)
         if bb_num == nothing
             if typeof(body[i]) != LabelNode
-                dprintln(0,"statement that couldn't be found in liveness analysis ", body[i])
+                @dprintln(0,"statement that couldn't be found in liveness analysis ", body[i])
                 throw(string("find_bb_for_statement should not fail for non-LabelNodes"))
             end
             continue
@@ -203,7 +203,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         end
     end
 
-    dprintln(3,"map_reduced_bb_num_to_body = ", map_reduced_bb_num_to_body)
+    @dprintln(3,"map_reduced_bb_num_to_body = ", map_reduced_bb_num_to_body)
 
     bbs_in_task_graph_loops = Set()
     bbs = new_lives.basic_blocks
@@ -224,7 +224,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                     length(back_bb.succs) == 2
                     before_head = getNonBlock(head_bb.preds, one_loop.back_edge)
                     assert(typeof(before_head) == CompilerTools.LivenessAnalysis.BasicBlock)
-                    dprintln(3,"head_bb.preds = ", head_bb.preds, " one_loop.back_edge = ", one_loop.back_edge, " before_head = ", before_head)
+                    @dprintln(3,"head_bb.preds = ", head_bb.preds, " one_loop.back_edge = ", one_loop.back_edge, " before_head = ", before_head)
                     # assert(length(before_head) == 1)
                     after_back  = getNonBlock(back_bb.succs, one_loop.head)
                     assert(typeof(after_back) == CompilerTools.LivenessAnalysis.BasicBlock)
@@ -276,9 +276,9 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
                     end
                 else
-                    dprintln(1,"Found a loop with 2 members but unexpected head or back_edge structure.")
-                    dprintln(1,"head = ", head_bb)
-                    dprintln(1,"back_edge = ", back_bb)
+                    @dprintln(1,"Found a loop with 2 members but unexpected head or back_edge structure.")
+                    @dprintln(1,"head = ", head_bb)
+                    @dprintln(1,"back_edge = ", back_bb)
                 end
             end
         end
@@ -314,7 +314,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
                     # Remember this section of code as something to transform into task graph format.
                     #push!(tgsections, TaskGraphSection(first_parfor, last_parfor, body[first_parfor:last_parfor]))
-                    #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+                    #@dprintln(3,"Adding TaskGraphSection ", tgsections[end])
 
                     push!(rr, ReplacedRegion(first_parfor, last_parfor, bb_num, makeTasks(first_parfor, last_parfor, body, bb_live_info, state, task_graph_mode)))
                 end
@@ -324,7 +324,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         # Remember this section of code as something to transform into task graph format.
                         cur_start = cur_end = body_indices[j]
                         #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                        #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+                        #@dprintln(3,"Adding TaskGraphSection ", tgsections[end])
 
                         push!(rr, ReplacedRegion(body_indices[j], body_indices[j], bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
                     end
@@ -344,25 +344,25 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         push!(stmts_in_batch, body_indices[j])
                     else
                         if cur_start != nothing
-                            dprintln(3,"Non-taskable parfor ", stmts_in_batch, " ", body[body_indices[j]])
+                            @dprintln(3,"Non-taskable parfor ", stmts_in_batch, " ", body[body_indices[j]])
                             in_vars, out, locals = io_of_stmts_in_batch = getIO(stmts_in_batch, bb_live_info.statements)
-                            dprintln(3,"in_vars = ", in_vars)
-                            dprintln(3,"out_vars = ", out)
-                            dprintln(3,"local_vars = ", locals)
+                            @dprintln(3,"in_vars = ", in_vars)
+                            @dprintln(3,"out_vars = ", out)
+                            @dprintln(3,"local_vars = ", locals)
 
                             cur_in_vars, cur_out, cur_locals = io_of_stmts_in_batch = getIO([body_indices[j]], bb_live_info.statements)
-                            dprintln(3,"cur_in_vars = ", cur_in_vars)
-                            dprintln(3,"cur_out_vars = ", cur_out)
-                            dprintln(3,"cur_local_vars = ", cur_locals)
+                            @dprintln(3,"cur_in_vars = ", cur_in_vars)
+                            @dprintln(3,"cur_out_vars = ", cur_out)
+                            @dprintln(3,"cur_local_vars = ", cur_locals)
 
                             if isempty(intersect(out, cur_in_vars))
-                                dprintln(3,"Sequential statement doesn't conflict with batch.")
+                                @dprintln(3,"Sequential statement doesn't conflict with batch.")
                                 push!(stmts_in_batch, body_indices[j])
                                 cur_end = body_indices[j]
                             else
                                 # Remember this section of code (excluding current statement) as something to transform into task graph format.
                                 #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                                #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+                                #@dprintln(3,"Adding TaskGraphSection ", tgsections[end])
 
                                 push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
 
@@ -376,7 +376,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                 if cur_start != nothing
                     # Remember this section of code as something to transform into task graph format.
                     #push!(tgsections, TaskGraphSection(cur_start, cur_end, body[cur_start:cur_end]))
-                    #dprintln(3,"Adding TaskGraphSection ", tgsections[end])
+                    #@dprintln(3,"Adding TaskGraphSection ", tgsections[end])
 
                     push!(rr, ReplacedRegion(cur_start, cur_end, bb_num, makeTasks(cur_start, cur_end, body, bb_live_info, state, task_graph_mode)))
                 end
@@ -386,18 +386,18 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         end
     end
 
-    dprintln(3,"Regions prior to sorting.")
-    dprintln(3,rr)
+    @dprintln(3,"Regions prior to sorting.")
+    @dprintln(3,rr)
     # We replace regions in reverse order of index so that we don't mess up indices that we need to replace later.
     sort!(rr, by=x -> x.end_index, rev=true)
-    dprintln(3,"Regions after sorting.")
-    dprintln(3,rr)
+    @dprintln(3,"Regions after sorting.")
+    @dprintln(3,rr)
 
     printBody(3,body)
 
-    dprintln(2, "replaced_regions")
+    @dprintln(2, "replaced_regions")
     for i = 1:length(rr)
-        dprintln(2, rr[i])
+        @dprintln(2, rr[i])
 
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
             # New body starts with the pre-task graph portion
@@ -407,7 +407,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
             # Then adds calls for each task
             for j = 1:length(rr[i].tasks)
                 cur_task = rr[i].tasks[j]
-                dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
+                @dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
 
                 process_cur_task(cur_task, new_body, state)
             end
@@ -423,7 +423,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
             body = new_body
 
-            dprintln(3,"new_body after region ", i, " replaced")
+            @dprintln(3,"new_body after region ", i, " replaced")
             printBody(3,body)
         elseif ParallelAccelerator.client_intel_task_graph
             # new body starts with the pre-task graph portion
@@ -433,16 +433,16 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
             # then adds calls for each task
             for j = 1:length(rr[i].tasks)
                 cur_task = rr[i].tasks[j]
-                dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
+                @dprintln(3,"cur_task = ", cur_task, " type = ", typeof(cur_task))
                 if typeof(cur_task) == TaskInfo
-                    dprintln(3,"Inserting call to insert_divisible_task")
-                    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+                    @dprintln(3,"Inserting call to insert_divisible_task")
+                    @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
                     in_len  = length(cur_task.input_symbols)
                     mod_len = length(cur_task.modified_inputs)
                     io_len  = length(cur_task.io_symbols)
                     red_len = length(cur_task.reduction_vars)
-                    dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
+                    @dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
 
                     dims = length(cur_task.loopNests)
                     if dims > 0
@@ -484,35 +484,35 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         # Fill in the arg metadata.
                         for l = 1:in_len
                             if cur_task.input_symbols[l].typ.name == Array.name
-                                dprintln(3, "is array")
+                                @dprintln(3, "is array")
                                 push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN, create_array_access_desc(cur_task.input_symbols[l])))
                             else
-                                dprintln(3, "is not array")
+                                @dprintln(3, "is not array")
                                 push!(itn.args, pir_arg_metadata(cur_task.input_symbols[l], ARG_OPT_IN))
                             end
                         end
                         for l = 1:mod_len
-                            dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
+                            @dprintln(3, "mod_len loop: ", l, " ", cur_task.modified_inputs[l])
                             if cur_task.modified_inputs[l].typ.name == Array.name
-                                dprintln(3, "is array")
+                                @dprintln(3, "is array")
                                 push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT, create_array_access_desc(cur_task.modified_inputs[l])))
                             else
-                                dprintln(3, "is not array")
+                                @dprintln(3, "is not array")
                                 push!(itn.args, pir_arg_metadata(cur_task.modified_inputs[l], ARG_OPT_OUT))
                             end
                         end
                         for l = 1:io_len
-                            dprintln(3, "io_len loop: ", l, " ", cur_task.io_symbols[l])
+                            @dprintln(3, "io_len loop: ", l, " ", cur_task.io_symbols[l])
                             if cur_task.io_symbols[l].typ.name == Array.name
-                                dprintln(3, "is array")
+                                @dprintln(3, "is array")
                                 push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT, create_array_access_desc(cur_task.io_symbols[l])))
                             else
-                                dprintln(3, "is not array")
+                                @dprintln(3, "is not array")
                                 push!(itn.args, pir_arg_metadata(cur_task.io_symbols[l], ARG_OPT_INOUT))
                             end
                         end
                         for l = 1:red_len
-                            dprintln(3, "red_len loop: ", l, " ", cur_task.reduction_vars[l])
+                            @dprintln(3, "red_len loop: ", l, " ", cur_task.reduction_vars[l])
                             push!(itn.args, pir_arg_metadata(cur_task.reduction_vars[l], ARG_OPT_ACCUMULATOR))
                         end
 
@@ -520,7 +520,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         itn.task_func = cur_task.task_func
                         itn.join_func = cur_task.join_func
 
-                        dprintln(3,"InsertTaskNode = ", itn)
+                        @dprintln(3,"InsertTaskNode = ", itn)
 
                         insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn) 
                         push!(new_body, insert_task_expr)
@@ -543,7 +543,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
             body = new_body
 
-            dprintln(3,"new_body after region ", i, " replaced")
+            @dprintln(3,"new_body after region ", i, " replaced")
             printBody(3,body)
         elseif run_as_task_decrement()
             # new body starts with the pre-task graph portion
@@ -554,9 +554,9 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                 cur_task = rr[i].tasks[j]
                 assert(typeof(cur_task) == TaskInfo)
 
-                dprintln(3,"Inserting call to function")
-                dprintln(3,cur_task, " type = ", typeof(cur_task))
-                dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+                @dprintln(3,"Inserting call to function")
+                @dprintln(3,cur_task, " type = ", typeof(cur_task))
+                @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
                 in_len = length(cur_task.input_symbols)
                 out_len = length(cur_task.output_symbols)
@@ -587,13 +587,13 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
             body = new_body
 
-            dprintln(3,"new_body after region ", i, " replaced")
+            @dprintln(3,"new_body after region ", i, " replaced")
             printBody(3,body)
         end
     end
 
     #    throw(string("debugging task graph"))
-    dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
+    @dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
 
     return body
 end
@@ -676,18 +676,18 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_var = string(cur_task.task_func,"_range_var")
     range_sym = symbol(range_var)
 
-    dprintln(3,"Inserting call to jl_threading_run ", range_sym)
-    dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+    @dprintln(3,"Inserting call to jl_threading_run ", range_sym)
+    @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
     in_len  = length(cur_task.input_symbols)
     mod_len = length(cur_task.modified_inputs)
     io_len  = length(cur_task.io_symbols)
     red_len = length(cur_task.reduction_vars)
-    dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
+    @dprintln(3, "inputs, modifieds, io_sym, reductions = ", cur_task.input_symbols, " ", cur_task.modified_inputs, " ", cur_task.io_symbols, " ", cur_task.reduction_vars)
 
     dims = length(cur_task.loopNests)
     if dims > 0
-        dprintln(3,"dims > 0")
+        @dprintln(3,"dims > 0")
         assert(dims <= 3)
         #whole_iteration_range = pir_range_actual()
         #whole_iteration_range.dim = dims
@@ -700,10 +700,10 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
             #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
         end
-        dprintln(3, "cstr_params = ", cstr_params)
+        @dprintln(3, "cstr_params = ", cstr_params)
         cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
         whole_range_expr = mk_assignment_expr(SymbolNode(range_sym, pir_range_actual), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
-        dprintln(3,"whole_range_expr = ", whole_range_expr)
+        @dprintln(3,"whole_range_expr = ", whole_range_expr)
         push!(new_body, whole_range_expr)
 
         #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", SymbolNode(range_sym, pir_range_actual)))
@@ -729,9 +729,9 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             push!(args_type.args,  cur_task.reduction_vars[l].typ)
         end
 
-        dprintln(3,"task_func = ", cur_task.task_func)
-        #dprintln(3,"whole_iteration_range = ", whole_iteration_range)
-        dprintln(3,"real_args_build = ", real_args_build)
+        @dprintln(3,"task_func = ", cur_task.task_func)
+        #@dprintln(3,"whole_iteration_range = ", whole_iteration_range)
+        @dprintln(3,"real_args_build = ", real_args_build)
 
         tup_var = string(cur_task.task_func,"_tup_var")
         tup_sym = symbol(tup_var)
@@ -743,7 +743,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         else
             call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
             call_tup = eval(call_tup_expr)
-            dprintln(3, "call_tup = ", call_tup)
+            @dprintln(3, "call_tup = ", call_tup)
             #push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, call_tup), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
             push!(new_body, mk_assignment_expr(SymbolNode(tup_sym, SimpleVector), mk_svec_expr(cur_task.task_func, SymbolNode(range_sym, pir_range_actual), real_args_build...), state))
         end
@@ -785,11 +785,11 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     
     body = top_level_mk_body(ast, depth, state)
 
-    dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+    @dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
 
-    dprintln(3,"Body after first pass before task graph creation.")
+    @dprintln(3,"Body after first pass before task graph creation.")
     for j = 1:length(body)
-        dprintln(3, body[j])
+        @dprintln(3, body[j])
     end
 
     # TASK GRAPH
@@ -802,38 +802,38 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     body = top_level_expand_pre(body, state)
 
-    dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
+    @dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
 
 
-    dprintln(3,"expanded_body = ")
+    @dprintln(3,"expanded_body = ")
     for j = 1:length(body)
-        dprintln(3, body[j])
+        @dprintln(3, body[j])
     end
 
-    dprintln(3,"lambdaInfo = ", state.lambdaInfo)
+    @dprintln(3,"lambdaInfo = ", state.lambdaInfo)
     fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-    dprintln(3,"fake_body = ", fake_body)
+    @dprintln(3,"fake_body = ", fake_body)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-    dprintln(1,"Starting loop analysis.")
+    @dprintln(1,"Starting loop analysis.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-    dprintln(1,"Finished loop analysis.")
+    @dprintln(1,"Finished loop analysis.")
 
     if hoist_allocation == 1
         body = hoistAllocation(body, new_lives, loop_info, state)
         fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
         new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
-        dprintln(1,"Starting loop analysis again.")
+        @dprintln(1,"Starting loop analysis again.")
         loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
-        dprintln(1,"Finished loop analysis.")
+        @dprintln(1,"Finished loop analysis.")
     end
 
-    dprintln(3,"new_lives = ", new_lives)
-    dprintln(3,"loop_info = ", loop_info)
+    @dprintln(3,"new_lives = ", new_lives)
+    @dprintln(3,"loop_info = ", loop_info)
 
     # task mode commented out
     #=
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
-        dprintln(3, "Entering top_level_mk_task_graph.")
+        @dprintln(3, "Entering top_level_mk_task_graph.")
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
@@ -845,7 +845,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     LoopEndDict = Dict{Symbol,Array{Any,1}}()
 
     for i = 1:length(body)
-        dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
+        @dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
             # Convert loophead and loopend into Julia loops.
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
             typeof(body[i]) == Expr && 

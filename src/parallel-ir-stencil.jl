@@ -107,18 +107,18 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   kernArgs[1] = idxNodes
   kernArgs[2] = strideNodes
   kernArgs[3] = bufs
-  dprintln(3,"kernArgs = ", kernArgs)
+  @dprintln(3,"kernArgs = ", kernArgs)
   bodyExpr = relabel(kernelF.genBody(linfo, kernArgs).args, irState)
   # rotate
   assert(is(bodyExpr[end].head, :return))
-  dprintln(3,"bodyExpr = ")
+  @dprintln(3,"bodyExpr = ")
   printBody(3, bodyExpr)
   local rotateExpr = Array(Any, 0)
   local revertExpr = Array(Any, 0)
   # warn(string("last return=", bodyExpr[end]))
   if bodyExpr[end].args[1] != nothing
     rets = bodyExpr[end].args
-    dprintln(3,"bodyExpr[end].args = ", rets)
+    @dprintln(3,"bodyExpr[end].args = ", rets)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
       push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), rets[i]))

@@ -32,7 +32,7 @@ using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
 import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..DistributedIR, ..CGen, ..DomainIR.isarray, ..API
-import ..dprint, ..dprintln, ..DEBUG_LVL
+import ..@dprint, ..@dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
 
@@ -43,7 +43,7 @@ const PROXYONLY=3
 # Convert regular Julia types to make them appropriate for calling C code.
 # Note that it only handles conversion of () and Array, not tuples.
 function convert_to_ccall_typ(typ)
-  dprintln(3,"convert_to_ccall_typ typ = ", typ, " typeof(typ) = ", typeof(typ))
+  @dprintln(3,"convert_to_ccall_typ typ = ", typ, " typeof(typ) = ", typeof(typ))
   # if there a better way to check for typ being an array DataType?
   if isarray(typ)
     # If it is an Array type then convert to Ptr type.
@@ -63,8 +63,8 @@ function convert_sig(sig)
   # fill in the new_tuple args/elements by converting the individual elements of the incoming signature
   new_tuple.args = [ convert_to_ccall_typ(sig[i])[1] for i = 1:length(sig) ]
   sig_ndims      = [ convert_to_ccall_typ(sig[i])[2] for i = 1:length(sig) ]
-  dprintln(3,"new_tuple.args = ", new_tuple.args)
-  dprintln(3,"sig_ndims = ", sig_ndims)
+  @dprintln(3,"new_tuple.args = ", new_tuple.args)
+  @dprintln(3,"sig_ndims = ", sig_ndims)
   return (eval(new_tuple), sig_ndims)
 end
 
@@ -122,8 +122,8 @@ function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   fname = bytestring(convert(Cstring, func.name))
   code = DomainIR.from_expr(fname, func.mod, ast)
   dir_time = time_ns() - dir_start
-  dprintln(3, "domain code = ", code)
-  dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(dir_time))
+  @dprintln(3, "domain code = ", code)
+  @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(dir_time))
   return code
 end
 
@@ -134,14 +134,14 @@ function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
 #  Profile.print()
   code = ParallelIR.from_root(string(func.name), ast)
   pir_time = time_ns() - pir_start
-  dprintln(3, "parallel code = ", code)
-  dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
+  @dprintln(3, "parallel code = ", code)
+  @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
   return code
 end
 
 function toFlatParfors(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   code = ParallelIR.flattenParfors(string(func.name), ast)
-  dprintln(3, "flattened code = ", code)
+  @dprintln(3, "flattened code = ", code)
   return code
 end
 
@@ -149,8 +149,8 @@ function toDistributedIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   dir_start = time_ns()
   code = DistributedIR.from_root(string(func.name), ast)
   dir_time = time_ns() - dir_start
-  dprintln(3, "Distributed code = ", code)
-  dprintln(1, "accelerate: DistributedIR conversion time = ", ns_to_sec(dir_time))
+  @dprintln(3, "Distributed code = ", code)
+  @dprintln(1, "accelerate: DistributedIR conversion time = ", ns_to_sec(dir_time))
   return code
 end
 
@@ -174,7 +174,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
           t = eltype(t)
       end
   end
-  dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
+  @dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
 
   lambdaInfo = lambdaExprToLambdaInfo(code)
   ret_type = getReturnType(lambdaInfo)
@@ -190,7 +190,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
           t = eltype(t)
       end
   end
-  dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
+  @dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
  
   outfile_name = CGen.writec(CGen.from_root_entry(code, function_name_string, array_types_in_sig))
   CGen.compile(outfile_name)
@@ -199,9 +199,9 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
   proxy_sym = gensym(proxy_name)
-  dprintln(2, "ParallelAccelerator.accelerate for ", proxy_name)
-  dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
-  dprintln(2, "dyn_lib = ", dyn_lib)
+  @dprintln(2, "ParallelAccelerator.accelerate for ", proxy_name)
+  @dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
+  @dprintln(2, "dyn_lib = ", dyn_lib)
   
   # This is the name of the function that j2c generates.
   j2c_name = string("_",function_name_string,"_")
@@ -209,9 +209,9 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
 
   # Convert Arrays in signature to Ptr and add extra arguments for array dimensions
   (modified_sig, sig_dims) = convert_sig(signature)
-  dprintln(2, "modified_sig = ", modified_sig)
-  dprintln(2, "sig_dims = ", sig_dims)
-  dprintln(3, "len? ", length(code.args[1]), length(sig_dims))
+  @dprintln(2, "modified_sig = ", modified_sig)
+  @dprintln(2, "sig_dims = ", sig_dims)
+  @dprintln(3, "len? ", length(code.args[1]), length(sig_dims))
  
   original_args = Symbol[ gensym(string(s)) for s in code.args[1] ]
   assert(length(original_args) == length(sig_dims))
@@ -272,12 +272,12 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       end
   end
   
-  dprintln(2,"signature = ", signature, " -> ", ret_typs)
-  dprintln(2,"modified_args = ", typeof(modified_args), " ", modified_args)
-  dprintln(2,"extra_sig = ", extra_sig)
-  dprintln(2,"ret_arg_exps = ", ret_arg_exps)
+  @dprintln(2,"signature = ", signature, " -> ", ret_typs)
+  @dprintln(2,"modified_args = ", typeof(modified_args), " ", modified_args)
+  @dprintln(2,"extra_sig = ", extra_sig)
+  @dprintln(2,"ret_arg_exps = ", ret_arg_exps)
   tuple_sig_expr = Expr(:tuple,Cint,modified_sig...,extra_sig...)
-  dprintln(2,"tuple_sig_expr = ", tuple_sig_expr)
+  @dprintln(2,"tuple_sig_expr = ", tuple_sig_expr)
   proxy_func = @eval function ($proxy_sym)($(original_args...))
       # As we convert arrays into pointers that are stored in j2c_array objects, we remember in this
       # dictionary a mapping between an array's data pointer and the array object itself.  Later,
@@ -286,7 +286,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       # array we passed to it as input and so from_j2c_array will get the original array from
       # ptr_array_dict and will alias to the returned array.
       ptr_array_dict = Dict{Ptr{Void},Array}()
-      #dprintln(2,"Running proxy function.")
+      #@dprintln(2,"Running proxy function.")
       ret_args = Array(Any, $num_rets)
       for i = 1:$num_rets
         (t, is_array) = $(ret_typs)[i]
@@ -297,14 +297,14 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       end
       $(j2c_array) = [ $(extra_inits...) ]
       #j2c_array_typs = Any[ typeof(x) for x in $(extra_inits...) ]
-      #dprintln(3, "before ccall: ret_args = ", Any[$(ret_arg_exps...)])
-      #dprintln(3, "before ccall: modified_args = ", Any[$(modified_args...)])
+      #@dprintln(3, "before ccall: ret_args = ", Any[$(ret_arg_exps...)])
+      #@dprintln(3, "before ccall: modified_args = ", Any[$(modified_args...)])
       ccall(($j2c_name, $dyn_lib), Void, $tuple_sig_expr, $run_where, $(modified_args...), $(ret_arg_exps...))
       result = Array(Any, $num_rets)
       for i = 1:$num_rets
         (t, is_array) = $(ret_typs)[i]
         if is_array
-          # dprintln(3, "ret=", ret_args[i][1], "t=", t)
+          # @dprintln(3, "ret=", ret_args[i][1], "t=", t)
           result[i] = from_j2c_array(ret_args[i][1], t.parameters[1], t.parameters[2], ptr_array_dict)
         else
           result[i] = convert(t, (ret_args[i][1]))
@@ -319,7 +319,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   
   off_time = time_ns() - off_time_start
-  dprintln(1, "accelerate: accelerate conversion time = ", ns_to_sec(off_time))
+  @dprintln(1, "accelerate: accelerate conversion time = ", ns_to_sec(off_time))
   return proxy_func
 end
 
@@ -343,9 +343,9 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
     return func
   end
 
-  dprintln(2, "Starting accelerate for ", func, " with signature ", signature)
+  @dprintln(2, "Starting accelerate for ", func, " with signature ", signature)
   if !isgeneric(func)
-    dprintln(1, "method ", func, " is not generic.")
+    @dprintln(1, "method ", func, " is not generic.")
     return nothing
   end
   m = methods(func, signature)

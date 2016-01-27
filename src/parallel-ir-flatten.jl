@@ -27,7 +27,7 @@ function flattenParfors(function_name, ast::Expr)
     flatten_start = time_ns()
 
     assert(ast.head == :lambda)
-    dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
+    @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
     start_time = time_ns()
 
@@ -39,11 +39,11 @@ function flattenParfors(function_name, ast::Expr)
     flattenParfors(expanded_args, args)
     args = expanded_args
 
-    dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
+    @dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
 
-    dprintln(3, "After flattening")
+    @dprintln(3, "After flattening")
     for j = 1:length(args)
-        dprintln(3, args[j])
+        @dprintln(3, args[j])
     end
 
     if shortcut_array_assignment != 0
@@ -55,12 +55,12 @@ function flattenParfors(function_name, ast::Expr)
             if isAssignmentNode(node)
                 lhs = node.args[1]
                 rhs = node.args[2]
-                dprintln(3,"shortcut_array_assignment = ", node)
+                @dprintln(3,"shortcut_array_assignment = ", node)
                 if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
-                    dprintln(3,"shortcut_array_assignment to array detected")
+                    @dprintln(3,"shortcut_array_assignment to array detected")
                     live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
                     if !in(rhs.name, live_info.live_out)
-                        dprintln(3,"rhs is dead")
+                        @dprintln(3,"rhs is dead")
                         # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
                         push!(node.args, RhsDead())
                     end
@@ -76,7 +76,7 @@ end
 
 function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1})
     for i = 1:length(in_body)
-        dprintln(3,"Flatten index ", i, " ", in_body[i], " type = ", typeof(in_body[i]))
+        @dprintln(3,"Flatten index ", i, " ", in_body[i], " type = ", typeof(in_body[i]))
         if isBareParfor(in_body[i])
             flattenParfor(out_body, in_body[i].args[1])
         else
@@ -92,7 +92,7 @@ pre-statements and post-statements are already elevated by this point.  We repla
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
 function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
-    dprintln(2,"Flattening ", the_parfor)
+    @dprintln(2,"Flattening ", the_parfor)
 
     private_set = getPrivateSet(the_parfor.body)
     private_array = collect(private_set)

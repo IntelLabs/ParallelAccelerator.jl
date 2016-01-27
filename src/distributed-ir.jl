@@ -57,24 +57,24 @@ dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
-    dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
+    @dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     state::DistIrState = initDistState(linfo)
 
-    dprintln(3,"DistIR state before walk: ",state)
+    @dprintln(3,"DistIR state before walk: ",state)
     AstWalk(ast, get_arr_dist_info, state)
-    dprintln(3,"DistIR state after walk: ",state)
+    @dprintln(3,"DistIR state after walk: ",state)
 
     # now that we have the array info, see if parfors are distributable 
     checkParforsForDistribution(state)
-    dprintln(3,"DistIR state after check: ",state)
+    @dprintln(3,"DistIR state after check: ",state)
     
     # transform body
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
     body = TypedExpr(ast.args[3].typ, :body, from_toplevel_body(ast.args[3].args, state)...)
     new_ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
-    dprintln(1,"DistributedIR.from_root returns function = ", function_name, " ast = ", new_ast)
+    @dprintln(1,"DistributedIR.from_root returns function = ", function_name, " ast = ", new_ast)
     # ast = from_expr(ast)
     return new_ast
 end
@@ -170,11 +170,11 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
     head = node.head
     # arrays written in parfors are ok for now
     
-    dprintln(3,"DistIR arr info walk Expr node: ", node)
+    @dprintln(3,"DistIR arr info walk Expr node: ", node)
     if head==:(=) && isAllocation(node.args[2]) 
         arr = toSymGen(node.args[1])
         state.arrs_dist_info[arr].dim_sizes = get_alloc_shape(node.args[2].args[2:end])
-        dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
+        @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
     elseif head==:parfor
         parfor = getParforNode(node)
         rws = parfor.rws
@@ -186,7 +186,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         state.parfor_info[parfor.unique_id] = allArrs
         
         if length(parfor.arrays_read_past_index)!=0 || length(parfor.arrays_written_past_index)!=0 
-            dprintln(2,"DistIR arr info walk parfor sequential: ", node)
+            @dprintln(2,"DistIR arr info walk parfor sequential: ", node)
             for arr in allArrs
                 state.arrs_dist_info[arr].isSequential = true
             end
@@ -197,7 +197,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
              if length(index)!=1 || index[1][end].name!=indexVariable.name
-                dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
+                @dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -205,7 +205,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
              if length(index)!=1 || index[1][end].name!=indexVariable.name
-                dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
+                @dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
         end
@@ -213,15 +213,15 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
     elseif head==:call && in(node.args[1], dist_ir_funcs)
         func = node.args[1]
         if func==:__hps_data_source_HDF5_read || func==:__hps_data_source_TXT_read
-            dprintln(2,"DistIR arr info walk data source read ", node)
+            @dprintln(2,"DistIR arr info walk data source read ", node)
             # will be parallel IO, intentionally do nothing
         elseif func==:__hps_kmeans
-            dprintln(2,"DistIR arr info walk kmeans ", node)
+            @dprintln(2,"DistIR arr info walk kmeans ", node)
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
             state.arrs_dist_info[node.args[2]].isSequential = true
         elseif func==:__hps_LinearRegression || func==:__hps_NaiveBayes
-            dprintln(2,"DistIR arr info walk LinearRegression/NaiveBayes ", node)
+            @dprintln(2,"DistIR arr info walk LinearRegression/NaiveBayes ", node)
             # first array is cluster output and is sequential
             # second array is input matrix and is parallel
             # third array is responses and is parallel
@@ -234,7 +234,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         writeArrs = collect(keys(rws.writeSet.arrays))
         allArrs = [readArrs;writeArrs]
         for arr in allArrs
-            dprintln(2,"DistIR arr info walk arr in sequential code: ", arr, " ", node)
+            @dprintln(2,"DistIR arr info walk arr in sequential code: ", arr, " ", node)
             state.arrs_dist_info[arr].isSequential = true
         end
         return node
@@ -263,7 +263,7 @@ function checkParforsForDistribution(state::DistIrState)
                 # all parfor arrays should have same size
                 if state.arrs_dist_info[arr].isSequential ||
                         !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[arrays[1]].dim_sizes)
-                    dprintln(2,"DistIR check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
+                    @dprintln(2,"DistIR check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
                     changed = true
                     push!(state.seq_parfors, parfor_id)
                     for a in arrays
@@ -277,7 +277,7 @@ function checkParforsForDistribution(state::DistIrState)
     # all arrays not marked sequential are distributable at this point 
     for arr in keys(state.arrs_dist_info)
         if state.arrs_dist_info[arr].isSequential==false
-            dprintln(2,"DistIR distributable parfor array: ", arr)
+            @dprintln(2,"DistIR distributable parfor array: ", arr)
             push!(state.dist_arrays, arr)
         end
     end
@@ -366,7 +366,7 @@ function from_assignment(node::Expr, state::DistIrState)
     if isAllocation(node.args[2])
         arr = toSymGen(node.args[1])
         if in(arr, state.dist_arrays)
-            dprintln(3,"DistIR allocation array: ", arr)
+            @dprintln(3,"DistIR allocation array: ", arr)
             #shape = get_alloc_shape(node.args[2].args[2:end])
             #old_size = shape[end]
             dim_sizes = state.arrs_dist_info[arr].dim_sizes
@@ -423,7 +423,7 @@ function from_parfor(node::Expr, state)
         CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
 
         #first_arr = state.parfor_info[parfor.unique_id][1]; 
-        #dprintln(3,"DistIR parfor first array ", first_arr)
+        #@dprintln(3,"DistIR parfor first array ", first_arr)
         #global_size = state.arrs_dist_info[first_arr].dim_sizes[1]
 
         # some parfors have no arrays
@@ -462,12 +462,12 @@ end
 
 function from_call(node::Expr, state)
     @assert node.head==:call "Invalid call node"
-    dprintln(2,"DistIR from_call ", node)
+    @dprintln(2,"DistIR from_call ", node)
 
     func = node.args[1]
     if (func==:__hps_data_source_HDF5_read || func==:__hps_data_source_TXT_read) && in(toSymGen(node.args[3]), state.dist_arrays)
         arr = toSymGen(node.args[3])
-        dprintln(3,"DistIR data source for array: ", arr)
+        @dprintln(3,"DistIR data source for array: ", arr)
         
         arr_id = state.arrs_dist_info[arr].arr_id 
         
@@ -478,7 +478,7 @@ function from_call(node::Expr, state)
         return [node]
     elseif func==:__hps_kmeans && in(toSymGen(node.args[3]), state.dist_arrays)
         arr = toSymGen(node.args[3])
-        dprintln(3,"DistIR kmeans call for array: ", arr)
+        @dprintln(3,"DistIR kmeans call for array: ", arr)
         
         arr_id = state.arrs_dist_info[arr].arr_id 
         
@@ -491,7 +491,7 @@ function from_call(node::Expr, state)
     elseif (func==:__hps_LinearRegression || func==:__hps_NaiveBayes) && in(toSymGen(node.args[3]), state.dist_arrays) && in(toSymGen(node.args[4]), state.dist_arrays)
         arr1 = toSymGen(node.args[3])
         arr2 = toSymGen(node.args[4])
-        dprintln(3,"DistIR LinearRegression/NaiveBayes call for arrays: ", arr1," ", arr2)
+        @dprintln(3,"DistIR LinearRegression/NaiveBayes call for arrays: ", arr1," ", arr2)
         
         arr1_id = state.arrs_dist_info[arr1].arr_id 
         arr2_id = state.arrs_dist_info[arr2].arr_id 
