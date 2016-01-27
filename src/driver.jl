@@ -119,7 +119,8 @@ end
 
 function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   dir_start = time_ns()
-  code = DomainIR.from_expr(string(func.name), func.mod, ast)
+  fname = bytestring(convert(Cstring, func.name))
+  code = DomainIR.from_expr(fname, func.mod, ast)
   dir_time = time_ns() - dir_start
   dprintln(3, "domain code = ", code)
   dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(dir_time))
@@ -191,7 +192,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
  
-  outfile_name = CGen.writec(CGen.from_root(code, function_name_string, array_types_in_sig))
+  outfile_name = CGen.writec(CGen.from_root_entry(code, function_name_string, array_types_in_sig))
   CGen.compile(outfile_name)
   dyn_lib = CGen.link(outfile_name)
  

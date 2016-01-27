@@ -27,7 +27,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 """
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """
-function fuse(body, body_index, cur, state)
+function fuse(body, body_index, cur::Expr, state)
     global fuse_limit
     prev = body[body_index]
 
