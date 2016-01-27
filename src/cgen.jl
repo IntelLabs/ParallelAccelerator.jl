@@ -39,7 +39,7 @@ using ..ParallelAccelerator
 import ..ParallelIR
 import ..ParallelIR.DelayedFunc
 import CompilerTools
-export setvectorizationlevel, generate, from_root, writec, compile, link, set_include_blas
+export setvectorizationlevel, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.isDistributedMode
 import ParallelAccelerator.H5SizeArr_t
@@ -955,7 +955,7 @@ function from_arrayalloc(args)
     dprintln(3,"Array alloc dims = ", dims)
     typ = toCtype(typ)
     dprintln(3,"Array alloc after ctype conversion typ = ", typ)
-    shape::AbstractString = get_alloc_shape(args, dims)
+    shape = get_alloc_shape(args, dims)
     dprintln(3,"Array alloc shape = ", shape)
     return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
 end
@@ -2214,53 +2214,25 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     s
 end
 
-# This is the entry point to CGen from the PSE driver
-function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}(), isEntryPoint = true)
-    global inEntryPoint
-    inEntryPoint = isEntryPoint
-    global lstate
-    emitunaliasedroots = false
-    if isEntryPoint
-        #adp = ASTDispatcher()
-        lstate = LambdaGlobalData()
-        # If we are forcing vectorization then we will not emit the unaliased versions
-        # of the roots
-        emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
-    end
-    dprintln(3,"vectorizationlevel = ", vectorizationlevel)
-    dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
-    dprintln(1,"Ast = ", ast)
-    dprintln(3,"functionName = ", functionName)
-    dprintln(3,"Starting processing for $ast")
-    params  =   ast.args[1]
-    aparams =   lambdaparams(ast)
-    env     =   ast.args[2]
-    bod     =   ast.args[3]
-    dprintln(3,"Processing body: ", bod)
-    returnType = bod.typ
-    typ = returnType
-
-    if contains(string(ast),"gemm_wrapper!")
+function set_includes(ast)
+    s = string(ast)
+    if contains(s,"gemm_wrapper!")
         set_include_blas(true)
     end
-
-    if contains(string(ast),"rand!") || contains(string(ast),"randn!")
+    if contains(s,"rand!") || contains(s,"randn!")
         global include_rand = true
     end
-    if contains(string(ast),"HDF5") 
+    if contains(s,"HDF5") 
         global USE_HDF5 = 1
     end
-    if contains(string(ast),"__hps_kmeans") || contains(string(ast),"__hps_LinearRegression") || contains(string(ast),"__hps_NaiveBayes")
+    if contains(s,"__hps_kmeans") || contains(s,"__hps_LinearRegression") || contains(s,"__hps_NaiveBayes")
         global USE_DAAL = 1
     end
-    # Translate the body
-    bod = from_expr(ast)
+end
 
-
-    for i in 1:length(params)
-        dprintln(3,"Param ", i, " is ", params[i], " with type ", typeof(params[i]))
-    end
+function check_params(emitunaliasedroots, params)
     # Find varargs expression if present
+    global lstate
     vararglist = []
     num_array_params = 0
     canAliasCheck = insertAliasCheck
@@ -2303,16 +2275,40 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     # If emitting unaliased versions, get "restrict"ed decls for arguments
     argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
 
+    vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist) 
+
+    return vararg_bod, args, argsunal, alias_check
+end
+
+
+# This is the entry point to CGen from the PSE driver
+function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+    global inEntryPoint
+    inEntryPoint = true
+    global lstate
+    lstate = LambdaGlobalData()
+    # If we are forcing vectorization then we will not emit the unaliased versions
+    # of the roots
+    emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
+
+    dprintln(3,"vectorizationlevel = ", vectorizationlevel)
+    dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
+    dprintln(1,"Ast = ", ast)
+    dprintln(3,"functionName = ", functionName)
+
+    set_includes(ast)
+    params = ast.args[1]
+    returnType = ast.args[3].typ
+    # Translate the body
+    bod = from_expr(ast)
+
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
     end
 
-    if !isempty(vararglist)
-        bod = from_varargpack(vararglist) * bod
-    end
+    vararg_bod, args, argsunal, alias_check = check_params(emitunaliasedroots, params)
+    bod = vararg_bod * bod
 
-    hdr = ""
-    wrapper = ""
     dprintln(3,"returnType = ", returnType)
     if istupletyp(returnType)
         returnType = tuple(returnType.parameters...)
@@ -2323,54 +2319,72 @@ function from_root(ast::Expr, functionName::ASCIIString, array_types_in_sig :: D
     else
         returnType = (returnType,)
     end
-    hdr = from_header(isEntryPoint)
+    hdr = from_header(true)
 
     # Create an entry point that will be called by the Julia code.
-    if isEntryPoint
-        wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
-        rtyp = "void"
-        if length(returnType) > 0
-            retargs = foldl((a, b) -> "$a, $b",
-               [toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
-        else
-            # Must be the special case for Void/nothing so don't do anything here.
-            retargs = ""
-        end
-
-        comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
-        args *= comma * retargs
-        argsunal *= comma * retargs
+    wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
+    rtyp = "void"
+    if length(returnType) > 0
+        retargs = foldl((a, b) -> "$a, $b",
+           [toCtype(returnType[i]) * " * __restrict ret" * string(i-1) for i in 1:length(returnType)])
     else
-        rtyp = toCtype(typ)
+        # Must be the special case for Void/nothing so don't do anything here.
+        retargs = ""
     end
+
+    comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
+    args *= comma * retargs
+    argsunal *= comma * retargs
+    
     dprintln(3, "args = (", args, ")")
-    s::AbstractString = "$rtyp $functionName($args)\n{\n$bod\n}\n"
-    s *= (isEntryPoint && emitunaliasedroots) ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
-    forwarddecl::AbstractString = isEntryPoint ? "" : "$rtyp $functionName($args);\n"
-    if inEntryPoint
-        inEntryPoint = false
-    end
+    s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+    s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
-    c = hdr * forwarddecl * from_worklist() * s * wrapper
-    if isEntryPoint
-        resetLambdaState(lstate)
+    forwards, funcs = from_worklist()
+    c = hdr * forwards * funcs * s * wrapper
+    resetLambdaState(lstate)
 
-#        if length(array_types_in_sig) > 0
-            gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
-            for (key, value) in array_types_in_sig
-                atyp = toCtype(key)
-                elemtyp = toCtype(eltype(key))
-                gen_j2c_array_new *= "case " * string(value) * ":\na = new " * atyp * "((" * elemtyp * "*)data, ndim, dims);\nbreak;\n"
-            end
-            gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
-            c *= gen_j2c_array_new   
-#        end
-    else
-        if length(array_types_in_sig) > 0
-           dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
-        end
+    gen_j2c_array_new = "extern \"C\"\nvoid *j2c_array_new(int key, void*data, unsigned ndim, int64_t *dims) {\nvoid *a = NULL;\nswitch(key) {\n"
+    for (key, value) in array_types_in_sig
+        atyp = toCtype(key)
+        elemtyp = toCtype(eltype(key))
+        gen_j2c_array_new *= "case " * string(value) * ":\na = new " * atyp * "((" * elemtyp * "*)data, ndim, dims);\nbreak;\n"
     end
+    gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
+    c *= gen_j2c_array_new   
     c
+end
+
+# This is the entry point to CGen from the PSE driver
+function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+    global inEntryPoint
+    inEntryPoint = false
+    global lstate
+    dprintln(1,"Ast = ", ast)
+    dprintln(3,"functionName = ", functionName)
+
+    set_includes(ast)
+    params = ast.args[1]
+    returnType = ast.args[3].typ
+    # Translate the body
+    bod = from_expr(ast)
+
+    vararg_bod, args, argsunal, alias_check = check_params(false, params)
+    bod = vararg_bod * bod
+
+    hdr = from_header(false)
+    # Create an entry point that will be called by the Julia code.
+    rtyp = toCtype(returnType)
+
+    dprintln(3, "args = (", args, ")")
+    s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
+    forwarddecl = "$rtyp $functionName($args);\n"
+    push!(lstate.compiledfunctions, functionName)
+    c = hdr * forwarddecl * s 
+    if length(array_types_in_sig) > 0
+        dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
+    end
+    forwarddecl, c
 end
 
 function insert(func::Any, mod::Any, name, typs)
@@ -2423,8 +2437,8 @@ end
 
 # Translate function nodes in breadth-first order
 function from_worklist()
+    f = ""
     s = ""
-    si = ""
     global lstate
     while !isempty(lstate.worklist)
         a, fname, typs = splice!(lstate.worklist, 1)
@@ -2440,21 +2454,23 @@ function from_worklist()
         if isa(a, Symbol)
             a = ParallelAccelerator.Driver.code_typed(a, typs)
         end
-        dprintln(3,"============ Compiling AST for ", fname, " ============")
-        dprintln(3,a)
-        length(a) >= 1 ? dprintln(3,a[1].args) : ""
-        dprintln(3,"============ End of AST for ", fname, " ============")
-        si = length(a) >= 1 ? from_root(a[1], fname, Dict{DataType,Int64}(), false) : ""
-        dprintln(3,"============== C++ after compiling ", fname, " ===========")
-        dprintln(3,si)
-        dprintln(3,"============== End of C++ for ", fname, " ===========")
-        dprintln(3,"Adding ", fname, " to compiledFunctions")
-        dprintln(3,lstate.compiledfunctions)
-        dprintln(3,"Added ", fname, " to compiledFunctions")
-        dprintln(3,lstate.compiledfunctions)
-        s *= si
+        if length(a) != 1
+            error("Error: expect 1 AST for ", a, " with signature ", types, " but got: ", length(a))
+        else
+            dprintln(3,"============ Compiling AST for ", fname, " ============")
+            fi, si = from_root_nonentry(a[1], fname, Dict{DataType,Int64}())
+            dprintln(3,"============== C++ after compiling ", fname, " ===========")
+            dprintln(3,si)
+            dprintln(3,"============== End of C++ for ", fname, " ===========")
+            dprintln(3,"Adding ", fname, " to compiledFunctions")
+            dprintln(3,lstate.compiledfunctions)
+            dprintln(3,"Added ", fname, " to compiledFunctions")
+            dprintln(3,lstate.compiledfunctions)
+            f *= fi
+            s *= si
+        end
     end
-    s
+    f, s
 end
 
 #
@@ -2618,14 +2634,4 @@ function link(outfile_name)
   return lib
 end
 
-# When in standalone mode, this is the entry point to CGen.
-function generate(func::Function, typs; init_lstate=false)
-  global lstate
-  if init_lstate
-      lstate = LambdaGlobalData()
-  end
-  name = string(func.env.name)
-  insert(func, name, typs)
-  return from_worklist()
-end
 end # CGen module
