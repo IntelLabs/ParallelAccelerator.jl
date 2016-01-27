@@ -818,8 +818,8 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
             multinomial_naive_bayes::training::Distributed<step1Local> localAlgorithm($c_num_classes);
         
             /* Pass a training data set and dependent values to the algorithm */
-            localAlgorithm.input.set(multinomial_naive_bayes::classifier::training::data,   trainData);
-            localAlgorithm.input.set(multinomial_naive_bayes::classifier::training::labels, trainGroundTruth);
+            localAlgorithm.input.set(classifier::training::data,   trainData);
+            localAlgorithm.input.set(classifier::training::labels, trainGroundTruth);
         
             /* Train the Na__ve Bayes model on local nodes */
             localAlgorithm.compute();
@@ -855,12 +855,12 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
                     /* Deserialize partial results from step 1 */
                     OutputDataArchive dataArch(serializedData.get() + perNodeArchLength * i, perNodeArchLength);
         
-                    services::SharedPtr<multinomial_naive_bayes::classifier::training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<multinomial_naive_bayes::classifier::training::PartialResult>
-                                                                               (new multinomial_naive_bayes::classifier::training::PartialResult());
+                    services::SharedPtr<classifier::training::PartialResult> dataForStep2FromStep1 = services::SharedPtr<classifier::training::PartialResult>
+                                                                               (new classifier::training::PartialResult());
                     dataForStep2FromStep1->deserialize(dataArch);
         
                     /* Set the local Na__ve Bayes model as input for the master-node algorithm */
-                    masterAlgorithm.input.add(multinomial_naive_bayes::classifier::training::partialModels, dataForStep2FromStep1);
+                    masterAlgorithm.input.add(classifier::training::partialModels, dataForStep2FromStep1);
                 }
         
                 /* Merge and finalizeCompute the Na__ve Bayes model on the master node */
@@ -870,18 +870,18 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
                 /* Retrieve the algorithm results */
                 trainingResult = masterAlgorithm.getResult();
                 
-                trainingLogpTable = trainingResult->get(multinomial_naive_bayes::training::model)->getLogP();
-                trainingLogThetaTable = trainingResult->get(multinomial_naive_bayes::training::model)->getLogTheta();
+                services::SharedPtr<NumericTable> trainingLogpTable = trainingResult->get(classifier::training::model)->getLogP();
+                services::SharedPtr<NumericTable> trainingLogThetaTable = trainingResult->get(classifier::training::model)->getLogTheta();
             
                 BlockDescriptor<double> block1, block2;
             
-                std::cout<<trainingLogThetaTable->getNumberOfRows()<<std::endl;
-                std::cout<<trainingLogThetaTable->getNumberOfColumns()<<std::endl;
-                std::cout<<trainingLogpTable->getNumberOfRows()<<std::endl;
-                std::cout<<trainingLogpTable->getNumberOfColumns()<<std::endl;
+                //std::cout<<trainingLogThetaTable->getNumberOfRows()<<std::endl;
+                //std::cout<<trainingLogThetaTable->getNumberOfColumns()<<std::endl;
+                //std::cout<<trainingLogpTable->getNumberOfRows()<<std::endl;
+                //std::cout<<trainingLogpTable->getNumberOfColumns()<<std::endl;
         
-                trainingLogpTable->getBlockOfRows(0, $c_num_class, readOnly, block1);
-                trainingLogThetaTable->getBlockOfRows(0, $c_num_class, readOnly, block2);
+                trainingLogpTable->getBlockOfRows(0, $c_num_classes, readOnly, block1);
+                trainingLogThetaTable->getBlockOfRows(0, $c_num_classes, readOnly, block2);
                 double* out_arr1 = block1.getBlockPtr();
                 double* out_arr2 = block2.getBlockPtr();
             
@@ -892,7 +892,7 @@ function pattern_match_call_naive_bayes(f::Symbol, coeff_out::SymAllGen, points:
             //}
             //std::cout<<std::endl;
             
-                int64_t res_dims[] = {$c_num_classes+1,$c_num_classes};
+                int64_t res_dims[] = {$c_num_classes,$c_num_classes+1};
                 double* out_data = new double[$c_num_classes*($c_num_classes+1)];
                 memcpy(out_data, block1.getBlockPtr(), $c_num_classes*sizeof(double));
                 memcpy(out_data+$c_num_classes, block2.getBlockPtr(), $c_num_classes*$c_num_classes*sizeof(double));
