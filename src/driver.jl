@@ -32,7 +32,7 @@ using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
 import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..DistributedIR, ..CGen, ..DomainIR.isarray, ..API
-import ..@dprint, ..@dprintln, ..DEBUG_LVL
+import ..dprint, ..dprintln, ..@dprint, ..@dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
 
