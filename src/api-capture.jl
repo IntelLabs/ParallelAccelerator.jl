@@ -37,7 +37,7 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
     elseif head == :call
         # f(...)
         opr = node.args[1]
-        if isa(opr,Expr) && opr.head==:. && opr.args[1]==:HPS 
+        if isa(opr,Expr) && opr.head==:. && opr.args[1]==:HPS && opr.args[2].args[1]==:mmul
             B = node.args[2]
             A = node.args[3]
             return parse("[sum(squeeze($B[i,:],1).*$A[:,j]) for i in 1:size($B,1), j in 1:size($A,2)]") 
