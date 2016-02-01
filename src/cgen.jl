@@ -128,7 +128,7 @@ if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
 
-if isDistributedMode() && NERSC==0
+if isDistributedMode() #&& NERSC==0
     using MPI
     MPI.Init()
 end
@@ -222,7 +222,7 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if isDistributedMode() && NERSC==0
+if isDistributedMode() #&& NERSC==0
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
@@ -250,7 +250,7 @@ function CGen_finalize()
     if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
         rm(generated_file_dir; recursive=true)
     end
-    if isDistributedMode() && NERSC==0
+    if isDistributedMode() #&& NERSC==0
         MPI.Finalize()
     end
 end
