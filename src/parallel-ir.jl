@@ -3439,6 +3439,15 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # remove line numbers
         return []
         # skip
+    elseif head == :select
+        # translate dangling :select (because most other :select would have been inlined and then removed when no longer live) as an mmap into parfor
+        head = :parfor
+        @assert (length(args) == 2) "expect Domain IR select expr to have two arguments, but got " * args
+        etyp = eltype(typ)
+        args = Any[[DomainIR.mk_select(args...)], DomainIR.DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], CompilerTools.LambdaHandling.LambdaInfo())]
+        domain_oprs = [DomainOperation(:mmap, args)]
+        args = mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state)
+        @dprintln(1,"switching to parfor node for :select, got ", args)
     elseif head == :mmap
         head = :parfor
         # Make sure we get what we expect from domain IR.
