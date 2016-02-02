@@ -31,7 +31,6 @@ using ParallelAccelerator
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
-
 @acc function sum_A(col::Int)
     A = ones(Int, col, col, col)
     sum(A)
@@ -43,6 +42,28 @@ end
     C = sum(B, 2)
 end
 
+@acc function sum_A_cond_1(col::Int)
+    A = ones(Int, col)
+    A[1] = -1
+    sum(A[A .> 0])
+end
+
+@acc function sum_A_cond_2(col::Int)
+    A = ones(Int, col, col)
+    A[1,1] = -1
+    B = [ i for i = 1:col ]
+    C = B .> 2
+    cartesianarray(Int, (col,)) do j
+        sum(A[C, j:j])
+    end
+end
+
+@acc function sum_A_range_1(col::Int)
+    A = ones(Int, col, col)
+    A[1,2] = 0
+    sum(A[:, 2])
+end
+
 function test1()
     return sum_A(5) == @noacc sum_A(5)
 end
@@ -51,6 +72,17 @@ function test2()
     return sum_A_1(5) == @noacc sum_A_1(5)
 end
 
+function test3()
+    return sum_A_cond_1(5) == @noacc sum_A_cond_1(5)
+end
+
+function test4()
+    return sum_A_cond_2(5) == @noacc sum_A_cond_2(5)
+end
+
+function test5()
+    return sum_A_range_1(5) == @noacc sum_A_range_1(5)
+end
 
 end
 
@@ -59,6 +91,9 @@ println("Testing reductions...")
 
 @test ReductionTest.test1() 
 @test ReductionTest.test2()
+@test ReductionTest.test3()
+@test ReductionTest.test4()
+@test ReductionTest.test5()
 
 println("Done testing reductions.")
 
