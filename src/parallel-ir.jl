@@ -2444,7 +2444,9 @@ function hasNoSideEffects(node)
 end
 
 function hasNoSideEffects(node :: Expr)
-    if node.head == :ccall
+    if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask
+        return all(Bool[hasNoSideEffects(a) for a in node.args])
+    elseif node.head == :ccall
         func = node.args[1]
         if func == QuoteNode(:jl_alloc_array_1d) ||
             func == QuoteNode(:jl_alloc_array_2d)
@@ -2468,6 +2470,7 @@ function hasNoSideEffects(node :: Expr)
             func == TopNode(:box) ||
             func == TopNode(:tuple) ||
             func == TopNode(:getindex_bool_1d) ||
+            func == TopNode(:arraysize) ||
             func == :getindex ||
             func == GlobalRef(Core.Intrinsics, :box) ||
             func == GlobalRef(Core.Intrinsics, :sub_int) ||

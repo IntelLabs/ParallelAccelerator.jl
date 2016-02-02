@@ -165,7 +165,7 @@ function type_expr(typ, expr)
     return expr
 end
 
-export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isarray
+export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isarray, isbitarray
 
 # A representation for anonymous lambda used in domainIR.
 #   inputs:  types of input tuple
@@ -1169,34 +1169,38 @@ end
 
 # if a definition of arr is getindex(a, ...), return select(a, ranges(...))
 # otherwise return arr unchanged.
-function inline_select(env, state, arr::SymbolNode)
+function inline_select(env, state, arr::SymAllGen)
     range_extra = Any[]
 
     # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
-    def = lookupConstDef(state, arr.name)
+    def = lookupConstDef(state, arr)
+    dprintln(env, "inline_select: arr = ", arr, " def = ", def)
     if !isa(def, Void)  
-        if isa(def, Expr) && is(def.head, :call) 
-            target_arr = arr
-            if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
-                target_arr = def.args[2]
-                range_extra = def.args[3:end]
-            elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
-                error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
-            end
-            dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
-            if length(range_extra) > 0
-                # if all ranges are int, then it is not a selection
-                if any(Bool[ismask(state,r) for r in range_extra])
-                    ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
-                  dprintln(env, "inline-select: converted to ranges = ", ranges)
-                  arr = mk_select(target_arr, ranges)
-                else
-                  dprintln(env, "inline-select: skipped")
+        if isa(def, Expr) 
+            if is(def.head, :call) 
+                target_arr = arr
+                if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
+                    target_arr = def.args[2]
+                    range_extra = def.args[3:end]
+                elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
+                    error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
                 end
+                dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
+                if length(range_extra) > 0
+                    # if all ranges are int, then it is not a selection
+                    if any(Bool[ismask(state,r) for r in range_extra])
+                        ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
+                      dprintln(env, "inline-select: converted to ranges = ", ranges)
+                      arr = mk_select(target_arr, ranges)
+                    else
+                      dprintln(env, "inline-select: skipped")
+                    end
+                end
+            elseif is(def.head, :select)
+                arr = def
             end
         end
     end
-
     return arr
 end
 
@@ -1435,9 +1439,11 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
             ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
             dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
-                expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+                # expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+                expr = mk_select(arr, ranges)
+                expr.typ = atyp
             else
-                args = Any[mk_select(arr, ranges), args[2]]
+                args = Any[ inline_select(env, state, e) for e in Any[mk_select(arr, ranges), args[2]]]
                 typs = Type[atyp, typeOfOpr(state, args[2])]
                 (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
                 elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
@@ -1488,9 +1494,9 @@ function translate_call_map(state, env, typ, fun::Symbol, args::Array{Any,1})
     domF = DomainLambda(elmtyps, [etyp], f, linfo)
     for i = 1:length(args)
         arg_ = inline_select(env, state, args[i])
-        if arg_ != args[i] && i != 1 && length(args) > 1
-            error("Selector array must be the only array argument to mmap: ", args)
-        end
+        #if arg_ != args[i] && i != 1 && length(args) > 1
+        #    error("Selector array must be the only array argument to mmap: ", args)
+        #end
         args[i] = arg_
     end
     expr::Expr = endswith(string(fun), '!') ? mk_mmap!(args, domF) : mk_mmap(args, domF)

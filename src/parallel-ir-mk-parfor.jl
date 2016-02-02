@@ -104,10 +104,23 @@ function mk_arrayref1(num_dim_inputs,
         fname = :arrayref
     end
 
-    indsyms = [ x <= num_dim_inputs ? 
-                   augment_sn(x, index_vars, range) : 
-                   index_vars[x] 
-                for x = 1:length(index_vars) ]
+    # if num_dim_inputs < length(range), we have signular selection along one or more of the dimensions
+    range_size = length(range)
+    if num_dim_inputs < range_size
+        num_dim_inputs = range_size
+    end
+    indsyms = Any[]
+    x = 1
+    for i = 1:num_dim_inputs
+        if i > range_size
+            push!(indsyms, index_vars[i])
+        elseif isa(range[i], SingularSelector)
+            push!(indsyms, range[i].value)
+        else
+            push!(indsyms, augment_sn(i, index_vars, range))
+        end
+    end
+
     @dprintln(3,"mk_arrayref1 indsyms = ", indsyms)
 
     TypedExpr(
@@ -237,12 +250,13 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     assert(length(input_args) == 3 || length(input_args) == 4)
 
     zero_val    = input_args[1]   # The initial value of the reduction variable.
-    input_array = input_args[2]   # The array expression to reduce.
 
     # Handle range selector
-    inputInfo   = get_mmap_input_info(input_array, state)
+    inputInfo   = get_mmap_input_info(input_args[2], state)
     @dprintln(3,"inputInfo = ", inputInfo)
 
+    inp_dim = inputInfo.dim       # dimension of input array variable, maybe different than inputInfo.out_dim
+    input_array = inputInfo.array # The array expression to reduce.
     dl = input_args[3]            # Get the DomainLambda from the AST node's args.
     assert(isa(dl, DomainLambda))
 
@@ -284,83 +298,77 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
     loopNests = Array(PIRLoopNest, red_dim > 0 ? 1 : num_dim_inputs) # only 1 loopNest if red_dim > 0
+    @dprintln(3, "num_dim_inputs = ", num_dim_inputs)
 
     # Create variables to use for the loop indices.
     parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
-    argtyp = typeof(input_array)
-    @dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
-    assert(argtyp <: SymNodeGen)
+    #argtyp = typeof(input_array)
+    #@dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
+    #assert(argtyp <: SymNodeGen)
 
     reduce_body = Any[]
     if red_dim == 0 
         # full reduction?
         atm = createTempForArray(input_array, 1, state)
-        push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(num_dim_inputs, input_array, parfor_index_syms, true, state), state))
+        push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(num_dim_inputs, input_array, parfor_index_syms, true, state, inputInfo.range), state))
     else
         atm = createTempForArray(input_array, 1, state, CompilerTools.LambdaHandling.getType(input_array, state.lambdaInfo))
         push!(reduce_body, mk_assignment_expr(atm, mk_arrayslice(num_dim_inputs, input_array, parfor_index_syms, red_dim, true, state), state))
     end
 
+    @dprintln(3, "reduce_body = ", reduce_body)
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     indexed_array = atm
 
     # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
+    pre_statements  = copy(inputInfo.pre_offsets)
     post_statements = Any[]
     save_array_lens  = AbstractString[]
     input_array_rangeconds = Array(Any, num_dim_inputs)
 
     # Insert a statement to assign the length of the input arrays to a var
-    for i = 1:num_dim_inputs
-        save_array_start = string("parallel_ir_save_array_start_", i, "_", unique_node_id)
-        save_array_step  = string("parallel_ir_save_array_step_", i, "_", unique_node_id)
+    nest_idx = num_dim_inputs
+    for i = 1:inp_dim #num_dim_inputs
         save_array_len   = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
         if isWholeArray(inputInfo)
-            array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
-            array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
-            array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo.array,i), state)
+            push!(pre_statements,mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo,i), state))
             input_array_rangeconds[i] = nothing
         elseif isRange(inputInfo)
             this_dim = inputInfo.range[i]
             if isa(this_dim, RangeData)
-                array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), inputInfo.range[i].start, state)
-                array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), inputInfo.range[i].skip, state)
-                array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), inputInfo.range[i].last, state)
+                push!(pre_statements,mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo,i), state))
                 input_array_rangeconds[i] = nothing
-            else
-                mask_array = this_dim
+            elseif isa(this_dim, MaskSelector)
+                mask_array = this_dim.value
+                @dprintln(3, "mask_array = ", mask_array)
                 assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.lambdaInfo)))
                 if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
                     mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
                 end
                 # TODO: generate dimension check on mask_array
-                array1_start = mk_assignment_expr(SymbolNode(symbol(save_array_start), Int), 1, state)
-                array1_step  = mk_assignment_expr(SymbolNode(symbol(save_array_step), Int), 1, state)
-                array1_len   = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo.array,i), state)
+                push!(pre_statements,mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo,i), state))
                 input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, SymbolNode(parfor_index_syms[i], Int))
+            elseif isa(this_dim, SingularSelector)
+                generatePreOffsetStatement(this_dim, pre_statements)
+                continue;
+                #CompilerTools.LambdaHandling.addLocalVar(getSName(this_dim), Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+            else
+                error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
         end 
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,array1_start)
-        push!(pre_statements,array1_step)
-        push!(pre_statements,array1_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_start, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_step,  Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
         push!(save_array_lens, save_array_len)
-        loop_nest = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int),
-                                SymbolNode(symbol(save_array_start), Int),
-                                SymbolNode(symbol(save_array_len),Int),
-                                SymbolNode(symbol(save_array_step), Int))
+        loop_nest = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int), 1)
         if red_dim > 0
             if red_dim == i
                loopNests[1] = loop_nest
             end
         else
-            loopNests[num_dim_inputs - i + 1] = loop_nest
+            loopNests[nest_idx] = loop_nest
+            nest_idx -= 1
         end
     end
 
