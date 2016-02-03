@@ -59,7 +59,7 @@ const unary_map_operators = Symbol[
 
 const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
-const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy, :pointer])
+const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy])
 
 @inline sum(A::DenseArray{Bool}) = sum(1 .* A)
 @inline sum(A::DenseArray{Bool}, x::Int) = sum(1 .* A, x)
@@ -167,9 +167,13 @@ end
 include("api-capture.jl")
 include("api-stencil.jl")
 
+@noinline function pointer(args...)
+    Base.pointer(args...)
+end
+
 import .Stencil.runStencil
 
-export cartesianarray, parallel_for, runStencil
+export cartesianarray, parallel_for, runStencil, pointer
 
 end
 
