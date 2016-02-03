@@ -203,7 +203,8 @@ _Intrinsics = [
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
-        "zext_int"
+        "zext_int",
+        "sext_int"
 ]
 
 tokenXlate = Dict(
@@ -624,6 +625,7 @@ function toCtype(typ::DataType)
     elseif isArrayType(typ)
         atyp, dims = parseArrayType(typ)
         atyp = toCtype(atyp)
+        return "$atyp *"
         assert(dims >= 0)
         return " j2c_array< $(atyp) > "
     elseif isPtrType(typ)
@@ -735,6 +737,7 @@ function from_getindex(args)
     end
     s = ""
     src = from_expr(args[1])
+    return src * "[" * from_expr(args[2]) * " - 1]"
     s *= src * ".ARRAYELEM("
     idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
@@ -747,6 +750,7 @@ end
 function from_setindex(args)
     s = ""
     src = from_expr(args[1])
+    return src * "[" * from_expr(args[2]) * " - 1]"
     s *= src * ".ARRAYELEM("
     idxs = map(from_expr, args[3:end])
     for i in 1:length(idxs)
@@ -839,6 +843,7 @@ function from_arrayset(args)
     idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
+    return src * "[" * from_expr(args[3]) * " - 1] = $val"
     "$src.ARRAYELEM($idxs) = $val"
 end
 
@@ -975,9 +980,9 @@ end
 
 function from_pointer(args)
     if length(args) == 1
-        return "$(from_expr(args[1])).data"
+        return "$(from_expr(args[1]))"
     else
-        return "$(from_expr(args[1])).data + $(from_expr(args[2]))"
+        return "$(from_expr(args[1])) + $(from_expr(args[2]))"
     end
 end
 
@@ -1097,6 +1102,8 @@ function from_intrinsic(f :: ANY, args)
         return "((($m) % ($n) + ($n)) % $n)"
     elseif intr == "srem_int" || intr == "checked_srem_int"
         return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
+    elseif intr == "sext_int"
+        return "(($(toCtype(args[1]))) $(from_expr(args[2])))"
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
     elseif intr == "flipsign_int"
@@ -1834,7 +1841,7 @@ end
 
 function from_loophead(args)
     iv = from_expr(args[1])
-    decl = "uint64_t"
+    decl = "int64_t"
     if haskey(lstate.symboltable, args[1])
         decl = toCtype(lstate.symboltable[args[1]])
     end
@@ -1845,6 +1852,45 @@ end
 
 function from_loopend(args)
     "}\n"
+end
+
+function from_parallel_loophead(args)
+    private = ""
+    if length(args[4]) > 0
+        private = "private("
+        for var in args[4]
+            private *= canonicalize(var) * ","
+        end
+        private = chop(private) * ")"  # Remove trailing "," and close paren
+    end
+    num_threads = ""
+    if args[5] > 0
+        num_threads = "num_threads($(args[5]))"
+    end
+    schedule = args[6]
+    inner_private = "private("
+    for iv in args[1]
+        inner_private *= "$iv,"
+    end
+    inner_private = chop(inner_private) * ")"
+
+    s = "#pragma omp parallel $private $num_threads \n{\n"
+    s *= "#pragma omp for $schedule collapse($(length(args[1]))) $inner_private\n"
+    for (iv, start, stop) in zip(args[1], args[2], args[3])
+        start = from_expr(start)
+        stop = from_expr(stop)
+        iv = from_expr(iv)
+        s *= "for(int64_t $iv = $start; $iv <= $stop; $iv += 1) {\n"
+    end
+    s
+end
+
+function from_parallel_loopend(args)
+    s = "}\n"
+    for i in 1:args[1]
+        s *= "}\n"
+    end
+    s
 end
 
 
@@ -1936,6 +1982,12 @@ function from_expr(ast::Expr)
 
     elseif head == :loopend
         s *= from_loopend(args)
+
+    elseif head == :parallel_loophead
+        s *= from_parallel_loophead(args)
+
+    elseif head == :parallel_loopend
+        s *= from_parallel_loopend(args)
 
     # type_goto is "a virtual control flow edge used to convey
     # type data to static_typeof, also to be removed."  We can
@@ -2095,8 +2147,8 @@ function from_formalargs(params, vararglist, unaliased=false)
         @dprintln(3,"Type is: ", typeof(params[p]))
         if get(lstate.symboltable, params[p], false) != false
             ptyp = toCtype(lstate.symboltable[params[p]])
-            s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
-                * (isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
+            # s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
+            s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
                 * canonicalize(params[p])
                 * (p < length(params) ? ", " : ""))
         # We may have a varags expression
@@ -2262,7 +2314,7 @@ function check_params(emitunaliasedroots, params)
         end
     end
     @dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
-    if canAliasCheck && num_array_params > 0
+    if false && canAliasCheck && num_array_params > 0
         alias_check = "j2c_alias_test<" * string(num_array_params) * ">({{" * array_list * "}})"
         @dprintln(3,"alias_check = ", alias_check)
     else
@@ -2503,7 +2555,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
   otherArgs = []
 
-  Opts = ["-O3"]
+  Opts = ["-O0"]
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
