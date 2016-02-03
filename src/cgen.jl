@@ -203,7 +203,7 @@ _Intrinsics = [
         "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
-        "zext_int"
+        "zext_int", "sext_int"
 ]
 
 tokenXlate = Dict(
@@ -1092,6 +1092,8 @@ function from_intrinsic(f :: ANY, args)
     elseif intr == "checked_smul"
         return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
     elseif intr == "zext_int"
+        return "($(toCtype(args[1]))) ($(from_expr(args[2])))"
+    elseif intr == "sext_int"
         return "($(toCtype(args[1]))) ($(from_expr(args[2])))"
     elseif intr == "smod_int"
         m = from_expr(args[1])
