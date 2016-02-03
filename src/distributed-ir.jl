@@ -196,7 +196,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
         for arr in keys(rws.readSet.arrays)
              index = rws.readSet.arrays[arr]
-             if length(index)!=1 || index[1][end].name!=indexVariable.name
+             if length(index)!=1 || toSymGen(index[1][end])!=toSymGen(indexVariable)
                 @dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
@@ -204,7 +204,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         
         for arr in keys(rws.writeSet.arrays)
              index = rws.writeSet.arrays[arr]
-             if length(index)!=1 || index[1][end].name!=indexVariable.name
+             if length(index)!=1 || toSymGen(index[1][end])!=toSymGen(indexVariable)
                 @dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
                 state.arrs_dist_info[arr].isSequential = true
              end
@@ -523,7 +523,7 @@ function adjust_arrayrefs(stmt::Expr, loop_start_var::Symbol)
         if topCall.name==:unsafe_arrayref || topCall.name==:unsafe_arrayset
             # TODO: simply divide the last dimension, more general partitioning needed
             index_arg = stmt.args[2].args[end]
-            stmt.args[2].args[end] = :($(index_arg.name)-$loop_start_var+1)
+            stmt.args[2].args[end] = :($(toSymGen(index_arg))-$loop_start_var+1)
         end
     end
 end

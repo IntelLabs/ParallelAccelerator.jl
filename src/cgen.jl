@@ -222,14 +222,16 @@ tokenXlate = Dict(
 replacedTokens = Set("#")
 scrubbedTokens = Set(",.({}):")
 
-if isDistributedMode() #&& NERSC==0
+#= if isDistributedMode() #&& NERSC==0
     package_root = getPackageRoot()
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     generated_file_dir = "$package_root/deps/generated$rank"
     if !isdir(generated_file_dir)
         mkdir(generated_file_dir)
     end
-elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+else
+=#
+if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -2546,9 +2548,8 @@ function compile(outfile_name)
 
   cgenOutput = "$generated_file_dir/$outfile_name.cpp"
 
-  if isDistributedMode() && MPI.Comm_rank(MPI.COMM_WORLD)==0
+  if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
     println("Distributed-memory MPI mode.")
-  end
 
   if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
       println("OpenMP is not used.")
@@ -2569,6 +2570,7 @@ function compile(outfile_name)
   compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
   @dprintln(1,compileCommand)
   run(compileCommand)
+  end
 end
 
 function getLinkCommand(outfile_name, lib)
@@ -2595,7 +2597,11 @@ function getLinkCommand(outfile_name, lib)
   if USE_DAAL==1
       DAALROOT=ENV["DAALROOT"]
     push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_core.a")
-    push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_thread.a")
+    if USE_OMP==1
+        push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_thread.a")
+    else
+        push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_sequential.a")
+    end
     push!(linkLibs,"-L$DAALROOT/../tbb/lib/intel64_lin/gcc4.4/")
     push!(linkLibs,"-ltbb")
     push!(linkLibs,"-liomp5")
@@ -2632,10 +2638,15 @@ end
 
 function link(outfile_name)
   lib = "$generated_file_dir/lib$outfile_name.so.1.0"
+  if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
   linkCommand = getLinkCommand(outfile_name, lib)
   @dprintln(1,linkCommand)
   run(linkCommand)
   @dprintln(3,"Done CGen linking")
+  end
+  if isDistributedMode()
+    MPI.Barrier(MPI.COMM_WORLD)
+  end
   return lib
 end
 
