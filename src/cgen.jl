@@ -296,7 +296,7 @@ function from_includes()
     if USE_HDF5==1 
         s *= "#include \"hdf5.h\"\n"
     end
-    if USE_OMP==1
+    if USE_OMP==1 || USE_DAAL==1
         s *= "#include <omp.h>\n"
     end
     if USE_DAAL==1
@@ -2504,6 +2504,10 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   otherArgs = []
 
   Opts = ["-O3"]
+  if USE_DAAL==1
+    DAALROOT=ENV["DAALROOT"]
+    push!(Opts,"-I$DAALROOT/include")
+  end
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
@@ -2516,7 +2520,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
         end
     end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
-    if USE_OMP == 1
+    if USE_OMP == 1 || USE_DAAL==1
         push!(Opts, "-qopenmp")
     end
     # Generate dyn_lib
@@ -2592,6 +2596,7 @@ function getLinkCommand(outfile_name, lib)
       DAALROOT=ENV["DAALROOT"]
     push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_core.a")
     push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_thread.a")
+    push!(linkLibs,"-L$DAALROOT/../tbb/lib/intel64_lin/gcc4.4/")
     push!(linkLibs,"-ltbb")
     push!(linkLibs,"-liomp5")
     push!(linkLibs,"-ldl")
@@ -2605,7 +2610,7 @@ function getLinkCommand(outfile_name, lib)
             comp = "mpiicpc"
         end
     end
-    if USE_OMP==1
+    if USE_OMP==1 || USE_DAAL==1
         push!(Opts,"-qopenmp")
     end
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`

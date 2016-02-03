@@ -202,7 +202,7 @@ function pattern_match_call_dist_init(f::Any)
 end
 
 function pattern_match_reduce_sum(reductionFunc::DelayedFunc)
-    if reductionFunc.args[1][1].args[2].args[1]==TopNode(:add_float)
+    if reductionFunc.args[1][1].args[2].args[1]==TopNode(:add_float) || reductionFunc.args[1][1].args[2].args[1]==TopNode(:add_int)
         return true
     end
     return false
