@@ -61,6 +61,17 @@ function convert_to_ccall_typ(typ)
   end
 end
 
+"""
+Convert return types to C interface types of Julia such as Cchar.
+"""
+function convert_to_Julia_typ(typ::DataType)
+    if typ==Char
+        return Cchar
+    else
+        return typ
+    end
+end
+
 # Convert a whole function signature in a form of a tuple to something appropriate for calling C code.
 function convert_sig(sig)
   assert(isa(sig,Tuple))   # make sure we got a tuple
@@ -184,7 +195,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   lambdaInfo = lambdaExprToLambdaInfo(code)
   ret_type = getReturnType(lambdaInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
-  ret_typs = DomainIR.istupletyp(ret_type) ? [ (x, isarrayorbitarray(x)) for x in ret_type.parameters ] : [ (ret_type, isarrayorbitarray(ret_type)) ]
+  ret_typs = DomainIR.istupletyp(ret_type) ? [ (convert_to_Julia_typ(x), isarrayorbitarray(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isarrayorbitarray(ret_type)) ]
 
   # Add arrays from the return type to array_types_in_sig.
   for rt in ret_typs
