@@ -180,7 +180,8 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             # We also consider type casting here
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
-            "UInt8", "UInt16", "UInt32", "UInt64"
+            "UInt8", "UInt16", "UInt32", "UInt64",
+            "raw_arrayref", "raw_arrayset", "raw_pointer"
 ]
 
 # Intrinsics
@@ -241,6 +242,13 @@ end
 file_counter = -1
 
 #### End of globals ####
+
+type RawArray{T,N} <: AbstractArray{T,N}
+end
+
+export RawArray
+
+is_raw_array(arg) = arg <: RawArray
 
 function generate_new_file_name()
     global file_counter
@@ -628,6 +636,8 @@ function toCtype(typ::DataType)
         atyp = toCtype(atyp)
         assert(dims >= 0)
         return " j2c_array< $(atyp) > "
+    elseif is_raw_array(typ)
+        return "$(toCtype(eltype(typ))) *"
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
     elseif typ == Complex64
@@ -844,6 +854,18 @@ function from_arrayset(args)
     "$src.ARRAYELEM($idxs) = $val"
 end
 
+function from_raw_arrayset(args)
+    @assert length(args) == 3
+    src = from_expr(args[1])
+    val = from_expr(args[2])
+    return "$src[$(from_expr(args[3])) - 1] = $val"
+end
+
+function from_raw_arrayref(args)
+    src = from_expr(args[1])
+    return src * "[$(from_expr(args[2])) - 1]"
+end
+
 function istupletyp(typ)
     isa(typ, DataType) && is(typ.name, Tuple.name)
 end
@@ -983,6 +1005,14 @@ function from_pointer(args)
     end
 end
 
+function from_raw_pointer(args)
+    if length(args) == 1
+        return "$(from_expr(args[1]))"
+    else
+        return "$(from_expr(args[1])) + $(from_expr(args[2]))"
+    end
+end
+
 function from_builtins(f, args)
     tgt = string(f)
     if tgt == "getindex" || tgt == "getindex!"
@@ -1029,6 +1059,12 @@ function from_builtins(f, args)
         return from_sizeof(args)
     elseif tgt =="steprange_last"
         return from_steprange_last(args)
+    elseif tgt == "raw_arrayref"
+        return from_raw_arrayref(args)
+    elseif tgt == "raw_arrayset"
+        return from_raw_arrayset(args)
+    elseif tgt == "raw_pointer"
+        return from_raw_pointer(args)
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
@@ -2171,9 +2207,11 @@ function from_formalargs(params, vararglist, unaliased=false)
         @dprintln(3,"Doing param $p: ", params[p])
         @dprintln(3,"Type is: ", typeof(params[p]))
         if get(lstate.symboltable, params[p], false) != false
-            ptyp = toCtype(lstate.symboltable[params[p]])
-            s *= ptyp * ((isArrayType(lstate.symboltable[params[p]]) ? "&" : "")
-                * (isArrayType(lstate.symboltable[params[p]]) ? " $ql " : " ")
+            typ = lstate.symboltable[params[p]]
+            ptyp = toCtype(typ)
+            is_array = isArrayType(typ)
+            s *= ptyp * ((is_array ? "&" : "")
+                * (is_array || is_raw_array(typ) ? " $ql " : " ")
                 * canonicalize(params[p])
                 * (p < length(params) ? ", " : ""))
         # We may have a varags expression
