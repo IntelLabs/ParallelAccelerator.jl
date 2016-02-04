@@ -2657,44 +2657,46 @@ function getCompileCommand(full_outfile_name, cgenOutput)
 end
 
 function compile(outfile_name)
-  global use_bcpp
-  packageroot = getPackageRoot()
+    global use_bcpp
+    packageroot = getPackageRoot()
 
-  cgenOutput = "$generated_file_dir/$outfile_name.cpp"
+    cgenOutput = "$generated_file_dir/$outfile_name.cpp"
 
-  if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
-    println("Distributed-memory MPI mode.")
+    if isDistributedMode() && MPI.Comm_rank(MPI.COMM_WORLD)==0
+        println("Distributed-memory MPI mode.")
 
-  if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
-      println("OpenMP is not used.")
-  end
+        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
 
-  if use_bcpp == 1
-    cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
-    run(`cp $cgenOutput $cgenOutputTmp`)
-    # make cpp code readable
-    beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
-    if DEBUG_LVL < 1
-        beautifyCommand = pipeline(beautifyCommand, stdout=DevNull, stderr=DevNull)
+            if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
+                println("OpenMP is not used.")
+            end
+
+            if use_bcpp == 1
+                cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
+                run(`cp $cgenOutput $cgenOutputTmp`)
+                # make cpp code readable
+                beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+                if DEBUG_LVL < 1
+                    beautifyCommand = pipeline(beautifyCommand, stdout=DevNull, stderr=DevNull)
+                end
+                run(beautifyCommand)
+            end
+
+            full_outfile_name = `$generated_file_dir/$outfile_name.o`
+            compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
+            @dprintln(1,compileCommand)
+            run(compileCommand)
+        end
     end
-    run(beautifyCommand)
-  end
 
-  full_outfile_name = `$generated_file_dir/$outfile_name.o`
-  compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
-  @dprintln(1,compileCommand)
-  run(compileCommand)
-  end
-end
+    function getLinkCommand(outfile_name, lib)
+        # return an error if this is not overwritten with a valid compiler
+        linkCommand = `echo "invalid backend linker"`
 
-function getLinkCommand(outfile_name, lib)
-  # return an error if this is not overwritten with a valid compiler
-  linkCommand = `echo "invalid backend linker"`
-
-  Opts = []
-  linkLibs = []
-  if include_blas==true
-      if mkl_lib!=""
+        Opts = []
+        linkLibs = []
+        if include_blas==true
+            if mkl_lib!=""
           push!(linkLibs,"-lmkl_rt")
       elseif openblas_lib!=""
           push!(linkLibs,"-lopenblas")
@@ -2751,17 +2753,17 @@ end
 
 
 function link(outfile_name)
-  lib = "$generated_file_dir/lib$outfile_name.so.1.0"
-  if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
-  linkCommand = getLinkCommand(outfile_name, lib)
-  @dprintln(1,linkCommand)
-  run(linkCommand)
-  @dprintln(3,"Done CGen linking")
-  end
-  if isDistributedMode()
-    MPI.Barrier(MPI.COMM_WORLD)
-  end
-  return lib
+    lib = "$generated_file_dir/lib$outfile_name.so.1.0"
+    if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
+        linkCommand = getLinkCommand(outfile_name, lib)
+        @dprintln(1,linkCommand)
+        run(linkCommand)
+        @dprintln(3,"Done CGen linking")
+    end
+    if isDistributedMode()
+        MPI.Barrier(MPI.COMM_WORLD)
+    end
+    return lib
 end
 
 end # CGen module
