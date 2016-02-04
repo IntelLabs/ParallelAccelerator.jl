@@ -76,6 +76,7 @@ type LambdaGlobalData
             Bool    =>  "bool",
             Char    =>  "char",
             Void    =>  "void",
+            ASCIIString =>  "char*",
             H5SizeArr_t => "hsize_t*",
             SizeArr_t => "uint64_t*"
     )
