@@ -1851,6 +1851,73 @@ function from_loopend(args)
     "}\n"
 end
 
+"""
+Helper function to construct a :parallel_loophead node,
+see from_parallel_loophead for a description of the arguments
+"""
+function mk_parallel_loophead(loopvars::Vector{Symbol}, 
+                              starts::Vector{Union{Symbol,Int}}, 
+                              stops::Vector{Union{Symbol,Int}}; 
+                              num_threads::Int=0, schedule::AbstractString="") 
+    Expr(:parallel_loophead, loopvars, starts, stops, 
+         Set{Union{GenSym, Symbol}}(), num_threads, "")
+end
+
+export mk_parallel_loophead
+
+"""
+Insert an openmp parallel for loop nest
+    args[1]::Vector{Symbol}            : The loop variable for loop in the nest
+    args[2]::Vector{Union{Symbol,Int}} : The start value for each loop in the nest
+    args[3]::Vector{Union{Symbol,Int}} : The stop value for each loop in the nest
+    args[4]::Set{GenSym,Symbol}        : A list of private variables for the parallel region
+    args[5]::Int (optional)            : Argument to num_threads clause
+    args[6]::String (optional)         : Exact string for schedule clause (i.e. schedule(dynamic))
+"""
+function from_parallel_loophead(args)
+    private = ""
+    if length(args[4]) > 0
+        private = "private("
+        for var in args[4]
+            private *= "$(canonicalize(var)),"
+        end
+        private = chop(private)
+        private *= ")"
+    end
+    num_threads = ""
+    if args[5] > 0
+        num_threads = "num_threads($(args[5]))"
+    end
+    schedule = args[6]
+    inner_private = "private("
+    for iv in args[1]
+        inner_private *= "$iv,"
+    end
+    inner_private = chop(inner_private)
+    inner_private *= ")"
+
+    s = "#pragma omp parallel $private $num_threads \n{\n"
+    s *= "#pragma omp for $schedule collapse($(length(args[1]))) $inner_private\n"
+    for (iv, start, stop) in zip(args[1], args[2], args[3])
+        start = from_expr(start)
+        stop = from_expr(stop)
+        iv = from_expr(iv)
+        s *="for(int64_t $iv = $start; $iv <= $stop; $iv += 1) {\n"
+    end
+    s
+end
+
+"""
+Close a loopnest create by a :parallel_loophead
+    args[1]::Int : The depth of the loopnest (>= 1)
+"""
+function from_parallel_loopend(args)
+    s = "}\n"           # Close parallel region
+    for i in 1:args[1]  # Close loops
+        s *= "}\n"
+    end
+    s
+end
 
 function from_expr(ast::Expr)
     s = ""
@@ -1940,6 +2007,12 @@ function from_expr(ast::Expr)
 
     elseif head == :loopend
         s *= from_loopend(args)
+
+    elseif head == :parallel_loophead
+        s *= from_parallel_loophead(args)
+
+    elseif head == :parallel_loopend
+        s *= from_parallel_loopend(args)
 
     # type_goto is "a virtual control flow edge used to convey
     # type data to static_typeof, also to be removed."  We can
