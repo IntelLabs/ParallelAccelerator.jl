@@ -2664,46 +2664,46 @@ function compile(outfile_name)
 
     if isDistributedMode() && MPI.Comm_rank(MPI.COMM_WORLD)==0
         println("Distributed-memory MPI mode.")
+    end
+    if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
 
-        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
+        if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
+            println("OpenMP is not used.")
+        end
 
-            if USE_OMP==0 && (!isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0)
-                println("OpenMP is not used.")
+        if use_bcpp == 1
+            cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
+            run(`cp $cgenOutput $cgenOutputTmp`)
+            # make cpp code readable
+            beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
+            if DEBUG_LVL < 1
+                beautifyCommand = pipeline(beautifyCommand, stdout=DevNull, stderr=DevNull)
             end
+            run(beautifyCommand)
+        end
 
-            if use_bcpp == 1
-                cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
-                run(`cp $cgenOutput $cgenOutputTmp`)
-                # make cpp code readable
-                beautifyCommand = `bcpp $cgenOutputTmp $cgenOutput`
-                if DEBUG_LVL < 1
-                    beautifyCommand = pipeline(beautifyCommand, stdout=DevNull, stderr=DevNull)
-                end
-                run(beautifyCommand)
-            end
+        full_outfile_name = `$generated_file_dir/$outfile_name.o`
+        compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
+        @dprintln(1,compileCommand)
+        run(compileCommand)
+    end
+end
 
-            full_outfile_name = `$generated_file_dir/$outfile_name.o`
-            compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
-            @dprintln(1,compileCommand)
-            run(compileCommand)
+function getLinkCommand(outfile_name, lib)
+    # return an error if this is not overwritten with a valid compiler
+    linkCommand = `echo "invalid backend linker"`
+
+    Opts = []
+    linkLibs = []
+    if include_blas==true
+        if mkl_lib!=""
+            push!(linkLibs,"-lmkl_rt")
+        elseif openblas_lib!=""
+            push!(linkLibs,"-lopenblas")
         end
     end
-
-    function getLinkCommand(outfile_name, lib)
-        # return an error if this is not overwritten with a valid compiler
-        linkCommand = `echo "invalid backend linker"`
-
-        Opts = []
-        linkLibs = []
-        if include_blas==true
-            if mkl_lib!=""
-          push!(linkLibs,"-lmkl_rt")
-      elseif openblas_lib!=""
-          push!(linkLibs,"-lopenblas")
-      end
-  end
-  if USE_HDF5==1
-      if NERSC==1
+    if USE_HDF5==1
+        if NERSC==1
           HDF5_DIR=ENV["HDF5_DIR"]
           push!(linkLibs,"-L$HDF5_DIR/lib")
       end
