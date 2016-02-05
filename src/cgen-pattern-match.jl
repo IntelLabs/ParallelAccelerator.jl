@@ -231,6 +231,8 @@ function pattern_match_call_dist_reduce(f::TopNode, var::SymbolNode, reductionFu
         end
                 
         s="MPI_Reduce(&$(var.name), &$output, 1, $mpi_type, $mpi_func, 0, MPI_COMM_WORLD);"
+        # debug print for 1D_sum
+        #s*="printf(\"len %d start %d end %d\\n\", parallel_ir_save_array_len_1_1, __hps_loop_start_2, __hps_loop_end_3);\n"
         return s
     else
         return ""
@@ -314,8 +316,11 @@ function pattern_match_call_data_src_read(f::Symbol, id::GenSym, arr::Symbol, st
         s *= "assert (mem_dataspace_$num != -1);\n"
         s *= "hid_t xfer_plist_$num = H5Pcreate (H5P_DATASET_XFER);\n"
         s *= "assert(xfer_plist_$num != -1);\n"
+        s *= "double h5_read_start_$num = MPI_Wtime();\n"
         s *= "ret_$num = H5Dread(dataset_id_$num, H5T_NATIVE_DOUBLE, mem_dataspace_$num, space_id_$num, xfer_plist_$num, $arr.getData());\n"
         s *= "assert(ret_$num != -1);\n"
+        #s*="if(__hps_node_id==__hps_num_pes/2) printf(\"h5 read %lf\\n\", MPI_Wtime()-h5_read_start_$num);\n"
+        s *= ";\n"
     elseif f==:__hps_data_source_TXT_read
         # assuming 1st dimension is partitined
         s = """

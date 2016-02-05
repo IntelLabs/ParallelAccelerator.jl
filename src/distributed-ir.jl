@@ -398,6 +398,8 @@ function from_assignment(node::Expr, state::DistIrState)
             #push!(res,debug_size_print)
             return res
         end
+    else
+        node.args[2] = from_expr(node.args[2],state)[1]
     end
     return [node]
 end
@@ -507,6 +509,13 @@ function from_call(node::Expr, state)
         push!(node.args, dsrc_start_var2, dsrc_count_var2,
                 state.arrs_dist_info[arr2].dim_sizes[1], state.arrs_dist_info[arr2].dim_sizes[end])
         return [node]
+    elseif isTopNode(func) && func.name==:arraysize && in(toSymGen(node.args[2]), state.dist_arrays)
+        arr = toSymGen(node.args[2])
+        @dprintln(3,"found arraysize on dist array: ",node," ",arr)
+        # replace last dimension size queries since it is partitioned
+        if node.args[3]==length(state.arrs_dist_info[arr].dim_sizes)
+            return [state.arrs_dist_info[arr].dim_sizes[end]]
+        end
     end
     return [node]
 end
