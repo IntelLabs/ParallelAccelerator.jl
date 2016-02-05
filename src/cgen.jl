@@ -2611,13 +2611,13 @@ function writec(s, outfile_name=nothing; with_headers=false)
     return outfile_name
 end
 
-function getCompileCommand(full_outfile_name, cgenOutput)
+function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
   # return an error if this is not overwritten with a valid compiler
   compileCommand = `echo "invalid backend compiler"`
 
   packageroot = getPackageRoot()
   # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
-  otherArgs = []
+  otherArgs = flags
 
   Opts = ["-O3"]
   if USE_DAAL==1
@@ -2656,7 +2656,7 @@ function getCompileCommand(full_outfile_name, cgenOutput)
   return compileCommand
 end
 
-function compile(outfile_name)
+function compile(outfile_name; flags=[])
     global use_bcpp
     packageroot = getPackageRoot()
 
@@ -2683,17 +2683,17 @@ function compile(outfile_name)
         end
 
         full_outfile_name = `$generated_file_dir/$outfile_name.o`
-        compileCommand = getCompileCommand(full_outfile_name, cgenOutput)
+        compileCommand = getCompileCommand(full_outfile_name, cgenOutput, flags)
         @dprintln(1,compileCommand)
         run(compileCommand)
     end
 end
 
-function getLinkCommand(outfile_name, lib)
+function getLinkCommand(outfile_name, lib, flags=[])
     # return an error if this is not overwritten with a valid compiler
     linkCommand = `echo "invalid backend linker"`
 
-    Opts = []
+    Opts = flags
     linkLibs = []
     if include_blas==true
         if mkl_lib!=""
@@ -2752,10 +2752,10 @@ function getLinkCommand(outfile_name, lib)
 end
 
 
-function link(outfile_name)
+function link(outfile_name; flags=[])
     lib = "$generated_file_dir/lib$outfile_name.so.1.0"
     if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
-        linkCommand = getLinkCommand(outfile_name, lib)
+        linkCommand = getLinkCommand(outfile_name, lib, flags)
         @dprintln(1,linkCommand)
         run(linkCommand)
         @dprintln(3,"Done CGen linking")
