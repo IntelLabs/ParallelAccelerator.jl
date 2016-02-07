@@ -53,7 +53,6 @@ function convert_to_ccall_typ(typ)
   elseif is(typ, ())
     return (Void, 0)
   elseif is(typ,AbstractString) || is(typ,ASCIIString)
-      println("string conv")
       return (Ptr{UInt8},0)
   else
     # Else no conversion needed.

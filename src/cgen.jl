@@ -233,7 +233,13 @@ scrubbedTokens = Set(",.({}):")
     end
 else
 =#
-if CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+if NERSC==1
+    generated_file_dir =  ENV["SCRATCH"]*"/generated_"*ENV["SLURM_JOBID"]
+    if MPI.Comm_rank(MPI.COMM_WORLD)==0 && !isdir(generated_file_dir)
+        #println(generated_file_dir)
+        mkdir(generated_file_dir)
+    end
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -262,7 +268,7 @@ function CGen_finalize()
         rm(generated_file_dir; recursive=true)
     end
     if isDistributedMode() #&& NERSC==0
-        MPI.Finalize()
+        #MPI.Finalize()
     end
 end
 
