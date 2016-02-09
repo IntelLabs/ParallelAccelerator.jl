@@ -318,7 +318,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       result = Array(Any, $num_rets)
       for i = 1:$num_rets
         (t, is_array) = $(ret_typs)[i]
-        dprintln(3, "ret=", ret_args[i][1], "t=", t, " is_array=", is_array)
+        #dprintln(3, "ret=", ret_args[i][1], "t=", t, " is_array=", is_array)
         if is_array
           result[i] = from_j2c_array(ret_args[i][1], eltype(t), ndims(t), ptr_array_dict)
           if isbitarray(t)
