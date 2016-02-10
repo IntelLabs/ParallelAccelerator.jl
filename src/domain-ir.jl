@@ -1032,7 +1032,7 @@ function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, f
 end
 
 function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::ANY, args)
-    @dprintln(3,"unrecognized fun type ",fun, " args ", args)
+    @dprintln(3,"unrecognized fun type ", fun, " type ", typeof(fun), " args ", args)
     oldargs = normalize_args(state, env, oldargs)
     mk_expr(typ, head, oldfun, oldargs...)
 end
@@ -1619,7 +1619,11 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
         borderExp = args[i+1]
     end
     # assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
-    kernelExp_lsd::LambdaStaticData = lookupConstDefForArg(state, kernelExp_var)
+    kernelExp_lsd :: Any = lookupConstDefForArg(state, kernelExp_var)
+    if isa(kernelExp_lsd, SymbolNode) && kernelExp_lsd.typ <: Function
+        # function/closure support is changed in julia 0.5
+        kernelExp_lsd = kernelExp_lsd.typ.name.primary
+    end
     dprintln(env, "stencil kernelExp = ", kernelExp_lsd)
     dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
     
@@ -1790,7 +1794,7 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
                                     Expr(:tuple) ], LambdaInfo())
         opr, reorder = specializeOp(fun, [etyp])
         # ignore reorder since it is always id function
-        f(linfo, as) = [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
+        f = (linfo, as) -> [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
                                              (linfo,as)->[Expr(:tuple, mk_expr(etyp, :call, opr, as...))], LambdaInfo())))]
         outtyp = arrtyp
     else
@@ -1798,7 +1802,7 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
         neutral = neutralelt
         opr, reorder = specializeOp(fun, [etyp])
         # ignore reorder since it is always id function
-        f(linfo,as) = [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
+        f = (linfo,as) -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
         outtyp = etyp
     end
     domF = DomainLambda([outtyp, outtyp], [outtyp], f, LambdaInfo())
@@ -1860,7 +1864,7 @@ end
 function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
-    dprintln(env, "translate_call fun=", fun, "::", typeof(fun), " args=", args, " typ=", typ)
+    dprintln(env, "translate_call fun ", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
     #if isa(fun, GlobalRef) && fun.mod == Main
     #   fun = fun.name
@@ -1868,6 +1872,9 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
+    elseif is(fu.mod, Core) && is(fun.name, :convert)
+        # fix type of convert
+        expr.typ = args[1]
     elseif is(fun.mod, Base) 
         if is(fun.name, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
             opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
@@ -1928,11 +1935,11 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
     elseif isdefined(fun.mod, fun.name)
         args_typ = map(x -> typeOfOpr(state, x), args)
         gf = getfield(fun.mod, fun.name)
-        if isgeneric(gf)
+        if isa(gf, Function) && !is(fun.mod, Core) # fun != GlobalRef(Core, :(===))
             dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
             _accelerate(gf, tuple(args_typ...))
         else
-            dprintln(env,"function ", fun, " not offloaded since it isn't generic.")
+            dprintln(env,"function ", fun, " not offloaded.")
         end
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")
@@ -1985,7 +1992,7 @@ end
 function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
     if ccall(:jl_is_const, Int32, (Any, Any), ast.mod, ast.name) == 1
         def = getfield(ast.mod, ast.name)
-        if isbits(def) && !isa(def, IntrinsicFunction)
+        if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
             return def
         end
     end
@@ -1999,7 +2006,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     def = lookupDefInAllScopes(state, name)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
-        if isbits(def) && !isa(def, IntrinsicFunction)
+        if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
             return def
         end
     end
@@ -2366,7 +2373,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
             tmp = tmp.args[1] 
         end 
-        toSymGen(x) = isa(x, SymbolNode) ? x.name : x
+        toSymGen = x -> isa(x, SymbolNode) ? x.name : x
         return AliasAnalysis.lookup(state, toSymGen(tmp))
     elseif head == :reduce
         # TODO: inspect the lambda body to rule out assignment?
@@ -2400,7 +2407,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
     elseif head == :ranges
         return AliasAnalysis.NotArray
     elseif is(head, :tomask)
-        toSymGen(x) = isa(x, SymbolNode) ? x.name : x
+        toSymGen = x -> isa(x, SymbolNode) ? x.name : x
         return AliasAnalysis.lookup(state, toSymGen(args[1]))
     elseif is(head, :arraysize)
         return AliasAnalysis.NotArray

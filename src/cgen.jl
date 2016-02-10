@@ -427,14 +427,13 @@ function isCompositeType(t::Type)
     b
 end
 
-function lambdaparams(ast::Expr)
-    CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast).input_params
-end
-
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
     params = linfo.input_params
+    if length(params) > 0 && params[1] == symbol("#self#")
+        params = params[2:end]
+    end
     vars = linfo.var_defs
     gensyms = linfo.gen_sym_typs
 
@@ -2257,8 +2256,11 @@ function from_callee(ast::Expr, functionName::ASCIIString)
     typ = toCtype(body(ast).typ)
     @dprintln(3,"Return type of body = $typ")
     params  =   ast.args[1]
-    env     =   ast.args[2]
+    #env     =   ast.args[2]
     bod     =   ast.args[3]
+    if length(params) > 0 && params[1] == symbol("#self#")
+        params = params[2:end]
+    end
     @dprintln(3,"Body type is ", bod.typ)
     f = Dict(ast => functionName)
     bod = from_expr(ast)
@@ -2420,6 +2422,9 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
 
     set_includes(ast)
     params = ast.args[1]
+    if length(params) > 0 && params[1] == symbol("#self#")
+        params = params[2:end]
+    end
     returnType = ast.args[3].typ
     # Translate the body
     bod = from_expr(ast)
@@ -2487,6 +2492,9 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
 
     set_includes(ast)
     params = ast.args[1]
+    if length(params) > 0 && params[1] == symbol("#self#")
+        params = params[2:end]
+    end
     returnType = ast.args[3].typ
     # Translate the body
     bod = from_expr(ast)

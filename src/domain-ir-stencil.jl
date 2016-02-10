@@ -69,6 +69,9 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms::Array{Symbol,1} = krn.args[1] # parameter of the kernel lambda
+  if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
+    arrSyms = arrSyms[2:end]
+  end
   local narrs = length(arrSyms)
   local bufSyms = Array(GenSym, narrs)
   local arrSymDict = Dict{Symbol,GenSym}()

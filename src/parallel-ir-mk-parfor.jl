@@ -425,7 +425,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     reduce_flatten_body = Any[]
     flattenParfors(reduce_flatten_body, deepcopy(temp_body))
     @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
     reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_output_snode, atm])
 
     #  makeLhsPrivate(out_body, state)

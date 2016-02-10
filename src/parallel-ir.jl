@@ -2461,9 +2461,11 @@ function hasNoSideEffects(node :: Expr)
     elseif node.head == :lambda
         return true
     elseif node.head == :new
-        if node.args[1] <: Range
-            return true
+        newtyp::Any = node.args[1]
+        if isa(newtyp, GlobalRef) && isdefined(newtyp.mod, newtyp.name)
+            newtyp = getfield(newtyp.mod, newtyp.name)
         end
+        return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
     elseif node.head == :call
         func = node.args[1]
         if func == GlobalRef(Base, :box) ||

@@ -228,7 +228,11 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   @dprintln(2, "sig_dims = ", sig_dims)
   @dprintln(3, "len? ", length(code.args[1]), length(sig_dims))
  
-  original_args = Symbol[ gensym(string(s)) for s in code.args[1] ]
+  original_args = code.args[1]
+  if length(original_args) > 0 && original_args[1] == symbol("#self#")
+    original_args = original_args[2:end]
+  end
+  map!(s -> gensym(string(s)), original_args)
   assert(length(original_args) == length(sig_dims))
   modified_args = Array(Any, length(sig_dims))
   extra_inits = Array(Any, 0)
