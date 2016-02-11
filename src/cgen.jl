@@ -429,7 +429,7 @@ end
 
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
     params = linfo.input_params
     if length(params) > 0 && params[1] == symbol("#self#")
         params = params[2:end]

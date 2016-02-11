@@ -59,7 +59,7 @@ function from_root(function_name, ast :: Expr)
     @assert ast.head == :lambda "Input to DistributedIR should be :lambda Expr"
     @dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
     state::DistIrState = initDistState(linfo)
 
     @dprintln(3,"DistIR state before walk: ",state)
@@ -73,7 +73,7 @@ function from_root(function_name, ast :: Expr)
     # transform body
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
     body = TypedExpr(ast.args[3].typ, :body, from_toplevel_body(ast.args[3].args, state)...)
-    new_ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    new_ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, body)
     @dprintln(1,"DistributedIR.from_root returns function = ", function_name, " ast = ", new_ast)
     # ast = from_expr(ast)
     return new_ast
@@ -99,7 +99,7 @@ type DistIrState
     # information about all arrays
     arrs_dist_info::Dict{SymGen, ArrDistInfo}
     parfor_info::Dict{Int, Array{SymGen,1}}
-    lambdaInfo::LambdaInfo
+    LambdaVarInfo::LambdaVarInfo
     seq_parfors::Array{Int,1}
     dist_arrays::Array{SymGen,1}
     uniqueId::Int
@@ -130,7 +130,7 @@ function show(io::IO, pnode::ParallelAccelerator.DistributedIR.DistIrState)
     println(io,"")
 end
 
-function initDistState(linfo::LambdaInfo)
+function initDistState(linfo::LambdaVarInfo)
     state = DistIrState(linfo)
     
     #params = linfo.input_params
@@ -229,7 +229,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         end
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
-        rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.lambdaInfo)
+        rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.LambdaVarInfo)
         readArrs = collect(keys(rws.readSet.arrays))
         writeArrs = collect(keys(rws.writeSet.arrays))
         allArrs = [readArrs;writeArrs]
@@ -351,8 +351,8 @@ function genDistributedInit(state::DistIrState)
     numPesCall = Expr(:call,TopNode(:hps_dist_num_pes))
     nodeIdCall = Expr(:call,TopNode(:hps_dist_node_id))
     
-    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_num_pes"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_node_id"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_num_pes"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVar(symbol("__hps_node_id"), Int32, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
 
     num_pes_assign = Expr(:(=), :__hps_num_pes, numPesCall)
     node_id_assign = Expr(:(=), :__hps_node_id, nodeIdCall)
@@ -381,9 +381,9 @@ function from_assignment(node::Expr, state::DistIrState)
             darr_div_var = symbol("__hps_dist_arr_div_"*string(arr_id))
             darr_count_var = symbol("__hps_dist_arr_count_"*string(arr_id))
 
-            CompilerTools.LambdaHandling.addLocalVar(darr_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-            CompilerTools.LambdaHandling.addLocalVar(darr_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-            CompilerTools.LambdaHandling.addLocalVar(darr_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
 
 
             darr_div_expr = :($darr_div_var = $(arr_tot_size)/__hps_num_pes)
@@ -420,9 +420,9 @@ function from_parfor(node::Expr, state)
         loop_end_var = symbol("__hps_loop_end_"*string(getDistNewID(state)))
         loop_div_var = symbol("__hps_loop_div_"*string(getDistNewID(state)))
 
-        CompilerTools.LambdaHandling.addLocalVar(loop_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(loop_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(loop_end_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(loop_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
 
         #first_arr = state.parfor_info[parfor.unique_id][1]; 
         #@dprintln(3,"DistIR parfor first array ", first_arr)
@@ -545,7 +545,7 @@ function gen_dist_reductions(reductions::Array{PIRReduction,1}, state)
     res = Any[]
     for reduce in reductions
         reduce_var = symbol("__hps_reduce_"*string(getDistNewID(state)))
-        CompilerTools.LambdaHandling.addLocalVar(reduce_var, reduce.reductionVar.typ, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(reduce_var, reduce.reductionVar.typ, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
 
         reduce_var_init = Expr(:(=), reduce_var, 0)
         reduceCall = Expr(:call,TopNode(:hps_dist_reduce),reduce.reductionVar,reduce.reductionFunc, reduce_var)

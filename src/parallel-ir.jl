@@ -412,7 +412,7 @@ type expr_state
     array_length_correlation :: Dict{SymGen,Int}
     symbol_array_correlation :: Dict{Array{SymGen,1},Int}
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
-    lambdaInfo :: CompilerTools.LambdaHandling.LambdaInfo
+    LambdaVarInfo :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
 
     # Initialize the state for parallel IR translation.
@@ -422,7 +422,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label)
     end
 end
 
@@ -511,7 +511,7 @@ Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
 function mk_assignment_expr(lhs::SymAllGen, rhs, state :: expr_state)
-    expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)    
+    expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)    
     @dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
     TypedExpr(expr_typ, symbol('='), lhs, rhs)
 end
@@ -708,7 +708,7 @@ end
 Returns the element type of an Array.
 """
 function getArrayElemType(array :: GenSym, state :: expr_state)
-    atyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+    atyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     return eltype(atyp)
 end
 
@@ -725,18 +725,18 @@ end
 Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: GenSym, state :: expr_state)
-    gstyp = CompilerTools.LambdaHandling.getType(array, state.lambdaInfo)
+    gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
     ndims(gstyp)
 end
 
 """
-Add a local variable to the current function's lambdaInfo.
+Add a local variable to the current function's LambdaVarInfo.
 Returns a symbol node of the new variable.
 """
 function createStateVar(state, name, typ, access)
     new_temp_sym = symbol(name)
-    CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.LambdaVarInfo)
     return SymbolNode(new_temp_sym, typ)
 end
 
@@ -757,7 +757,7 @@ Takes an existing variable whose name is in "var_name" and adds the descriptor f
 variable to be parfor loop private and eventually go in an OMP private clause.
 """
 function makePrivateParfor(var_name :: Symbol, state)
-    res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.lambdaInfo)
+    res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
     assert(res)
 end
 
@@ -1185,16 +1185,16 @@ function from_lambda(lambda :: Expr, depth, state)
     assert(lambda.head == :lambda)
     @dprintln(4,"from_lambda starting")
 
-    # Save the current lambdaInfo away so we can restore it later.
-    save_lambdaInfo  = state.lambdaInfo
-    state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(lambda)
+    # Save the current LambdaVarInfo away so we can restore it later.
+    save_LambdaVarInfo  = state.LambdaVarInfo
+    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(lambda)
     body = CompilerTools.LambdaHandling.getBody(lambda)
 
     # Process the lambda's body.
-    @dprintln(3,"state.lambdaInfo.var_defs = ", state.lambdaInfo.var_defs)
+    @dprintln(3,"state.LambdaVarInfo.var_defs = ", state.LambdaVarInfo.var_defs)
     body = get_one(from_expr(body, depth, state, false))
     @dprintln(4,"from_lambda after from_expr")
-    @dprintln(3,"After processing lambda body = ", state.lambdaInfo)
+    @dprintln(3,"After processing lambda body = ", state.LambdaVarInfo)
     @dprintln(3,"from_lambda: after body = ")
     printBody(3, body)
 
@@ -1202,17 +1202,17 @@ function from_lambda(lambda :: Expr, depth, state)
     symbol_assigns = Dict{Symbol, Int}()
     AstWalk(body, count_assignments, symbol_assigns)
 
-    # After counting static assignments, update the lambdaInfo for those vars
+    # After counting static assignments, update the LambdaVarInfo for those vars
     # to say whether the var is assigned once or multiple times.
-    CompilerTools.LambdaHandling.updateAssignedDesc(state.lambdaInfo, symbol_assigns)
+    CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, symbol_assigns)
 
-    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.lambdaInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
-    # Write the lambdaInfo back to the lambda AST node.
-    lambda = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, body)
+    # Write the LambdaVarInfo back to the lambda AST node.
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, body)
     @dprintln(3,"new lambda = ", lambda)
 
-    state.lambdaInfo = save_lambdaInfo
+    state.LambdaVarInfo = save_LambdaVarInfo
 
     @dprintln(4,"from_lambda ending")
     return lambda
@@ -1442,7 +1442,7 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     # First, form the type of the tuple for those multiple outputs.
     tt = Expr(:tuple)
     for i = 1:num_map
-        push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.lambdaInfo))
+        push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.LambdaVarInfo))
     end
     temp_type = eval(tt)
 
@@ -1453,23 +1453,23 @@ end
 Pull the information from the inner lambda into the outer lambda.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
-    inner_lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(inner_lambda)
+    inner_LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(inner_lambda)
     @dprintln(3,"mergeLambdaIntoOuterState")
-    @dprintln(3,"state.lambdaInfo = ", state.lambdaInfo)
-    @dprintln(3,"inner_lambdaInfo = ", inner_lambdaInfo)
-    CompilerTools.LambdaHandling.mergeLambdaInfo(state.lambdaInfo, inner_lambdaInfo)
+    @dprintln(3,"state.LambdaVarInfo = ", state.LambdaVarInfo)
+    @dprintln(3,"inner_LambdaVarInfo = ", inner_LambdaVarInfo)
+    CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, inner_LambdaVarInfo)
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
 function createRetTupleType(rets :: Array{Union{SymbolNode, GenSym},1}, unique_id :: Int64, state :: expr_state)
     # Form the type of the tuple var.
-    tt_args = [ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in rets]
+    tt_args = [ CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo) for x in rets]
     temp_type = Tuple{tt_args...}
 
     new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
     new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
     @dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
-    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.LambdaVarInfo)
 
     new_temp_snode
 end
@@ -1735,7 +1735,7 @@ function sub_cur_body_walk(x::Expr,
             push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
             if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
                 new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
-                x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.lambdaInfo))
+                x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.LambdaVarInfo))
             end
         end
     end
@@ -2025,9 +2025,9 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
             corresponding_elem = last_post[i-3]
 
             assert(isa(parfor_assignment.args[i], SymNodeGen))
-            rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
-            rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.lambdaInfo))
-            if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.lambdaInfo))
+            rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.LambdaVarInfo))
+            rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.LambdaVarInfo))
+            if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.LambdaVarInfo))
                 # For fused parfors, the last post statement is a tuple variable.
                 # That tuple variable is declared in the previous statement (end-1).
                 # The statement is an Expr with head == :call and top(:tuple) as the first arg.
@@ -2042,13 +2042,13 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
         if !isBareParfor(parfor_assignment)
             lhs_pa = getLhsFromAssignment(parfor_assignment)
             ast_lhs_pa_typ = typeof(lhs_pa)
-            lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.lambdaInfo)
+            lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.LambdaVarInfo)
             if isa(lhs_pa, SymNodeGen)
                 ppftyp = typeof(the_parfor.postParFor[end]) 
                 assert(isa(the_parfor.postParFor[end], SymNodeGen))
                 rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
                 rhs = the_parfor.postParFor[end]
-                rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.lambdaInfo))
+                rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.LambdaVarInfo))
 
                 if isArrayType(lhs_pa_typ)
                     map_lhs_post_array[toSymGen(lhs_pa)]     = toSymGen(the_parfor.postParFor[end])
@@ -2265,8 +2265,8 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, this_parfor.loopNests[i].upper)
             push!(expr_to_process, this_parfor.loopNests[i].step)
         end
-        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
         @dprintln(3,"fake_body = ", fake_body)
 
         body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
@@ -2314,10 +2314,10 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, this_parfor.loopNests[i].upper)
             push!(expr_to_process, this_parfor.loopNests[i].step)
         end
-        #emptyLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-        #fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(emptyLambdaInfo, TypedExpr(nothing, :body, this_parfor.body...))
-        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaInfo)
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        #emptyLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
+        #fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(emptyLambdaVarInfo, TypedExpr(nothing, :body, this_parfor.body...))
+        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
         @dprintln(3,"fake_body = ", fake_body)
 
         body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
@@ -2608,7 +2608,7 @@ function from_assignment(lhs, rhs, depth, state)
                     dim1 = rhs.args[7]
                     @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
                     if typeof(dim1) == SymbolNode
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.LambdaVarInfo)
                         if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
                             @dprintln(3, "Will establish array length correlation for const size ", dim1)
                             getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
@@ -2619,8 +2619,8 @@ function from_assignment(lhs, rhs, depth, state)
                     dim2 = rhs.args[9]
                     @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
                     if typeof(dim1) == SymbolNode && typeof(dim2) == SymbolNode
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.lambdaInfo)
-                        si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.lambdaInfo)
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.LambdaVarInfo)
+                        si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.LambdaVarInfo)
                         if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
                             @dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
                             getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
@@ -2639,7 +2639,7 @@ function from_assignment(lhs, rhs, depth, state)
         end
     else
         # Get the type of the lhs from its metadata declaration.
-        out_typ = CompilerTools.LambdaHandling.getType(lhs, state.lambdaInfo)
+        out_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)
     end
 
     return [toSNGen(lhs, out_typ); rhs], out_typ
@@ -2851,11 +2851,11 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     @dprintln(3,"types = ", type_data)
     @dprintln(3,"DomainLambda is:")
     pirPrintDl(3, domain_lambda)
-    newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-    CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaInfo)
-    stmts = domain_lambda.genBody(newLambdaInfo, dl_inputs)
-    newLambdaInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
-    ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, Expr(:body, stmts...))
+    newLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
+    CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaVarInfo)
+    stmts = domain_lambda.genBody(newLambdaVarInfo, dl_inputs)
+    newLambdaVarInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(newLambdaVarInfo, Expr(:body, stmts...))
     # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
     return (ast, input_arrays) 
 end
@@ -2972,7 +2972,7 @@ end
 doRemoveAssertEqShape = true
 generalSimplification = true
 
-function get_input_arrays(linfo::LambdaInfo)
+function get_input_arrays(linfo::LambdaVarInfo)
     ret = Symbol[]
     input_vars = linfo.input_params
     @dprintln(3,"input_vars = ", input_vars)
@@ -3009,13 +3009,13 @@ function from_root(function_name, ast :: Expr)
 
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
     cfg = CompilerTools.CFGs.from_ast(ast)
-    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-    input_arrays = get_input_arrays(lambdaInfo)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    input_arrays = get_input_arrays(LambdaVarInfo)
     body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
     body.args = CompilerTools.CFGs.createFunctionBody(cfg)
     # Re-create the lambda minus any dead basic blocks.
-    ast = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(lambdaInfo, body)
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
     @dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
 
     #CompilerTools.LivenessAnalysis.set_debug_level(3)
@@ -3199,7 +3199,7 @@ end
 type rm_allocs_state
     defs::Set{SymGen}
     removed_arrs::Dict{SymGen,Array{Any,1}}
-    lambdaInfo
+    LambdaVarInfo
 end
 
 
@@ -3208,16 +3208,16 @@ removes extra allocations
 """
 function remove_extra_allocs(ast)
     @dprintln(3,"starting remove extra allocs")
-    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, lambdaInfo)
-    #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, lambdaInfo)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, LambdaVarInfo)
+    #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{SymGen}()
     for i in values(lives.basic_blocks)
         defs = union(defs, i.def)
     end
     @dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Dict{SymGen,Array{Any,1}}(), lambdaInfo)
+    rm_state = rm_allocs_state(defs, Dict{SymGen,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(ast, rm_allocs_cb, rm_state)
 
     return;
@@ -3245,7 +3245,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         shape = map(toSynGemOrInt,sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
-        updateLambdaType(arr, length(shape), state.lambdaInfo)
+        updateLambdaType(arr, length(shape), state.LambdaVarInfo)
         state.removed_arrs[arr] = shape
         return ast
     elseif head==:call
@@ -3308,16 +3308,16 @@ function rm_allocs_cb_parfor(state::rm_allocs_state, parfor::PIRParForAst)
     end
 end
 
-function updateLambdaType(arr::Symbol, dim::Int, lambdaInfo)
+function updateLambdaType(arr::Symbol, dim::Int, LambdaVarInfo)
     #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
-    #lambdaInfo.var_defs[arr] = eval(parse(typ));
-    lambdaInfo.var_defs[arr].typ = Int64; 
+    #LambdaVarInfo.var_defs[arr] = eval(parse(typ));
+    LambdaVarInfo.var_defs[arr].typ = Int64; 
 end
 
-function updateLambdaType(arr::GenSym, dim::Int, lambdaInfo)
+function updateLambdaType(arr::GenSym, dim::Int, LambdaVarInfo)
     #typ = "Tuple{"*mapfoldl(x->"Int64",(a,b)->"$a,Int64", 1:dim)*"}"
-    #lambdaInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
-    lambdaInfo.gen_sym_typs[arr.id+1] = Int64;
+    #LambdaVarInfo.gen_sym_typs[arr.id+1] = eval(parse(typ));
+    LambdaVarInfo.gen_sym_typs[arr.id+1] = Int64;
 end
 
 function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
@@ -3446,7 +3446,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         head = :parfor
         @assert (length(args) == 2) "expect Domain IR select expr to have two arguments, but got " * args
         etyp = eltype(typ)
-        args = Any[[DomainIR.mk_select(args...)], DomainIR.DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], CompilerTools.LambdaHandling.LambdaInfo())]
+        args = Any[[DomainIR.mk_select(args...)], DomainIR.DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], CompilerTools.LambdaHandling.LambdaVarInfo())]
         domain_oprs = [DomainOperation(:mmap, args)]
         args = mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state)
         @dprintln(1,"switching to parfor node for :select, got ", args)

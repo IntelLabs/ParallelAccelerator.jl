@@ -322,7 +322,7 @@ function fuse(body, body_index, cur::Expr, state)
         push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
 
         # rws
-        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.lambdaInfo)
+        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
 
         @dprintln(3,"New lhs = ", new_lhs)
         if prev_assignment
@@ -331,7 +331,7 @@ function fuse(body, body_index, cur::Expr, state)
                 @dprintln(2,"prev was assignment and is staying an assignment")
                 # The new lhs is not empty and so this is the normal case where "prev" stays an assignment expression and we update types here and if necessary FusionSentinel.
                 prev.args[1] = new_lhs
-                prev.typ = getType(new_lhs, state.lambdaInfo)
+                prev.typ = getType(new_lhs, state.LambdaVarInfo)
                 prev.args[2].typ = prev.typ
                 # Strip off a previous FusionSentinel() if it exists in the expression.
                 prev.args = prev.args[1:2]
@@ -352,7 +352,7 @@ function fuse(body, body_index, cur::Expr, state)
                 # The new lhs is not empty so the fused parfor will not be bare and "prev" needs to become an assignment expression.
                 body[body_index] = mk_assignment_expr(new_lhs, prev, state)
                 prev = body[body_index]
-                prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.lambdaInfo)
+                prev.args[2].typ = CompilerTools.LambdaHandling.getType(new_lhs, state.LambdaVarInfo)
                 if !single
                     push!(prev.args, FusionSentinel())
                     append!(prev.args, all_rets)
@@ -409,14 +409,14 @@ function inline!(src, dst, lhs)
     g_inps = length(inputs) 
     inputs = vcat(inputs[1:pos-1], inputs[pos+1:end], f.inputs)
     linfo = g.linfo
-    # add escaping variables from f into g, since mergeLambdaInfo only deals
+    # add escaping variables from f into g, since mergeLambdaVarInfo only deals
     # with nesting lambda, but not parallel ones.
     for (v, d) in f.linfo.escaping_defs
         if !CompilerTools.LambdaHandling.isEscapingVariable(v, linfo)
             CompilerTools.LambdaHandling.addEscapingVariable(d, linfo)
         end
     end
-    # gensym_map = CompilerTools.LambdaHandling.mergeLambdaInfo(linfo, f.linfo)
+    # gensym_map = CompilerTools.LambdaHandling.mergeLambdaVarInfo(linfo, f.linfo)
     tmp_t = f.outputs[1]
     dst.args[2] = DomainLambda(inputs, g.outputs, 
     (linfo, args) -> begin
@@ -635,7 +635,7 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
-    lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
     body = ast.args[3]
     assert(isa(body, Expr) && is(body.head, :body))
     # For each statement in the body.
@@ -647,7 +647,7 @@ function mmapToMmap!(ast, lives, uniqSet)
             rhs = expr.args[2]
             # right now assume all
             assert(isa(lhs, SymAllGen))
-            lhsTyp = CompilerTools.LambdaHandling.getType(lhs, lambdaInfo) 
+            lhsTyp = CompilerTools.LambdaHandling.getType(lhs, LambdaVarInfo) 
             # If the right-hand side is an mmap.
             if isa(rhs, Expr) && is(rhs.head, :mmap)
                 args = rhs.args[1]
@@ -663,7 +663,7 @@ function mmapToMmap!(ast, lives, uniqSet)
                     v = args[j]
                     v = isa(v, SymbolNode) ? v.name : v
                     if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
-                        CompilerTools.LambdaHandling.getType(v, lambdaInfo) == lhsTyp
+                        CompilerTools.LambdaHandling.getType(v, LambdaVarInfo) == lhsTyp
                         reuse = v  # Found a dying symbol.
                         break
                     end

@@ -555,7 +555,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
             assert(isa(array_param, SymbolNode) || isa(array_param, GenSym)) # should be a SymbolNode or GenSym
-            array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.lambdaInfo) # get its type
+            array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.LambdaVarInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
                 dim_symbols = [getSName(lhs)]
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
@@ -629,11 +629,11 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
     print_correlations(3, state)
 
     if node.head == :lambda
-        save_lambdaInfo  = state.lambdaInfo
-        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(node)
+        save_LambdaVarInfo  = state.LambdaVarInfo
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(node)
         body = CompilerTools.LambdaHandling.getBody(node)
         AstWalk(body, create_equivalence_classes, state)
-        state.lambdaInfo = save_lambdaInfo
+        state.LambdaVarInfo = save_LambdaVarInfo
         return node
     end
 
@@ -734,7 +734,7 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
         if typeof(dim_array[i]) != SymbolNode
             return false
         end
-        if CompilerTools.LambdaHandling.getDesc(dim_array[i].name, state.lambdaInfo) & ISASSIGNEDONCE != ISASSIGNEDONCE
+        if CompilerTools.LambdaHandling.getDesc(dim_array[i].name, state.LambdaVarInfo) & ISASSIGNEDONCE != ISASSIGNEDONCE
             return false
         end
         push!(dim_names, dim_array[i].name)

@@ -306,7 +306,7 @@ end
 type eic_state
     non_calls      :: Float64    # estimated instruction count for non-calls
     fully_analyzed :: Bool
-    lambdaInfo     :: Union{CompilerTools.LambdaHandling.LambdaInfo, Void}
+    LambdaVarInfo     :: Union{CompilerTools.LambdaHandling.LambdaVarInfo, Void}
 end
 
 ASSIGNMENT_COST = 1.0
@@ -355,7 +355,7 @@ function call_instruction_count(args, state :: eic_state, debug_level)
 
     @dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
     sig_expr = Expr(:tuple)
-    sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.lambdaInfo), fargs)
+    sig_expr.args = map(x -> CompilerTools.LivenessAnalysis.typeOfOpr(x, state.LambdaVarInfo), fargs)
     signature = eval(sig_expr)
     fs = (func, signature)
 
@@ -484,7 +484,7 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
         dprintln(debug_level,head, " ", args)
     end
     if head == :lambda
-        state.lambdaInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaInfo(ast)
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
     elseif head == :body || head == :block || head == :(::) || head == :line || head == :& || head == :(.) || head == :copyast
         # skip
     elseif head == :(=)
@@ -557,7 +557,7 @@ Takes a parfor and walks the body of the parfor and estimates the number of inst
 function createInstructionCountEstimate(the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state :: expr_state)
     if num_threads_mode == 1 || num_threads_mode == 2 || num_threads_mode == 3
         @dprintln(2,"instruction count estimate for parfor = ", the_parfor)
-        new_state = eic_state(0, true, state.lambdaInfo)
+        new_state = eic_state(0, true, state.LambdaVarInfo)
         for i = 1:length(the_parfor.body)
             AstWalk(the_parfor.body[i], estimateInstrCount, new_state)
         end
@@ -1016,7 +1016,7 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaInfo)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaVarInfo)
     @dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
     if loop_nest_level > length(the_parfor.loopNests)
         # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
@@ -1114,11 +1114,11 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         gensym3_sym = symbol(gensym3_var)
         gensym4_var = string("#recreate_gensym4_", (loop_nest_level-1) * num_vars + 4)
         gensym4_sym = symbol(gensym4_var)
-        CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
@@ -1138,7 +1138,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
            push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
            push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
 
-           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaInfo)
+           recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaVarInfo)
 
            push!(new_body, LabelNode(label_before_second_unless))
            push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
@@ -1152,11 +1152,11 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaInfo)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaVarInfo)
     max_label = getMaxLabel(0, the_parfor.body)
     @dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaInfo)
+    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaVarInfo)
     nothing
 end
 
@@ -1181,26 +1181,26 @@ function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
     nothing
 end
 
-function toTaskArgName(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+function toTaskArgName(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     x
 end
-function toTaskArgName(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+function toTaskArgName(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     x.name
 end
-function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     newstr = string("parforToTask_gensym_", x.id)
     ret    = symbol(newstr)
-    gsmap[x] = CompilerTools.LambdaHandling.VarDef(ret, CompilerTools.LambdaHandling.getType(x, lambdaInfo), 0)
+    gsmap[x] = CompilerTools.LambdaHandling.VarDef(ret, CompilerTools.LambdaHandling.getType(x, LambdaVarInfo), 0)
     return ret
 end
 
-function toTaskArgVarDef(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
-    CompilerTools.LambdaHandling.getVarDef(x, lambdaInfo)
+function toTaskArgVarDef(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
+    CompilerTools.LambdaHandling.getVarDef(x, LambdaVarInfo)
 end
-function toTaskArgVarDef(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
-    CompilerTools.LambdaHandling.getVarDef(x.name, lambdaInfo)
+function toTaskArgVarDef(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
+    CompilerTools.LambdaHandling.getVarDef(x.name, LambdaVarInfo)
 end
-function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, lambdaInfo)
+function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     gsmap[x]
 end
 
@@ -1258,9 +1258,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
     gensyms_table = Dict{SymGen, Any}()
     for i in locals
         if isa(i, Symbol) 
-            push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.lambdaInfo))
+            push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.LambdaVarInfo))
         elseif isa(i, GenSym) 
-            push!(gensyms, CompilerTools.LambdaHandling.getType(i,state.lambdaInfo))
+            push!(gensyms, CompilerTools.LambdaHandling.getType(i,state.LambdaVarInfo))
             gensyms_table[i] = GenSym(length(gensyms) - 1)
         else
             assert(false)
@@ -1300,10 +1300,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # If we detect a GenSym in the parameter list we replace it with a symbol derived from
     # the GenSym number and add it to gsmap.
     all_arg_names = [:ranges;
-                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), in_array_names);
-                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), modified_symbols);
-                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), io_symbols);
-                     map(x -> toTaskArgName(x, gsmap, state.lambdaInfo), reduction_vars)]
+                     map(x -> toTaskArgName(x, gsmap, state.LambdaVarInfo), in_array_names);
+                     map(x -> toTaskArgName(x, gsmap, state.LambdaVarInfo), modified_symbols);
+                     map(x -> toTaskArgName(x, gsmap, state.LambdaVarInfo), io_symbols);
+                     map(x -> toTaskArgName(x, gsmap, state.LambdaVarInfo), reduction_vars)]
 
     @dprintln(3,"gsmap = ", gsmap)
     # Add gsmap to gensyms_table so that the GenSyms in the body can be translated to
@@ -1316,19 +1316,19 @@ function parforToTask(parfor_index, bb_statements, body, state)
     all_arg_types_tuple = Expr(:tuple)
     all_arg_types_tuple.args = [
         pir_range_actual;
-        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), in_array_names);
-        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), modified_symbols);
-        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), io_symbols);
-        map(x -> CompilerTools.LambdaHandling.getType(x, state.lambdaInfo), reduction_vars)]
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), in_array_names);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), modified_symbols);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), io_symbols);
+        map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), reduction_vars)]
     all_arg_type = eval(all_arg_types_tuple)
     # Forms VarDef's for the local variables to the task function.
     args_var = CompilerTools.LambdaHandling.VarDef[]
     push!(args_var, CompilerTools.LambdaHandling.VarDef(:ranges, pir_range_actual, 0))
     append!(args_var, 
-      [ map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), in_array_names);
-        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), modified_symbols);
-        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), io_symbols);
-        map(x -> toTaskArgVarDef(x, gsmap, state.lambdaInfo), reduction_vars)])
+      [ map(x -> toTaskArgVarDef(x, gsmap, state.LambdaVarInfo), in_array_names);
+        map(x -> toTaskArgVarDef(x, gsmap, state.LambdaVarInfo), modified_symbols);
+        map(x -> toTaskArgVarDef(x, gsmap, state.LambdaVarInfo), io_symbols);
+        map(x -> toTaskArgVarDef(x, gsmap, state.LambdaVarInfo), reduction_vars)])
     @dprintln(3,"all_arg_names = ", all_arg_names)
     @dprintln(3,"all_arg_type = ", all_arg_type)
     @dprintln(3,"args_var = ", args_var)
@@ -1349,15 +1349,15 @@ function parforToTask(parfor_index, bb_statements, body, state)
     unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
     @dprintln(3, "unused_ct = ", unused_ct)
 
-    newLambdaInfo = CompilerTools.LambdaHandling.LambdaInfo()
-    CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaInfo)
+    newLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
+    CompilerTools.LambdaHandling.addInputParameters(deepcopy(args_var), newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariables(deepcopy(locals_array), newLambdaVarInfo)
     # Change all variables in the task function to have ASSIGNED desc.
-    for vd in newLambdaInfo.var_defs
+    for vd in newLambdaVarInfo.var_defs
         var_def = vd[2]
         var_def.desc = CompilerTools.LambdaHandling.ISASSIGNED
     end
-    newLambdaInfo.gen_sym_typs = gensyms
+    newLambdaVarInfo.gen_sym_typs = gensyms
 
     # Creating the new body for the task function.
     task_body = TypedExpr(Int, :body)
@@ -1392,7 +1392,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # Add the parfor stmt to the task function body.
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
         #push!(task_body.args, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), "in task func"))
-        recreateLoops(task_body.args, the_parfor, state, newLambdaInfo)
+        recreateLoops(task_body.args, the_parfor, state, newLambdaVarInfo)
     else
         flattenParfor(task_body.args, the_parfor)
     end
@@ -1419,7 +1419,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
     # Create the new :lambda Expr for the task function.
-    code = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(newLambdaInfo, task_body)
+    code = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(newLambdaVarInfo, task_body)
 
     @dprintln(3, "New task = ", code)
 
@@ -1542,10 +1542,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
     ret = TaskInfo(task_func,     # The task function that we just generated of type Function.
                     task_func_sym, # The task function's Symbol name.
                     reduction_func_name, # The name of the C reduction function created for this task.
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), in_array_names),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), modified_symbols),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), io_symbols),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.lambdaInfo)), reduction_vars),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), in_array_names),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), modified_symbols),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), io_symbols),
+                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), reduction_vars),
                     code,          # The AST for the task function.
                     saved_loopNests)
     return ret

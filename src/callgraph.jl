@@ -44,7 +44,7 @@ type FunctionInfo
     array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
     can_parallelize :: Bool              # false if a global is written in this function
     recursive_parallelize :: Bool
-    lambdaInfo :: LambdaInfo
+    LambdaVarInfo :: LambdaVarInfo
 end
 
 type extractStaticCallGraphState
@@ -54,7 +54,7 @@ type extractStaticCallGraphState
 
     calls :: Array{CallInfo,1}
     globalWrites :: Set
-    lambdaInfo   :: Union{LambdaInfo, Void}
+    LambdaVarInfo   :: Union{LambdaVarInfo, Void}
     array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
     cant_analyze :: Bool
 
@@ -213,9 +213,9 @@ function extractStaticCallGraphWalk(node::Expr,
     head = node.head
     args = node.args
     if head == :lambda
-        if state.lambdaInfo == nothing
-            state.lambdaInfo = lambdaExprToLambdaInfo(node)
-            @dprintln(3, "lambdaInfo = ", state.lambdaInfo)
+        if state.LambdaVarInfo == nothing
+            state.LambdaVarInfo = lambdaExprToLambdaVarInfo(node)
+            @dprintln(3, "LambdaVarInfo = ", state.LambdaVarInfo)
         else
             new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
             AstWalker.AstWalk(node, extractStaticCallGraphWalk, new_lambda_state)
@@ -225,7 +225,7 @@ function extractStaticCallGraphWalk(node::Expr,
         func_expr = args[1]
         call_args = args[2:end]
         call_sig = Expr(:tuple)
-        call_sig.args = map(x -> typeOfOpr(state.lambdaInfo, x), call_args)
+        call_sig.args = map(x -> typeOfOpr(state.LambdaVarInfo, x), call_args)
         call_sig_arg_tuple = eval(call_sig)
         @dprintln(4,"func_expr = ", func_expr)
         @dprintln(4,"Arg tuple = ", call_sig_arg_tuple)
@@ -467,7 +467,7 @@ function extractStaticCallGraph(func, sig)
             state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
             AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
             @dprintln(4,state)
-            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.lambdaInfo)
+            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
         elseif ftyp == LambdaStaticData
             @dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
             ast = ParallelIR.uncompressed_ast(the_func)
@@ -475,7 +475,7 @@ function extractStaticCallGraph(func, sig)
             state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
             AstWalker.AstWalk(ast, extractStaticCallGraphWalk, state)
             @dprintln(4,state)
-            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.lambdaInfo)
+            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
         end
     end
 

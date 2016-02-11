@@ -315,7 +315,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         atm = createTempForArray(input_array, 1, state)
         push!(reduce_body, mk_assignment_expr(atm, mk_arrayref1(num_dim_inputs, input_array, parfor_index_syms, true, state, inputInfo.range), state))
     else
-        atm = createTempForArray(input_array, 1, state, CompilerTools.LambdaHandling.getType(input_array, state.lambdaInfo))
+        atm = createTempForArray(input_array, 1, state, CompilerTools.LambdaHandling.getType(input_array, state.LambdaVarInfo))
         push!(reduce_body, mk_assignment_expr(atm, mk_arrayslice(num_dim_inputs, input_array, parfor_index_syms, red_dim, true, state), state))
     end
 
@@ -344,7 +344,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
                 @dprintln(3, "mask_array = ", mask_array)
-                assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.lambdaInfo)))
+                assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
                     mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
                 end
@@ -354,12 +354,12 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             elseif isa(this_dim, SingularSelector)
                 generatePreOffsetStatement(this_dim, pre_statements)
                 continue;
-                #CompilerTools.LambdaHandling.addLocalVar(getSName(this_dim), Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+                #CompilerTools.LambdaHandling.addLocalVar(getSName(this_dim), Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
             else
                 error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
         end 
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_len,   Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         push!(save_array_lens, save_array_len)
         loop_nest = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int), 1)
         if red_dim > 0
@@ -378,7 +378,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
     reduction_output_snode = SymbolNode(symbol(reduction_output_name), out_type)
     @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-    CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.lambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
     push!(post_statements, reduction_output_snode)
 
     # Call Domain IR to generate most of the body of the function (except for saving the output)
@@ -414,7 +414,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
 
     # Make sure that for reduce that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
@@ -685,7 +685,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
         array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         push!(save_array_lens, save_array_len)
         loopNests[num_dim_inputs - i + 1] = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
     end
@@ -740,7 +740,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     # add local vars to state
     #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
 
     @dprintln(3,"indexed_arrays = ", indexed_arrays)
@@ -806,7 +806,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     @dprintln(3, "out_body = ", out_body)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
 
     # Make sure that for mmap! that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
@@ -843,7 +843,7 @@ function create_mmap!_post_statements(input_arrays, dl, state)
         push!(post_statements, input_arrays[1])
     else
         ret_arrays = input_arrays[1:length(dl.outputs)]
-        ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.lambdaInfo) for x in ret_arrays ]
+        ret_types = Any[ CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo) for x in ret_arrays ]
         push!(post_statements, mk_tuple_expr(ret_arrays, Core.Inference.to_tuple_type(tuple(ret_types...))))
     end
     return post_statements
@@ -875,20 +875,20 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         # FIXME: We should infer the range type
         range_type = UnitRange{Int64}
         range_expr = mk_assignment_expr(SymbolNode(range_name, range_type), range)
-        CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         push!(pre_statements, range_expr)
         save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
         loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($range_name)), state)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,loop_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
         push!(rearray, RangeExprs(1,1,:(length($range_name))))
     end
     inputInfo = InputInfo()
     inputInfo.range = [RangeData(i) for i in rearray]
 
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
@@ -952,7 +952,7 @@ function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
     for i = 1:num_dim_inputs
         parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
         parfor_index_sym = symbol(parfor_index_var)
-        CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
         parfor_index_syms[i] = parfor_index_sym
     end
     return parfor_index_syms
@@ -1078,7 +1078,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     # add local vars to state
     #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.lambdaInfo)
+    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
@@ -1124,7 +1124,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
             throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
         end
         # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
-        CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.lambdaInfo)
+        CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         # add the statement to create the new output array to the set of statements to execute before the parfor
         push!(pre_statements,new_ass_expr)
         nans = symbol(new_array_name)
@@ -1150,7 +1150,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     end
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.lambdaInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
 
     # Make sure that for mmap that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)

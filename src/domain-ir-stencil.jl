@@ -268,7 +268,7 @@ end
  Border specification in runStencil can only be Symbols.
 """
 function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
-  local linfo = lambdaExprToLambdaInfo(kernelExp)
+  local linfo = lambdaExprToLambdaVarInfo(kernelExp)
   local typs = Type[ typeOfOpr(state_, a) for a in bufs ]
   local state = newState(linfo, Dict(), state_)
   local stat, genBody
@@ -297,7 +297,7 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
       strides = stat.strideSym
       bufs = inputs
     end
-    dict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+    dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
     body = genBody(dict, indices, strides, bufs)
   end
   return stat, DomainLambda(typs, typs, f, state.linfo)

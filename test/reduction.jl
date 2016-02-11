@@ -26,29 +26,29 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module ReductionTest
 using ParallelAccelerator
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
-#ParallelAccelerator.set_debug_level(4)
+ParallelAccelerator.DomainIR.set_debug_level(4)
+ParallelAccelerator.ParallelIR.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
+ParallelAccelerator.set_debug_level(4)
 
-@acc function sum_A(col::Int)
+@acc function sum_A(col)
     A = ones(Int, col, col, col)
     sum(A)
 end
 
-@acc function sum_A_1(col::Int)
+@acc function sum_A_1(col)
     A = ones(Int, col, col, col)
     B = sum(A, 1)
     C = sum(B, 2)
 end
 
-@acc function sum_A_cond_1(col::Int)
+@acc function sum_A_cond_1(col)
     A = ones(Int, col)
     A[1] = -1
     sum(A[A .> 0])
 end
 
-@acc function sum_A_cond_2(col::Int)
+@acc function sum_A_cond_2(col)
     A = ones(Int, col, col)
     A[1,1] = -1
     B = [ i for i = 1:col ]
@@ -58,7 +58,7 @@ end
     end
 end
 
-@acc function sum_A_range_1(col::Int)
+@acc function sum_A_range_1(col)
     A = ones(Int, col, col)
     A[1,2] = 0
     sum(A[:, 2])

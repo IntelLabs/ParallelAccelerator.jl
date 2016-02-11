@@ -65,7 +65,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # convert all SymbolNode in bufs to just Symbol
   local bufs = args[3]
   local kernelF :: DomainLambda = args[4] 
-  local linfo = irState.lambdaInfo
+  local linfo = irState.LambdaVarInfo
   # println(stat)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
   local toSymGen(x) = isa(x, SymbolNode) ? x.name : x 

@@ -170,13 +170,13 @@ export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isarray, isb
 # A representation for anonymous lambda used in domainIR.
 #   inputs:  types of input tuple
 #   outputs: types of output tuple
-#   genBody: (LambdaInfo, Array{Any,1}) -> Array{Expr, 1}
+#   genBody: (LambdaVarInfo, Array{Any,1}) -> Array{Expr, 1}
 #   escapes: escaping variables in the body
 #
 # So the downstream can just call genBody, and pass it
-# the downstream's LambdaInfo and an array of parameters,
+# the downstream's LambdaVarInfo and an array of parameters,
 # and it will return an expression (with :body head) that 
-# represents the loop body. The input LambdaInfo, if
+# represents the loop body. The input LambdaVarInfo, if
 # given, is updated inplace. 
 #
 # genBody always returns an array of expression even when 
@@ -193,7 +193,7 @@ type DomainLambda
     inputs  :: Array{Type, 1}
     outputs :: Array{Type, 1}
     genBody :: Function
-    linfo   :: LambdaInfo
+    linfo   :: LambdaVarInfo
 
     function DomainLambda(i, o, gb, li)
         # TODO: is the following necessary?
@@ -219,14 +219,14 @@ function lambdaSwapArg(f::DomainLambda, i, j)
 end
 
 type IRState
-    linfo  :: LambdaInfo
+    linfo  :: LambdaVarInfo
     defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
     data_source_counter::Int64 # a unique counter for data sources in program
 end
 
-emptyState() = IRState(LambdaInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
+emptyState() = IRState(LambdaVarInfo(), Dict{Union{Symbol,Int},Any}(), Any[], nothing, 0)
 newState(linfo, defs, state::IRState) = IRState(linfo, defs, Any[], state, state.data_source_counter)
 
 """
@@ -355,7 +355,7 @@ const afoldlDict = Dict{Type,Symbol}(zip(afoldTyps, afoldOprs))
 
 # some part of the code still requires this
 unique_id = 0
-function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaInfo)
+function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaVarInfo)
     global unique_id
     name = :tmpvar
     unique = false
@@ -583,7 +583,7 @@ function show(io::IO, f::DomainLambda)
     local len = length(f.inputs)
     local syms = [ symbol(string("x", i)) for i = 1:len ]
     local symNodes = [ SymbolNode(syms[i], f.inputs[i]) for i = 1:len ]
-    local body = f.genBody(LambdaInfo(), syms) # use a dummy LambdaInfo for show purpose
+    local body = f.genBody(LambdaVarInfo(), syms) # use a dummy LambdaVarInfo for show purpose
     print(io, "(")
     show(io, symNodes)
     print(io, ";")
@@ -760,7 +760,7 @@ function from_lambda(state, env, expr::Expr)
     local ast  = expr.args
     local typ  = expr.typ
     assert(length(ast) == 3)
-    linfo = lambdaExprToLambdaInfo(expr) 
+    linfo = lambdaExprToLambdaVarInfo(expr) 
     local body  = ast[3]
     assert(isa(body, Expr) && is(body.head, :body))
     local state_ = newState(linfo, Dict{Union{Symbol,Int},Any}(), state)
@@ -769,7 +769,7 @@ function from_lambda(state, env, expr::Expr)
     typ = body.typ
     dprintln(env,"from_lambda: body=", body)
     dprintln(env,"from_lambda: linfo=", linfo)
-    return lambdaInfoToLambdaExpr(linfo, body)
+    return LambdaVarInfoToLambdaExpr(linfo, body)
 end
 
 """
@@ -1439,7 +1439,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
             ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
             dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
-                # expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaInfo())) 
+                # expr = mk_mmap([mk_select(arr, ranges)], DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], LambdaVarInfo())) 
                 expr = mk_select(arr, ranges)
                 expr.typ = atyp
             else
@@ -1447,7 +1447,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                 typs = Type[atyp, typeOfOpr(state, args[2])]
                 (nonarrays, args, typs, f) = specialize(state, args, typs, as -> [Expr(:tuple, as[2])])
                 elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
-                linfo = LambdaInfo()
+                linfo = LambdaVarInfo()
                 for i=1:length(nonarrays)
                     # At this point, they are either symbol nodes, or constants
                     if isa(nonarrays[i], SymbolNode)
@@ -1484,7 +1484,7 @@ function translate_call_map(state, env, typ, fun::Symbol, args::Array{Any,1})
     dprintln(env,"from_lambda: after specialize, typs=", typs)
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     # calculate escaping variables
-    linfo = LambdaInfo()
+    linfo = LambdaVarInfo()
     for i=1:length(nonarrays)
         # At this point, they are either symbol nodes, or constants
         if isa(nonarrays[i], SymbolNode)
@@ -1568,7 +1568,7 @@ function translate_call_assign_bool(state, env, typ, fun, args::Array{Any,1})
     (nonarrays, args, typs, f) = specialize(state, args, typs, 
     as -> [ Expr(:tuple, mk_expr(etyp, :call, TopNode(:select_value), as[3], as[2], as[1])) ])
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
-    linfo = LambdaInfo()
+    linfo = LambdaVarInfo()
     for i=1:length(nonarrays)
         # At this point, they are either symbol nodes, or constants
         if isa(nonarrays[i], SymbolNode)
@@ -1720,7 +1720,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # dprintln(env, "params = ", params)
     #locals = metaToVarDef(ast.args[2][2])
     #escapes = metaToVarDef(ast.args[2][3])
-    linfo = lambdaExprToLambdaInfo(ast)
+    linfo = lambdaExprToLambdaVarInfo(ast)
     assert(is(body.head, :body))
     # fix the return in body
     lastExp::Expr = body.args[end]
@@ -1756,7 +1756,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         #s = sprint(io->Base.show_backtrace(io, bt))
         #@dprintln(3, "bodyF backtrace ")
         #@dprintln(3, s)
-        ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+        ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
         #@dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
         ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args[1+length(etys):end])))
         # @dprintln(2,"cartesianarray idict = ", ldict)
@@ -1790,12 +1790,12 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
                          1, mk_arraysize(arr, dim)) for dim = 1:num_dim ]
         neutral = DomainLambda([arrtyp], [],  
                   (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], mk_alloc(state, etyp, dimExp)),
-                                    mk_mmap!(lhs, DomainLambda([etyp], [etyp], (linfo, x) -> [Expr(:tuple, neutralelt)], LambdaInfo())),
-                                    Expr(:tuple) ], LambdaInfo())
+                                    mk_mmap!(lhs, DomainLambda([etyp], [etyp], (linfo, x) -> [Expr(:tuple, neutralelt)], LambdaVarInfo())),
+                                    Expr(:tuple) ], LambdaVarInfo())
         opr, reorder = specializeOp(fun, [etyp])
         # ignore reorder since it is always id function
         f = (linfo, as) -> [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
-                                             (linfo,as)->[Expr(:tuple, mk_expr(etyp, :call, opr, as...))], LambdaInfo())))]
+                                             (linfo,as)->[Expr(:tuple, mk_expr(etyp, :call, opr, as...))], LambdaVarInfo())))]
         outtyp = arrtyp
     else
         red_dim = []
@@ -1805,7 +1805,7 @@ function translate_call_reduce(state, env, typ, fun::Symbol, args::Array{Any,1})
         f = (linfo,as) -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
         outtyp = etyp
     end
-    domF = DomainLambda([outtyp, outtyp], [outtyp], f, LambdaInfo())
+    domF = DomainLambda([outtyp, outtyp], [outtyp], f, LambdaVarInfo())
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
     expr = mk_reduce(neutral, arr, domF, red_dim...)
@@ -1819,7 +1819,7 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     arr = args[1]
     ival = args[2]
     typs = Type[typeOfOpr(state, arr)]
-    linfo = LambdaInfo()
+    linfo = LambdaVarInfo()
     if isa(ival, GenSym)
         tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
         emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
@@ -1844,14 +1844,14 @@ function translate_call_parallel_for(state, env, args::Array{Any,1})
     etys = [Int for _ in length(loopvars)]
     body = ast.args[3]
     ranges = args[2:end]
-    linfo = lambdaExprToLambdaInfo(ast)
+    linfo = lambdaExprToLambdaVarInfo(ast)
     assert(isa(body, Expr) && is(body.head, :body))
     lastExp = body.args[end]
     assert(isa(lastExp, Expr) && is(lastExp.head, :return))
     # Remove return statement
     pop!(body.args)
     function bodyF(plinfo, args)
-        ldict = CompilerTools.LambdaHandling.mergeLambdaInfo(plinfo, linfo)
+        ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
         # ldict = merge(ldict, Dict{SymGen,Any}(zip(loopvars, etys)))
         ret = replaceExprWithDict(body, ldict).args
         ret
@@ -1872,7 +1872,7 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
-    elseif is(fu.mod, Core) && is(fun.name, :convert)
+    elseif is(fun.mod, Core) && is(fun.name, :convert)
         # fix type of convert
         expr.typ = args[1]
     elseif is(fun.mod, Base) 

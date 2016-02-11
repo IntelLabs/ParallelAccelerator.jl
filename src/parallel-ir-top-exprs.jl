@@ -599,7 +599,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 end
 
 
-function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol,Array{Any,1}}, state, newLambdaInfo, next_available_label)
+function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol,Array{Any,1}}, state, newLambdaVarInfo, next_available_label)
     # Only handle 1D loophead right now.
 
     if stmt.head == :loophead
@@ -636,11 +636,11 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     gensym3_sym = symbol(gensym3_var)
     gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
     gensym4_sym = symbol(gensym4_var)
-    CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
@@ -810,18 +810,18 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         @dprintln(3, body[j])
     end
 
-    @dprintln(3,"lambdaInfo = ", state.lambdaInfo)
-    fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
+    @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
+    fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo), :body, body...))
     @dprintln(3,"fake_body = ", fake_body)
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
     @dprintln(1,"Starting loop analysis.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
     @dprintln(1,"Finished loop analysis.")
 
     if hoist_allocation == 1
         body = hoistAllocation(body, new_lives, loop_info, state)
-        fake_body = CompilerTools.LambdaHandling.lambdaInfoToLambdaExpr(state.lambdaInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.lambdaInfo), :body, body...))
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.lambdaInfo)
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo), :body, body...))
+        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
         @dprintln(1,"Starting loop analysis again.")
         loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
         @dprintln(1,"Finished loop analysis.")
@@ -850,13 +850,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
             typeof(body[i]) == Expr && 
             (body[i].head == :loophead || body[i].head == :loopend)
-            max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
+            max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo, max_label + 1)
         else
             # Convert loophead and loopend into Julia loops.
             if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
                typeof(body[i]) == Expr && 
                (body[i].head == :loophead || body[i].head == :loopend)
-                max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.lambdaInfo, max_label + 1)
+                max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo, max_label + 1)
             else
                 push!(expanded_body, body[i])
             end
