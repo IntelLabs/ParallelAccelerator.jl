@@ -410,7 +410,7 @@ type expr_state
     # If two arrays have the same dictionary value, they are equal in size.
     next_eq_class            :: Int
     array_length_correlation :: Dict{SymGen,Int}
-    symbol_array_correlation :: Dict{Array{SymGen,1},Int}
+    symbol_array_correlation :: Dict{Array{Union{SymAllGen,Int},1},Int}
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     LambdaVarInfo :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
@@ -1066,7 +1066,7 @@ end
 """
 A new array is being created with an explicit size specification in dims.
 """
-function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{SymGen,1})
+function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{Union{SymGen,Int},1})
     if !haskey(state.symbol_array_correlation, dims)
         # We haven't yet seen this combination of dims used to create an array.
         @dprintln(3,"Correlation for symbol set not found, dims = ", dims)

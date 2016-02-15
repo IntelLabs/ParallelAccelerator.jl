@@ -23,6 +23,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =# 
 
+#using Debug
+
 """
 Try to hoist allocations outside the loop if possible.
 """
@@ -41,14 +43,23 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                 break
             end
         end
+
+        # TODO: is this correct?
         if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
+        # if is(preBlk, nothing) continue end
         tls = lives.basic_blocks[ preBlk ]
+
+        
+        # TODO: is this correct?
         preHead = preBlk.statements[end].index
+        #preHead = headBlk.statements[1].index-1
+        
         head = headBlk.statements[1].index
         tail = tailBlk.statements[1].index
         @dprintln(3, "HA: line before head is ", ast[preHead-1])
         # Is iterating through statement indices this way safe?
         for i = head:tail
+            
             if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
                 @dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
                 lhs = ast[i].args[1]
@@ -723,21 +734,23 @@ function extractArrayEquivalencies(node :: Expr, state)
 end
 
 """
-Make sure all the dimensions are SymbolNodes.
+Make sure all the dimensions are SymbolNodes or constants.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
 function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
-    dim_names = SymGen[]
+    dim_names = Union{SymGen,Int}[]
 
     for i = 1:length(dim_array)
-        if typeof(dim_array[i]) != SymbolNode
+        # constant sizes are either SymbolNodes or Ints, TODO: expand to GenSyms that are constant
+        if !(typeof(dim_array[i])==SymbolNode || typeof(dim_array[i])==Int)
             return false
         end
-        if CompilerTools.LambdaHandling.getDesc(dim_array[i].name, state.LambdaVarInfo) & ISASSIGNEDONCE != ISASSIGNEDONCE
+        if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
+        if !(isa(dim_array[i],Int) || CompilerTools.LambdaHandling.getDesc(dim_array[i], state.LambdaVarInfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
             return false
         end
-        push!(dim_names, dim_array[i].name)
+        push!(dim_names, dim_array[i])
     end
 
     @dprintln(3, "Will establish array length correlation for const size lhs = ", lhs, " dims = ", dim_names)
