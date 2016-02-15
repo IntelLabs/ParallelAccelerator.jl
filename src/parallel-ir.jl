@@ -409,8 +409,10 @@ type expr_state
     # Arrays created from each other are known to have the same size. Store such correlations here.
     # If two arrays have the same dictionary value, they are equal in size.
     next_eq_class            :: Int
-    array_length_correlation :: Dict{SymGen,Int}
-    symbol_array_correlation :: Dict{Array{Union{SymAllGen,Int},1},Int}
+    array_length_correlation :: Dict{SymGen,Int} # map array var -> size group
+    symbol_array_correlation :: Dict{Array{Union{SymAllGen,Int},1},Int} # map size -> size group
+    # keep values for constant tuples. They are often used for allocating and reshaping arrays.
+    tuple_table              :: Dict{SymAllGen,Array{Union{SymAllGen,Int},1}}
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     LambdaVarInfo :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
@@ -418,11 +420,13 @@ type expr_state
     # Initialize the state for parallel IR translation.
     function expr_state(bl, max_label, input_arrays)
         init_corr = Dict{SymGen,Int}()
+        init_sym_corr = Dict{Array{Union{SymAllGen,Int},1},Int}()
+        init_tup_table =  Dict{SymAllGen,Array{Union{SymAllGen,Int},1}}()
         # For each input array, insert into the correlations table with a different value.
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, Dict{Array{SymGen,1},Int}(), Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label)
     end
 end
 

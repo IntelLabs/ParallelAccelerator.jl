@@ -590,6 +590,21 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             else
                 throw(string("arraysize AST node didn't have 2 or 3 arguments."))
             end
+        elseif rhs.args[1]==GlobalRef(Base,:reshape)
+            # rhs.args[2] is the array to be reshaped, lhs is the result, rhs.args[3] is a tuple with new shape
+            if haskey(state.tuple_table, rhs.args[3])
+                checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[rhs.args[3]])
+            end
+        elseif rhs.args[1]==TopNode(:tuple)
+            ok = true
+            for s in rhs.args[2:end]
+                if !(isa(s,SymbolNode) || isa(s,Int))
+                    ok = false
+                end
+            end
+            if ok
+                state.tuple_table[lhs]=rhs.args[2:end]
+            end
         end
     elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
         # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
