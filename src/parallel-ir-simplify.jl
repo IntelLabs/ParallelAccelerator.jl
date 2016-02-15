@@ -573,6 +573,20 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 checkAndAddSymbolCorrelation(isa(array_param, SymbolNode) ? array_param.name : array_param, state, dim_symbols)
             end
         elseif rhs.args[1] == TopNode(:arraysize)
+            # replace arraysize calls when size is known and constant
+            arr = toSymGen(rhs.args[2])
+            if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
+                arr_class = state.array_length_correlation[arr]
+                for (d, v) in state.symbol_array_correlation
+                    if v==arr_class
+                        #
+                        res = d[rhs.args[3]]
+                        node = TypedExpr(Int64,:(=),lhs, res)
+                        @dprintln(3, "arraysize() replaced: ", node)
+                        return node
+                    end
+                end
+            end
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             if length(rhs.args) == 2
                 array_param = rhs.args[2]                  # length takes one param, which is the array
@@ -617,9 +631,11 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             print_correlations(3, state)
         end
     end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function print_correlations(level, state)
@@ -670,7 +686,8 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
         if isAssignmentNode(node)
             # Here the node is an assignment.
             @dprintln(3,"Is an assignment node.")
-            create_equivalence_classes_assignment(node.args[1], node.args[2], state)
+            # return value here since this function can replace arraysize() calls
+            return create_equivalence_classes_assignment(node.args[1], node.args[2], state)
         else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
                 extractArrayEquivalencies(node, state)
