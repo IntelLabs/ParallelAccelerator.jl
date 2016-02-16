@@ -376,7 +376,7 @@ State to aide in the copy propagation phase.
 """
 type CopyPropagateState
     lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-    copies :: Dict{SymGen, SymGen}
+    copies :: Dict{SymGen, Union{SymGen,Number}}
 
     function CopyPropagateState(l, c)
         new(l,c)
@@ -436,10 +436,10 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
             @dprintln(4,rhs)
 
-            if isa(rhs, SymAllGen)
+            if isa(rhs, SymAllGen) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
                 @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
-                data.copies[toSymGen(lhs)] = toSymGen(rhs)
+                data.copies[toSymGen(lhs)] = toSymGenOrNum(rhs)
             end
             return node
         end
