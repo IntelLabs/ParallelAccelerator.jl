@@ -3026,7 +3026,14 @@ function from_root(function_name, ast :: Expr)
 
     @dprintln(1,"Starting liveness analysis. function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-
+    
+    # propagate transpose() calls to gemm() calls
+    # copy propagation is need so that the output of transpose is directly used in gemm()
+    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}()))
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    
     #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     @dprintln(3,"lives = ", lives)
     #  @dprintln(3,"udinfo = ", udinfo)

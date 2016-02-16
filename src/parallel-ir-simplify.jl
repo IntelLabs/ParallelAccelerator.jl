@@ -370,6 +370,81 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+"""
+State to aide in the transpose propagation phase.
+"""
+type TransposePropagateState
+    lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
+    transpose_map :: Dict{SymGen, SymGen} # transposed output -> matrix in
+
+    function TransposePropagateState(l)
+        new(l, Dict{SymGen, SymGen}())
+    end
+end
+
+function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_level_number, is_top_level, read)
+    @dprintln(3,"transpose_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"transpose_propagate node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        @dprintln(3,"node.head = ", node.head)
+    end
+    ntype = typeof(node)
+
+    if is_top_level
+        @dprintln(3,"transpose_propagate is_top_level")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+
+        if live_info != nothing
+            # Remove matrices from data.transpose_map if either original or transposed matrix is modified by this statement.
+            # For each symbol modified by this statement...
+            for def in live_info.def
+                @dprintln(4,"Symbol ", def, " is modifed by current statement.")
+                # For each transpose map we currently have recorded.
+                for mat in data.transpose_map
+                    @dprintln(4,"Current mat in data.transpose_map = ", mat)
+                    # If original or transposed matrix is modified by the statement.
+                    if def == mat[1] || def==mat[2]
+                    #@bp
+                        @dprintln(3,"transposed or original matrix is modified so removing ", mat," from data.transpose_map.")
+                        # Then remove the lhs = rhs entry from copies.
+                        delete!(data.transpose_map, mat[1])
+                    end
+                end
+            end
+        end
+
+        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+            # Only transpose propagate within a basic block.  this is now a new basic block.
+            empty!(data.transpose_map) 
+        elseif isAssignmentNode(node)
+            @dprintln(3,"Is an assignment node.")
+            lhs = toSymGen(node.args[1])
+            rhs = node.args[2]
+            if isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base,:transpose!)
+                original_matrix = toSymGen(rhs.args[3])
+                transpose_var1 = toSymGen(rhs.args[2])
+                transpose_var2 = lhs
+                data.transpose_map[transpose_var1] = original_matrix
+                data.transpose_map[transpose_var2] = original_matrix
+            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+            #@bp
+                if haskey(data.transpose_map, rhs.args[5])
+                    rhs.args[5] = data.transpose_map[rhs.args[5]]
+                    rhs.args[3] = 'T'
+                end
+                if haskey(data.transpose_map, rhs.args[6])
+                    rhs.args[6] = data.transpose_map[rhs.args[6]]
+                    rhs.args[4] = 'T'
+                end
+            end
+            return node
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
 
 """
 State to aide in the copy propagation phase.
