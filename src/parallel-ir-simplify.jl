@@ -436,6 +436,18 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                     rhs.args[6] = data.transpose_map[rhs.args[6]]
                     rhs.args[4] = 'T'
                 end
+            # replace arraysize() calls to the transposed matrix with original
+            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1] == TopNode(:arraysize)
+                if haskey(data.transpose_map, rhs.args[2])
+                    rhs.args[2] = data.transpose_map[rhs.args[2]]
+                    if rhs.args[3] ==1
+                        rhs.args[3] = 2
+                    elseif rhs.args[3] ==2
+                        rhs.args[3] = 1
+                    else
+                        throw("transpose_propagate matrix dim error")
+                    end
+                end
             end
             return node
         end
