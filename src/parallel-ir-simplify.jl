@@ -506,11 +506,15 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             data.copies = Dict{SymGen, SymGen}() 
         elseif isAssignmentNode(node)
             @dprintln(3,"Is an assignment node.")
-            lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
+            lhs = AstWalk(node.args[1], copy_propagate, data)
             @dprintln(4,lhs)
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
             @dprintln(4,rhs)
-
+            # sometimes lhs can already be replaced with a constant
+            if !isa(lhs, SymAllGen)
+                return node
+            end
+            node.args[1] = lhs
             if isa(rhs, SymAllGen) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
                 @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
