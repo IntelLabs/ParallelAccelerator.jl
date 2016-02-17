@@ -52,7 +52,8 @@ import ..ParallelIR.ISPRIVATEPARFORLOOP
 import ..ParallelIR.PIRReduction
 
 dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,
-                        :__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression, :__hps_NaiveBayes])
+                        :__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression, :__hps_NaiveBayes, 
+                        GlobalRef(Base,:arraylen), TopNode(:arraysize)])
 
 # ENTRY to distributedIR
 function from_root(function_name, ast :: Expr)
@@ -60,11 +61,13 @@ function from_root(function_name, ast :: Expr)
     @dprintln(1,"Starting main DistributedIR.from_root.  function = ", function_name, " ast = ", ast)
 
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
-    state::DistIrState = initDistState(linfo)
-
-    @dprintln(3,"DistIR state before walk: ",state)
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, ParallelIR.pir_live_cb, linfo)
+    state::DistIrState = initDistState(linfo,lives)
+    
+    # find if an array should be partitioned, sequential, or shared
+    @dprintln(3,"DistIR state before array info walk: ",state)
     AstWalk(ast, get_arr_dist_info, state)
-    @dprintln(3,"DistIR state after walk: ",state)
+    @dprintln(3,"DistIR state after array info walk: ",state)
 
     # now that we have the array info, see if parfors are distributable 
     checkParforsForDistribution(state)
@@ -103,9 +106,10 @@ type DistIrState
     seq_parfors::Array{Int,1}
     dist_arrays::Array{SymGen,1}
     uniqueId::Int
+    lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
     
-    function DistIrState(linfo)
-        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[],0)
+    function DistIrState(linfo, lives)
+        new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[],0, lives)
     end
 end
 
@@ -130,8 +134,8 @@ function show(io::IO, pnode::ParallelAccelerator.DistributedIR.DistIrState)
     println(io,"")
 end
 
-function initDistState(linfo::LambdaVarInfo)
-    state = DistIrState(linfo)
+function initDistState(linfo::LambdaVarInfo, lives)
+    state = DistIrState(linfo, lives)
     
     #params = linfo.input_params
     vars = linfo.var_defs
@@ -175,6 +179,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         arr = toSymGen(node.args[1])
         state.arrs_dist_info[arr].dim_sizes = get_alloc_shape(node.args[2].args[2:end])
         @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[arr].dim_sizes)
+        return node
     elseif head==:parfor
         parfor = getParforNode(node)
         rws = parfor.rws
@@ -210,6 +215,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
              end
         end
         return node
+    # functions dist_ir_funcs are either handled here or do not make arrays sequential  
     elseif head==:call && in(node.args[1], dist_ir_funcs)
         func = node.args[1]
         if func==:__hps_data_source_HDF5_read || func==:__hps_data_source_TXT_read
@@ -227,15 +233,25 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
             # third array is responses and is parallel
             state.arrs_dist_info[node.args[2]].isSequential = true
         end
+        return node
     # arrays written in sequential code are not distributed
     elseif head!=:body && head!=:block && head!=:lambda
-        rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.LambdaVarInfo)
-        readArrs = collect(keys(rws.readSet.arrays))
-        writeArrs = collect(keys(rws.writeSet.arrays))
-        allArrs = [readArrs;writeArrs]
-        for arr in allArrs
-            @dprintln(2,"DistIR arr info walk arr in sequential code: ", arr, " ", node)
-            state.arrs_dist_info[arr].isSequential = true
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.lives)
+        
+        all_vars = union(live_info.def, live_info.use)
+        
+        # ReadWriteSet is not robust enough now
+        #rws = CompilerTools.ReadWriteSet.from_exprs([node], ParallelIR.pir_live_cb, state.LambdaVarInfo)
+        #readArrs = collect(keys(rws.readSet.arrays))
+        #writeArrs = collect(keys(rws.writeSet.arrays))
+        #allArrs = [readArrs;writeArrs]
+        
+        for var in all_vars
+            if haskey(state.arrs_dist_info, var)
+                @dprintln(2,"DistIR arr info walk array in sequential code: ", var, " ", node)
+                
+                state.arrs_dist_info[var].isSequential = true
+            end
         end
         return node
     end
