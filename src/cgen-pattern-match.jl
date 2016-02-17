@@ -159,7 +159,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Cha
     end
     s = "$(from_expr(C)); "
     m = (tA == 'N') ? from_arraysize(A,1) : from_arraysize(A,2) 
-    k = (tB == 'N') ? from_arraysize(A,2) : from_arraysize(A,1) 
+    k = (tA == 'N') ? from_arraysize(A,2) : from_arraysize(A,1) 
     n = (tB == 'N') ? from_arraysize(B,2) : from_arraysize(B,1)
 
     lda = from_arraysize(A,1)
