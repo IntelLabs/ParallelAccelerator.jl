@@ -26,7 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 # math functions
 libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :isnan])
-
+#using Debug
 
 function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     s = ""
@@ -985,6 +985,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
             rows = lstate.tupleTable[rhs.args[3]]
             values = rhs.args[4:end]
         else
+
             rows = lstate.tupleTable[rhs.args[2]]
             values = rhs.args[3:end]
             arr_var = toSymGen(lhs)
@@ -995,7 +996,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
         nr = length(rows)
         nc = rows[1] # all rows should have the same size
         s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
-        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nr)),(i-1)%nr+1])*";", (a, b) -> "$a $b", 1:length(values))
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nc)),(i-1)%nc+1])*";", (a, b) -> "$a $b", 1:length(values))
     end
     return s
 end
