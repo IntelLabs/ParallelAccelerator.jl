@@ -96,6 +96,22 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
     return ast
 end
 
+function isDeadCall(rhs::Expr, live_out)
+    if rhs.head==:call
+        if in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
+            println(rhs)
+            return true
+        elseif in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
+                !in(toSymGen(rhs.args[2]), live_out)
+            return true
+        end
+    end
+    return false
+end
+
+function isDeadCall(rhs::ANY, live_out)
+    return false
+end
 
 type DictInfo
     live_info
@@ -181,7 +197,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                     if !in(lhs_sym, live_info.live_out)
                         data.change = true
                         @dprintln(3,"remove_no_deps lhs is NOT live out")
-                        if hasNoSideEffects(rhs)
+                        if hasNoSideEffects(rhs) || isDeadCall(rhs, live_info.live_out)
                             @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
@@ -353,7 +369,7 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
                         @dprintln(3,"remove_dead lhs is NOT live out")
-                        if hasNoSideEffects(rhs)
+                        if hasNoSideEffects(rhs) || isDeadCall(rhs, live_info.live_out)
                             @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
