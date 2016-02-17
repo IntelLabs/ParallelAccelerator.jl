@@ -182,7 +182,8 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "raw_arrayref", "raw_arrayset", "raw_pointer"
+            "raw_arrayref", "raw_arrayset", "raw_pointer",
+            "convert", "unsafe_convert"
 ]
 
 # Intrinsics
@@ -348,7 +349,7 @@ end
 # and emit a C++ type declaration for each
 function from_UDTs()
     global lstate
-    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
+    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), *, keys(lstate.globalUDTs))
 end
 
 # Tuples are represented as structs
@@ -432,50 +433,34 @@ end
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
-    params = linfo.input_params
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    vars = linfo.var_defs
-    gensyms = linfo.gen_sym_typs
+    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x) 
+                     for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
+    vars = CompilerTools.LambdaHandling.getLocalVariables(linfo)
 
     decls = ""
     global lstate
     # Populate the symbol table
-    for k in keys(vars)
-        v = vars[k] # v is a VarDef
-        lstate.symboltable[k] = v.typ
-        if v.typ == Any
-            @dprintln(1, "Variable with Any type: ", v)
-        end
-        @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
-        #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
-        if !in(k, params) && (v.desc & 32 != 0)
+    for k in vcat(params, vars)
+        t = CompilerTools.LambdaHandling.getType(k, linfo) # v is a VarDef
+        lstate.symboltable[k] = t
+        @assert t!=Any "CGen: variable " * string(k) * " cannot have Any (unresolved) type"
+        if !in(k, params) && (CompilerTools.LambdaHandling.getDesc(k, linfo) & 32 != 0)
             push!(lstate.ompprivatelist, k)
+        end
+        # If we have user defined types, record them
+        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+        if !isPrimitiveJuliaType(t) && !isArrayOfPrimitiveJuliaType(t)
+            lstate.globalUDTs[t] = 1
         end
     end
 
-    for k in 1:length(gensyms)
-        lstate.symboltable[GenSym(k-1)] = gensyms[k]
-        @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
-        #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
-    end
     bod = from_expr(args[3])
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
 
-    for k in keys(lstate.symboltable)
-        # If we have user defined types, record them
-        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-        if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
-            if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-                lstate.globalUDTs[lstate.symboltable[k]] = 1
-            end
-        end
-        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-            decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-        end
+    for k in vars
+        decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
     end
     decls * bod
 end
@@ -1073,6 +1058,8 @@ function from_builtins(f, args)
         return from_raw_arrayset(args)
     elseif tgt == "raw_pointer"
         return from_raw_pointer(args)
+    elseif tgt == "convert" || tgt == "unsafe_convert"
+        return from_typecast(args[1], [args[2]])
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
@@ -2255,15 +2242,9 @@ end
 function from_callee(ast::Expr, functionName::ASCIIString)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
-    typ = toCtype(body(ast).typ)
-    @dprintln(3,"Return type of body = $typ")
-    params  =   ast.args[1]
-    #env     =   ast.args[2]
-    bod     =   ast.args[3]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    @dprintln(3,"Body type is ", bod.typ)
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
     bod = from_expr(ast)
     args = from_formalargs(params, [], false)
@@ -2423,11 +2404,9 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
@@ -2448,7 +2427,6 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     else
         returnType = (returnType,)
     end
-    hdr = from_header(true)
 
     # Create an entry point that will be called by the Julia code.
     wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
@@ -2470,6 +2448,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
     forwards, funcs = from_worklist()
+    hdr = from_header(true)
     c = hdr * forwards * funcs * s * wrapper
     resetLambdaState(lstate)
 
@@ -2493,18 +2472,16 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
     vararg_bod, args, argsunal, alias_check = check_params(false, params)
     bod = vararg_bod * bod
 
-    hdr = from_header(false)
+    #hdr = from_header(false)
     # Create an entry point that will be called by the Julia code.
     rtyp = toCtype(returnType)
 
@@ -2512,11 +2489,10 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     forwarddecl = "$rtyp $functionName($args);\n"
     push!(lstate.compiledfunctions, functionName)
-    c = hdr * forwarddecl * s 
     if length(array_types_in_sig) > 0
         @dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
     end
-    forwarddecl, c
+    forwarddecl, s
 end
 
 function insert(func::Any, mod::Any, name, typs)

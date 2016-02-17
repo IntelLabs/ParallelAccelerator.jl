@@ -1178,18 +1178,22 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 end
 
 function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs)
-    post_statements = SymbolNode[]
+    post_statements = Any[]
     # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
     if(length(dl.outputs)==1)
         # If there is only one output then put that output in the post_statements
         push!(post_statements,SymbolNode(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}))
     else
-        all_sn = SymbolNode[]
+        all_sn = Any[]
+        all_ty = DataType[]
         assert(length(dl.outputs) == length(new_array_symbols))
         for i = 1:length(dl.outputs)
-            push!(all_sn, SymbolNode(new_array_symbols[1], Array{dl.outputs[1], num_dim_inputs}))
+            s = new_array_symbols[i]
+            t = Array{dl.outputs[i], num_dim_inputs}
+            push!(all_sn, SymbolNode(s, t))
+            push!(all_ty, t)
         end
-        push!(post_statements, all_sn)
+        push!(post_statements, mk_tuple_expr(all_sn, Tuple{all_ty...}))
     end
     return post_statements
 end

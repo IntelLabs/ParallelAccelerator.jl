@@ -110,7 +110,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   @dprintln(3,"kernArgs = ", kernArgs)
   bodyExpr = relabel(kernelF.genBody(linfo, kernArgs).args, irState)
   # rotate
-  assert(is(bodyExpr[end].head, :return))
+  assert(is(bodyExpr[end].head, :tuple))
   @dprintln(3,"bodyExpr = ")
   printBody(3, bodyExpr)
   local rotateExpr = Array(Any, 0)

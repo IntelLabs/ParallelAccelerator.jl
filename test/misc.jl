@@ -26,10 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module MiscTest
 using ParallelAccelerator
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
+ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
-#ParallelAccelerator.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
+ParallelAccelerator.set_debug_level(4)
 
 @acc function for_ret()
     for f = 1:10
@@ -66,8 +66,8 @@ function test3()
 end
 
 @acc function f()
-    W  = zeros(5, 5)
-    s = [sum(W[:,j]) for j in 1:5]
+    W = zeros(5, 5)
+    s = Int[sum(W[:,j]) for j in 1:5]
 end
 
 function test4()
@@ -93,7 +93,7 @@ println("Testing miscellaneous features...")
 @test MiscTest.test1() == nothing
 @test MiscTest.test2() == nothing
 @test MiscTest.test3() 
-@test MiscTest.test4() == [0.0; 0.0; 0.0; 0.0; 0.0]
+@test MiscTest.test4() == [0.0, 0.0, 0.0, 0.0, 0.0]
 @test MiscTest.test5() 
 @test MiscTest.mod_rem_test(7,3) == [1, 1]
 @test MiscTest.mod_rem_test(7,-3) == [-2, 1]
