@@ -68,7 +68,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   assert(is(krn.head, :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
-  local arrSyms::Array{Symbol,1} = krn.args[1] # parameter of the kernel lambda
+  local arrSyms::Array{Symbol,1} = Symbol[parameterToSymbol(x) for x in krn.args[1]] # parameter of the kernel lambda
   if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
     arrSyms = arrSyms[2:end]
   end
@@ -96,9 +96,6 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   for e in expr.args
     if isa(e, LineNumberNode)
     elseif isa(e, Expr) && is(e.head, :line)
-    # Skip tuple assignments in stencil kernel since codegen can't handle it.
-    # TODO: Ensure it is only safe when the LHS tuple is used in return statement.
-    elseif isa(e, Expr) && is(e.head, :(=)) && istupletyp(e.typ)
     else
       push!(body, e)
     end

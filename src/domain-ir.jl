@@ -1721,7 +1721,7 @@ function translate_call_map(state, env, typ, args::Array{Any,1})
     rdim = ndims(argtyps[1])
     rtys = DataType[ Array{t, rdim} for t in etys ]
     linfo = lambdaExprToLambdaVarInfo(ast)
-    params = getParamsNoSelf(linfo)
+    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(linfo)]
     body = ast.args[3]
     bodyF = (plinfo, args) -> begin
         ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
@@ -1757,7 +1757,7 @@ function translate_call_map!(state, env, typ, args::Array{Any,1})
     rdim = ndims(argtyps[1])
     rtys = DataType[ Array{t, rdim} for t in etys ]
     linfo = lambdaExprToLambdaVarInfo(ast)
-    params = getParamsNoSelf(linfo)
+    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(linfo)]
     body = ast.args[3]
     bodyF = (plinfo, args) -> begin
         ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
@@ -1899,7 +1899,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # produce a DomainLambda
     body::Expr = ast.args[3]
     linfo = lambdaExprToLambdaVarInfo(ast)
-    params = getParamsNoSelf(linfo)
+    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(linfo)]
     bodyF = (plinfo, args) -> begin
         #bt = backtrace() ;
         #s = sprint(io->Base.show_backtrace(io, bt))
@@ -1938,7 +1938,7 @@ function translate_call_reduce(state, env, typ, args::Array{Any,1})
     (ast, ety) = get_lambda_for_arg(state, env, fun, inptyps)
     @assert (ety == etyp) "expect return type of reduce function to be " * etyp * " but got " * ety
     linfo = lambdaExprToLambdaVarInfo(ast)
-    params = getParamsNoSelf(linfo)
+    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(linfo)]
     body = ast.args[3]
     bodyF = (plinfo, args) -> begin
         ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
