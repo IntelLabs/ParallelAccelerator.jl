@@ -235,9 +235,11 @@ else
 =#
 if NERSC==1
     generated_file_dir =  ENV["SCRATCH"]*"/generated_"*ENV["SLURM_JOBID"]
-    if MPI.Comm_rank(MPI.COMM_WORLD)==0 && !isdir(generated_file_dir)
-        #println(generated_file_dir)
-        mkdir(generated_file_dir)
+    if !isdir(generated_file_dir)
+        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0    
+            #println(generated_file_dir)
+            mkdir(generated_file_dir)
+        end
     end
 elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
     package_root = getPackageRoot()
