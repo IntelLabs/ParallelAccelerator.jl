@@ -44,15 +44,19 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
             end
         end
 
-        # TODO: is this correct?
-        if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
-        # if is(preBlk, nothing) continue end
+        #if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
+        if is(preBlk, nothing) continue end
         tls = lives.basic_blocks[ preBlk ]
 
-        
-        # TODO: is this correct?
+        # sometimes the preBlk has no statements
+        # in this case we go to preBlk's previous block to find the previous statement of the current loop (for allocations to be inserted)
+        while length(preBlk.statements)==0
+            if length(preBlk.preds)==1
+                preBlk = next(preBlk.preds,start(preBlk.preds))[1]
+            end
+        end
+        if length(preBlk.statements)==0 continue end
         preHead = preBlk.statements[end].index
-        #preHead = headBlk.statements[1].index-1
         
         head = headBlk.statements[1].index
         tail = tailBlk.statements[1].index
@@ -70,8 +74,9 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                     for (d, v) in state.symbol_array_correlation
                         if v == c
                             ok = true
+
                             for j = 1:length(d)
-                                if !in(d[j], tls.live_out)
+                                if !(isa(d[j],Int) || in(d[j], tls.live_out))
                                     ok = false
                                     break
                                 end
@@ -80,11 +85,15 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                             if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
                                 rhs.args = rhs.args[1:6]
                                 for s in d
-                                    push!(rhs.args, SymbolNode(s, Int))
+                                    if isa(s,Int)
+                                        push!(rhs.args, s)
+                                    else
+                                        push!(rhs.args, SymbolNode(s, Int))
+                                    end
                                     push!(rhs.args, 0)
                                 end
                                 @dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
-                                ast = [ ast[1:preHead-1], ast[i], ast[preHead:i-1], ast[i+1:end] ]
+                                ast = [ ast[1:preHead-1]; ast[i]; ast[preHead:i-1]; ast[i+1:end] ]
                                 break
                             end
                         end
