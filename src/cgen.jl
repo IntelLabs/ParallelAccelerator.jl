@@ -349,7 +349,7 @@ end
 # and emit a C++ type declaration for each
 function from_UDTs()
     global lstate
-    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
+    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), *, keys(lstate.globalUDTs))
 end
 
 # Tuples are represented as structs
@@ -433,47 +433,34 @@ end
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
-    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
-    vars = linfo.var_defs
-    gensyms = linfo.gen_sym_typs
+    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x) 
+                     for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
+    vars = CompilerTools.LambdaHandling.getLocalVariables(linfo)
 
     decls = ""
     global lstate
     # Populate the symbol table
-    for k in keys(vars)
-        v = vars[k] # v is a VarDef
-        lstate.symboltable[k] = v.typ
-        if v.typ == Any
-            @dprintln(1, "Variable with Any type: ", v)
-        end
-        @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
-        #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
-        if !in(k, params) && (v.desc & 32 != 0)
+    for k in vcat(params, vars)
+        t = CompilerTools.LambdaHandling.getType(k, linfo) # v is a VarDef
+        lstate.symboltable[k] = t
+        @assert t!=Any "CGen: variable " * string(k) * " cannot have Any (unresolved) type"
+        if !in(k, params) && (CompilerTools.LambdaHandling.getDesc(k, linfo) & 32 != 0)
             push!(lstate.ompprivatelist, k)
+        end
+        # If we have user defined types, record them
+        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+        if !isPrimitiveJuliaType(t) && !isArrayOfPrimitiveJuliaType(t)
+            lstate.globalUDTs[t] = 1
         end
     end
 
-    for k in 1:length(gensyms)
-        lstate.symboltable[GenSym(k-1)] = gensyms[k]
-        @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
-        #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
-    end
     bod = from_expr(args[3])
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
 
-    for k in keys(lstate.symboltable)
-        # If we have user defined types, record them
-        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-        if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
-            if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-                lstate.globalUDTs[lstate.symboltable[k]] = 1
-            end
-        end
-        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-            decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-        end
+    for k in vars
+        decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
     end
     decls * bod
 end
@@ -2440,7 +2427,6 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     else
         returnType = (returnType,)
     end
-    hdr = from_header(true)
 
     # Create an entry point that will be called by the Julia code.
     wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
@@ -2462,6 +2448,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
     forwards, funcs = from_worklist()
+    hdr = from_header(true)
     c = hdr * forwards * funcs * s * wrapper
     resetLambdaState(lstate)
 
@@ -2494,7 +2481,7 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     vararg_bod, args, argsunal, alias_check = check_params(false, params)
     bod = vararg_bod * bod
 
-    hdr = from_header(false)
+    #hdr = from_header(false)
     # Create an entry point that will be called by the Julia code.
     rtyp = toCtype(returnType)
 
@@ -2502,11 +2489,10 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     forwarddecl = "$rtyp $functionName($args);\n"
     push!(lstate.compiledfunctions, functionName)
-    c = hdr * forwarddecl * s 
     if length(array_types_in_sig) > 0
         @dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
     end
-    forwarddecl, c
+    forwarddecl, s
 end
 
 function insert(func::Any, mod::Any, name, typs)
