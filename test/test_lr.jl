@@ -23,40 +23,32 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module TestLogisticRegression
 using ParallelAccelerator
+
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+
+    
+@acc function logistic_regression(iterations::Int64)
+    D = 3  # Number of dimensions
+    N = 4
+    # synthetic but deterministic initial values
+    labels = reshape([1.,.9,.4,.8],1,N)
+    points = [1. 2. 3. 4.; 4. 3. 2. 1.; 4. 5. 6. 7.]
+    w = reshape(2.0.*ones(D)-1.3,1,D)
+
+    for i in 1:iterations
+       w -= ((1.0./(1.0.+exp(-labels.*(w*points))).-1.0).*labels)*points'
+    end
+    w
+end
+
+end
+
 using Base.Test
+println("Testing logistic regression...")
+@test_approx_eq TestLogisticRegression.logistic_regression(10) [0.9461770317849691 0.8827825771001324 1.2035527971160302]
+println("Done testing logistic regression...")
 
-include("reduction.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
-include("strings.jl")
-include("test_lr.jl")
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-# black-scholes should have only 1 allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/pi/pi.jl")
-# pi should have no allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
