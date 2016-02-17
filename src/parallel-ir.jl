@@ -2450,6 +2450,8 @@ end
 function hasNoSideEffects(node :: Expr)
     if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask
         return all(Bool[hasNoSideEffects(a) for a in node.args])
+    elseif node.head == :alloc
+        return true
     elseif node.head == :ccall
         func = node.args[1]
         if func == QuoteNode(:jl_alloc_array_1d) ||
