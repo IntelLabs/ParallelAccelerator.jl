@@ -182,7 +182,8 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "raw_arrayref", "raw_arrayset", "raw_pointer"
+            "raw_arrayref", "raw_arrayset", "raw_pointer",
+            "convert", "unsafe_convert"
 ]
 
 # Intrinsics
@@ -432,10 +433,7 @@ end
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
-    params = linfo.input_params
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     vars = linfo.var_defs
     gensyms = linfo.gen_sym_typs
 
@@ -1073,6 +1071,8 @@ function from_builtins(f, args)
         return from_raw_arrayset(args)
     elseif tgt == "raw_pointer"
         return from_raw_pointer(args)
+    elseif tgt == "convert" || tgt == "unsafe_convert"
+        return from_typecast(args[1], [args[2]])
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
@@ -2255,15 +2255,9 @@ end
 function from_callee(ast::Expr, functionName::ASCIIString)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
-    typ = toCtype(body(ast).typ)
-    @dprintln(3,"Return type of body = $typ")
-    params  =   ast.args[1]
-    #env     =   ast.args[2]
-    bod     =   ast.args[3]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    @dprintln(3,"Body type is ", bod.typ)
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
     bod = from_expr(ast)
     args = from_formalargs(params, [], false)
@@ -2423,11 +2417,9 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
@@ -2493,11 +2485,9 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
