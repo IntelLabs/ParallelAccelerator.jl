@@ -106,28 +106,14 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   # fix return statments
   expr.args = body
   local lastExpr = expr.args[end]
-  assert(lastExpr.head == :return)
+  assert(lastExpr.head == :tuple)
   # default to returning nothing
   #warn(string("lastExpr=",lastExpr))
-  rhs = nothing
-  if (isa(lastExpr.args[1], SymbolNode) || isa(lastExpr.args[1], GenSym)) && istupletyp(getType(lastExpr.args[1], state.linfo))
-    rhs = lookupDef(state, lastExpr.args[1])
-    if rhs != nothing
-      #warn(string("rhs = ", rhs))
-      # real return arguments (from a tuple)
-      args = rhs.args[2:end]
-      # number of returned buffers must match number of inputs
-      assert(length(args) == narrs)
-      # and they must all be SymbolNodes or GenSyms
-      for i = 1:narrs assert(isa(args[i], SymbolNode) || isa(args[i], GenSym)) end
-      # convert last Expr to multi-return
-      lastExpr.args = args
-      stat.rotateNum = length(args)
-    end
-  end
-  # if not returning buffers or buffers not found, return nothing
-  if rhs == nothing 
-    lastExpr.args = Any[ nothing ]
+  if length(lastExpr.args) > 1
+      assert(length(lastExpr.args) == narrs)
+      stat.rotateNum = length(lastExpr.args)
+  else
+      lastExpr.args = Any[ nothing ]
   end 
   krnExpr = expr
   assert(stat.initialized)            # check if stat is indeed created

@@ -93,9 +93,11 @@ for f in unary_map_operators
 end
 
 # Binary operators/functions
-const binary_map_operators = Symbol[ :*, :/,
+const comparison_map_operators = Symbol[ :.>, :.<, :.<=, :.>=, :.== ]
+
+const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
     :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, 
-    :div, :mod, :rem, :&, :|, :$, :min, :max]
+    :div, :mod, :rem, :&, :|, :$, :min, :max])
 
 const binary_operators = binary_map_operators
 
@@ -158,7 +160,45 @@ function parallel_for(loopvar, range, body)
   throw("Not Implemented")
 end
 
-const operators = Set(vcat(unary_operators, binary_operators, Symbol[:setindex!, :getindex,:__hps_data_source_HDF5,:__hps_kmeans, :__hps_LinearRegression, :__hps_NaiveBayes]))
+@noinline function map{T<:Number}(f::Function, a::DenseArray{T})
+    Base.map(f, a)
+end
+
+@noinline function map{T<:Number}(f::Function, a::DenseArray{T}, b...)
+    Base.map(f, a, b...)
+end
+
+@inline function map(f, a...)
+    Base.map(f, a...)
+end
+
+@noinline function map!{T<:Number}(f::Function, a::DenseArray{T})
+    Base.map!(f, a)
+end
+
+@noinline function map!{T<:Number}(f::Function, a::DenseArray{T}, b...)
+    Base.map!(f, a, b...)
+end
+
+@inline function map!(f, a...)
+    Base.map!(f, a...)
+end
+
+@noinline function reduce{T<:Number}(f::Function, v::T, a::DenseArray{T})
+    Base.reduce(f, v, a)
+end
+
+@noinline function reduce{T<:Number}(f::Function, v::T, a::DenseArray{T}, b...)
+    Base.reduce(f, v, a, b...)
+end
+
+@inline function reduce(f, a...)
+    Base.reduce(f, a...)
+end
+
+const operators = Set(vcat(unary_operators, binary_operators, 
+    Symbol[:map, :map!, :reduce, :setindex!, :getindex,
+           :__hps_data_source_HDF5, :__hps_kmeans, :__hps_LinearRegression, :__hps_NaiveBayes]))
 
 for opr in operators
   @eval export $opr

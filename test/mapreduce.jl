@@ -23,13 +23,42 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module ReductionTest
+module MapReduceTest
 using ParallelAccelerator
 
 ParallelAccelerator.DomainIR.set_debug_level(4)
 ParallelAccelerator.ParallelIR.set_debug_level(4)
 ParallelAccelerator.CGen.set_debug_level(4)
 ParallelAccelerator.set_debug_level(4)
+
+@acc function map_1(A)
+    a = map(x -> x + 1, A) 
+    b = map(x -> x - 1, A)
+    c = a .* b
+    return c
+end
+
+@acc function map_2(A, B)
+    map((x, y) -> x * y, A, B)
+end
+
+@acc function map_3(A)
+    map!(x -> x - 1, A) 
+    return A
+end
+
+@acc function map_4(A, B)
+    map!(x -> x - 1, A, B) 
+    sum(A.+B)
+end
+
+@acc function reduce_1(A)
+    reduce((x,y) -> x + y, 0, A)
+end
+
+@acc function reduce_2(A)
+    reduce((x,y) -> x + y, 0, map(x -> x * x, A))
+end
 
 @acc function sum_A(col)
     A = ones(Int, col, col, col)
@@ -65,35 +94,73 @@ end
 end
 
 function test1()
-    return sum_A(5) == @noacc sum_A(5)
+    A = Int[x for x = 1:10]
+    map_1(A) == @noacc map_1(A)
 end
 
 function test2()
-    return sum_A_1(5) == @noacc sum_A_1(5)
+    A = Int[x for x = 1:10]
+    map_2(A, A) == @noacc map_2(A, A)
 end
 
 function test3()
-    return sum_A_cond_1(5) == @noacc sum_A_cond_1(5)
+    A = Int[x for x = 1:10]
+    map_3(A) 
+    A[1] == 0 && A[10] == 9
 end
 
 function test4()
-    return sum_A_cond_2(5) == @noacc sum_A_cond_2(5)
+    A = Int[0 for x = 1:10]
+    B = Int[x for x = 1:10]
+    map_4(A, B) == @noacc map_4(A, B)
 end
 
 function test5()
+    A = Int[x for x = 1:10]
+    reduce_1(A) == sum(A)
+end
+
+function test6()
+    A = Int[x for x = 1:10]
+    reduce_2(A) == sumabs2(A)
+end
+
+function test7()
+    return sum_A(5) == @noacc sum_A(5)
+end
+
+function test8()
+    return sum_A_1(5) == @noacc sum_A_1(5)
+end
+
+function test9()
+    return sum_A_cond_1(5) == @noacc sum_A_cond_1(5)
+end
+
+function test10()
+    return sum_A_cond_2(5) == @noacc sum_A_cond_2(5)
+end
+
+function test11()
     return sum_A_range_1(5) == @noacc sum_A_range_1(5)
 end
 
 end
 
-using ReductionTest
-println("Testing reductions...")
+using MapReduceTest
+println("Testing map and reduce...")
 
-@test ReductionTest.test1() 
-@test ReductionTest.test2()
-@test ReductionTest.test3()
-@test ReductionTest.test4()
-@test ReductionTest.test5()
+@test MapReduceTest.test1() 
+@test MapReduceTest.test2()
+@test MapReduceTest.test3()
+@test MapReduceTest.test4()
+@test MapReduceTest.test5()
+@test MapReduceTest.test6() 
+@test MapReduceTest.test7()
+@test MapReduceTest.test8()
+@test MapReduceTest.test9()
+@test MapReduceTest.test10()
+@test MapReduceTest.test11()
 
-println("Done testing reductions.")
+println("Done testing map and reduce.")
 
