@@ -1631,30 +1631,45 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
     linfo = lambdaExprToLambdaVarInfo(ast)
     lastExp::Expr = body.args[end]
     assert(is(lastExp.head, :return))
-    args1 = lastExp.args[1]
-    args1_typ::Type = getType(args1, linfo)
-    dprintln(env, "lastExp=", lastExp, " args1=", args1, " typ=", args1_typ)
+    args1_typ::DataType = Void
+    if length(lastExp.args) > 0 
+        args1 = lastExp.args[1]
+        if isa(args1, SymbolNode) || isa(args1, GenSym)
+            args1_typ = getType(args1, linfo)
+            dprintln(env, "lastExp=", lastExp, " args1=", args1, " typ=", args1_typ)
+        end
+    end
     # modify the last return statement if it's a tuple
     if istupletyp(args1_typ)
-        # create tmp variables to store results
-        tvar = args1
-        typs::SimpleVector = args1_typ.parameters
-        nvar = length(typs)
-        retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
-        retExprs = Array(Expr, length(retNodes))
-        for i in 1:length(retNodes)
-            n = retNodes[i]
-            t = typs[i]
-            retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
+        # take a shortcut if the second last statement is the tuple creation
+        exp = body.args[end-1]
+        if exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
+           exp.args[2].head == :call && exp.args[2].args[1] == TopNode(:tuple)
+            dprintln(env, "second last is tuple assignment, we'll take shortcut")
+            pop!(body.args)
+            exp.head = :tuple
+            exp.args = exp.args[2].args[2:end]
+        else
+            # create tmp variables to store results
+            tvar = args1
+            typs::SimpleVector = args1_typ.parameters
+            nvar = length(typs)
+            retNodes = GenSym[ addGenSym(t, linfo) for t in typs ]
+            retExprs = Array(Expr, length(retNodes))
+            for i in 1:length(retNodes)
+                n = retNodes[i]
+                t = typs[i]
+                retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
+            end
+            lastExp.head = retExprs[1].head
+            lastExp.args = retExprs[1].args
+            lastExp.typ  = retExprs[1].typ
+            for i = 2:length(retExprs)
+                push!(body.args, retExprs[i])
+            end
+            push!(body.args, mk_expr(typs, :tuple, retNodes...))
+            ast = LambdaVarInfoToLambdaExpr(linfo, body)
         end
-        lastExp.head = retExprs[1].head
-        lastExp.args = retExprs[1].args
-        lastExp.typ  = retExprs[1].typ
-        for i = 2:length(retExprs)
-            push!(body.args, retExprs[i])
-        end
-        push!(body.args, mk_expr(typs, :tuple, retNodes...))
-        ast = LambdaVarInfoToLambdaExpr(linfo, body)
     else
         lastExp.head = :tuple
     end
