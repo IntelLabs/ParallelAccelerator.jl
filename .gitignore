@@ -2,3 +2,4 @@
 *.jl.mem
 *.so*
 *.o
+sftp-config.json
