@@ -53,7 +53,7 @@ import ..ParallelIR.PIRReduction
 
 dist_ir_funcs = Set([:__hps_data_source_HDF5_open,:__hps_data_source_HDF5_read,:__hps_kmeans,
                         :__hps_data_source_TXT_open,:__hps_data_source_TXT_read, :__hps_LinearRegression, :__hps_NaiveBayes, 
-                        GlobalRef(Base,:arraylen), TopNode(:arraysize), GlobalRef(Base,:reshape), 
+                        GlobalRef(Base,:arraylen), TopNode(:arraysize), GlobalRef(Base,:reshape), TopNode(:tuple), 
                         GlobalRef(Base.LinAlg,:gemm_wrapper!)])
 
 # ENTRY to distributedIR
@@ -189,6 +189,8 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
             rhs = toSymGen(rhs)
             if haskey(state.arrs_dist_info, rhs)
                 state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs].isSequential
+                state.arrs_dist_info[lhs].dim_sizes = state.arrs_dist_info[rhs].dim_sizes
+                @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[lhs].dim_sizes)
             end
         elseif isa(rhs,Expr) && rhs.head==:call && in(rhs.args[1], dist_ir_funcs)
             func = rhs.args[1]
@@ -196,8 +198,10 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
                 # only reshape() with constant tuples handled
                 if haskey(state.tuple_table, rhs.args[3])
                     state.arrs_dist_info[lhs].dim_sizes = state.tuple_table[rhs.args[3]]
+                    @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[lhs].dim_sizes)
                     state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs.args[2]].isSequential
                 else
+                    @dprintln(3,"DistIR arr info reshape tuple not found: ", rhs.args[3])
                     state.arrs_dist_info[lhs].isSequential = true
                 end
             elseif rhs.args[1]==TopNode(:tuple)
@@ -209,6 +213,9 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
                 end 
                 if ok
                     state.tuple_table[lhs]=rhs.args[2:end]
+                    @dprintln(3,"DistIR arr info tuple constant: ", lhs," ",rhs.args[2:end])
+                else
+                    @dprintln(3,"DistIR arr info tuple not constant: ", lhs," ",rhs.args[2:end])
                 end 
             elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
                 #
