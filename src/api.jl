@@ -96,7 +96,7 @@ end
 const comparison_map_operators = Symbol[ :.>, :.<, :.<=, :.>=, :.== ]
 
 const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
-    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.>, :.<, :.<=, :.>=, :.==, :.<<, :.>>, :.^, 
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :.^, 
     :div, :mod, :rem, :&, :|, :$, :min, :max])
 
 const binary_operators = binary_map_operators
