@@ -23,8 +23,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
+
 void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda, double* B, int ldb, double* C, int ldc)
 {
+
+    // printf("tA %d tB %d m %d n %d k %d lda %d ldb %d ldc %d\n",tA,tB,m,n,k,lda,ldb,ldc);
 
 #define Amat(I,J) A[(I) + (J)*(lda)]
 #define Bmat(I,J) B[(I) + (J)*(ldb)]
@@ -35,8 +39,8 @@ void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda,
 
     if (!tA) {
         if(!tB){
-            for(i=0; i<n; i++) {
-                for(j=0; j<m; j++) {
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
                     Cmat(i,j) = tmp = 0.0;
                     for(l=0; l<k; l++)
                         tmp += Amat(i,l)* Bmat(l,j);
@@ -45,8 +49,8 @@ void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda,
             }
         }
         else{
-            for(i=0; i<n; i++) {
-                for(j=0; j<m; j++) {
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
                     Cmat(i,j) = tmp = 0.0;
                     for(l=0; l<k; l++)
                         tmp += Amat(i,l)* Bmat(j,l);
@@ -57,8 +61,8 @@ void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda,
     }
     else {
         if(!tB){
-            for(i=0; i<n; i++) {
-                for(j=0; j<m; j++) {
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
                     Cmat(i,j) = tmp = 0.0;
                     for(l=0; l<k; l++)
                         tmp += Amat(l,i)* Bmat(l,j);
@@ -67,8 +71,8 @@ void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda,
             }
         }
         else{
-            for(i=0; i<n; i++) {
-                for(j=0; j<m; j++) {
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
                     Cmat(i,j) = tmp = 0.0;
                     for(l=0; l<k; l++)
                         tmp += Amat(l,i)* Bmat(j,l);
