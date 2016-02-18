@@ -69,6 +69,7 @@ function from_root(function_name, ast :: Expr)
     @dprintln(3,"DistIR state before array info walk: ",state)
     AstWalk(ast, get_arr_dist_info, state)
     @dprintln(3,"DistIR state after array info walk: ",state)
+    
 
     # now that we have the array info, see if parfors are distributable 
     checkParforsForDistribution(state)
@@ -218,7 +219,39 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
                     @dprintln(3,"DistIR arr info tuple not constant: ", lhs," ",rhs.args[2:end])
                 end 
             elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
-                #
+                # determine output dimensions
+                state.arrs_dist_info[lhs].dim_sizes = state.arrs_dist_info[rhs.args[2]].dim_sizes
+                arr1 = rhs.args[5]
+                t1 = (rhs.args[3]=='T')
+                arr2 = rhs.args[6]
+                t2 = (rhs.args[4]=='T')
+                
+                seq = false
+                
+                # result is sequential if both inputs are sequential 
+                if state.arrs_dist_info[arr1].isSequential && state.arrs_dist_info[arr2].isSequential
+                    seq = true
+                # result is sequential but with reduction if both inputs are partitioned and second one is transposed
+                # e.g. labels*points'
+                elseif !state.arrs_dist_info[arr1].isSequential && !state.arrs_dist_info[arr2].isSequential && t2 && !t1
+                    seq = true
+                # first input is sequential but output is parallel if the second input is partitioned but not transposed
+                # e.g. w*points
+                elseif !state.arrs_dist_info[arr2].isSequential && !t2
+                    @dprintln(3,"DistIR arr info gemm first input is sequential: ", arr1)
+                    state.arrs_dist_info[arr1].isSequential = true
+                # otherwise, no known pattern found, every array is sequential
+                else
+                    @dprintln(3,"DistIR arr info gemm all sequential: ", arr1," ", arr2)
+                    state.arrs_dist_info[arr1].isSequential = true
+                    state.arrs_dist_info[arr2].isSequential = true
+                    seq = true
+                end
+                
+                if seq
+                    @dprintln(3,"DistIR arr info gemm output is sequential: ", lhs," ",rhs.args[2])
+                end
+                state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs.args[2]].isSequential = seq
             end
         else
             return CompilerTools.AstWalker.ASTWALK_RECURSE
