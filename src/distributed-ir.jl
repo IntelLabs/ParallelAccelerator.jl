@@ -66,14 +66,7 @@ function from_root(function_name, ast :: Expr)
     state::DistIrState = initDistState(linfo,lives)
     
     # find if an array should be partitioned, sequential, or shared
-    @dprintln(3,"DistIR state before array info walk: ",state)
-    AstWalk(ast, get_arr_dist_info, state)
-    @dprintln(3,"DistIR state after array info walk: ",state)
-    
-
-    # now that we have the array info, see if parfors are distributable 
-    checkParforsForDistribution(state)
-    @dprintln(3,"DistIR state after check: ",state)
+    getArrayDistributionInfo(ast, state)
     
     # transform body
     @assert ast.args[3].head==:body "DistributedIR: invalid lambda input"
@@ -82,6 +75,31 @@ function from_root(function_name, ast :: Expr)
     @dprintln(1,"DistributedIR.from_root returns function = ", function_name, " ast = ", new_ast)
     # ast = from_expr(ast)
     return new_ast
+end
+
+function getArrayDistributionInfo(ast, state)
+    before_dist_arrays = [arr for arr in keys(state.arrs_dist_info)]
+    
+    while true
+        dist_arrays = []
+        @dprintln(3,"DistIR state before array info walk: ",state)
+        AstWalk(ast, get_arr_dist_info, state)
+        @dprintln(3,"DistIR state after array info walk: ",state)
+            # all arrays not marked sequential are distributable at this point 
+        for arr in keys(state.arrs_dist_info)
+            if state.arrs_dist_info[arr].isSequential==false
+                @dprintln(2,"DistIR distributable parfor array: ", arr)
+                push!(dist_arrays,arr)
+            end
+        end
+        # break if no new sequential array discovered
+        if length(dist_arrays)==length(before_dist_arrays)
+            break
+        end
+        before_dist_arrays = dist_arrays
+    end
+    state.dist_arrays = before_dist_arrays
+    @dprintln(3,"DistIR state dist_arrays after array info walk: ",state.dist_arrays)
 end
 
 type ArrDistInfo
@@ -189,8 +207,10 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         elseif isa(rhs,SymAllGen)
             rhs = toSymGen(rhs)
             if haskey(state.arrs_dist_info, rhs)
-                state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs].isSequential
                 state.arrs_dist_info[lhs].dim_sizes = state.arrs_dist_info[rhs].dim_sizes
+                # lhs and rhs are sequential if either is sequential
+                seq = state.arrs_dist_info[lhs].isSequential || state.arrs_dist_info[rhs].isSequential
+                state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs].isSequential = seq
                 @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[lhs].dim_sizes)
             end
         elseif isa(rhs,Expr) && rhs.head==:call && in(rhs.args[1], dist_ir_funcs)
@@ -200,10 +220,12 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
                 if haskey(state.tuple_table, rhs.args[3])
                     state.arrs_dist_info[lhs].dim_sizes = state.tuple_table[rhs.args[3]]
                     @dprintln(3,"DistIR arr info dim_sizes update: ", state.arrs_dist_info[lhs].dim_sizes)
-                    state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs.args[2]].isSequential
+                    # lhs and rhs are sequential if either is sequential
+                    seq = state.arrs_dist_info[lhs].isSequential || state.arrs_dist_info[rhs.args[2]].isSequential
+                    state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs.args[2]].isSequential = seq
                 else
                     @dprintln(3,"DistIR arr info reshape tuple not found: ", rhs.args[3])
-                    state.arrs_dist_info[lhs].isSequential = true
+                    state.arrs_dist_info[lhs].isSequential = state.arrs_dist_info[rhs.args[2]].isSequential = true
                 end
             elseif rhs.args[1]==TopNode(:tuple)
                 ok = true
@@ -266,13 +288,13 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
         allArrs = [readArrs;writeArrs]
         # keep mapping from parfors to arrays
         state.parfor_info[parfor.unique_id] = allArrs
+        seq = false
         
         if length(parfor.arrays_read_past_index)!=0 || length(parfor.arrays_written_past_index)!=0 
             @dprintln(2,"DistIR arr info walk parfor sequential: ", node)
             for arr in allArrs
-                state.arrs_dist_info[arr].isSequential = true
+                seq = true
             end
-            return node
         end
         
         indexVariable::SymbolNode = parfor.loopNests[1].indexVariable
@@ -280,7 +302,7 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
              index = rws.readSet.arrays[arr]
              if length(index)!=1 || toSymGen(index[1][end])!=toSymGen(indexVariable)
                 @dprintln(2,"DistIR arr info walk arr read index sequential: ", index, " ", indexVariable)
-                state.arrs_dist_info[arr].isSequential = true
+                seq = true
              end
         end
         
@@ -288,8 +310,22 @@ function get_arr_dist_info(node::Expr, state::DistIrState, top_level_number, is_
              index = rws.writeSet.arrays[arr]
              if length(index)!=1 || toSymGen(index[1][end])!=toSymGen(indexVariable)
                 @dprintln(2,"DistIR arr info walk arr write index sequential: ", index, " ", indexVariable)
-                state.arrs_dist_info[arr].isSequential = true
+                seq = true
              end
+        end
+        for arr in allArrs
+            if state.arrs_dist_info[arr].isSequential ||
+                        !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[allArrs[1]].dim_sizes)
+                    @dprintln(2,"DistIR parfor check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
+                    seq = true
+            end
+        end
+        # parfor and all its arrays are sequential
+        if seq
+            push!(state.seq_parfors, parfor.unique_id)
+            for arr in allArrs
+                state.arrs_dist_info[arr].isSequential = true
+            end
         end
         return node
     # functions dist_ir_funcs are either handled here or do not make arrays sequential  
@@ -338,42 +374,6 @@ end
 
 function get_arr_dist_info(ast::Any, state::DistIrState, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
-end
-"""
-All arrays of a parfor should distributable for it to be distributable.
-If an array is used in any sequential parfor, it is not distributable.
-"""
-function checkParforsForDistribution(state::DistIrState)
-    changed = true
-    while changed
-        changed = false
-        for parfor_id in keys(state.parfor_info)
-            if parfor_id in state.seq_parfors
-                continue
-            end
-            arrays = state.parfor_info[parfor_id]
-            for arr in arrays
-                # all parfor arrays should have same size
-                if state.arrs_dist_info[arr].isSequential ||
-                        !isEqualDimSize(state.arrs_dist_info[arr].dim_sizes, state.arrs_dist_info[arrays[1]].dim_sizes)
-                    @dprintln(2,"DistIR check array: ", arr," seq: ", state.arrs_dist_info[arr].isSequential)
-                    changed = true
-                    push!(state.seq_parfors, parfor_id)
-                    for a in arrays
-                        state.arrs_dist_info[a].isSequential = true
-                    end
-                    break
-                end
-            end
-        end
-    end
-    # all arrays not marked sequential are distributable at this point 
-    for arr in keys(state.arrs_dist_info)
-        if state.arrs_dist_info[arr].isSequential==false
-            @dprintln(2,"DistIR distributable parfor array: ", arr)
-            push!(state.dist_arrays, arr)
-        end
-    end
 end
 
 function isEqualDimSize(sizes1::Array{Union{SymAllGen,Int,Expr},1} , sizes2::Array{Union{SymAllGen,Int,Expr},1})
