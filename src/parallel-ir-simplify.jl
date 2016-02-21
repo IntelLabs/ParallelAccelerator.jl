@@ -890,8 +890,8 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
     dim_names = Union{SymGen,Int}[]
 
     for i = 1:length(dim_array)
-        # constant sizes are either SymbolNodes or Ints, TODO: expand to GenSyms that are constant
-        if !(typeof(dim_array[i])==SymbolNode || typeof(dim_array[i])==Int)
+        # constant sizes are either SymbolNodes, Symbols or Ints, TODO: expand to GenSyms that are constant
+        if !(isa(dim_array[i],SymAll) || typeof(dim_array[i])==Int)
             return false
         end
         if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
