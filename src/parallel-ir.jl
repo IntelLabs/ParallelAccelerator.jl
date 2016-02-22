@@ -3310,8 +3310,8 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::SymAllG
         if dim==1
             ast = shape[1]
         else
-            mul = foldl((a,b)->"$a*$b", "", shape)
-            ast = eval(parse(mul))
+            mul = foldl((a,b)->"$a*$b", "1", shape)
+            ast = parse(mul)
         end
         return ast
     end
