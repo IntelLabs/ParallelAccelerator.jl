@@ -542,7 +542,7 @@ function from_parfor(node::Expr, state)
 
     parfor = node.args[1]
 
-    if !in(state.seq_parfors, parfor.unique_id)
+    if !in(parfor.unique_id, state.seq_parfors)
 
         # TODO: assuming 1st loop nest is the last dimension
         loopnest = parfor.loopNests[1]
