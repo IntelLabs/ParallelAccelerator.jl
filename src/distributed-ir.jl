@@ -609,6 +609,12 @@ function from_call(node::Expr, state)
         if node.args[3]==length(state.arrs_dist_info[arr].dim_sizes)
             return [state.arrs_dist_info[arr].dim_sizes[end]]
         end
+    elseif func==GlobalRef(Base,:arraylen) && in(toSymGen(node.args[2]), state.dist_arrays)
+        arr = toSymGen(node.args[2])
+        len = parse(foldl((a,b)->"$a*$b", "1",state.arrs_dist_info[arr].dim_sizes))
+        @dprintln(3,"found arraylen on dist array: ",node," ",arr," len: ",len)
+        @dprintln(3,"found arraylen on dist array: ",node," ",arr)
+        return [len]
     end
     return [node]
 end
