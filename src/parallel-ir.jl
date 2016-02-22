@@ -704,14 +704,7 @@ end
 """
 Returns the element type of an Array.
 """
-function getArrayElemType(array :: SymbolNode, state :: expr_state)
-    return eltype(array.typ)
-end
-
-"""
-Returns the element type of an Array.
-"""
-function getArrayElemType(array :: GenSym, state :: expr_state)
+function getArrayElemType(array :: SymAllGen, state :: expr_state)
     atyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     return eltype(atyp)
 end
@@ -719,16 +712,7 @@ end
 """
 Return the number of dimensions of an Array.
 """
-function getArrayNumDims(array :: SymbolNode, state :: expr_state)
-    @assert array.typ.name == Array.name || array.typ.name == BitArray.name "Array expected"
-    @dprintln(3, "getArrayNumDims from SymbolNode array = ", array, " ", array.typ, " ", ndims(array.typ))
-    ndims(array.typ)
-end
-
-"""
-Return the number of dimensions of an Array.
-"""
-function getArrayNumDims(array :: GenSym, state :: expr_state)
+function getArrayNumDims(array :: SymAllGen, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
     ndims(gstyp)
