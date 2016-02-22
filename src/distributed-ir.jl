@@ -455,9 +455,11 @@ end
 
 function from_assignment(node::Expr, state::DistIrState)
     @assert node.head==:(=) "DistributedIR invalid assignment head"
-
-    if isAllocation(node.args[2])
-        arr = toSymGen(node.args[1])
+    lhs = node.args[1]
+    rhs = node.args[2]
+    
+    if isAllocation(rhs)
+        arr = toSymGen(lhs)
         if in(arr, state.dist_arrays)
             @dprintln(3,"DistIR allocation array: ", arr)
             #shape = get_alloc_shape(node.args[2].args[2:end])
@@ -484,15 +486,53 @@ function from_assignment(node::Expr, state::DistIrState)
             darr_start_expr = :($darr_start_var = __hps_node_id*$darr_div_var) 
             darr_count_expr = :($darr_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$darr_div_var : $darr_div_var)
 
-            node.args[2].args[end-1] = darr_count_var
+            rhs.args[end-1] = darr_count_var
 
             res = [darr_div_expr; darr_start_expr; darr_count_expr; node]
             #debug_size_print = :(println("size ",$darr_count_var))
             #push!(res,debug_size_print)
             return res
         end
+    elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base,:reshape)
+        arr = toSymGen(lhs)
+        if in(arr, state.dist_arrays)
+            @dprintln(3,"DistIR reshape array: ", arr)
+            dim_sizes = state.arrs_dist_info[arr].dim_sizes
+            # generate array division
+            # simple 1D partitioning of last dimension, more general partitioning needed
+            # match common big data matrix reperesentation
+            arr_tot_size = dim_sizes[end]
+    
+            arr_id = getDistNewID(state)
+            state.arrs_dist_info[arr].arr_id = arr_id
+            darr_start_var = symbol("__hps_dist_arr_start_"*string(arr_id))
+            darr_div_var = symbol("__hps_dist_arr_div_"*string(arr_id))
+            darr_count_var = symbol("__hps_dist_arr_count_"*string(arr_id))
+    
+            CompilerTools.LambdaHandling.addLocalVar(darr_start_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_div_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            CompilerTools.LambdaHandling.addLocalVar(darr_count_var, Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+    
+    
+            darr_div_expr = :($darr_div_var = $(arr_tot_size)/__hps_num_pes)
+            # zero-based index to match C interface of HDF5
+            darr_start_expr = :($darr_start_var = __hps_node_id*$darr_div_var) 
+            darr_count_expr = :($darr_count_var = __hps_node_id==__hps_num_pes-1 ? $arr_tot_size-__hps_node_id*$darr_div_var : $darr_div_var)
+    
+            # create a new tuple for reshape
+            tup_call = Expr(:call, TopNode(:tuple), dim_sizes[1:end-1]... , darr_count_var)
+            reshape_tup_var = symbol("__hps_dist_tup_var_"*string(arr_id))
+            tup_typ = CompilerTools.LambdaHandling.getType(rhs.args[3], state.LambdaVarInfo)
+            CompilerTools.LambdaHandling.addLocalVar(reshape_tup_var, tup_typ, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            tup_expr = Expr(:(=),reshape_tup_var,tup_call)
+            rhs.args[3] = reshape_tup_var
+            res = [darr_div_expr; darr_start_expr; darr_count_expr; tup_expr; node]
+            #debug_size_print = :(println("size ",$darr_count_var))
+            #push!(res,debug_size_print)
+            return res
+        end
     else
-        node.args[2] = from_expr(node.args[2],state)[1]
+        node.args[2] = from_expr(rhs,state)[1]
     end
     return [node]
 end
