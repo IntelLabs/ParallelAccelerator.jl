@@ -565,9 +565,8 @@ function from_assignment(node::Expr, state::DistIrState)
                     allreduceCall = Expr(:call,TopNode(:hps_dist_allreduce), reduce_var, TopNode(:add_float), rhs.args[2], reduce_size_var)
                     res_copy = Expr(:(=), lhs, rhs.args[2])
                     # replace gemm output with local var
-                    node.args[1] = reduce_var
+                    #node.args[1] = reduce_var
                     rhs.args[2] = reduce_var
-
 
                     return [reduce_var_init; node; size_expr; allreduceCall; res_copy]
                 # first input is sequential but output is parallel if the second input is partitioned but not transposed
