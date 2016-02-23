@@ -138,7 +138,7 @@ function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   code = DomainIR.from_expr(fname, func.mod, ast)
   dir_time = time_ns() - dir_start
   @dprintln(3, "domain code = ", code)
-  @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(dir_time))
+  @dprintln(1, "accelerate: DomainIR conversion time = ", ns_to_sec(dir_time))
   return code
 end
 
