@@ -531,6 +531,27 @@ function from_assignment(node::Expr, state::DistIrState)
             #push!(res,debug_size_print)
             return res
         end
+    elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+
+                arr1 = rhs.args[5]
+                t1 = (rhs.args[3]=='T')
+                arr2 = rhs.args[6]
+                t2 = (rhs.args[4]=='T')
+                
+                # result is sequential but with reduction if both inputs are partitioned and second one is transposed
+                # e.g. labels*points'
+                if !state.arrs_dist_info[arr1].isSequential && !state.arrs_dist_info[arr2].isSequential && t2 && !t1 &&
+                            state.arrs_dist_info[lhs].isSequential
+                    rhs.args[1] = :__hps_gemm_reduce
+                    @dprintln(3,"DistIR translating gemm reduce: ", node)
+                # first input is sequential but output is parallel if the second input is partitioned but not transposed
+                # e.g. w*points
+                elseif state.arrs_dist_info[arr1].isSequential && !state.arrs_dist_info[arr2].isSequential && !t2 && !state.arrs_dist_info[lhs].isSequential
+                    @dprintln(3,"DistIR arr info gemm first input is sequential: ", arr1)
+                    rhs.args[1] = :__hps_gemm_broadcast
+                    @dprintln(3,"DistIR translating gemm broadcast: ", node)
+                # otherwise, no known pattern found
+                end
     else
         node.args[2] = from_expr(rhs,state)[1]
     end
@@ -543,7 +564,7 @@ function from_parfor(node::Expr, state)
     parfor = node.args[1]
 
     if !in(parfor.unique_id, state.seq_parfors)
-
+        @dprintln(3,"DistIR translating parfor: ", parfor.unique_id)
         # TODO: assuming 1st loop nest is the last dimension
         loopnest = parfor.loopNests[1]
         # TODO: build a constant table and check the loop variables at this stage
