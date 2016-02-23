@@ -542,13 +542,39 @@ function from_assignment(node::Expr, state::DistIrState)
                 # e.g. labels*points'
                 if !state.arrs_dist_info[arr1].isSequential && !state.arrs_dist_info[arr2].isSequential && t2 && !t1 &&
                             state.arrs_dist_info[lhs].isSequential
-                    rhs.args[1] = :__hps_gemm_reduce
                     @dprintln(3,"DistIR translating gemm reduce: ", node)
+                    # rhs.args[1] = :__hps_gemm_reduce
+                    # allocate temporary array for local gemm values
+                    alloc_args = Array(Any,2)
+                    out_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)
+                    alloc_args[1] = eltype(out_typ)
+                    out_dim_sizes = state.arrs_dist_info[lhs].dim_sizes
+                    alloc_args[2] = out_dim_sizes
+                    alloc_call = ParallelIR.from_alloc(alloc_args)
+                    reduce_num = getDistNewID(state)
+                    reduce_var = symbol("__hps_gemm_reduce_"*string(reduce_num))
+                    CompilerTools.LambdaHandling.addLocalVar(reduce_var, out_typ, ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+                    reduce_var_init = Expr(:(=), reduce_var, Expr(:call,alloc_call...))
+
+                    # get reduction size
+                    reduce_size_var = symbol("__hps_gemm_reduce_size_"*string(reduce_num))
+                    CompilerTools.LambdaHandling.addLocalVar(reduce_size_var, Int, ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+                    size_expr = Expr(:(=), reduce_size_var, Expr(:call,:*,out_dim_sizes[1], out_dim_sizes[2]))
+
+                    # add allreduce call
+                    allreduceCall = Expr(:call,TopNode(:hps_dist_allreduce), reduce_var, TopNode(:add_float), rhs.args[2], reduce_size_var)
+                    res_copy = Expr(:(=), lhs, rhs.args[2])
+                    # replace gemm output with local var
+                    node.args[1] = reduce_var
+                    rhs.args[2] = reduce_var
+
+
+                    return [reduce_var_init; node; size_expr; allreduceCall; res_copy]
                 # first input is sequential but output is parallel if the second input is partitioned but not transposed
                 # e.g. w*points
                 elseif state.arrs_dist_info[arr1].isSequential && !state.arrs_dist_info[arr2].isSequential && !t2 && !state.arrs_dist_info[lhs].isSequential
                     @dprintln(3,"DistIR arr info gemm first input is sequential: ", arr1)
-                    rhs.args[1] = :__hps_gemm_broadcast
+                    #rhs.args[1] = :__hps_gemm_broadcast
                     @dprintln(3,"DistIR translating gemm broadcast: ", node)
                 # otherwise, no known pattern found
                 end

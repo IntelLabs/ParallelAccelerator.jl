@@ -243,6 +243,55 @@ function pattern_match_call_dist_reduce(f::Any, v::Any, rf::Any, o::Any)
     return ""
 end
 
+function pattern_match_call_dist_allreduce(f::TopNode, var::SymAllGen, reductionFunc::TopNode, output::SymAllGen, size::Symbol)
+    if f.name==:hps_dist_allreduce
+        mpi_type = ""
+        var = toSymGen(var)
+        c_var = from_expr(var)
+        c_output = from_expr(output)
+        var_typ = lstate.symboltable[var]
+        is_array =  var_typ<:Array
+        if is_array
+            var_typ = eltype(var_typ)
+            c_var *= ".data"
+            c_output *= ".data"
+        else
+            c_var = "&"*c_var
+            c_output = "&"*c_output
+        end
+        if var_typ==Float64 || var_typ==Array{Float64,1}
+            mpi_type = "MPI_DOUBLE"
+        elseif var_typ==Float32 || var_typ==Array{Float32,1}
+            mpi_type = "MPI_FLOAT"
+        elseif var_typ==Int32 || var_typ==Array{Int32,1}
+            mpi_type = "MPI_INT"
+        elseif var_typ==Int64 || var_typ==Array{Int64,1}
+            mpi_type = "MPI_LONG_LONG_INT"
+        else
+            println("reduction type ", var_typ)
+            throw("CGen unsupported MPI reduction type")
+        end
+
+        mpi_func = ""
+        if reductionFunc.name == :add_float
+            mpi_func = "MPI_SUM"
+        else
+            throw("CGen unsupported MPI reduction function")
+        end
+                
+        s="MPI_Allreduce($c_var, $c_output, $size, $mpi_type, $mpi_func, MPI_COMM_WORLD);"
+        # debug print for 1D_sum
+        #s*="printf(\"len %d start %d end %d\\n\", parallel_ir_save_array_len_1_1, __hps_loop_start_2, __hps_loop_end_3);\n"
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_allreduce(f::Any, v::Any, rf::Any, o::Any, s::Any)
+    return ""
+end
+
 """
 Generate code for HDF5 file open
 """
@@ -936,6 +985,7 @@ function pattern_match_call(ast::Array{Any, 1})
         # HDF5 open
         s = pattern_match_call_data_src_open(ast[1],ast[2],ast[3], ast[4], ast[5])
         s *= pattern_match_call_data_src_read(ast[1],ast[2],ast[3], ast[4], ast[5])
+        s *= pattern_match_call_dist_allreduce(ast[1],ast[2],ast[3], ast[4], ast[5])
     end
     if(length(ast)==3) # randn! call has 3 args
         s = pattern_match_call_dist_h5_size(ast[1],ast[2],ast[3])
