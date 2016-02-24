@@ -129,10 +129,11 @@ type DistIrState
     lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
     # keep values for constant tuples. They are often used for allocating and reshaping arrays.
     tuple_table              :: Dict{SymGen,Array{Union{SymGen,Int},1}}
+    max_label :: Int # holds the max number of all LabelNodes
 
     function DistIrState(linfo, lives)
         new(Dict{SymGen, Array{ArrDistInfo,1}}(), Dict{Int, Array{SymGen,1}}(), linfo, Int[], SymGen[],0, lives, 
-             Dict{SymGen,Array{Union{SymGen,Int},1}}())
+             Dict{SymGen,Array{Union{SymGen,Int},1}}(),0)
     end
 end
 
@@ -410,6 +411,7 @@ end
 
 # nodes are :body of AST
 function from_toplevel_body(nodes::Array{Any,1}, state::DistIrState)
+    state.max_label = ParallelIR.getMaxLabel(state.max_label, nodes)
     res::Array{Any,1} = genDistributedInit(state)
     for node in nodes
         new_exprs = from_expr(node, state)
@@ -637,8 +639,40 @@ function from_parfor(node::Expr, state)
         #debug_rank_print = :(println("parfor rank ", __hps_node_id))
         #push!(res,debug_rank_print)
         return res
+    else
+        # broadcast results of sequential parfors if rand() is used
+        has_rand = false
+        for stmt in parfor.body
+            if isa(stmt,Expr) && stmt.head==:(=) && isa(stmt.args[2],Expr) && stmt.args[2].head==:call && stmt.args[2].args[1]==TopNode(:rand!)
+                has_rand = true
+                break
+            end
+        end
+        if has_rand
+            # only rank 0 executes rand(), then broadcasts results
+            writeArrs = collect(keys(parfor.rws.writeSet.arrays))
+            @assert length(writeArrs)==1 "Only one parfor output supported now"
+            write_arr = writeArrs[1]
+            # generate new label
+            label = next_label(state)
+            label_node = LabelNode(next_label(state))
+            goto_node = Expr(:gotoifnot, :__hps_node_id,label)
+            # get broadcast size
+            bcast_size_var = symbol("__hps_bcast_size_"*string(label))
+            CompilerTools.LambdaHandling.addLocalVar(bcast_size_var, Int, ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+            size_expr = Expr(:(=), bcast_size_var, Expr(:call,:*,1,state.arrs_dist_info[write_arr].dim_sizes...))
+            bcast_expr = Expr(:call,:__hps_broadcast, write_arr, bcast_size_var)
+
+            @dprintln(3,"DistIR rand() in sequential parfor ", parfor)
+            return [goto_node; node; label_node; size_expr; bcast_expr]
+        end
     end
     return [node]
+end
+
+function next_label(state)
+    state.max_label = state.max_label + 1
+    return state.max_label
 end
 
 function from_call(node::Expr, state)
@@ -697,7 +731,8 @@ function from_call(node::Expr, state)
         end
     elseif func==GlobalRef(Base,:arraylen) && in(toSymGen(node.args[2]), state.dist_arrays)
         arr = toSymGen(node.args[2])
-        len = parse(foldl((a,b)->"$a*$b", "1",state.arrs_dist_info[arr].dim_sizes))
+        #len = parse(foldl((a,b)->"$a*$b", "1",state.arrs_dist_info[arr].dim_sizes))
+        len = Expr(:call,:*, 1,state.arrs_dist_info[arr].dim_sizes...)
         @dprintln(3,"found arraylen on dist array: ",node," ",arr," len: ",len)
         @dprintln(3,"found arraylen on dist array: ",node," ",arr)
         return [len]
