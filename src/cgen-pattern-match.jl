@@ -259,13 +259,13 @@ function pattern_match_call_dist_allreduce(f::TopNode, var::SymAllGen, reduction
             c_var = "&"*c_var
             c_output = "&"*c_output
         end
-        if var_typ==Float64 || var_typ==Array{Float64,1}
+        if var_typ==Float64
             mpi_type = "MPI_DOUBLE"
-        elseif var_typ==Float32 || var_typ==Array{Float32,1}
+        elseif var_typ==Float32
             mpi_type = "MPI_FLOAT"
-        elseif var_typ==Int32 || var_typ==Array{Int32,1}
+        elseif var_typ==Int32
             mpi_type = "MPI_INT"
-        elseif var_typ==Int64 || var_typ==Array{Int64,1}
+        elseif var_typ==Int64
             mpi_type = "MPI_LONG_LONG_INT"
         else
             println("reduction type ", var_typ)
@@ -289,6 +289,43 @@ function pattern_match_call_dist_allreduce(f::TopNode, var::SymAllGen, reduction
 end
 
 function pattern_match_call_dist_allreduce(f::Any, v::Any, rf::Any, o::Any, s::Any)
+    return ""
+end
+
+function pattern_match_call_dist_bcast(f::Symbol, var::SymAllGen, size::Symbol)
+    if f==:__hps_dist_broadcast
+        mpi_type = ""
+        var = toSymGen(var)
+        c_var = from_expr(var)
+        var_typ = lstate.symboltable[var]
+        is_array =  var_typ<:Array
+        if is_array
+            var_typ = eltype(var_typ)
+            c_var *= ".data"
+        else
+            c_var = "&"*c_var
+        end
+        if var_typ==Float64
+            mpi_type = "MPI_DOUBLE"
+        elseif var_typ==Float32
+            mpi_type = "MPI_FLOAT"
+        elseif var_typ==Int32
+            mpi_type = "MPI_INT"
+        elseif var_typ==Int64
+            mpi_type = "MPI_LONG_LONG_INT"
+        else
+            println("reduction type ", var_typ)
+            throw("CGen unsupported MPI broadcast type")
+        end
+                
+        s="MPI_Bcast($c_var, $size, $mpi_type, 0, MPI_COMM_WORLD);"
+        return s
+    else
+        return ""
+    end
+end
+
+function pattern_match_call_dist_bcast(f::Any, v::Any, rf::Any)
     return ""
 end
 
@@ -992,6 +1029,7 @@ function pattern_match_call(ast::Array{Any, 1})
         s *= pattern_match_call_randn(ast[1],ast[2],ast[3])
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3])
+        s *= pattern_match_call_dist_bcast(ast[1],ast[2],ast[3])
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(ast...)

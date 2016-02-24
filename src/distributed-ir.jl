@@ -655,13 +655,13 @@ function from_parfor(node::Expr, state)
             write_arr = writeArrs[1]
             # generate new label
             label = next_label(state)
-            label_node = LabelNode(next_label(state))
+            label_node = LabelNode(label)
             goto_node = Expr(:gotoifnot, :__hps_node_id,label)
             # get broadcast size
             bcast_size_var = symbol("__hps_bcast_size_"*string(label))
             CompilerTools.LambdaHandling.addLocalVar(bcast_size_var, Int, ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
             size_expr = Expr(:(=), bcast_size_var, Expr(:call,:*,1,state.arrs_dist_info[write_arr].dim_sizes...))
-            bcast_expr = Expr(:call,:__hps_broadcast, write_arr, bcast_size_var)
+            bcast_expr = Expr(:call,:__hps_dist_broadcast, write_arr, bcast_size_var)
 
             @dprintln(3,"DistIR rand() in sequential parfor ", parfor)
             return [goto_node; node; label_node; size_expr; bcast_expr]
