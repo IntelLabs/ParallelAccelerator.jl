@@ -557,6 +557,8 @@ function from_assignment(node::Expr, state::DistIrState)
                     reduce_var = symbol("__hps_gemm_reduce_"*string(reduce_num))
                     CompilerTools.LambdaHandling.addLocalVar(reduce_var, out_typ, ISASSIGNED | ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
                     reduce_var_init = Expr(:(=), reduce_var, Expr(:call,alloc_call...))
+                    # TODO: deallocate temporary array
+                    # reduce_var_dealloc = Expr(:call, TopNode(:ccall), QuoteNode(:jl_dealloc_array), reduce_var)
 
                     # get reduction size
                     reduce_size_var = symbol("__hps_gemm_reduce_size_"*string(reduce_num))
