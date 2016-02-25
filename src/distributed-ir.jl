@@ -746,13 +746,18 @@ function getDistNewID(state)
 end
 
 function adjust_arrayrefs(stmt::Expr, loop_start_var::Symbol)
-    if stmt.head==:(=) && isCall(stmt.args[2]) && isTopNode(stmt.args[2].args[1])
-        topCall = stmt.args[2].args[1]
-        #ref_args = stmt.args[2].args[2:end]
+    
+    if stmt.head==:(=)
+        stmt = stmt.args[2]
+    end
+    
+    if isCall(stmt) && isTopNode(stmt.args[1])
+        topCall = stmt.args[1]
+        #ref_args = stmt.args[2:end]
         if topCall.name==:unsafe_arrayref || topCall.name==:unsafe_arrayset
             # TODO: simply divide the last dimension, more general partitioning needed
-            index_arg = stmt.args[2].args[end]
-            stmt.args[2].args[end] = :($(toSymGen(index_arg))-$loop_start_var+1)
+            index_arg = stmt.args[end]
+            stmt.args[end] = :($(toSymGen(index_arg))-$loop_start_var+1)
         end
     end
 end
