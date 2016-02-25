@@ -233,7 +233,6 @@ end
 include("api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
-include("distributed-ir.jl")
 include("j2c-array.jl")
 include("cgen.jl")
 include("callgraph.jl")
@@ -267,9 +266,6 @@ function __init__()
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
-      if isDistributedMode()
-          addOptPass(toDistributedIR, PASS_TYPED)
-      end
       addOptPass(toFlatParfors, PASS_TYPED)
       addOptPass(toCGen, PASS_TYPED)
     end

@@ -25,13 +25,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toDistributedIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
 
 using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..DistributedIR, ..CGen, ..DomainIR.isarray, ..DomainIR.isbitarray, ..API
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..DomainIR.isarray, ..DomainIR.isbitarray, ..API
 import ..dprint, ..dprintln, ..@dprint, ..@dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -160,14 +160,6 @@ function toFlatParfors(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   return code
 end
 
-function toDistributedIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
-  dir_start = time_ns()
-  code = DistributedIR.from_root(string(func.name), ast)
-  dir_time = time_ns() - dir_start
-  @dprintln(3, "Distributed code = ", code)
-  @dprintln(1, "accelerate: DistributedIR conversion time = ", ns_to_sec(dir_time))
-  return code
-end
 
 function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   # In threads mode, we have already converted back to standard Julia AST so we skip this phase.
