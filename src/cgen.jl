@@ -142,6 +142,19 @@ if isDistributedMode() #&& NERSC==0
     MPI.Init()
 end
 
+type ExternalPatternMatchCall
+    func::Function
+end
+
+external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
+
+"""
+Other packages can set external functions for pattern matching calls in CGen
+"""
+function setExternalPatternMatch(ext_pm::Function)
+    external_pattern_match_call.func = ext_pm
+end
+
 
 # Set what flags pertaining to vectorization to pass to the
 # C++ compiler.
@@ -1393,6 +1406,12 @@ end
 
 
 function from_call(ast::Array{Any, 1})
+
+    pat_out = external_pattern_match_call.func(ast)
+    if pat_out != ""
+        @dprintln(3, "external pattern matched: ",ast)
+        return pat_out
+    end
 
     pat_out = pattern_match_call(ast)
     if pat_out != ""
