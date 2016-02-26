@@ -571,11 +571,6 @@ function from_assignment(args::Array{Any,1})
         return external_match
     end
 
-    match_hps_dist = from_assignment_match_dist(lhs, rhs)
-    if match_hps_dist!=""
-        return match_hps_dist
-    end
-
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
     if match_hvcat!=""
         return match_hvcat
