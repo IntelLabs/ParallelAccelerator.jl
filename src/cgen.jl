@@ -147,12 +147,17 @@ type ExternalPatternMatchCall
 end
 
 external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
+external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs)->"")
 
 """
 Other packages can set external functions for pattern matching calls in CGen
 """
-function setExternalPatternMatch(ext_pm::Function)
+function setExternalPatternMatchCall(ext_pm::Function)
     external_pattern_match_call.func = ext_pm
+end
+
+function setExternalPatternMatchAssignment(ext_pm::Function)
+    external_pattern_match_assignment.func = ext_pm
 end
 
 
@@ -560,6 +565,11 @@ function from_assignment(args::Array{Any,1})
     rhs = args[2]
 
     from_assignment_fix_tupple(lhs, rhs)
+
+    external_match = external_pattern_match_assignment.func(lhs, rhs)
+    if external_match!=""
+        return external_match
+    end
 
     match_hps_dist = from_assignment_match_dist(lhs, rhs)
     if match_hps_dist!=""
