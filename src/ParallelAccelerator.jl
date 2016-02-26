@@ -117,13 +117,6 @@ const HOST_TASK_MODE = 1
 const PHI_TASK_MODE = 2
 const DYNAMIC_TASK_MODE = 3
 
-function isDistributedMode()
-    mode = "0"
-    if haskey(ENV,"HPS_DISTRIBUTED_MEMORY")
-        mode = ENV["HPS_DISTRIBUTED_MEMORY"]
-    end
-    return mode=="1"
-end
 
 """
 Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".
@@ -274,7 +267,7 @@ end
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for, isDistributedMode
+export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
 
 end
 

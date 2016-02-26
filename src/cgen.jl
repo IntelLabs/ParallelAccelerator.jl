@@ -41,7 +41,6 @@ import ..ParallelIR.DelayedFunc
 import CompilerTools
 export setvectorizationlevel, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
-import ParallelAccelerator.isDistributedMode
 import ParallelAccelerator.H5SizeArr_t
 import ParallelAccelerator.SizeArr_t
 
@@ -100,7 +99,7 @@ const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
 
-if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
+if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     const USE_OMP = 0
 else
     @osx? (
@@ -113,6 +112,15 @@ else
     end
     )
 end
+
+function isDistributedMode()
+    mode = "0"
+    if haskey(ENV,"CGEN_MPI_COMPILE")
+        mode = ENV["CGEN_MPI_COMPILE"]
+    end
+    return mode=="1"
+end
+
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -242,7 +250,7 @@ if NERSC==1
             mkdir(generated_file_dir)
         end
     end
-elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE || isDistributedMode()
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -267,7 +275,7 @@ function generate_new_file_name()
 end
 
 function CGen_finalize()
-    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE && !isDistributedMode()
         rm(generated_file_dir; recursive=true)
     end
     if isDistributedMode() #&& NERSC==0
