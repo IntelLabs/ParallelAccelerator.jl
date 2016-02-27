@@ -1,4 +1,4 @@
-.. _limits:
+.. _limitations:
 
 *********
 Limitations 
@@ -43,9 +43,9 @@ implementation of ParallelAccelerator has some other limitations:
    are supported yet, and using them may or may not work in ParallelAccelerator.
    For supported functions, we rely on capturing operator names to resolve array related functions and operators
    to our API module. This prevents them from being inlined by Julia
-   which helps our translation. For unsupported functions such as ``mean(x)``,
+   which helps our translation. For unsupported functions such as ``mean``,
    Julia's typed AST for the program
-   that contains ``mean(x)`` becomes a lowered call that is basically the
+   that contains ``mean`` becomes a lowered call that is basically the
    the low-level sequential implementation which cannot be
    handled by ParallelAccelerator. Of course, adding support
    for functions like ``mean`` is not a huge effort, and we are still in 
@@ -55,8 +55,8 @@ implementation of ParallelAccelerator has some other limitations:
    in Julia's typed AST in order to work properly. Although we do not require
    user functions to be explicitly typed, it is in general a good practice to
    ensure the function that is being accelerated can pass Julia's type inference
-   without leaving any parameters or internal variables with an ``Any`` type. 
+   without leaving any arguments or internal variables with an ``Any`` type. 
    There is currently no facility to help users understand whether something
-   is being optimized or silently rejected. We plan to provide 
-   better report on what is going on under the hood.
+   is being optimized or silently rejected. In the future, we plan to provide 
+   such functionality to give users better insight into what is going on under the hood.
 
