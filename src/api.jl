@@ -197,8 +197,7 @@ end
 end
 
 const operators = Set(vcat(unary_operators, binary_operators, 
-    Symbol[:map, :map!, :reduce, :setindex!, :getindex,
-           :__hps_data_source_HDF5, :__hps_kmeans, :__hps_LinearRegression, :__hps_NaiveBayes]))
+    Symbol[:map, :map!, :reduce, :setindex!, :getindex]))
 
 for opr in operators
   @eval export $opr
