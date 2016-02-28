@@ -2363,7 +2363,7 @@ function set_includes(ast)
     if contains(s,"HDF5") 
         global USE_HDF5 = 1
     end
-    if contains(s,"__hpat_kmeans") || contains(s,"__hpat_LinearRegression") || contains(s,"__hpat_NaiveBayes")
+    if contains(s,"__hpat_Kmeans") || contains(s,"__hpat_LinearRegression") || contains(s,"__hpat_NaiveBayes")
         global USE_DAAL = 1
     end
 end
