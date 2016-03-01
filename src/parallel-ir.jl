@@ -704,14 +704,7 @@ end
 """
 Returns the element type of an Array.
 """
-function getArrayElemType(array :: SymbolNode, state :: expr_state)
-    return eltype(array.typ)
-end
-
-"""
-Returns the element type of an Array.
-"""
-function getArrayElemType(array :: GenSym, state :: expr_state)
+function getArrayElemType(array :: SymAllGen, state :: expr_state)
     atyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     return eltype(atyp)
 end
@@ -719,16 +712,7 @@ end
 """
 Return the number of dimensions of an Array.
 """
-function getArrayNumDims(array :: SymbolNode, state :: expr_state)
-    @assert array.typ.name == Array.name || array.typ.name == BitArray.name "Array expected"
-    @dprintln(3, "getArrayNumDims from SymbolNode array = ", array, " ", array.typ, " ", ndims(array.typ))
-    ndims(array.typ)
-end
-
-"""
-Return the number of dimensions of an Array.
-"""
-function getArrayNumDims(array :: GenSym, state :: expr_state)
+function getArrayNumDims(array :: SymAllGen, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
     ndims(gstyp)
@@ -2439,7 +2423,11 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node :: Union{Symbol, SymbolNode, GenSym, LambdaStaticData, Number})
+function hasNoSideEffects(node :: Union{Symbol, SymbolNode, GenSym, GlobalRef})
+    return true
+end
+
+function hasNoSideEffects(node :: Union{LambdaStaticData, Number, Function})
     return true
 end
 
@@ -2450,6 +2438,8 @@ end
 function hasNoSideEffects(node :: Expr)
     if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask
         return all(Bool[hasNoSideEffects(a) for a in node.args])
+    elseif node.head == :alloc
+        return true
     elseif node.head == :ccall
         func = node.args[1]
         if func == QuoteNode(:jl_alloc_array_1d) ||
@@ -3026,7 +3016,14 @@ function from_root(function_name, ast :: Expr)
 
     @dprintln(1,"Starting liveness analysis. function = ", function_name)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-
+    
+    # propagate transpose() calls to gemm() calls
+    # copy propagation is need so that the output of transpose is directly used in gemm()
+    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}()))
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    
     #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     @dprintln(3,"lives = ", lives)
     #  @dprintln(3,"udinfo = ", udinfo)
@@ -3297,8 +3294,8 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::SymAllG
         if dim==1
             ast = shape[1]
         else
-            mul = foldl((a,b)->"$a*$b", "", shape)
-            ast = eval(parse(mul))
+            mul = foldl((a,b)->"$a*$b", "1", shape)
+            ast = parse(mul)
         end
         return ast
     end

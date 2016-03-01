@@ -41,7 +41,6 @@ import ..ParallelIR.DelayedFunc
 import CompilerTools
 export setvectorizationlevel, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
-import ParallelAccelerator.isDistributedMode
 import ParallelAccelerator.H5SizeArr_t
 import ParallelAccelerator.SizeArr_t
 
@@ -100,7 +99,7 @@ const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
 
-if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
+if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     const USE_OMP = 0
 else
     @osx? (
@@ -113,6 +112,15 @@ else
     end
     )
 end
+
+function isDistributedMode()
+    mode = "0"
+    if haskey(ENV,"CGEN_MPI_COMPILE")
+        mode = ENV["CGEN_MPI_COMPILE"]
+    end
+    return mode=="1"
+end
+
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -132,6 +140,24 @@ end
 if isDistributedMode() #&& NERSC==0
     using MPI
     MPI.Init()
+end
+
+type ExternalPatternMatchCall
+    func::Function
+end
+
+external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
+external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs)->"")
+
+"""
+Other packages can set external functions for pattern matching calls in CGen
+"""
+function setExternalPatternMatchCall(ext_pm::Function)
+    external_pattern_match_call.func = ext_pm
+end
+
+function setExternalPatternMatchAssignment(ext_pm::Function)
+    external_pattern_match_assignment.func = ext_pm
 end
 
 
@@ -182,7 +208,8 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "raw_arrayref", "raw_arrayset", "raw_pointer"
+            "raw_arrayref", "raw_arrayset", "raw_pointer",
+            "convert", "unsafe_convert"
 ]
 
 # Intrinsics
@@ -235,11 +262,13 @@ else
 =#
 if NERSC==1
     generated_file_dir =  ENV["SCRATCH"]*"/generated_"*ENV["SLURM_JOBID"]
-    if MPI.Comm_rank(MPI.COMM_WORLD)==0 && !isdir(generated_file_dir)
-        #println(generated_file_dir)
-        mkdir(generated_file_dir)
+    if !isdir(generated_file_dir)
+        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0    
+            #println(generated_file_dir)
+            mkdir(generated_file_dir)
+        end
     end
-elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE || isDistributedMode()
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -264,7 +293,7 @@ function generate_new_file_name()
 end
 
 function CGen_finalize()
-    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE && !isDistributedMode()
         rm(generated_file_dir; recursive=true)
     end
     if isDistributedMode() #&& NERSC==0
@@ -346,7 +375,7 @@ end
 # and emit a C++ type declaration for each
 function from_UDTs()
     global lstate
-    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), (a, b) -> "$a; $b", keys(lstate.globalUDTs))
+    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), *, keys(lstate.globalUDTs))
 end
 
 # Tuples are represented as structs
@@ -430,50 +459,34 @@ end
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
-    params = linfo.input_params
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    vars = linfo.var_defs
-    gensyms = linfo.gen_sym_typs
+    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x) 
+                     for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
+    vars = CompilerTools.LambdaHandling.getLocalVariables(linfo)
 
     decls = ""
     global lstate
     # Populate the symbol table
-    for k in keys(vars)
-        v = vars[k] # v is a VarDef
-        lstate.symboltable[k] = v.typ
-        if v.typ == Any
-            @dprintln(1, "Variable with Any type: ", v)
-        end
-        @assert v.typ!=Any "CGen: variables cannot have Any (unresolved) type"
-        #@assert !(v.typ<:AbstractString) "CGen: Strings are not supported"
-        if !in(k, params) && (v.desc & 32 != 0)
+    for k in vcat(params, vars)
+        t = CompilerTools.LambdaHandling.getType(k, linfo) # v is a VarDef
+        lstate.symboltable[k] = t
+        @assert t!=Any "CGen: variable " * string(k) * " cannot have Any (unresolved) type"
+        if !in(k, params) && (CompilerTools.LambdaHandling.getDesc(k, linfo) & 32 != 0)
             push!(lstate.ompprivatelist, k)
+        end
+        # If we have user defined types, record them
+        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
+        if !isPrimitiveJuliaType(t) && !isArrayOfPrimitiveJuliaType(t)
+            lstate.globalUDTs[t] = 1
         end
     end
 
-    for k in 1:length(gensyms)
-        lstate.symboltable[GenSym(k-1)] = gensyms[k]
-        @assert gensyms[k]!=Any "CGen: GenSyms (generated symbols) cannot have Any (unresolved) type"
-        #@assert !(gensyms[k]<:AbstractString) "CGen: Strings are not supported"
-    end
     bod = from_expr(args[3])
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
 
-    for k in keys(lstate.symboltable)
-        # If we have user defined types, record them
-        #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
-        if !isPrimitiveJuliaType(lstate.symboltable[k]) && !isArrayOfPrimitiveJuliaType(lstate.symboltable[k])
-            if !haskey(lstate.globalUDTs, lstate.symboltable[k])
-                lstate.globalUDTs[lstate.symboltable[k]] = 1
-            end
-        end
-        if !in(k, params) #|| (!in(k, locals) && !in(k, params))
-            decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
-        end
+    for k in vars
+        decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
     end
     decls * bod
 end
@@ -553,9 +566,9 @@ function from_assignment(args::Array{Any,1})
 
     from_assignment_fix_tupple(lhs, rhs)
 
-    match_hps_dist = from_assignment_match_dist(lhs, rhs)
-    if match_hps_dist!=""
-        return match_hps_dist
+    external_match = external_pattern_match_assignment.func(lhs, rhs)
+    if external_match!=""
+        return external_match
     end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
@@ -1071,6 +1084,8 @@ function from_builtins(f, args)
         return from_raw_arrayset(args)
     elseif tgt == "raw_pointer"
         return from_raw_pointer(args)
+    elseif tgt == "convert" || tgt == "unsafe_convert"
+        return from_typecast(args[1], [args[2]])
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
@@ -1232,10 +1247,9 @@ function from_inlineable(f, args)
     if has(_operators, string(f))
         if length(args) == 1
           return "(" * string(f) * from_expr(args[1]) * ")"
-        elseif length(args) == 2
-          return "(" * from_expr(args[1]) * string(f) * from_expr(args[2]) * ")"
-        else
-          error("Expect 1 or 2 arguments to ", f, " but got ", args)
+        else 
+          s = "(" * mapfoldl(from_expr, (a,b)->"$a"*string(f)*"$b", args) * ")"
+          return s 
         end
     elseif has(_builtins, string(f))
         return from_builtins(f, args)
@@ -1397,6 +1411,12 @@ end
 
 
 function from_call(ast::Array{Any, 1})
+
+    pat_out = external_pattern_match_call.func(ast)
+    if pat_out != ""
+        @dprintln(3, "external pattern matched: ",ast)
+        return pat_out
+    end
 
     pat_out = pattern_match_call(ast)
     if pat_out != ""
@@ -2253,15 +2273,9 @@ end
 function from_callee(ast::Expr, functionName::ASCIIString)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
-    typ = toCtype(body(ast).typ)
-    @dprintln(3,"Return type of body = $typ")
-    params  =   ast.args[1]
-    #env     =   ast.args[2]
-    bod     =   ast.args[3]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    @dprintln(3,"Body type is ", bod.typ)
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
     bod = from_expr(ast)
     args = from_formalargs(params, [], false)
@@ -2349,7 +2363,7 @@ function set_includes(ast)
     if contains(s,"HDF5") 
         global USE_HDF5 = 1
     end
-    if contains(s,"__hps_kmeans") || contains(s,"__hps_LinearRegression") || contains(s,"__hps_NaiveBayes")
+    if contains(s,"__hpat_Kmeans") || contains(s,"__hpat_LinearRegression") || contains(s,"__hpat_NaiveBayes")
         global USE_DAAL = 1
     end
 end
@@ -2421,11 +2435,9 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
@@ -2446,7 +2458,6 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     else
         returnType = (returnType,)
     end
-    hdr = from_header(true)
 
     # Create an entry point that will be called by the Julia code.
     wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
@@ -2468,6 +2479,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
     forwards, funcs = from_worklist()
+    hdr = from_header(true)
     c = hdr * forwards * funcs * s * wrapper
     resetLambdaState(lstate)
 
@@ -2491,18 +2503,16 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    params = ast.args[1]
-    if length(params) > 0 && params[1] == symbol("#self#")
-        params = params[2:end]
-    end
-    returnType = ast.args[3].typ
+    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     bod = from_expr(ast)
 
     vararg_bod, args, argsunal, alias_check = check_params(false, params)
     bod = vararg_bod * bod
 
-    hdr = from_header(false)
+    #hdr = from_header(false)
     # Create an entry point that will be called by the Julia code.
     rtyp = toCtype(returnType)
 
@@ -2510,11 +2520,10 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     forwarddecl = "$rtyp $functionName($args);\n"
     push!(lstate.compiledfunctions, functionName)
-    c = hdr * forwarddecl * s 
     if length(array_types_in_sig) > 0
         @dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
     end
-    forwarddecl, c
+    forwarddecl, s
 end
 
 function insert(func::Any, mod::Any, name, typs)

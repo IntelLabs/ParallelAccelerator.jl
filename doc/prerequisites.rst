@@ -19,7 +19,7 @@ To use ParallelAccelerator, you need the following:
 
     Check that you can run Julia and get to a ``julia>`` prompt.  You
     will know you're running the correct version if when you run it,
-    you see ``Version 0.4.x`` where ``x`` is 0, 1, or 2.
+    you see ``Version 0.4.x`` where ``x`` is 0 or greater.
   * **A C/C++ compiler: either GCC or ICC.** We recommend GCC 4.8.4 or
     later and ICC 15.0.3 or later.  At package build time,
     ParallelAccelerator will check to see if you have ICC installed.

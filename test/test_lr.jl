@@ -23,77 +23,32 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module ReductionTest
+module TestLogisticRegression
 using ParallelAccelerator
 
-ParallelAccelerator.DomainIR.set_debug_level(4)
-ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.CGen.set_debug_level(4)
-ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
 
-@acc function sum_A(col)
-    A = ones(Int, col, col, col)
-    sum(A)
-end
+    
+@acc function logistic_regression(iterations::Int64)
+    D = 3  # Number of dimensions
+    N = 4
+    # synthetic but deterministic initial values
+    labels = reshape([1.,.9,.4,.8],1,N)
+    points = [1. 2. 3. 4.; 4. 3. 2. 1.; 4. 5. 6. 7.]
+    w = reshape(2.0.*ones(D)-1.3,1,D)
 
-@acc function sum_A_1(col)
-    A = ones(Int, col, col, col)
-    B = sum(A, 1)
-    C = sum(B, 2)
-end
-
-@acc function sum_A_cond_1(col)
-    A = ones(Int, col)
-    A[1] = -1
-    sum(A[A .> 0])
-end
-
-@acc function sum_A_cond_2(col)
-    A = ones(Int, col, col)
-    A[1,1] = -1
-    B = [ i for i = 1:col ]
-    C = B .> 2
-    cartesianarray(Int, (col,)) do j
-        sum(A[C, j:j])
+    for i in 1:iterations
+       w -= ((1.0./(1.0.+exp(-labels.*(w*points))).-1.0).*labels)*points'
     end
-end
-
-@acc function sum_A_range_1(col)
-    A = ones(Int, col, col)
-    A[1,2] = 0
-    sum(A[:, 2])
-end
-
-function test1()
-    return sum_A(5) == @noacc sum_A(5)
-end
-
-function test2()
-    return sum_A_1(5) == @noacc sum_A_1(5)
-end
-
-function test3()
-    return sum_A_cond_1(5) == @noacc sum_A_cond_1(5)
-end
-
-function test4()
-    return sum_A_cond_2(5) == @noacc sum_A_cond_2(5)
-end
-
-function test5()
-    return sum_A_range_1(5) == @noacc sum_A_range_1(5)
+    w
 end
 
 end
 
-using ReductionTest
-println("Testing reductions...")
+using Base.Test
+println("Testing logistic regression...")
+@test_approx_eq TestLogisticRegression.logistic_regression(10) [0.9461770317849691 0.8827825771001324 1.2035527971160302]
+println("Done testing logistic regression...")
 
-@test ReductionTest.test1() 
-@test ReductionTest.test2()
-@test ReductionTest.test3()
-@test ReductionTest.test4()
-@test ReductionTest.test5()
-
-println("Done testing reductions.")
 

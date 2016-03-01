@@ -24,39 +24,59 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
 using ParallelAccelerator
-using Base.Test
+using DocOpt
 
-include("mapreduce.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
-include("strings.jl")
-include("test_lr.jl")
+@acc function logistic_regression(iterations::Int64)
+    D = 10  # Number of features
+    N = 10000 # number of instances
 
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
+    labels = reshape(rand(N),1,N)
+    points = rand(D,N)
+    w = reshape(2.0.*rand(D)-1.0,1,D)
 
-include("../examples/black-scholes/black-scholes.jl")
-# black-scholes should have only 1 allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
+    for i in 1:iterations
+       w -= ((1.0./(1.0.+exp(-labels.*(w*points))).-1.0).*labels)*points'
+    end
+    w
+end
 
-include("../examples/pi/pi.jl")
-# pi should have no allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
+function main()
+    doc = """logistic_regression.jl
 
-include("../examples/opt-flow/opt-flow.jl")
+Logistic regression statistical method.
 
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+Usage:
+  logistic_regression.jl -h | --help
+  logistic_regression.jl [--iterations=<iterations>]
+
+Options:
+  -h --help                  Show this screen.
+  --iterations=<iterations>  Specify a number of iterations; defaults to 50.
+"""
+    arguments = docopt(doc)
+
+    if (arguments["--iterations"] != nothing)
+        iterations = parse(Int, arguments["--iterations"])
+    else
+        iterations = 50
+    end
+
+    srand(0)
+
+    println("iterations = ",iterations)
+
+    tic()
+    logistic_regression(2)
+    println("SELFPRIMED ", toq())
+
+    tic()
+    W = logistic_regression(iterations)
+    time = toq()
+    println("result = ", W)
+    println("rate = ", iterations / time, " iterations/sec")
+    println("SELFTIMED ", time)
+
+end
+
+main()
+

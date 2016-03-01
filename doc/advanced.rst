@@ -32,12 +32,16 @@ operator name. These operations are translated internally into data-parallel *ma
 ParallelAccelerator. The following are recognized by ``@acc`` as *map*
 operations:
 
-* Unary functions: ``-, +, acos, acosh, angle, asin, asinh, atan, atanh, cbrt,
-  cis, cos, cosh, exp10, exp2, exp, expm1, lgamma, log10, log1p, log2, log,
-  sin, sinh, sqrt, tan, tanh, abs, copy, erf``
+* Unary functions: ``-``, ``+``, ``acos``, ``acosh``, ``angle``,
+  ``asin``, ``asinh``, ``atan``, ``atanh``, ``cbrt``, ``cis``,
+  ``cos``, ``cosh``, exp10``, ``exp2``, ``exp``, ``expm1``,
+  ``lgamma``, ``log10``, ``log1p``, ``log2``, ``log``, ``sin``,
+  ``sinh``, ``sqrt``, ``tan``, ``tanh``, ``abs``, ``copy``, ``erf``
 
-* Binary functions: ``-, +, .+, .-, .*, ./, .\, .%, .>, .<, .<=, .>=, .==, .<<,
-  .>>, .^, div, mod, rem, &, |, $, min, max``
+* Binary functions: ``-``, ``+``, ``.+``, ``.-``, ``.*``, ``./``,
+  ``.\``, ``.%``, ``.>``, ``.<``, ``.<=``, ``.>=``, ``.==``, ``.<<``,
+  ``.>>``, ``.^``, ``div``, ``mod``, ``rem``, ``&``, ``|``, ``$``,
+  ``min``, ``max``
 
 Array assignments are also recognized and converted into *in-place map*
 operations.  Expressions like ``a = a .+ b`` will be turned into an *in-place map*
@@ -47,7 +51,7 @@ Array operations that compute a single result by repeating an associative
 and commutative operator on all input array elements are called *reduce* operations.
 The following are recognized by ``@acc`` as ``reduce`` operations::
 
-    minimum, maximum, sum, prod, any, all
+    ``minimum``, ``maximum``, ``sum``, ``prod``, ``any``, ``all``
 
 
 We also support range operations to a limited extent. For example, ``a[r] =
@@ -80,9 +84,9 @@ whose element is of ``Type``, where ``N`` is the number of *x* and *r* variables
 currently only up-to-3 dimensions are supported.
 
 It should be noted, however, that not all comprehensions are safe to parallelize.
-For example, if the function `f` above reads and writes to a variable outside of the comprehension, 
+For example, if the function ``f`` above reads and writes to a variable outside of the comprehension, 
 then making it run in parallel can produce a non-deterministic
-result. Therefore, it is the responsibility of the user to avoid using `@acc` in such situations.
+result. Therefore, it is the responsibility of the user to avoid using ``@acc`` in such situations.
 
 Another difference between parallel comprehension and the aforementioned *map*
 operation is that array indexing operations in the body of a parallel
@@ -104,8 +108,8 @@ does not provide such an API, ParallelAccelerator exports a general
                                      
 
 As an example, the following (taken from
-`our Gaussian blur example <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl>`_
-performs a 5x5 stencil computation (note the use of Julia's `do` syntax that lets
+`our Gaussian blur example <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/examples/gaussian-blur/gaussian-blur.jl>`_)
+performs a 5x5 stencil computation (note the use of Julia's ``do``-block syntax that lets
 the user write a lambda function)::
 
     runStencil(buf, img, iterations, :oob_skip) do b, a

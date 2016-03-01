@@ -117,13 +117,6 @@ const HOST_TASK_MODE = 1
 const PHI_TASK_MODE = 2
 const DYNAMIC_TASK_MODE = 3
 
-function isDistributedMode()
-    mode = "0"
-    if haskey(ENV,"HPS_DISTRIBUTED_MEMORY")
-        mode = ENV["HPS_DISTRIBUTED_MEMORY"]
-    end
-    return mode=="1"
-end
 
 """
 Return internal mode number by looking up environment variable "PROSPECT_TASK_MODE".
@@ -168,6 +161,11 @@ end
 """
 Call this function if you want to embed binary-code of ParallelAccelerator into your Julia build to speed-up @acc compilation time.
 It will attempt to add a userimg.jl file to your Julia distribution and then re-build Julia.
+
+NOTE: At the moment, we don't recommend using `embed`.  It will speed
+up the `using ParallelAccelerator` statement, but it will merely delay
+the compilation of ParallelAccelerator until an accelerated function
+is called.  This is probably not the behavior that most users want.
 """
 function embed(julia_root)
   # See if the specified julia_root path exists.
@@ -184,7 +182,10 @@ function embed(julia_root)
   end
 
   # The contents of the userimg.jl file.
-  userimg_contents = string("Base.reinit_stdio()\ninclude(\"", @__FILE__, "\")\ntmp_f(A,B)=begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end\nParallelAccelerator.accelerate(tmp_f,(Array{Float64,1},Array{Float64,1},))\n")
+  current_file = @__FILE__
+  userimg_contents = string("""
+include("$current_file")
+""")
 
   userimg_file = string(base_dir, "/userimg.jl")
   # If there is already a userimg.jl file then just report the need for a manual merge.
@@ -233,7 +234,6 @@ end
 include("api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
-include("distributed-ir.jl")
 include("j2c-array.jl")
 include("cgen.jl")
 include("callgraph.jl")
@@ -267,9 +267,6 @@ function __init__()
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
-      if isDistributedMode()
-          addOptPass(toDistributedIR, PASS_TYPED)
-      end
       addOptPass(toFlatParfors, PASS_TYPED)
       addOptPass(toCGen, PASS_TYPED)
     end
@@ -278,10 +275,16 @@ end
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for, isDistributedMode
+export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
 
 end
 
-#tmp_f(A,B)=begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
-#ParallelAccelerator.accelerate(tmp_f,(Array{Float64,1},Array{Float64,1},))
+# Include a dummy use of the ParallelAccelerator module, so that the
+# whole package compiles at package load time.  This will cause a
+# brief delay when `using ParallelAccelerator` runs, in exchange for
+# *not* having a delay when running the first accelerated function
+# later.
 
+using ParallelAccelerator
+@acc tmp_f(A,B) = begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
+tmp_f([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0])

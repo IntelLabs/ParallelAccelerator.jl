@@ -44,15 +44,19 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
             end
         end
 
-        # TODO: is this correct?
-        if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
-        # if is(preBlk, nothing) continue end
+        #if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
+        if is(preBlk, nothing) continue end
         tls = lives.basic_blocks[ preBlk ]
 
-        
-        # TODO: is this correct?
+        # sometimes the preBlk has no statements
+        # in this case we go to preBlk's previous block to find the previous statement of the current loop (for allocations to be inserted)
+        while length(preBlk.statements)==0
+            if length(preBlk.preds)==1
+                preBlk = next(preBlk.preds,start(preBlk.preds))[1]
+            end
+        end
+        if length(preBlk.statements)==0 continue end
         preHead = preBlk.statements[end].index
-        #preHead = headBlk.statements[1].index-1
         
         head = headBlk.statements[1].index
         tail = tailBlk.statements[1].index
@@ -70,8 +74,9 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                     for (d, v) in state.symbol_array_correlation
                         if v == c
                             ok = true
+
                             for j = 1:length(d)
-                                if !in(d[j], tls.live_out)
+                                if !(isa(d[j],Int) || in(d[j], tls.live_out))
                                     ok = false
                                     break
                                 end
@@ -80,11 +85,15 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                             if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
                                 rhs.args = rhs.args[1:6]
                                 for s in d
-                                    push!(rhs.args, SymbolNode(s, Int))
+                                    if isa(s,Int)
+                                        push!(rhs.args, s)
+                                    else
+                                        push!(rhs.args, SymbolNode(s, Int))
+                                    end
                                     push!(rhs.args, 0)
                                 end
                                 @dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
-                                ast = [ ast[1:preHead-1], ast[i], ast[preHead:i-1], ast[i+1:end] ]
+                                ast = [ ast[1:preHead-1]; ast[i]; ast[preHead:i-1]; ast[i+1:end] ]
                                 break
                             end
                         end
@@ -96,6 +105,22 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
     return ast
 end
 
+function isDeadCall(rhs::Expr, live_out)
+    if rhs.head==:call
+        if in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
+            println(rhs)
+            return true
+        elseif in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
+                !in(toSymGen(rhs.args[2]), live_out)
+            return true
+        end
+    end
+    return false
+end
+
+function isDeadCall(rhs::ANY, live_out)
+    return false
+end
 
 type DictInfo
     live_info
@@ -181,7 +206,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                     if !in(lhs_sym, live_info.live_out)
                         data.change = true
                         @dprintln(3,"remove_no_deps lhs is NOT live out")
-                        if hasNoSideEffects(rhs)
+                        if hasNoSideEffects(rhs) || isDeadCall(rhs, live_info.live_out)
                             @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
@@ -353,7 +378,7 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
                         @dprintln(3,"remove_dead lhs is NOT live out")
-                        if hasNoSideEffects(rhs)
+                        if hasNoSideEffects(rhs) || isDeadCall(rhs, live_info.live_out)
                             @dprintln(3,"Eliminating dead assignment. lhs = ", lhs, " rhs = ", rhs)
                             return CompilerTools.AstWalker.ASTWALK_REMOVE
                         else
@@ -369,6 +394,93 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+
+"""
+State to aide in the transpose propagation phase.
+"""
+type TransposePropagateState
+    lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
+    transpose_map :: Dict{SymGen, SymGen} # transposed output -> matrix in
+
+    function TransposePropagateState(l)
+        new(l, Dict{SymGen, SymGen}())
+    end
+end
+
+function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_level_number, is_top_level, read)
+    @dprintln(3,"transpose_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"transpose_propagate node = ", node, " type = ", typeof(node))
+    if typeof(node) == Expr
+        @dprintln(3,"node.head = ", node.head)
+    end
+    ntype = typeof(node)
+
+    if is_top_level
+        @dprintln(3,"transpose_propagate is_top_level")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+
+        if live_info != nothing
+            # Remove matrices from data.transpose_map if either original or transposed matrix is modified by this statement.
+            # For each symbol modified by this statement...
+            for def in live_info.def
+                @dprintln(4,"Symbol ", def, " is modifed by current statement.")
+                # For each transpose map we currently have recorded.
+                for mat in data.transpose_map
+                    @dprintln(4,"Current mat in data.transpose_map = ", mat)
+                    # If original or transposed matrix is modified by the statement.
+                    if def == mat[1] || def==mat[2]
+                    #@bp
+                        @dprintln(3,"transposed or original matrix is modified so removing ", mat," from data.transpose_map.")
+                        # Then remove the lhs = rhs entry from copies.
+                        delete!(data.transpose_map, mat[1])
+                    end
+                end
+            end
+        end
+
+        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+            # Only transpose propagate within a basic block.  this is now a new basic block.
+            empty!(data.transpose_map) 
+        elseif isAssignmentNode(node)
+            @dprintln(3,"Is an assignment node.")
+            lhs = toSymGen(node.args[1])
+            rhs = node.args[2]
+            if isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base,:transpose!)
+                original_matrix = toSymGen(rhs.args[3])
+                transpose_var1 = toSymGen(rhs.args[2])
+                transpose_var2 = lhs
+                data.transpose_map[transpose_var1] = original_matrix
+                data.transpose_map[transpose_var2] = original_matrix
+            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+            #@bp
+                if haskey(data.transpose_map, rhs.args[5])
+                    rhs.args[5] = data.transpose_map[rhs.args[5]]
+                    rhs.args[3] = 'T'
+                end
+                if haskey(data.transpose_map, rhs.args[6])
+                    rhs.args[6] = data.transpose_map[rhs.args[6]]
+                    rhs.args[4] = 'T'
+                end
+            # replace arraysize() calls to the transposed matrix with original
+            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1] == TopNode(:arraysize)
+                if haskey(data.transpose_map, rhs.args[2])
+                    rhs.args[2] = data.transpose_map[rhs.args[2]]
+                    if rhs.args[3] ==1
+                        rhs.args[3] = 2
+                    elseif rhs.args[3] ==2
+                        rhs.args[3] = 1
+                    else
+                        throw("transpose_propagate matrix dim error")
+                    end
+                end
+            end
+            return node
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 
 
 """
@@ -431,11 +543,15 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             data.copies = Dict{SymGen, SymGen}() 
         elseif isAssignmentNode(node)
             @dprintln(3,"Is an assignment node.")
-            lhs = node.args[1] = AstWalk(node.args[1], copy_propagate, data)
+            lhs = AstWalk(node.args[1], copy_propagate, data)
             @dprintln(4,lhs)
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
             @dprintln(4,rhs)
-
+            # sometimes lhs can already be replaced with a constant
+            if !isa(lhs, SymAllGen)
+                return node
+            end
+            node.args[1] = lhs
             if isa(rhs, SymAllGen) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
                 @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
@@ -774,8 +890,8 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
     dim_names = Union{SymGen,Int}[]
 
     for i = 1:length(dim_array)
-        # constant sizes are either SymbolNodes or Ints, TODO: expand to GenSyms that are constant
-        if !(typeof(dim_array[i])==SymbolNode || typeof(dim_array[i])==Int)
+        # constant sizes are either SymbolNodes, Symbols or Ints, TODO: expand to GenSyms that are constant
+        if !(isa(dim_array[i],SymAll) || typeof(dim_array[i])==Int)
             return false
         end
         if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
