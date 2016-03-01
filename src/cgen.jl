@@ -1933,7 +1933,7 @@ function from_parallel_loophead(args)
     schedule = args[6]
     inner_private = "private("
     for iv in args[1]
-        inner_private *= "$iv,"
+        inner_private *= "$(canonicalize(iv)),"
     end
     inner_private = chop(inner_private)
     inner_private *= ")"
