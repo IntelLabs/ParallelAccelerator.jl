@@ -284,7 +284,7 @@ end
 # brief delay when `using ParallelAccelerator` runs, in exchange for
 # *not* having a delay when running the first accelerated function
 # later.
-
-using ParallelAccelerator
-@acc tmp_f(A,B) = begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
-tmp_f([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0])
+# this causes a bug in distributed mode
+#using ParallelAccelerator
+#@acc tmp_f(A,B) = begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
+#tmp_f([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0])
