@@ -896,7 +896,13 @@ function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
             return false
         end
         if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
-        if !(isa(dim_array[i],Int) || CompilerTools.LambdaHandling.getDesc(dim_array[i], state.LambdaVarInfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
+        desc = 0
+        if !isa(dim_array[i],Int)
+            desc = CompilerTools.LambdaHandling.getDesc(dim_array[i], state.LambdaVarInfo)
+        end
+        
+        # FIXME: description of input parameters not changed in function is always 0?
+        if !(isa(dim_array[i],Int) || (desc & ISASSIGNEDONCE == ISASSIGNEDONCE) || (desc==0 && CompilerTools.LambdaHandling.isInputParameter(dim_array[i], state.LambdaVarInfo)))
             @dprintln(3, "checkAndAddSymbolCorrelation dim not Int or assigned once ", dim_array[i])
             return false
         end
