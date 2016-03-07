@@ -41,7 +41,6 @@ import ..ParallelIR.DelayedFunc
 import CompilerTools
 export setvectorizationlevel, from_root, writec, compile, link, set_include_blas
 import ParallelAccelerator, ..getPackageRoot
-import ParallelAccelerator.isDistributedMode
 import ParallelAccelerator.H5SizeArr_t
 import ParallelAccelerator.SizeArr_t
 
@@ -100,7 +99,7 @@ const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
 
-if haskey(ENV, "HPS_NO_OMP") && ENV["HPS_NO_OMP"]=="1"
+if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     const USE_OMP = 0
 else
     @osx? (
@@ -113,6 +112,15 @@ else
     end
     )
 end
+
+function isDistributedMode()
+    mode = "0"
+    if haskey(ENV,"CGEN_MPI_COMPILE")
+        mode = ENV["CGEN_MPI_COMPILE"]
+    end
+    return mode=="1"
+end
+
 # Globals
 inEntryPoint = false
 lstate = nothing
@@ -132,6 +140,24 @@ end
 if isDistributedMode() #&& NERSC==0
     using MPI
     MPI.Init()
+end
+
+type ExternalPatternMatchCall
+    func::Function
+end
+
+external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
+external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs)->"")
+
+"""
+Other packages can set external functions for pattern matching calls in CGen
+"""
+function setExternalPatternMatchCall(ext_pm::Function)
+    external_pattern_match_call.func = ext_pm
+end
+
+function setExternalPatternMatchAssignment(ext_pm::Function)
+    external_pattern_match_assignment.func = ext_pm
 end
 
 
@@ -242,7 +268,7 @@ if NERSC==1
             mkdir(generated_file_dir)
         end
     end
-elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+elseif CompilerTools.DebugMsg.PROSPECT_DEV_MODE || isDistributedMode()
     package_root = getPackageRoot()
     generated_file_dir = "$package_root/deps/generated"
 else
@@ -267,7 +293,7 @@ function generate_new_file_name()
 end
 
 function CGen_finalize()
-    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE
+    if !CompilerTools.DebugMsg.PROSPECT_DEV_MODE && !isDistributedMode()
         rm(generated_file_dir; recursive=true)
     end
     if isDistributedMode() #&& NERSC==0
@@ -540,9 +566,9 @@ function from_assignment(args::Array{Any,1})
 
     from_assignment_fix_tupple(lhs, rhs)
 
-    match_hps_dist = from_assignment_match_dist(lhs, rhs)
-    if match_hps_dist!=""
-        return match_hps_dist
+    external_match = external_pattern_match_assignment.func(lhs, rhs)
+    if external_match!=""
+        return external_match
     end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
@@ -1386,6 +1412,12 @@ end
 
 function from_call(ast::Array{Any, 1})
 
+    pat_out = external_pattern_match_call.func(ast)
+    if pat_out != ""
+        @dprintln(3, "external pattern matched: ",ast)
+        return pat_out
+    end
+
     pat_out = pattern_match_call(ast)
     if pat_out != ""
         @dprintln(3, "pattern matched: ",ast)
@@ -1493,7 +1525,7 @@ function from_return(args)
     global inEntryPoint
     @dprintln(3,"Return args are: ", args)
     retExp = ""
-    if length(args) == 0
+    if length(args) == 0 || (length(args) == 1 && args[1] == nothing)
         return "return"
     elseif inEntryPoint
         arg1 = args[1]
@@ -1921,7 +1953,7 @@ function from_parallel_loophead(args)
     schedule = args[6]
     inner_private = "private("
     for iv in args[1]
-        inner_private *= "$iv,"
+        inner_private *= "$(canonicalize(iv)),"
     end
     inner_private = chop(inner_private)
     inner_private *= ")"
@@ -2331,7 +2363,7 @@ function set_includes(ast)
     if contains(s,"HDF5") 
         global USE_HDF5 = 1
     end
-    if contains(s,"__hps_kmeans") || contains(s,"__hps_LinearRegression") || contains(s,"__hps_NaiveBayes")
+    if contains(s,"__hpat_Kmeans") || contains(s,"__hpat_LinearRegression") || contains(s,"__hpat_NaiveBayes")
         global USE_DAAL = 1
     end
 end
