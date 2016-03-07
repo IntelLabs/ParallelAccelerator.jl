@@ -1866,13 +1866,20 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         etyp    = arrtyp.parameters[1]
         num_dim = arrtyp.parameters[2]
         red_dim = [args[2]]
-        dimExp = Any[ mk_expr(arrtyp, :call, TopNode(:select_value), 
-                         mk_expr(Bool, :call, TopNode(:eq_int), red_dim[1], dim), 
-                         1, mk_arraysize(arr, dim)) for dim = 1:num_dim ]
+        sizeVars = Array(SymbolNode, num_dim)
+        linfo = LambdaVarInfo()
+        for i = 1:num_dim
+            sizeVars[i] = addFreshLocalVariable(string("red_dim_size"), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+            dimExp = mk_expr(arrtyp, :call, TopNode(:select_value), 
+                         mk_expr(Bool, :call, TopNode(:eq_int), red_dim[1], i), 
+                         1, mk_arraysize(arr, i)) 
+            emitStmt(state, mk_expr(Int, :(=), sizeVars[i].name, dimExp))
+            addEscapingVariable(sizeVars[i].name, Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
+        end
         neutral = DomainLambda([arrtyp], [],  
-                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], mk_alloc(state, etyp, dimExp)),
+                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], mk_alloc(state, etyp, sizeVars)),
                                     mk_mmap!(lhs, DomainLambda([etyp], [etyp], (linfo, x) -> [Expr(:tuple, neutralelt)], LambdaVarInfo())),
-                                    Expr(:tuple) ], LambdaVarInfo())
+                                    Expr(:tuple) ], linfo)
         opr, reorder = specializeOp(fun, [etyp])
         # ignore reorder since it is always id function
         f = (linfo, as) -> [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
@@ -2352,7 +2359,11 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         zero_val = args[1]
         input_array = args[2]
         dl = args[3]
-        if !isa(zero_val, DomainLambda) 
+        if isa(zero_val, DomainLambda) 
+            for (v, d) in zero_val.linfo.escaping_defs
+                push!(expr_to_process, v)
+            end
+        else
             push!(expr_to_process, zero_val)
         end
         push!(expr_to_process, input_array)

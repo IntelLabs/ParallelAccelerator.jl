@@ -1525,7 +1525,7 @@ function from_return(args)
     global inEntryPoint
     @dprintln(3,"Return args are: ", args)
     retExp = ""
-    if length(args) == 0
+    if length(args) == 0 || (length(args) == 1 && args[1] == nothing)
         return "return"
     elseif inEntryPoint
         arg1 = args[1]
