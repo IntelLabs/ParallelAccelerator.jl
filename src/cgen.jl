@@ -852,7 +852,11 @@ function from_ccall(args)
     argsStart = 4
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
-        s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+        if mkl_lib!=""
+            s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+        else
+            s *= "(CBLAS_ORDER) $(from_expr(args[4])), "
+        end
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6])), "
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
