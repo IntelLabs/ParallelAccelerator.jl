@@ -135,7 +135,17 @@ function fuse(body, body_index, cur::Expr, state)
 
         # Get the variables live after the previous parfor.
         live_in_prev = prev_stmt_live_first.live_in
-        def_prev     = prev_stmt_live_first.def
+        # def_prev     = prev_stmt_live_first.def
+        def_prev = Set{SymGen}()
+        # The "def" for a fused parfor is to a first approximation the union of the "def" of each statement in the parfor.  
+        # Some variables will be eliminated by fusion so we follow this first approximation up by an intersection with the
+        # live_out of the last statement of the previous parfor.
+        for prev_parfor_stmt in prev_parfor.top_level_number
+            constituent_stmt_live = CompilerTools.LivenessAnalysis.find_top_number(prev_parfor_stmt, state.block_lives)
+            def_prev = union(def_prev, constituent_stmt_live.def)
+        end
+        def_prev = intersect(def_prev, prev_stmt_live_last.live_out)
+ 
         @dprintln(2,"live_in_prev = ", live_in_prev, " def_prev = ", def_prev)
 
         # Get the variables live after the previous parfor.

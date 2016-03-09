@@ -854,7 +854,7 @@ function merge_correlations(state, unchanging, eliminate)
         end
     end
 
-    nothing
+    return unchanging
 end
 
 """
@@ -866,9 +866,11 @@ function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: e
     print_correlations(3, state)
     old_corr = getOrAddArrayCorrelation(old_sym, state)
     new_corr = getOrAddArrayCorrelation(new_sym, state)
-    merge_correlations(state, old_corr, new_corr)
+    ret = merge_correlations(state, old_corr, new_corr)
     @dprintln(3, "add_merge_correlations post")
     print_correlations(3, state)
+
+    return ret 
 end
 
 """
@@ -1037,15 +1039,24 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
             # is that of the entire array and so we can establish a correlation between the
             # DimensionSelector and the whole array.
             if all_mask
-                @dprintln(3, "All dimension selectors are masks so establishing correlation to main array.")
                 masked_array_corr = getOrAddArrayCorrelation(toSymGen(array), state)
-                merge_correlations(state, masked_array_corr, range_corr)
+                @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
+                range_corr = merge_correlations(state, masked_array_corr, range_corr)
+
+                if length(ranges) == 1
+                    print_correlations(3, state)
+                    mask_correlation = getCorrelation(ranges[1].value, state)
+
+                    @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
+                    range_corr = merge_correlations(state, mask_correlation, range_corr) 
+                end
             end
         else
             # Found an equivalent range.
             @dprintln(3, "Adding non-exact range match to class ", nonExactCorrelation)
             state.range_correlation[ranges] = nonExactCorrelation
         end
+        @dprintln(3, "getOrAddRangeCorrelation final correlations")
         print_correlations(3, state)
     end
     state.range_correlation[ranges]

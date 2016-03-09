@@ -25,7 +25,9 @@
 
 CONF_FILE="generated/config.jl"
 MKL_LIB=""
-OPENBLAS_LIB=""
+if [ -z "$OPENBLAS_LIB" ]; then
+    OPENBLAS_LIB=""
+fi  
 
 if [ -e "$CONF_FILE" ]
 then
@@ -56,8 +58,10 @@ do
     if echo "$lib" | grep -q "/mkl/"; then
         MKL_LIB=$lib
     fi
-    if echo "$lib" | grep -q "OpenBLAS"; then
-        OPENBLAS_LIB=$lib
+    if [ -z "$OPENBLAS_LIB" ]; then
+        if echo "$lib" | grep -q "OpenBLAS"; then
+            OPENBLAS_LIB=$lib
+        fi
     fi
 done
 
