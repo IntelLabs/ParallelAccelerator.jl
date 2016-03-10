@@ -1277,6 +1277,8 @@ function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, old
         end
         if isArrayType(typ)
             return translate_call_mapop(state,env_,typ, fun, args)
+        else
+            return mk_expr(typ, :call, oldfun, args...)
         end
     end
     
