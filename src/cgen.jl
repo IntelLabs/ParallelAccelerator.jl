@@ -98,19 +98,28 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+USE_OMP = 1
 
 if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
-    const USE_OMP = 0
+    USE_OMP = 0
 else
     @osx? (
     begin
-        const USE_OMP = 0
+        USE_OMP = 0
     end
     :
     begin
-        const USE_OMP = 1
+        USE_OMP = 1
     end
     )
+end
+
+function enableOMP()
+    USE_OMP = 1
+end
+
+function disableOMP()
+    USE_OMP = 0
 end
 
 function isDistributedMode()
