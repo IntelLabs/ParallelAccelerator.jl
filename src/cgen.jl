@@ -100,20 +100,6 @@ const USE_ICC = 0
 const USE_GCC = 1
 USE_OMP = 1
 
-if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
-    USE_OMP = 0
-else
-    @osx? (
-    begin
-        USE_OMP = 0
-    end
-    :
-    begin
-        USE_OMP = 1
-    end
-    )
-end
-
 function enableOMP()
     USE_OMP = 1
 end
@@ -145,6 +131,21 @@ USE_DAAL = 0
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
+
+if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
+    USE_OMP = 0
+else # on osx, use OpenMP only when ICC is used since GCC/Clang doesn't support it
+    @osx? (
+    begin
+        USE_OMP = USE_ICC
+    end
+    :
+    begin
+        USE_OMP = 1
+    end
+    )
+end
+
 
 if isDistributedMode() #&& NERSC==0
     using MPI
