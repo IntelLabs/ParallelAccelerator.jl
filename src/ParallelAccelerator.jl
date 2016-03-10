@@ -272,10 +272,11 @@ function __init__()
     end
 end
 
+import .API.@par
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
+export accelerate, @acc, @noacc, @par, runStencil, cartesianarray, parallel_for
 
 end
 

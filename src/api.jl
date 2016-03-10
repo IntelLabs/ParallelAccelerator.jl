@@ -124,6 +124,18 @@ for f in binary_operators
     end
 end
 
+@noinline function cartesianmapreduce(body, ndims, reductions...)
+  # reductions are ignored in sequential semantics
+  for (redFunc, redVar) in reductions
+      # redVar holds initial value that has to be neutral
+      vs = deepcopy(redVar)
+      @assert (vs == redFunc(redVar)) ("initial value " * string(vs) * " not idempotent with respect to the reduction function")
+  end
+  for I in CartesianRange(ndims)
+    body(I.I...)
+  end
+end
+
 function cartesianarray(body, T, ndims)
   a = Array(T, ndims...)
   for I in CartesianRange(ndims)
@@ -211,8 +223,9 @@ include("api-stencil.jl")
 end
 
 import .Stencil.runStencil
+import .Capture.@par
 
-export cartesianarray, parallel_for, runStencil, pointer
+export @par, cartesianmapreduce, cartesianarray, parallel_for, runStencil, pointer
 
 end
 

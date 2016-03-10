@@ -114,5 +114,81 @@ end
 #    return data_source_num
 #end
 
+macro par(args...)
+    na = length(args)
+    @assert (na > 0) "Expect a for loop as argument to @par"
+    redVars = Array(Symbol, na-1)
+    redOps = Array(Symbol, na-1)
+    loop = args[end]
+    if !isa(loop,Expr) || !is(loop.head,:for)
+        error("malformed @par loop")
+    end
+    if !isa(loop.args[1], Expr) 
+        error("maltformed for loop")
+    end
+    for i = 1:na-1
+        @assert (isa(args[i], Expr) && args[i].head == :call) "Expect @par reduction in the form of var(op), but got " * string(args[i])
+        v = args[i].args[1]
+        op = args[i].args[2]
+        println("got reduction variable ", v, " with function ", op)
+        @assert (isa(v, Symbol)) "Expect reduction variable to be symbols, but got " * string(v)
+        @assert (isa(op, Symbol)) "Expect reduction operator to be symbols, but got " * string(op)
+        redVars[i] = v
+        redOps[i] = op
+    end
+    if loop.args[1].head == :block
+        loopheads = loop.args[1].args
+    else
+        loopheads = Any[loop.args[1]]
+    end
+    ndim = length(loopheads)
+    body = loop.args[2]
+    params = Array(Symbol, ndim)
+    indices = Array(Symbol, ndim)
+    ranges = Array(Any, ndim)
+    headers = Array(Any, ndim)
+    for i = 1:ndim
+        r = loopheads[i]
+        assert(r.head == :(=))
+        indices[i] = r.args[1]
+        params[i] = gensym(string(indices[i]))
+        ranges[i] = r.args[2]
+        headers[i] = Expr(:(=), indices[i], Expr(:call, GlobalRef(Base, :getindex), ranges[i], params[i]))
+    end
+    args = Expr(:tuple, params...)
+    dims = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
+    tmpret = gensym("tmp")
+    tmpinits = [ :($idx = 1) for idx in params ]
+    #println("indices = ", indices)
+    #println("params = ", params)
+    #println("ranges = ", ranges)
+    #println("headers = ", headers)
+    #println("tmpinits = ", tmpinits)
+    #println("body = ", body)
+    #if na==1
+    #    thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
+    #else
+    #    thecall = :(preduce($(esc(reducer)),
+    #                        $(make_preduce_body(reducer, var, body, :therange)), length(therange)))
+    #end
+    #localize_vars(quote therange = $(esc(r)); $thecall; end)
+    ast =Expr(:call, GlobalRef(API, :cartesianmapreduce), 
+                    :($args -> let $(headers...); $body end), :($dims))
+    for i=1:na-1
+        redVar = redVars[i]
+        redArg = gensym(string(redVar))
+        opr = redOps[i]
+        if in(opr, operators)
+            opr = GlobalRef(API, opr)
+        end
+        redBody = Expr(:(=), redVars[i], Expr(:call, opr, redVar, redArg))
+        # redVals = Expr(:call, GlobalRef(Base, :copy), redVar)
+        push!(ast.args, :($redArg -> begin $redBody; return $redVar; end, $redVar))
+    end
+    println("ast = ", ast)
+    esc(ast)
+    #args -> esc(loop)
+end
+
 end # module Capture
 
