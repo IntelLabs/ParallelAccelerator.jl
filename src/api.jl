@@ -222,8 +222,38 @@ include("api-stencil.jl")
     Base.pointer(args...)
 end
 
+macro par(args...)
+    na = length(args)
+    @assert (na > 0) "Expect a for loop as argument to @par"
+    redVars = Array(Symbol, na-1)
+    redOps = Array(Symbol, na-1)
+    loop = args[end]
+    if !isa(loop,Expr) || !is(loop.head,:for)
+        error("malformed @par loop")
+    end
+    if !isa(loop.args[1], Expr) 
+        error("maltformed for loop")
+    end
+    for i = 1:na-1
+        @assert (isa(args[i], Expr) && args[i].head == :call) "Expect @par reduction in the form of var(op), but got " * string(args[i])
+        v = args[i].args[1]
+        op = args[i].args[2]
+        #println("got reduction variable ", v, " with function ", op)
+        @assert (isa(v, Symbol)) "Expect reduction variable to be symbols, but got " * string(v)
+        @assert (isa(op, Symbol)) "Expect reduction operator to be symbols, but got " * string(op)
+        redVars[i] = v
+        redOps[i] = op
+    end
+    if loop.args[1].head == :block
+        loopheads = loop.args[1].args
+    else
+        loopheads = Any[loop.args[1]]
+    end
+    # Here is a no-op, real implementation is in Capture module, and will run as an OptFramework pass
+    esc(loop)
+end
+
 import .Stencil.runStencil
-import .Capture.@par
 
 export @par, cartesianmapreduce, cartesianarray, parallel_for, runStencil, pointer
 

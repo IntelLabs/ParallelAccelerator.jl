@@ -114,7 +114,7 @@ end
 #    return data_source_num
 #end
 
-macro par(args...)
+function translate_par(args)
     na = length(args)
     @assert (na > 0) "Expect a for loop as argument to @par"
     redVars = Array(Symbol, na-1)
@@ -130,7 +130,7 @@ macro par(args...)
         @assert (isa(args[i], Expr) && args[i].head == :call) "Expect @par reduction in the form of var(op), but got " * string(args[i])
         v = args[i].args[1]
         op = args[i].args[2]
-        println("got reduction variable ", v, " with function ", op)
+        #println("got reduction variable ", v, " with function ", op)
         @assert (isa(v, Symbol)) "Expect reduction variable to be symbols, but got " * string(v)
         @assert (isa(op, Symbol)) "Expect reduction operator to be symbols, but got " * string(op)
         redVars[i] = v
@@ -185,10 +185,29 @@ macro par(args...)
         # redVals = Expr(:call, GlobalRef(Base, :copy), redVar)
         push!(ast.args, :($redArg -> begin $redBody; return $redVar; end, $redVar))
     end
-    println("ast = ", ast)
-    esc(ast)
+    #println("ast = ", ast)
+    ast
     #args -> esc(loop)
 end
+
+function process_par_macro(node::Expr, state, top_level_number, is_top_level, read)
+    if is(node.head, :macrocall) 
+        println("got par macro, args = ", node.args)
+        if node.args[1] == symbol("@par")
+            ast = translate_par(node.args[2:end])
+            node.head = ast.head
+            node.args = ast.args
+            node.typ  = ast.typ
+        end
+    end
+    CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function process_par_macro(node::ANY, state, top_level_number, is_top_level, read)
+    CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
 
 end # module Capture
 

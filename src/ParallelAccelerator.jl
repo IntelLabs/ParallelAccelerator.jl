@@ -265,6 +265,7 @@ function __init__()
     else
       addOptPass(captureOperators, PASS_MACRO)
       addOptPass(toCartesianArray, PASS_MACRO)
+      addOptPass(expandParMacro, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
       addOptPass(toFlatParfors, PASS_TYPED)

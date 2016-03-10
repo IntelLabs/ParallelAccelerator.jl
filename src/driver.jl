@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro
 
 using CompilerTools
 using CompilerTools.AstWalker
@@ -129,6 +129,14 @@ Pass for comprehension to cartesianarray translation.
 """
 function toCartesianArray(func, ast, sig)
   AstWalk(ast, Comprehension.process_node, nothing)
+  return ast
+end
+
+"""
+Pass for to convert @par to cartesianmapreduce. Without this pass, @par is a no-op.
+"""
+function expandParMacro(func, ast, sig)
+  AstWalk(ast, API.Capture.process_par_macro, nothing)
   return ast
 end
 
