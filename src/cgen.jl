@@ -1669,7 +1669,8 @@ function from_parforend(args)
             rdvt = getSymType(rdv)
             rdvtyp = toCtype(rdvt)
             rdvar = from_expr(rdv)
-            rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
+            #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
             rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
             rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
             if isPrimitiveJuliaType(rdvt) 
@@ -1834,6 +1835,8 @@ function from_parforstart(args)
         rdvt = getSymType(rdv)
         rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv)
+        rdv_tmp = gensym(rdvar)
+        rdvar_tmp = from_expr(rdv_tmp)
         if parallel_reduction 
             if isPrimitiveJuliaType(rdvt) 
                 rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
@@ -1841,12 +1844,13 @@ function from_parforstart(args)
                 rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
             end
             rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
-            rdsprolog *= "$rdvtyp &$rdvar = $(rdvar)_vec[rds_init_loop_var];\n"
-            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv) * "}\n"
+            rdsprolog *= "$rdvtyp &$rdvar_tmp = $(rdvar)_vec[rds_init_loop_var];\n"
+            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv_tmp) * "}\n"
             #push!(private_vars, rdv)
             rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
         else
-            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            # The init is now handled in pre-statements
+            #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
             # parallel IR no longer produces reductionFunc as a symbol
             #if isa(rd.reductionFunc, Symbol) 
             #   rdop = string(rd.reductionFunc)

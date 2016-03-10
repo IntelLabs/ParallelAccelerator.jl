@@ -256,10 +256,21 @@ function updateDef(state::IRState, s::SymAllGen, rhs)
     #@dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
     @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
     (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
-    (isa(s, Symbol) && isInputParameter(s, state.linfo))) state.linfo
+    (isa(s, Symbol) && isInputParameter(s, state.linfo)) ||
+    (isa(s, Symbol) && isEscapingVariable(s, state.linfo))) state.linfo
     s = isa(s, GenSym) ? s.id : s
     state.defs[s] = rhs
 end
+
+"""
+Delete a definition of a variable from current state.
+"""
+function deleteDef(state::IRState, s::SymAllGen)
+    s = isa(s, SymbolNode) ? s.name : s
+    s = isa(s, GenSym) ? s.id : s
+    delete!(state.defs, s)
+end
+
 
 """
 Look up a definition of a variable.
@@ -948,9 +959,12 @@ function from_assignment(state, env, expr::Expr)
     
     rhs = from_expr(state, env_, rhs)
     rhstyp = typeOfOpr(state, rhs)
+    lhstyp = typeOfOpr(state, lhs)
     dprintln(env, "from_assignment lhs=", lhs, " typ=", typ, " rhs.typ=", rhstyp)
     if typ != rhstyp && rhstyp != Any
-        updateTyp(state, lhs, rhstyp)
+        #if rhstyp != lhstyp
+            updateTyp(state, lhs, rhstyp)
+        #end
         typ = rhstyp
     end
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
@@ -1194,6 +1208,39 @@ function getElemTypeFromAllocExp(typExp::GlobalRef)
     return getfield(typExp.mod, typExp.name)
 end
 
+function translate_call_copy!(state, env, args)
+    @assert (length(args) == 4) "Expect only one argument to copy!, but got " * string(args)
+    args = normalize_args(state, env, Any[args[2], args[4]])
+    dprintln(env,"got copy!, args=", args)
+    argtyp = typeOfOpr(state, args[1])
+    if isarray(argtyp)
+        eltyp = eltype(argtyp)
+        expr = mk_mmap!(args, DomainLambda([eltyp,eltyp],[eltyp],(plinfo,args)->[Expr(:tuple, args[2])], LambdaVarInfo()))
+        dprintln(env, "turn copy! into mmap! ", expr)
+    else
+        warn("cannot handle copy! with arguments ", args)
+        #expr = mk_copy(args[1])
+    end
+    expr.typ = argtyp
+    return expr
+end
+
+function translate_call_copy(state, env, args)
+    @assert (length(args) == 1) "Expect only one argument to copy, but got " * string(args)
+    args = normalize_args(state, env, args[1:1])
+    dprintln(env,"got copy, args=", args)
+    argtyp = typeOfOpr(state, args[1])
+    if isarray(argtyp)
+        eltyp = eltype(argtyp)
+        expr = mk_mmap(args, DomainLambda([eltyp],[eltyp],(plinfo,args)->[Expr(:tuple, args...)], LambdaVarInfo()))
+        dprintln(env, "turn copy into mmap ", expr)
+    else
+        expr = mk_copy(args[1])
+    end
+    expr.typ = argtyp
+    return expr
+end
+
 function translate_call_alloc(state, env_, typ, typ_arg, args_in)
     typExp::Union{QuoteNode,DataType,GlobalRef}
     typExp = lookupConstDefForArg(state, typ_arg)
@@ -1290,6 +1337,8 @@ function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, old
         return translate_call_reduce(state, env_, typ, args)
     elseif is(fun, :cartesianarray)
         return translate_call_cartesianarray(state, env_, typ, args)
+    elseif is(fun, :cartesianmapreduce)
+        return translate_call_cartesianmapreduce(state, env_, typ, args)
     elseif is(fun, :runStencil)
         return translate_call_runstencil(state, env_, args)
     elseif is(fun, :parallel_for)
@@ -1475,7 +1524,7 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     args = reorder(args)
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
     (nonarrays, args, typs, f) = specialize(state, args, typs, 
-    as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
+            as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     # calculate escaping variables
@@ -1759,6 +1808,96 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     return expr
 end
 
+# translate API.cartesianmapreduce call.
+function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
+    # equivalent to creating an array first, then map! with indices.
+    dprintln(env, "got cartesianmapreduce args=", args)
+    # need to retrieve map lambda from inits, since it is already moved out.
+    nargs = length(args)
+    assert(nargs >= 2) # needs at least a function, and a dimension tuple
+    args_ = normalize_args(state, env, args[1:2])
+    local dimExp_var::SymNodeGen = args_[2]     # last argument is the dimension tuple
+    
+    dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
+    dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
+    assert(is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
+    dimExp = dimExp_e.args[2:end]
+    ndim = length(dimExp)   # num of dimensions
+    argstyp = Any[ Int for i in 1:ndim ] 
+    
+    (ast, ety) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
+    #etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
+    dprintln(env, "ety = ", ety)
+    #@assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
+    # create tmp arrays to store results
+    #arrtyps = Type[ Array{t, ndim} for t in etys ]
+    #dprintln(env, "arrtyps = ", arrtyps)
+    #tmpNodes = Array(Any, length(arrtyps))
+    # allocate the tmp array
+    #for i = 1:length(arrtyps)
+    #    arrdef = type_expr(arrtyps[i], mk_alloc(state, etys[i], dimExp))
+    #    tmparr = addGenSym(arrtyps[i], state.linfo)
+    #    updateDef(state, tmparr, arrdef)
+    #    emitStmt(state, mk_expr(arrtyps[i], :(=), tmparr, arrdef))
+    #    tmpNodes[i] = tmparr
+    #end
+    # produce a DomainLambda
+    body::Expr = ast.args[3]
+    linfo = lambdaExprToLambdaVarInfo(ast)
+    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(linfo)]
+    bodyF = (plinfo, args) -> begin
+        #bt = backtrace()
+        #s = sprint(io->Base.show_backtrace(io, bt))
+        #@dprintln(3, "bodyF backtrace ")
+        #@dprintln(3, s)
+        ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
+        #@dprintln(2,"cartesianarray body = ", body, " type = ", typeof(body))
+        ldict = merge(ldict, Dict{SymGen,Any}(zip(params, args)))
+        # @dprintln(2,"cartesianarray idict = ", ldict)
+        ret = replaceExprWithDict(body, ldict).args
+        #@dprintln(2,"cartesianarray ret = ", ret)
+        ret
+    end
+    domF = DomainLambda(argstyp, [ety], bodyF, linfo)
+    expr::Expr = mk_parallel_for(params, dimExp, domF)
+    for i=3:nargs # we have reduction here!
+        @assert (isa(args[i], Expr) && is(args[i].head, :call) && 
+                 is(args[i].args[1], TopNode(:tuple))) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(args[i])
+        redfunc = args[i].args[2]
+        redvar = args[i].args[3]
+        redvar = isa(redvar, SymbolNode) ? redvar.name : redvar
+        rvtyp = typeOfOpr(state, redvar)
+        dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
+        @assert (isa(redvar, Symbol)) "Expect a Symbol or SymbolNode at the position of the reduction variable, but got " * string(redvar)
+        nlinfo = LambdaVarInfo()
+        addEscapingVariable(redvar, Int, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
+        neutral = DomainLambda([rvtyp], [],  
+                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])),
+                                    Expr(:tuple, lhs[1]) ], nlinfo)
+        (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
+        # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
+        # @assert (redty == rvtyp) "Expect reduction function to return type " * string(rvtyp) * " but got " * string(redty)
+        rlinfo = lambdaExprToLambdaVarInfo(redast)
+        rparams = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(rlinfo)] 
+        @assert (length(rparams) == 1) "Expect only one argument to the reduction function, but got " * string(length(rparams))
+        redpvar = gensym(string(redvar))
+        rparams = Symbol[ redpvar, rparams[1] ] # make redvar also as a parameter
+        rbody = redast.args[3]
+        redF = (plinfo, args) -> begin # this domain lambda expects two arguments
+               ldict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, rlinfo)
+               ldict = merge(ldict, Dict{SymGen,Any}(zip(rparams, args)))
+               ret = replaceExprWithDict(rbody, ldict).args
+               ret
+        end
+        reduceF = DomainLambda([rvtyp,rvtyp], [rvtyp], redF, rlinfo)
+        push!(expr.args, (redvar, neutral, reduceF)) 
+    end
+    #expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
+    #dprintln(env, "cartesianarray return type = ", expr.typ)
+    return expr
+end
+
+# Translate API.cartesianarray call.
 function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     # equivalent to creating an array first, then map! with indices.
     dprintln(env, "got cartesianarray args=", args)
@@ -1815,6 +1954,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     return expr
 end
 
+# Translate API.reduce call, i.e., reduction over input arrays
 function translate_call_reduce(state, env, typ, args::Array{Any,1})
     nargs = length(args)
     @assert (nargs >= 3) "expect at least 3 arguments to reduce, but got " * args
@@ -1852,6 +1992,7 @@ function translate_call_reduce(state, env, typ, args::Array{Any,1})
     return expr
 end
 
+# reduction over input arrays using predefined operators.
 function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1})
     args = normalize_args(state, env, args)
     dprintln(env, "translate_call_reduceop: args = ", args)
@@ -1960,7 +2101,7 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
-    elseif is(fun.mod, Core) && is(fun.name, :convert)
+    elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
         args = normalize_args(state, env_, args)
         if isa(args[1], Type)
@@ -1972,11 +2113,10 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
             dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
             expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
             dprintln(env, "translated expr = ", expr)
+        elseif is(fun.name, :copy!)
+            expr = translate_call_copy!(state, env, args)
         elseif is(fun.name, :copy)
-            args = normalize_args(state, env_, args[1:1])
-            dprintln(env,"got copy, args=", args)
-            expr = mk_copy(args[1])
-            expr.typ = typ
+            expr = translate_call_copy(state, env, args)
     # legacy v0.3
     #=
         elseif is(fun.name, :checkbounds)
@@ -2397,7 +2537,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
     elseif head == :parallel_for
         expr_to_process = Any[]
 
-        assert(length(args) == 3)
+        assert(length(args) >= 3)
         loopvars = args[1]
         ranges = args[2]
         escaping_defs = args[3].linfo.escaping_defs
@@ -2405,8 +2545,26 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         append!(expr_to_process, ranges)
         for (v, d) in escaping_defs
             push!(expr_to_process, v)
+            if (0 != d.desc & (ISASSIGNED | ISASSIGNEDONCE)) 
+                push!(expr_to_process, Expr(:(=), v, 1))
+            end
         end
-
+        for i = 4:length(args)
+            (rv, nf, rf) = args[i]
+            push!(expr_to_process, rv)
+            for (v, d) in nf.linfo.escaping_defs
+                push!(expr_to_process, v)
+                if (0 != d.desc & (ISASSIGNED | ISASSIGNEDONCE)) 
+                    push!(expr_to_process, Expr(:(=), v, 1))
+                end
+            end
+            for (v, d) in rf.linfo.escaping_defs
+                push!(expr_to_process, v)
+                if (0 != d.desc & (ISASSIGNED | ISASSIGNEDONCE)) 
+                    push!(expr_to_process, Expr(:(=), v, 1))
+                end
+            end
+        end
         @dprintln(3, ":parallel_for ", expr_to_process)
         return expr_to_process
     elseif head == :assertEqShape
