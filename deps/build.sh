@@ -50,7 +50,8 @@ else
     exit 1;
 fi
 
-syslibs=`echo "$LD_LIBRARY_PATH:$DYLD_LIBRARY_PATH"`
+syslibs=${BASH_ARGV[*]}
+
 arr_libs=(${syslibs//:/ })
 
 for lib in "${arr_libs[@]}"

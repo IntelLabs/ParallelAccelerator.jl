@@ -25,5 +25,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 println("ParallelAccelerator: build.jl begin.")
 println("ParallelAccelerator: Building j2c-array shared library")
-run(`./build.sh`)
+
+ld_library_path = ""
+dyld_library_path = ""
+
+if haskey(ENV, "DYLD_LIBRARY_PATH")
+    dyld_library_path = ENV["DYLD_LIBRARY_PATH"]
+end
+
+if haskey(ENV, "LD_LIBRARY_PATH")
+    ld_library_path = ENV["LD_LIBRARY_PATH"]
+end
+
+run(`./build.sh $dyld_library_path $ld_library_path`)
 println("ParallelAccelerator: build.jl done.")
