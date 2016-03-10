@@ -23,41 +23,61 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module ParForTest
+
 using ParallelAccelerator
+
+@acc function parfor1(n)
+ A = Array(Int, n, n)
+ @par for i in 1:n, j in 1:n
+    A[i,j] = i * j
+ end
+ return sum(A)
+end
+
+@acc function parfor2(n)
+ A = Array(Int, n, n)
+ s::Int = 0
+ m::Int = 0
+ @par s(+) m(+) for i in 1:n, j = 1:n
+    A[i,j] = i * j
+    s = s + A[i,j]
+    m = m + 1
+ end
+ return s .* m
+end
+
+@acc function parfor3(n)
+ A = Array(Int, n, n)
+ s::Array{Int, 1} = zeros(n)
+ m::Int = 0
+ @par s(.+) m(+) for i in 1:n
+    for j = 1:n
+      A[j,i] = i * j
+    end
+    s = s .+ A[:,i]
+    m = m + 1
+ end
+ return s .* m
+end
+
+function test1()
+  parfor1(10) == @noacc parfor1(10) 
+end
+
+function test2()
+  parfor2(10) == @noacc parfor2(10) 
+end
+
+function test3()
+  parfor3(10) == @noacc parfor3(10) 
+end
+
+end
+
 using Base.Test
-
-include("parfor.jl")
-include("mapreduce.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
-include("strings.jl")
-include("test_lr.jl")
-
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-# black-scholes should have only 1 allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/pi/pi.jl")
-# pi should have no allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/opt-flow/opt-flow.jl")
-
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
+println("Testing parfor support via @par macro...")
+@test ParForTest.test1() 
+@test ParForTest.test2()
+@test ParForTest.test3()
+println("Done testing parfor.") 
