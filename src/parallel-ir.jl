@@ -1536,12 +1536,13 @@ function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
     if x.head == symbol('=')
-        assert(typeof(x.args[1]) == SymbolNode)
         lhs = x.args[1]
+        lhs = isa(lhs, SymbolNode) ? lhs.name : lhs
+        
         rhs = x.args[2]
         if isAllocation(rhs)
             @dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
-            if !in(lhs.name, all_aliased_outputs)
+            if !in(lhs, all_aliased_outputs)
                 @dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
                 return true
             end
@@ -1826,7 +1827,7 @@ function is_eliminated_arraylen(x::Expr)
 
     @dprintln(3,"is_eliminated_arraylen is Expr")
     if x.head == symbol('=')
-        assert(typeof(x.args[1]) == SymbolNode)
+        #assert(typeof(x.args[1]) == SymbolNode)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             @dprintln(3,"is_eliminated_arraylen is :call")
