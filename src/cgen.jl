@@ -239,7 +239,7 @@ _Intrinsics = [
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int", 
         "checked_smul", "checked_sdiv_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
+        "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
         "zext_int", "sext_int"
@@ -1221,7 +1221,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
     elseif intr == "sitofp"
         return from_expr(args[1]) * from_expr(args[2])
-    elseif intr == "fptosi"
+    elseif intr == "fptosi" || intr == "checked_fptosi"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "fptrunc" || intr == "fpext"
         @dprintln(3,"Args = ", args)
@@ -1869,7 +1869,6 @@ function from_parforstart(args)
     @dprintln(3,private_vars)
     @dprintln(3,"-----")
     privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
-
 
     s *= "{\n$preclause $rdsprolog #pragma omp parallel $nthreadsclause $privatevars\n{\n$rdsextra"
     s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"
