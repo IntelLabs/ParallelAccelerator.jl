@@ -149,7 +149,7 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
     if haskey(ptr_array_dict, array_ptr)
       arr = ptr_array_dict[array_ptr]
     else
-      arr = pointer_to_array(convert(Ptr{elem_typ}, array_ptr), tuple(dims...))
+      arr = pointer_to_array(convert(Ptr{elem_typ}, array_ptr), tuple(dims...), true)
     end
   elseif isarray(elem_typ)
     arr = Array(elem_typ, dims...)
