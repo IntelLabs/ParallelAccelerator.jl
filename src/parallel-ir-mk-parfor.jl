@@ -98,19 +98,19 @@ function mk_arrayref1(num_dim_inputs,
     @dprintln(3,"mk_arrayref1 element type = ", elem_typ)
     @dprintln(3,"mk_arrayref1 range = ", range)
 
+    # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
     if inbounds
         fname = :unsafe_arrayref
     else
         fname = :arrayref
     end
 
-    # if num_dim_inputs < length(range), we have signular selection along one or more of the dimensions
+    # If num_dim_inputs < length(range), we have signular selection along one or more of the dimensions
     range_size = length(range)
     if num_dim_inputs < range_size
         num_dim_inputs = range_size
     end
     indsyms = Any[]
-    x = 1
     for i = 1:num_dim_inputs
         if i > range_size
             push!(indsyms, index_vars[i])
@@ -224,12 +224,22 @@ function mk_arrayset1(num_dim_inputs,
         fname = :arrayset
     end
 
-    # For each index expression in "index_vars", if it isn't an Integer literal then convert the symbol to
-    # a SymbolNode containing the index expression type "Int".
-    indsyms = [ x <= num_dim_inputs ? 
-                   augment_sn(x, index_vars, range) : 
-                   index_vars[x] 
-                for x = 1:length(index_vars) ]
+    # If num_dim_inputs < length(range), we have signular selection along one or more of the dimensions
+    range_size = length(range)
+    if num_dim_inputs < range_size
+        num_dim_inputs = range_size
+    end
+    indsyms = Any[]
+    for i = 1:num_dim_inputs
+        if i > range_size
+            push!(indsyms, index_vars[i])
+        elseif isa(range[i], SingularSelector)
+            push!(indsyms, range[i].value)
+        else
+            push!(indsyms, augment_sn(i, index_vars, range))
+        end
+    end
+
     @dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
 
     TypedExpr(
