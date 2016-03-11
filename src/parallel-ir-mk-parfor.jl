@@ -241,6 +241,49 @@ function mk_arrayset1(num_dim_inputs,
        indsyms...)
 end
 
+function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, state)
+    assert(length(neutral_val.inputs) == 1)
+    assert(length(neutral_val.outputs) == 0)
+    # Call Domain IR to generate most of the body of the function (except for saving the output)
+    init_var = SymbolNode(symbol("temp_neutral_val"), neutral_val.inputs[1])
+    neutral_val_inputs = [init_var]
+    (max_label, nested_lambda, neutral_val_body) = nested_function_exprs(state.max_label, neutral_val, neutral_val_inputs)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    neutral_val_body = CompilerTools.LambdaHandling.replaceExprWithDict!(neutral_val_body, gensym_map, AstWalk)
+    state.max_label = max_label
+    assert(isa(neutral_val_body,Array))
+    @dprintln(3, "neutral_val_body = ", neutral_val_body)
+    pop!(neutral_val_body) # remove last Expr, which is Expr(:tuple)
+    neutral_val_flatten_body = Any[]
+    neutral_val_body = top_level_expand_pre(neutral_val_body, state)
+    flattenParfors(neutral_val_flatten_body, neutral_val_body)
+    @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(init_var.name, var)))
+    return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
+end
+
+function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
+    # call domain ir to generate most of the body of the function (except for saving the output)
+    reduction_func_inputs = [reduction_var, delta_var]
+    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, reduction_func, reduction_func_inputs)
+    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
+    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map, AstWalk)
+    state.max_label = max_label
+    assert(isa(temp_body,Array))
+    assert(length(temp_body) > 0)
+    assert(typeof(temp_body[end]) == Expr)
+    assert(temp_body[end].head == :tuple)
+    assert(length(temp_body[end].args) == 1)
+    temp_body[end] = mk_assignment_expr(reduction_var, temp_body[end].args..., state)
+    temp_body = top_level_expand_pre(temp_body, state)
+    reduce_flatten_body = Any[]
+    flattenParfors(reduce_flatten_body, deepcopy(temp_body))
+    @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
+    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_var, delta_var])
+    return temp_body, reduce_func 
+end
+
 """
 The main routine that converts a reduce AST node to a parfor AST node.
 """
@@ -266,28 +309,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     @dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
     @dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
     @dprintln(3,"mk_parfor_args_from_reduce. red_dim = ", red_dim)
-
-    # special handling when zero_val is a DomainLambda
-    if isa(zero_val, DomainIR.DomainLambda)
-        assert(length(zero_val.inputs) == 1)
-        assert(length(zero_val.outputs) == 0)
-        # Call Domain IR to generate most of the body of the function (except for saving the output)
-        init_var = SymbolNode(symbol("temp_zero_val"), zero_val.inputs[1])
-        zero_val_inputs = [init_var]
-        (max_label, nested_lambda, zero_val_body) = nested_function_exprs(state.max_label, zero_val, zero_val_inputs)
-        gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-        zero_val_body = CompilerTools.LambdaHandling.replaceExprWithDict!(zero_val_body, gensym_map, AstWalk)
-        state.max_label = max_label
-        assert(isa(zero_val_body,Array))
-        @dprintln(3, "zero_val_body = ", zero_val_body)
-        pop!(zero_val_body) # remove last Expr, which is Expr(:tuple)
-        zero_val_flatten_body = Any[]
-        zero_val_body = top_level_expand_pre(zero_val_body, state)
-        flattenParfors(zero_val_flatten_body, zero_val_body)
-        @dprintln(3, "zero_val_flatten_body = ", zero_val_flatten_body)
-        f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(init_var.name, var)))
-        zero_val = DelayedFunc(f, Any[zero_val_flatten_body, init_var])
-    end
 
     # Verify the number of input arrays matches the number of input types in dl
     assert(length(dl.inputs) == 2)
@@ -381,23 +402,19 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
     push!(post_statements, reduction_output_snode)
 
-    # Call Domain IR to generate most of the body of the function (except for saving the output)
-    dl_inputs = [reduction_output_snode, atm]
-    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
-    gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
-    temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map, AstWalk)
-    state.max_label = max_label
-    assert(isa(temp_body,Array))
-    assert(length(temp_body) > 0)
-    assert(typeof(temp_body[end]) == Expr)
-    assert(temp_body[end].head == :tuple)
-    assert(length(temp_body[end].args) == 1)
-    temp_body[end] = mk_assignment_expr(reduction_output_snode, temp_body[end].args..., state)
-    #assert(length(temp_body.args) == 1)
-    #temp_body = temp_body.args[1]
+    # special handling when zero_val is a DomainLambda
+    if isa(zero_val, DomainIR.DomainLambda) 
+        zero_val = translate_reduction_neutral_value(zero_val, state)
+        init_body = callDelayedFuncWith(zero_val, reduction_output_snode.name)
+        for exp in init_body 
+            push!(pre_statements, exp)
+        end
+    else
+        push!(pre_statements, Expr(:(=), reduction_output_snode.name, zero_val))
+    end
 
-    #@dprintln(3,"reduce_body = ", reduce_body, " type = ", typeof(reduce_body))
-    temp_body = top_level_expand_pre(temp_body, state)
+    # call domain ir to generate most of the body of the function (except for saving the output)
+    temp_body, reduce_func = translate_reduction_function(reduction_output_snode, atm, dl, state)
     out_body = [reduce_body; temp_body] 
 
     fallthroughLabel = next_label(state)
@@ -420,13 +437,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     @dprintln(2,rws)
-
-    # throw(string("Parallel IR only supports ", DomainIR.reduceVal, " reductions right now."))
-    reduce_flatten_body = Any[]
-    flattenParfors(reduce_flatten_body, deepcopy(temp_body))
-    @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
-    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_output_snode, atm])
 
     #  makeLhsPrivate(out_body, state)
 
@@ -851,21 +861,45 @@ end
 
 function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     @assert length(args[1]) == length(args[2])
+    # Create empty arrays to hold pre and post statements.
+    pre_statements  = Any[]
+    post_statements = Any[]
+    unique_node_id = get_unique_num()
     n_loops = length(args[1])
     loopvars = args[1]
     ranges = args[2]
     dl = args[3]
+    # the remaining arguments are about reductions
+    reductions = PIRReduction[]
+    redvar_map = Dict{SymGen,Any}()
+    for i = 1:length(args)-3
+        @dprintln(3, "mk_parfor_args_from_parallel_for. reduction ", i, " = ", args[i+3])
+        (redvar, neutral, redfunc) = args[i+3]
+        redtyp = CompilerTools.LambdaHandling.getType(redvar, state.LambdaVarInfo)
+        out_name = string("parallel_ir_reduction_output_",unique_node_id,"_",i)
+        #out_var = SymbolNode(symbol(out_name), redtyp)
+        out_var = SymbolNode(symbol(redvar), redtyp)
+        #CompilerTools.LambdaHandling.addLocalVar(out_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
+        inp_name = string("parallel_ir_reduction_input_",unique_node_id,"_",i)
+        inp_var = SymbolNode(symbol(inp_name), redtyp)
+        CompilerTools.LambdaHandling.addLocalVar(inp_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
+        neutral = translate_reduction_neutral_value(neutral, state)
+        temp_body, reduce_func = translate_reduction_function(out_var, inp_var, redfunc, state)
+        push!(reductions, PIRReduction(out_var, neutral, reduce_func))
+        #redvar_map[redvar] = out_var.name
+    end
     dl_inputs = [SymbolNode(s, Int) for s in loopvars]
     (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    #gensym_map = merge(mergeLambdaIntoOuterState(state, nested_lambda), redvar_map)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
     nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
     state.max_label = max_label
     out_body = nested_body
-    # Create empty arrays to hold pre and post statements.
-    pre_statements  = Any[]
-    post_statements = Any[]
+    # pop the last expr which is (:tuple, ....) since we don't need it
+    if isa(out_body[end], Expr) && (out_body[end].head == :tuple)
+        pop!(out_body)
+    end
     loopNests = Array(PIRLoopNest, n_loops)
-    unique_node_id = get_unique_num()
     rearray = RangeExprs[]
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:n_loops
@@ -874,20 +908,24 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         range_name = symbol("parallel_ir_range_len_$(loopvar)_$(unique_node_id)_range")
         # FIXME: We should infer the range type
         range_type = UnitRange{Int64}
-        range_expr = mk_assignment_expr(SymbolNode(range_name, range_type), range)
-        CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        push!(pre_statements, range_expr)
-        save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
-        loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($range_name)), state)
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,loop_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
-        push!(rearray, RangeExprs(1,1,:(length($range_name))))
+        if CompilerTools.LambdaHandling.getType(range, state.LambdaVarInfo) <: Number
+            loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int),1,range,1)
+            push!(rearray, RangeExprs(1,1,range))
+        else 
+            range_expr = mk_assignment_expr(SymbolNode(range_name, range_type), range)
+            CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+            push!(pre_statements, range_expr)
+            save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
+            loop_len = mk_assignment_expr(SymbolNode(symbol(save_loop_len), Int), :(length($range_name)), state)
+            # add that assignment to the set of statements to execute before the parfor
+            push!(pre_statements,loop_len)
+            CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+            loopNests[n_loops - i + 1] = PIRLoopNest(SymbolNode(loopvar,Int), 1, SymbolNode(symbol(save_loop_len),Int),1)
+            push!(rearray, RangeExprs(1,1,:(length($range_name))))
+        end
     end
     inputInfo = InputInfo()
     inputInfo.range = [RangeData(i) for i in rearray]
-
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
@@ -896,7 +934,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         out_body,
         pre_statements,
         loopNests,
-        PIRReduction[],
+        reductions,
         post_statements,
         [],
         state.top_level_number,
@@ -1135,6 +1173,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
         push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state))
         if length(condExprs) > 0
+            # FIXME: the following looks wrong, why writing back to input array? 
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
             push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         end

@@ -265,6 +265,7 @@ function __init__()
     else
       addOptPass(captureOperators, PASS_MACRO)
       addOptPass(toCartesianArray, PASS_MACRO)
+      addOptPass(expandParMacro, PASS_MACRO)
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
       addOptPass(toFlatParfors, PASS_TYPED)
@@ -272,10 +273,11 @@ function __init__()
     end
 end
 
+import .API.@par
 import .API.runStencil
 import .API.cartesianarray
 import .API.parallel_for
-export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
+export accelerate, @acc, @noacc, @par, runStencil, cartesianarray, parallel_for
 
 end
 

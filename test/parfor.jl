@@ -23,19 +23,61 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-println("ParallelAccelerator: build.jl begin.")
-println("ParallelAccelerator: Building j2c-array shared library")
+module ParForTest
 
-ld_library_path = ""
-dyld_library_path = ""
+using ParallelAccelerator
 
-if haskey(ENV, "DYLD_LIBRARY_PATH")
-    dyld_library_path = ENV["DYLD_LIBRARY_PATH"]
+@acc function parfor1(n)
+ A = Array(Int, n, n)
+ @par for i in 1:n, j in 1:n
+    A[i,j] = i * j
+ end
+ return sum(A)
 end
 
-if haskey(ENV, "LD_LIBRARY_PATH")
-    ld_library_path = ENV["LD_LIBRARY_PATH"]
+@acc function parfor2(n)
+ A = Array(Int, n, n)
+ s::Int = 0
+ m::Int = 0
+ @par s(+) m(+) for i in 1:n, j = 1:n
+    A[i,j] = i * j
+    s = s + A[i,j]
+    m = m + 1
+ end
+ return s .* m
 end
 
-run(`./build.sh $dyld_library_path $ld_library_path`)
-println("ParallelAccelerator: build.jl done.")
+@acc function parfor3(n)
+ A = Array(Int, n, n)
+ s::Array{Int, 1} = zeros(n)
+ m::Int = 0
+ @par s(.+) m(+) for i in 1:n
+    for j = 1:n
+      A[j,i] = i * j
+    end
+    s = s .+ A[:,i]
+    m = m + 1
+ end
+ return s .* m
+end
+
+function test1()
+  parfor1(10) == @noacc parfor1(10) 
+end
+
+function test2()
+  parfor2(10) == @noacc parfor2(10) 
+end
+
+function test3()
+  parfor3(10) == @noacc parfor3(10) 
+end
+
+end
+
+using Base.Test
+println("Testing parfor support via @par macro...")
+@test ParForTest.test1() 
+@test ParForTest.test2()
+@test ParForTest.test3()
+println("Done testing parfor.") 

@@ -601,10 +601,21 @@ function copy_propagate_helper(node::DomainLambda,
 
     @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
     intersection_dict = Dict{SymGen,Any}()
+    
+    # all copies of escaping_defs should be deleted, since there is no guarantee that their values
+    # remain the same at when DomainLambda is actually called.
+    for (v, d) in node.linfo.escaping_defs
+        @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
+        if haskey(data.copies, v)
+            delete!(data.copies, v)
+        end
+        @dprintln(3, "data.copies = ", data.copies)
+    end
+#=
     # For each statement in this basic block of the form "A = B".
     for copy in data.copies
-        # If the DomainLambda has an escaping def of the left-hand side.
-        if haskey(node.linfo.escaping_defs, copy[1])
+        # If the DomainLambda has an escaping def of the left-hand side
+        if haskey(node.linfo.escaping_defs, copy[1]) 
             ed = node.linfo.escaping_defs[copy[1]]
             @dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
             if typeof(copy[2]) == Symbol
@@ -619,13 +630,14 @@ function copy_propagate_helper(node::DomainLambda,
     end
     @dprintln(3,"Intersection dict = ", intersection_dict)
     @dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
+    
     if !isempty(intersection_dict)
         origBody      = node.genBody
         newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
         node.genBody  = newBody
         return node
     end
-
+=#
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 

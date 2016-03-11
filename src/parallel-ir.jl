@@ -183,7 +183,7 @@ type RangeData
     skip
     last
     exprs :: RangeExprs
-    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
+    offset_temp_var :: SymAllGen        # New temp variables to hold offset from iteration space for each dimension.
 
     function RangeData(s, sk, l, sv, skv, lv, temp_var)
         new(s, sk, l, RangeExprs(sv, skv, lv), temp_var)
@@ -227,7 +227,7 @@ end
 
 type SingularSelector
     value :: Union{SymAllGen,Number}
-    offset_temp_var :: SymNodeGen        # New temp variables to hold offset from iteration space for each dimension.
+    offset_temp_var :: SymAllGen        # New temp variables to hold offset from iteration space for each dimension.
 end
 
 function hash(x :: SingularSelector)
@@ -1536,12 +1536,13 @@ function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
     if x.head == symbol('=')
-        assert(typeof(x.args[1]) == SymbolNode)
         lhs = x.args[1]
+        lhs = isa(lhs, SymbolNode) ? lhs.name : lhs
+        
         rhs = x.args[2]
         if isAllocation(rhs)
             @dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
-            if !in(lhs.name, all_aliased_outputs)
+            if !in(lhs, all_aliased_outputs)
                 @dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
                 return true
             end
@@ -1826,7 +1827,7 @@ function is_eliminated_arraylen(x::Expr)
 
     @dprintln(3,"is_eliminated_arraylen is Expr")
     if x.head == symbol('=')
-        assert(typeof(x.args[1]) == SymbolNode)
+        #assert(typeof(x.args[1]) == SymbolNode)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             @dprintln(3,"is_eliminated_arraylen is :call")
@@ -1992,6 +1993,7 @@ end
 function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
     @dprintln(3, "getCorrelation for inputInfo num_dim_inputs = ", num_dim_inputs)
+    if num_dim_inputs == 0 return nothing end
     if isRange(inputInfo)
         return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
     else
@@ -2320,6 +2322,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         @dprintln(3,"fake_body = ", fake_body)
 
         body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
+        @dprintln(3, "body_lives = ", body_lives)
         live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
         all_defs = Set()
         for bb in body_lives.basic_blocks
@@ -2328,7 +2331,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         # as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
         # FIXME: is this correct?
         as = CompilerTools.LivenessAnalysis.AccessSummary(all_defs, live_in_to_start_block)
-
+        @dprintln(3, "as = ", as)
         push!(expr_to_process, as)
 
         append!(expr_to_process, this_parfor.postParFor)

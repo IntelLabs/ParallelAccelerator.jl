@@ -263,7 +263,7 @@ function fuse(body, body_index, cur::Expr, state)
             elseif typeof(x) == Expr && x.head == :(=)
                 lhs = x.args[1]
                 rhs = x.args[2]
-                assert(isa(lhs, SymNodeGen))
+                #assert(isa(lhs, SymNodeGen))
                 if isArrayrefCall(rhs)
                     array_name = rhs.args[2]
                     assert(isa(array_name, SymNodeGen))

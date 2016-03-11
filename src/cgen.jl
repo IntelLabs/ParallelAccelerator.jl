@@ -98,19 +98,14 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+USE_OMP = 1
 
-if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
-    const USE_OMP = 0
-else
-    @osx? (
-    begin
-        const USE_OMP = 0
-    end
-    :
-    begin
-        const USE_OMP = 1
-    end
-    )
+function enableOMP()
+    USE_OMP = 1
+end
+
+function disableOMP()
+    USE_OMP = 0
 end
 
 function isDistributedMode()
@@ -136,6 +131,21 @@ USE_DAAL = 0
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
+
+if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
+    USE_OMP = 0
+else # on osx, use OpenMP only when ICC is used since GCC/Clang doesn't support it
+    @osx? (
+    begin
+        USE_OMP = USE_ICC
+    end
+    :
+    begin
+        USE_OMP = 1
+    end
+    )
+end
+
 
 if isDistributedMode() #&& NERSC==0
     using MPI
@@ -229,7 +239,7 @@ _Intrinsics = [
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int", 
         "checked_smul", "checked_sdiv_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint", "powi_llvm",
+        "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
         "zext_int", "sext_int"
@@ -852,7 +862,11 @@ function from_ccall(args)
     argsStart = 4
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
-        s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+        if mkl_lib!=""
+            s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+        else
+            s *= "(CBLAS_ORDER) $(from_expr(args[4])), "
+        end
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6])), "
         s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
         argsStart = 10
@@ -1207,7 +1221,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
     elseif intr == "sitofp"
         return from_expr(args[1]) * from_expr(args[2])
-    elseif intr == "fptosi"
+    elseif intr == "fptosi" || intr == "checked_fptosi"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "fptrunc" || intr == "fpext"
         @dprintln(3,"Args = ", args)
@@ -1655,7 +1669,8 @@ function from_parforend(args)
             rdvt = getSymType(rdv)
             rdvtyp = toCtype(rdvt)
             rdvar = from_expr(rdv)
-            rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
+            #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
             rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
             rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
             if isPrimitiveJuliaType(rdvt) 
@@ -1820,6 +1835,8 @@ function from_parforstart(args)
         rdvt = getSymType(rdv)
         rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv)
+        rdv_tmp = gensym(rdvar)
+        rdvar_tmp = from_expr(rdv_tmp)
         if parallel_reduction 
             if isPrimitiveJuliaType(rdvt) 
                 rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
@@ -1827,12 +1844,13 @@ function from_parforstart(args)
                 rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
             end
             rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
-            rdsprolog *= "$rdvtyp &$rdvar = $(rdvar)_vec[rds_init_loop_var];\n"
-            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv) * "}\n"
+            rdsprolog *= "$rdvtyp &$rdvar_tmp = $(rdvar)_vec[rds_init_loop_var];\n"
+            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv_tmp) * "}\n"
             #push!(private_vars, rdv)
             rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
         else
-            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            # The init is now handled in pre-statements
+            #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
             # parallel IR no longer produces reductionFunc as a symbol
             #if isa(rd.reductionFunc, Symbol) 
             #   rdop = string(rd.reductionFunc)
@@ -1855,7 +1873,6 @@ function from_parforstart(args)
     @dprintln(3,private_vars)
     @dprintln(3,"-----")
     privatevars = isempty(private_vars) ? "" : "private(" * mapfoldl(canonicalize, (a,b) -> "$a, $b", private_vars) * ")"
-
 
     s *= "{\n$preclause $rdsprolog #pragma omp parallel $nthreadsclause $privatevars\n{\n$rdsextra"
     s *= "#pragma omp for private(" * mapfoldl((a)->a, (a, b)->"$a, $b", ivs) * ") $rdsclause\n"

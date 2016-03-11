@@ -26,6 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using Base.Test
 
+include("parfor.jl")
 include("mapreduce.jl")
 include("abs.jl")
 include("const_promote.jl")
