@@ -26,10 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module MiscTest
 using ParallelAccelerator
 
-ParallelAccelerator.DomainIR.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
-ParallelAccelerator.CGen.set_debug_level(4)
-ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.CGen.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(4)
 
 @acc function for_ret()
     for f = 1:10
