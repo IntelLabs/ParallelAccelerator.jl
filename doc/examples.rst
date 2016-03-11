@@ -19,10 +19,11 @@ The *SELFTIMED* line in the printed output shows the running time,
 while the *SELFPRIMED* line shows the time it takes to compile the
 accelerated code and run it with a small "warm-up" input.
 
-You may notice that the entire time it takes to run the command is
-about 20 or 25 seconds longer than *SELFPRIMED* + *SELFTIMED*.  This
-20- to 25-second delay is the time it takes for the
-ParallelAccelerator package itself to load.
+For the first function you accelerate in a given Julia session, you
+might notice a much longer time being reported for *SELFPRIMED*.  This
+delay (about 20 seconds on an 8-core desktop machine) is the time it
+takes for Julia to load the ParallelAccelerator package itself.  See
+`Speeding up package load time via userimg.jl`_ for a workaround.
 
 Pass the ``--help`` option to see usage information for each example::
 

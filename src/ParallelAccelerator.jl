@@ -161,11 +161,6 @@ end
 """
 Call this function if you want to embed binary-code of ParallelAccelerator into your Julia build to speed-up @acc compilation time.
 It will attempt to add a userimg.jl file to your Julia distribution and then re-build Julia.
-
-NOTE: At the moment, we don't recommend using `embed`.  It will speed
-up the `using ParallelAccelerator` statement, but it will merely delay
-the compilation of ParallelAccelerator until an accelerated function
-is called.  This is probably not the behavior that most users want.
 """
 function embed(julia_root)
   # See if the specified julia_root path exists.
@@ -184,7 +179,26 @@ function embed(julia_root)
   # The contents of the userimg.jl file.
   current_file = @__FILE__
   userimg_contents = string("""
+# This is a dummy use of the ParallelAccelerator module.  It will
+# cause a brief delay once, when Julia compiles, in exchange for *not*
+# having a delay every time the package is used.
+
+Base.reinit_stdio()
+
 include("$current_file")
+
+module __UserimgDummyModule__
+
+using ParallelAccelerator
+importall ParallelAccelerator.API
+
+__userimg_dummy_fn__(A::Array{Float64,1}, B::Array{Float64,1}) = begin
+    runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip, A .* B .+ 2)
+end
+
+ParallelAccelerator.accelerate(__userimg_dummy_fn__, (Array{Float64,1},Array{Float64,1},))
+
+end
 """)
 
   userimg_file = string(base_dir, "/userimg.jl")
@@ -278,13 +292,3 @@ import .API.parallel_for
 export accelerate, @acc, @noacc, runStencil, cartesianarray, parallel_for
 
 end
-
-# Include a dummy use of the ParallelAccelerator module, so that the
-# whole package compiles at package load time.  This will cause a
-# brief delay when `using ParallelAccelerator` runs, in exchange for
-# *not* having a delay when running the first accelerated function
-# later.
-# this causes a bug in distributed mode
-#using ParallelAccelerator
-#@acc tmp_f(A,B) = begin runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip); A.*B.+2 end
-#tmp_f([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0])
