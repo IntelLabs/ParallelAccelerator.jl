@@ -972,7 +972,7 @@ function findSelectedDimensions(inputInfo :: Array{InputInfo,1}, state)
     for i = 2:length(inputInfo)
         # Make sure that this is the same as the first array's.
         if inputInfo[i].out_dim != res
-            throw(string("Array number ", i, " does not have the same number of resulting dimensions as the first array in findSelectedDimensions."))
+            throw(string("ERROR: ParallelAccelerator does not support Julia-style broadcasting.  The first array in some operation has ", res, " dimensions but array number ", i, " does not have the same number of dimensions.  Instead, it has ", inputInfo[i].out_dim, " dimensions."))
         end
     end
 
