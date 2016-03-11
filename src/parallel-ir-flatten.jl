@@ -27,8 +27,13 @@ function flattenParfors(function_name, ast::Expr)
     flatten_start = time_ns()
 
     assert(ast.head == :lambda)
-    @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
+    @dprintln(1,"Starting flattenParfors.  function = ", function_name, " ast = ", ast)
 
+    #bt = backtrace() ;
+    #s = sprint(io->Base.show_backtrace(io, bt))
+    #@dprintln(3, "from_root backtrace ")
+    #@dprintln(3, s)
+ 
     start_time = time_ns()
 
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
