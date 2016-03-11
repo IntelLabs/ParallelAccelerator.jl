@@ -1357,6 +1357,8 @@ function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, old
         return arr_size_expr
     elseif is(fun, :alloc) || is(fun, :Array)
         return translate_call_alloc(state, env_, typ, args[1], args[2:end])
+    elseif is(fun, :copy)
+        return translate_call_copy(state, env, args)
     elseif is(fun, :sitofp) # typefix hack!
         typ = args[1]
     elseif is(fun, :fpext) # typefix hack!
