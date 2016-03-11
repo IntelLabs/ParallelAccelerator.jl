@@ -4,17 +4,20 @@
 Speeding up package load time via userimg.jl
 ********
 
-It is possible to embed a binary, compiled version of the ParallelAccelerator
-package into a Julia executable. This has the potential to
-greatly reduce the time it takes for Julia to load ParallelAccelerator.
+When running ParallelAccelerator, you may notice that the first time
+an accelerated function is run, it is in fact quite slow.  This delay
+is caused by the time it takes for Julia to load the
+ParallelAccelerator package itself.  This section presents a
+workaround.
+
+It is possible to embed a binary, compiled version of the
+ParallelAccelerator package into a Julia executable. This has the
+potential to greatly reduce the time it takes for Julia programs that
+use ParallelAccelerator to run.
+
 To use this feature, one needs to have the Julia source code
 and should be able to rebuild Julia.  Hence, users with
 Julia installations using pre-built binaries will not be able to use it.
-
-Note that this approach will speed up the `using ParallelAccelerator`
-statement, but it will merely delay the compilation of most of the
-ParallelAccelerator package until an accelerated function is called.
-This is probably *not* the behavior that most users want.
 
 To use this feature, start the Julia REPL and run the following::
 
@@ -22,9 +25,15 @@ To use this feature, start the Julia REPL and run the following::
     ParallelAccelerator.embed()
 
 
+
+After ``embed`` finishes running, exit the REPL and restart Julia.
+You should now be running a version of Julia in which
+ParallelAccelerator is already included in the Julia system image, and
+therefore the first run of an accelerated function will be much
+faster.
+
 The ``embed`` function tries to embed ParallelAccelerator into the Julia
 version used by the current REPL.
-
 If you want to target a different Julia distribution, you can alternatively use
 the following version of ``embed``::
 
