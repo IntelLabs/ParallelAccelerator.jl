@@ -77,7 +77,7 @@ else
 fi
 #echo "out" $SYS_BLAS $MKL_LIB $OPENBLAS_LIB
 
-if [ -z "$MKL_LIB" ] && [ -z "$OPENBLAS_LIB" ] && [ "$SYS_BLAS"=="0" ]; then
+if [ -z "$MKL_LIB" ] && [ -z "$OPENBLAS_LIB" ] && [ "$SYS_BLAS" -eq "0" ]; then
     echo "No BLAS installation detected (optional)"
 fi
 
