@@ -173,7 +173,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Cha
     CblasColMajor = 102
 
 
-    if mkl_lib!="" || openblas_lib!=""
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
         s *= "$(cblas_fun)((CBLAS_LAYOUT)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
         $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
     else

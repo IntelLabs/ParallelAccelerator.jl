@@ -125,6 +125,7 @@ USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
+sys_blas = 0
 NERSC = 0
 USE_DAAL = 0
 #config file overrides backend_compiler variable
@@ -336,7 +337,7 @@ function from_includes()
         libblas = Base.libblas_name
         if mkl_lib!=""
             blas_include = "#include <mkl.h>\n"
-        elseif openblas_lib!=""
+        elseif openblas_lib!="" || sys_blas==1
             blas_include = "#include <cblas.h>\n"
         else
             blas_include = "#include \"$packageroot/deps/include/cgen_mmul.h\"\n"
@@ -2740,6 +2741,8 @@ function getLinkCommand(outfile_name, lib, flags=[])
             push!(linkLibs,"-lmkl_rt")
         elseif openblas_lib!=""
             push!(linkLibs,"-lopenblas")
+        elseif sys_blas==1
+            push!(linkLibs,"-lblas")
         end
     end
     if USE_HDF5==1
