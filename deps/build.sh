@@ -66,12 +66,19 @@ do
     fi
 done
 
-if [ -z "$MKL_LIB" ]; then
-    echo "MKL not detected (optional)"
+echo "int main(){return 0;}" > blas_test.cpp
+SYS_BLAS=`$CC blas_test.cpp -lblas 2>&1`
+rm blas_test.cpp
+if [ -z "$SYS_BLAS" ]; then
+    echo "System installed BLAS found"
+    SYS_BLAS=1
+else
+    SYS_BLAS=0
 fi
+#echo "out" $SYS_BLAS $MKL_LIB $OPENBLAS_LIB
 
-if [ -z "$OPENBLAS_LIB" ]; then
-    echo "OpenBlas not detected (optional)"
+if [ -z "$MKL_LIB" ] && [ -z "$OPENBLAS_LIB" ] && [ "$SYS_BLAS"=="0" ]; then
+    echo "No BLAS installation detected (optional)"
 fi
 
 if [ -n "$NERSC_HOST" ]; then
@@ -81,6 +88,7 @@ fi
 
 echo "mkl_lib = \"$MKL_LIB\"" >> "$CONF_FILE"
 echo "openblas_lib = \"$OPENBLAS_LIB\"" >> "$CONF_FILE"
+echo "sys_blas = $SYS_BLAS" >> "$CONF_FILE"
 
 
 echo "Using $CC to build ParallelAccelerator array runtime.";
