@@ -84,3 +84,62 @@ void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda,
 
 }
 
+void cgen_cblas_sgemm(bool tA, bool tB, int m, int n, int k, float* A, int lda, float* B, int ldb, float* C, int ldc)
+{
+
+    // printf("tA %d tB %d m %d n %d k %d lda %d ldb %d ldc %d\n",tA,tB,m,n,k,lda,ldb,ldc);
+
+#define Amat(I,J) A[(I) + (J)*(lda)]
+#define Bmat(I,J) B[(I) + (J)*(ldb)]
+#define Cmat(I,J) C[(I) + (J)*(ldc)]
+
+    int i,j,l;
+    float tmp;
+
+    if (!tA) {
+        if(!tB){
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
+                    Cmat(i,j) = tmp = 0.0;
+                    for(l=0; l<k; l++)
+                        tmp += Amat(i,l)* Bmat(l,j);
+                    Cmat(i,j) = tmp;
+                }
+            }
+        }
+        else{
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
+                    Cmat(i,j) = tmp = 0.0;
+                    for(l=0; l<k; l++)
+                        tmp += Amat(i,l)* Bmat(j,l);
+                    Cmat(i,j) = tmp;
+                }
+            }
+        }
+    }
+    else {
+        if(!tB){
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
+                    Cmat(i,j) = tmp = 0.0;
+                    for(l=0; l<k; l++)
+                        tmp += Amat(l,i)* Bmat(l,j);
+                    Cmat(i,j) = tmp;
+                }
+            }
+        }
+        else{
+            for(i=0; i<m; i++) {
+                for(j=0; j<n; j++) {
+                    Cmat(i,j) = tmp = 0.0;
+                    for(l=0; l<k; l++)
+                        tmp += Amat(l,i)* Bmat(j,l);
+                    Cmat(i,j) = tmp;
+                }
+            }
+        }
+    }
+
+}
+
