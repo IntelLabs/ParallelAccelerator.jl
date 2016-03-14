@@ -66,7 +66,8 @@ do
     fi
 done
 
-echo "int main(){return 0;}" > blas_test.cpp
+echo "#include <cblas.h>" > blas_test.cpp
+echo "int main(){return 0;}" >> blas_test.cpp
 SYS_BLAS=`$CC blas_test.cpp -lblas 2>&1`
 rm blas_test.cpp
 if [ -z "$SYS_BLAS" ]; then
