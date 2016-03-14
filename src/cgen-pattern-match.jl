@@ -92,7 +92,11 @@ end
 function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
-        res = "cgen_distribution(cgen_rand_generator);\n"
+        if USE_OMP==1
+            res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
+        else
+            res = "cgen_distribution(cgen_rand_generator);\n"
+        end
     end
     return res 
 end
@@ -104,7 +108,11 @@ end
 function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
     res = ""
     if(fun.name==:randn!)
-        res = "cgen_n_distribution(cgen_rand_generator);\n"
+        if USE_OMP==1
+            res = "cgen_n_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
+        else
+            res = "cgen_n_distribution(cgen_rand_generator);\n"
+        end
     end
     return res 
 end

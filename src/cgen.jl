@@ -2013,9 +2013,15 @@ function from_expr(ast::Expr)
     elseif head == :body
         @dprintln(3,"Compiling body")
         if include_rand
-            s *= "std::default_random_engine cgen_rand_generator;\n"
+            s *= "std::random_device cgen_rand_device;\n"
             s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
             s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
+            if USE_OMP==1
+                s *= "std::vector<std::default_random_engine> cgen_rand_generator;\n"
+                s *= "for(int i=0; i<omp_get_max_threads(); i++) { cgen_rand_generator.push_back(std::default_random_engine(cgen_rand_device()));}\n"
+            else
+                s *= "std::default_random_engine cgen_rand_generator(cgen_rand_device());\n"
+            end
         end
         s *= from_exprs(args)
 
