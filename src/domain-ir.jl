@@ -1589,7 +1589,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
     if istupletyp(args1_typ)
         # take a shortcut if the second last statement is the tuple creation
         exp = body.args[end-1]
-        if exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
+        if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
            exp.args[2].head == :call && exp.args[2].args[1] == TopNode(:tuple)
             dprintln(env, "second last is tuple assignment, we'll take shortcut")
             pop!(body.args)
