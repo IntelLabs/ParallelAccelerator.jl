@@ -733,7 +733,7 @@ end
 
 function from_tupleref(args)
     # We could generate std::tuples instead of structs
-    from_expr(args[1]) * ".f" * string(int(from_expr(args[2]))-1)
+    from_expr(args[1]) * ".f" * string(parse(Int, (from_expr(args[2])))-1)
 end
 
 function from_safegetindex(args)
@@ -906,17 +906,33 @@ end
 function from_getfield(args)
     @dprintln(3,"from_getfield args are: ", args)
     tgt = from_expr(args[1])
+    @dprintln(4,"from_getfield tgt: ", tgt)
     if isa(args[1], SymbolNode)
       args1typ = args[1].typ
+      @dprintln(4,"from_getfield args[1] is SymbolNode, args1typ: ", args1typ)
     elseif isa(args[1], GenSym) || isa(args[1], Symbol)
       args1typ = lstate.symboltable[args[1]]
+      @dprintln(4,"from_getfield args[1] is GenSym or Symbol, args1typ: ", args1typ)
     else
       throw("Unhandled argument 1 type to getfield")
     end
     #if istupletyp(args1typ) && isPrimitiveJuliaType(eltype(args1typ))
     if istupletyp(args1typ)
-        eltyp = toCtype(eltype(args1typ))
-        return "(($eltyp *)&$(tgt))[" * from_expr(args[2]) * " - 1]"
+        fieldtype = typeof(args[2])
+        @dprintln(4,"from_getfield found tupletyp, eltype: ", eltype(args1typ), " field type: ", fieldtype)
+        if isa(args[2], Int)
+            @dprintln(4,"from_getfield args[2] is Int so using simple field reference via from_tupleref")
+            return from_tupleref(args)
+        else
+            # TO-DO!
+            # What we really need to do here is when you create a Tuple type that you create an
+            # array containing the offsets from the start of the struct to a given field.  Then
+            # use you can args[2]-1 to index that array, cast the Tuple var to a char *, add the
+            # offset, cast as a pointer to the type of the field, and then dereference.
+            eltyp = toCtype(eltype(args1typ))
+            @dprintln(4,"from_getfield eltyp: ", eltyp)
+            return "(($eltyp *)&$(tgt))[" * from_expr(args[2]) * " - 1]"
+        end
     end
     throw(string("Unhandled call to getfield ",args1typ, " ", eltype(args1typ)))
     #=
