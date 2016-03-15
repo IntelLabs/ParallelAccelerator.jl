@@ -581,7 +581,8 @@ function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
 end
 
 function specializeOp(opr::Symbol, argstyp)
-    reorder = x -> x # default no reorder
+    reorder = x -> x        # default no reorder
+    cast = (ty, x) -> x     # defualt no cast
     if opr == :>= 
         opr = :<=
         reorder = reverse
@@ -604,7 +605,12 @@ function specializeOp(opr::Symbol, argstyp)
         try
             # TODO: use subtype checking here?
             if is(typ, Int) || is(typ, Int32) || is(typ, Int64)
-                opr = TopNode(sintOps[opr])
+                if opr == :/ # special case for division
+                    opr = TopNode(floatOps[opr])
+                    cast = (ty, x) -> Expr(:call, TopNode(:sitofp), ty, x)
+                else
+                    opr = TopNode(sintOps[opr])
+                end
             elseif is(typ, Float32) || is(typ, Float64)
                 opr = TopNode(floatOps[opr])
             end
@@ -615,7 +621,7 @@ function specializeOp(opr::Symbol, argstyp)
     if isa(opr, Symbol)
         opr = TopNode(opr)
     end
-    return opr, reorder
+    return opr, reorder, cast
 end
 
 import Base.show
@@ -1521,12 +1527,12 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     end
     typs = Type[ typeOfOpr(state, arg) for arg in args ]
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
-    opr, reorder = specializeOp(mapOps[fun], elmtyps)
+    opr, reorder, cast = specializeOp(mapOps[fun], elmtyps)
     typs = reorder(typs)
     args = reorder(args)
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
     (nonarrays, args, typs, f) = specialize(state, args, typs, 
-            as -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))])
+            as -> [Expr(:tuple, mk_expr(etyp, :call, opr, map(x->cast(etyp, x), as)...))])
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
     # calculate escaping variables
@@ -2025,16 +2031,16 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
                   (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], mk_alloc(state, etyp, sizeVars)),
                                     mk_mmap!(lhs, DomainLambda([etyp], [etyp], (linfo, x) -> [Expr(:tuple, neutralelt)], LambdaVarInfo())),
                                     Expr(:tuple) ], linfo)
-        opr, reorder = specializeOp(fun, [etyp])
-        # ignore reorder since it is always id function
+        opr, reorder, cast = specializeOp(fun, [etyp])
+        # ignore reorder and cast since they are always id function
         f = (linfo, as) -> [Expr(:tuple, mk_mmap!(as, DomainLambda([etyp, etyp], [etyp], 
                                              (linfo,as)->[Expr(:tuple, mk_expr(etyp, :call, opr, as...))], LambdaVarInfo())))]
         outtyp = arrtyp
     else
         red_dim = []
         neutral = neutralelt
-        opr, reorder = specializeOp(fun, [etyp])
-        # ignore reorder since it is always id function
+        opr, reorder, cast = specializeOp(fun, [etyp])
+        # ignore reorder and cast since they are always id function
         f = (linfo,as) -> [Expr(:tuple, mk_expr(etyp, :call, opr, as...))]
         outtyp = etyp
     end
@@ -2111,7 +2117,8 @@ function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, 
         end
     elseif is(fun.mod, Base) 
         if is(fun.name, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
-            opr, reorder = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
+            opr, reorder, cast = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
+            # ignore reorder and cast since they are always id function
             dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
             expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
             dprintln(env, "translated expr = ", expr)

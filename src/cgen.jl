@@ -1220,12 +1220,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
     elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
-    elseif intr == "sitofp"
-        return from_expr(args[1]) * from_expr(args[2])
-    elseif intr == "fptosi" || intr == "checked_fptosi"
-        return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
-    elseif intr == "fptrunc" || intr == "fpext"
-        @dprintln(3,"Args = ", args)
+    elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "trunc_llvm" || intr == "trunc"
         return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
