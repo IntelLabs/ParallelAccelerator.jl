@@ -92,7 +92,11 @@ end
 function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
-        res = "cgen_distribution(cgen_rand_generator);\n"
+        if USE_OMP==1
+            res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
+        else
+            res = "cgen_distribution(cgen_rand_generator);\n"
+        end
     end
     return res 
 end
@@ -104,7 +108,11 @@ end
 function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
     res = ""
     if(fun.name==:randn!)
-        res = "cgen_n_distribution(cgen_rand_generator);\n"
+        if USE_OMP==1
+            res = "cgen_n_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
+        else
+            res = "cgen_n_distribution(cgen_rand_generator);\n"
+        end
     end
     return res 
 end
@@ -173,8 +181,8 @@ function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Cha
     CblasColMajor = 102
 
 
-    if mkl_lib!="" || openblas_lib!=""
-        s *= "$(cblas_fun)((CBLAS_LAYOUT)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
         $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 

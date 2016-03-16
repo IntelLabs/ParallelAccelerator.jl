@@ -173,7 +173,7 @@ function translate_par(args)
     #end
     #localize_vars(quote therange = $(esc(r)); $thecall; end)
     ast =Expr(:call, GlobalRef(API, :cartesianmapreduce), 
-                    :($args -> let $(headers...); $body end), :($dims))
+                    :($args -> let $(headers...); $body; return end), :($dims))
     for i=1:na-1
         redVar = redVars[i]
         redArg = gensym(string(redVar))

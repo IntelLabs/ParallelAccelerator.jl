@@ -125,6 +125,7 @@ USE_HDF5 = 0
 package_root = getPackageRoot()
 mkl_lib = ""
 openblas_lib = ""
+sys_blas = 0
 NERSC = 0
 USE_DAAL = 0
 #config file overrides backend_compiler variable
@@ -336,7 +337,7 @@ function from_includes()
         libblas = Base.libblas_name
         if mkl_lib!=""
             blas_include = "#include <mkl.h>\n"
-        elseif openblas_lib!=""
+        elseif openblas_lib!="" || sys_blas==1
             blas_include = "#include <cblas.h>\n"
         else
             blas_include = "#include \"$packageroot/deps/include/cgen_mmul.h\"\n"
@@ -1235,12 +1236,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
     elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
-    elseif intr == "sitofp"
-        return from_expr(args[1]) * from_expr(args[2])
-    elseif intr == "fptosi" || intr == "checked_fptosi"
-        return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
-    elseif intr == "fptrunc" || intr == "fpext"
-        @dprintln(3,"Args = ", args)
+    elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "trunc_llvm" || intr == "trunc"
         return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
@@ -2028,9 +2024,15 @@ function from_expr(ast::Expr)
     elseif head == :body
         @dprintln(3,"Compiling body")
         if include_rand
-            s *= "std::default_random_engine cgen_rand_generator;\n"
+            s *= "std::random_device cgen_rand_device;\n"
             s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
             s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
+            if USE_OMP==1
+                s *= "std::vector<std::default_random_engine> cgen_rand_generator;\n"
+                s *= "for(int i=0; i<omp_get_max_threads(); i++) { cgen_rand_generator.push_back(std::default_random_engine(cgen_rand_device()));}\n"
+            else
+                s *= "std::default_random_engine cgen_rand_generator(cgen_rand_device());\n"
+            end
         end
         s *= from_exprs(args)
 
@@ -2756,6 +2758,8 @@ function getLinkCommand(outfile_name, lib, flags=[])
             push!(linkLibs,"-lmkl_rt")
         elseif openblas_lib!=""
             push!(linkLibs,"-lopenblas")
+        elseif sys_blas==1
+            push!(linkLibs,"-lblas")
         end
     end
     if USE_HDF5==1
