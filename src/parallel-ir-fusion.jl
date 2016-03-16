@@ -24,6 +24,34 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =# 
 
 
+
+"""
+Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
+We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable usage is present.
+"""
+function isSymbolsUsed(vars :: Dict{SymGen,SymGen}, top_level_numbers :: Array{Int,1}, state)
+    @dprintln(3,"isSymbolsUsed: vars = ", vars, " typeof(vars) = ", typeof(vars), " top_level_numbers = ", top_level_numbers)
+    bl = state.block_lives
+
+    for i in top_level_numbers
+        tls = CompilerTools.LivenessAnalysis.find_top_number(i, bl)
+        assert(tls != nothing)
+
+        for v in vars
+            if in(v[1], tls.def) || in(v[2], tls.def)
+                @dprintln(3, "isSymbolsUsed: ", v, " defined in statement ", i)
+                return true
+            elseif in(v[1], tls.use) || in(v[2], tls.use)
+                @dprintln(3, "isSymbolsUsed: ", v, " used in statement ", i)
+                return true
+            end
+        end
+    end
+
+    @dprintln(3, "isSymbolsUsed: ", vars, " not used in statements ", top_level_numbers)
+    return false
+end
+
 """
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """

@@ -1943,34 +1943,6 @@ function isFusionAssignment(x :: Expr)
 end
 
 """
-Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
-    We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable
-        usage is present.
-"""
-function isSymbolsUsed(vars, top_level_numbers :: Array{Int,1}, state)
-    @dprintln(3,"isSymbolsUsed: vars = ", vars, " typeof(vars) = ", typeof(vars), " top_level_numbers = ", top_level_numbers)
-    bl = state.block_lives
-
-    for i in top_level_numbers
-        tls = CompilerTools.LivenessAnalysis.find_top_number(i, bl)
-        assert(tls != nothing)
-
-        for v in vars
-            if in(v, tls.def)
-                @dprintln(3, "isSymbolsUsed: ", v, " defined in statement ", i)
-                return true
-            elseif in(v, tls.use)
-                @dprintln(3, "isSymbolsUsed: ", v, " used in statement ", i)
-                return true
-            end
-        end
-    end
-
-    @dprintln(3, "isSymbolsUsed: ", vars, " not used in statements ", top_level_numbers)
-    return false
-end
-
-"""
 Get the equivalence class of the first array who length is extracted in the pre-statements of the specified "parfor".
 """
 function getParforCorrelation(parfor, state)
