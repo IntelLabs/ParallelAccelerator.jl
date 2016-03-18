@@ -2299,7 +2299,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :new)
         # skip?
     elseif is(head, :boundscheck)
-        # skip?
+        # skip or remove?
+        return nothing
     elseif is(head, :type_goto)
         # skip?
     elseif is(head, :gotoifnot)

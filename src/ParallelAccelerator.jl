@@ -273,6 +273,12 @@ function __init__()
     # Add the bin directory off the package root to the LD_LIBRARY_PATH.
     ENV[ld_env_key] = string(prefix, package_root, "bin")
 
+    # Must add LD_LIBRARY_PATH for MIC
+    if getPseMode() == OFFLOAD1_MODE || getPseMode() == OFFLOAD2_MODE || getPseMode() == TASK_MODE
+        ENV["LD_LIBRARY_PATH"]=string(CGen.generated_file_dir, ":", ENV["LD_LIBRARY_PATH"])
+        #ENV["MIC_LD_LIBRARY_PATH"]=string(generated_file_dir, ":", ENV["MIC_LD_LIBRARY_PATH"])
+    end
+
     if getPseMode() == OFF_MODE
       addOptPass(runStencilMacro, PASS_MACRO)
       #addOptPass(cleanupAPI, PASS_MACRO)
