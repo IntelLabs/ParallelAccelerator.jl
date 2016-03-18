@@ -1714,10 +1714,12 @@ function sub_cur_body_walk(x::Expr,
 
     dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
     if x.head == :call
-        dprintln(dbglvl,"sub_cur_body_walk xtype is call")
+        dprintln(dbglvl,"sub_cur_body_walk xtype is call x.args[1] = ", x.args[1], " type = ", typeof(x.args[1]))
         # Found a call to arrayref.
-        if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
-            dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
+        if x.args[1] == TopNode(:arrayref) || 
+           x.args[1] == TopNode(:unsafe_arrayref) || 
+           x.args[1] == GlobalRef(ParallelAccelerator.API, :getindex)
+            dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref, unsafe_arrayref, or getindex")
             array_name = x.args[2]
             index      = x.args[3]
             assert(isa(array_name, SymNodeGen))
