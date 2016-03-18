@@ -2267,7 +2267,7 @@ function from_formalargs(params, vararglist, unaliased=false)
     for p in 1:length(params)
         @dprintln(3,"Doing param $p: ", params[p])
         @dprintln(3,"Type is: ", typeof(params[p]))
-        if get(lstate.symboltable, params[p], false) != false
+        if haskey(lstate.symboltable, params[p])
             typ = lstate.symboltable[params[p]]
             ptyp = toCtype(typ)
             is_array = isArrayType(typ)
@@ -2330,15 +2330,15 @@ end
 function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
     @dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
     if length(params) > 0
-        params = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
+        paramstr = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
-        params = ""
+        paramstr = ""
     end
     # length(jtyp) == 0 means the special case of Void/nothing return so add nothing extra to actualParams in that case.
     retParams = length(jtyp) == 0 ? "" : foldl((a, b) -> "$a, $b",
         [(isScalarType(jtyp[i]) ? "" : "*") * "ret" * string(i-1) for i in 1:length(jtyp)])
-    @dprintln(3, " params = (", params, ") retParams = (", retParams, ")")
-    actualParams = params * ((length(params) > 0 && length(retParams) > 0) ? ", " : "") * retParams
+    @dprintln(3, " params = (", paramstr, ") retParams = (", retParams, ")")
+    actualParams = paramstr * ((length(paramstr) > 0 && length(retParams) > 0) ? ", " : "") * retParams
     @dprintln(3, " actualParams = (", actualParams, ")")
     wrapperParams = "int run_where"
     if length(args) > 0
@@ -2361,12 +2361,88 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     #printf(\"Starting execution of CGen generated code\\n\");
     #printf(\"End of execution of CGen generated code\\n\");
 
+    unaliased_func = functionName * "_unaliased"
+    unaliased_func_call = "$unaliased_func($actualParams);"
+
+    # OMP offload only works for unaliased calls
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE ||
+       ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
+        paramoffstr = ""
+        declstr = ""
+        initstr = ""
+        retstr = ""
+        memstr = ""
+        outstr = ""
+        inoutstr = ""
+        # parameter related processing, we treat j2c-arrays differently
+        nparams = length(params)
+        for i = 1:nparams
+            if haskey(lstate.symboltable, params[i])
+                sep = i < nparams ? ", " : ""
+                typ = lstate.symboltable[params[i]]
+                pname = canonicalize(params[i])
+                tname = toCtype(typ)
+                if isArrayType(typ)
+                    vname = "tmparr" * string(i)
+                    declstr *= "uintptr_t $vname = $pname.to_mic(run_where);\n"
+                    paramoffstr *= "*($tname*)$vname" * sep
+                    memstr *= "delete ($tname*)$vname;\n"
+                else
+                    paramoffstr *= pname * sep
+                end
+            else
+              error("Root function cannot have non-Symbol parameter: ", params[i])
+            end
+        end
+        if length(jtyp) > 0 && nparams > 0
+            paramoffstr *= ", "
+        end
+        # return type related processing
+        for i in length(jtyp)
+            sep = i < length(jtyp) ? ", " : ""
+            typ = jtyp[i]
+            j = string(i-1)
+            rname = "ret" * j
+            if isArrayType(typ)
+                vname = "retval" * j
+                tname = toCtype(typ)
+                pname = "tmpret" * j
+                declstr *= "uintptr_t $vname;\n"
+                initstr *= "$tname *$pname = new $tname();\n"
+                initstr *= "$vname = (uintptr_t)$pname;\n"
+                outstr *= vname * sep
+                paramoffstr *= pname * sep
+                retstr *= "**$rname = $tname::from_mic(run_where, $vname);\n"
+                memstr *= "$tname *$pname = ($tname*)$vname;\n"
+                memstr *= "delete $pname;\n"
+            else
+                paramoffstr *= rname * sep
+            end
+        end
+         unaliased_func_call = 
+        "if (run_where >= 0) {
+           $declstr
+           #pragma offload target(mic:run_where) out($outstr)
+           {
+             $initstr
+             $unaliased_func($paramoffstr);
+           }
+           $retstr
+           #pragma offload target(mic:run_where) 
+           {
+             $memstr
+           }
+         }
+         else {
+           $unaliased_func($actualParams);
+         }"
+    end
+
     # If we are forcing vectorization then we will not emit the alias check
     emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
     s::ASCIIString = ""
     if emitaliascheck && alias_check != nothing
         assert(isa(alias_check, AbstractString))
-        unaliased_func = functionName * "_unaliased"
 
         s *=
         "extern \"C\" void _$(functionName)_($wrapperParams $retSlot) {\n
@@ -2374,7 +2450,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
             if ($alias_check) {
                 $functionName($actualParams);
             } else {
-                $unaliased_func($actualParams);
+                $unaliased_func_call
             }
         }\n"
     else
@@ -2696,6 +2772,11 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
     if USE_OMP == 1 || USE_DAAL==1
         push!(Opts, "-qopenmp")
+    end
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE ||
+       ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
+        push!(Opts,"-DJ2C_ARRAY_OFFLOAD")
+        push!(Opts,"-qoffload-attribute-target=mic")
     end
     # Generate dyn_lib
     compileCommand = `$comp $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`

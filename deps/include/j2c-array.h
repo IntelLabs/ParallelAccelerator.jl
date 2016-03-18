@@ -121,7 +121,9 @@ PRINTF("scalar copy to mic data = %x start = %d len = %d\n", data, start, len);
 FLUSH();
         data += start;
         dst  += sizeof(ELEMENT_TYPE) * start;
-// #pragma offload target(mic:run_where) in(data:length(len))
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) in(data:length(len))
+#endif
         {
             memcpy((void*)dst, (void*)data, sizeof(ELEMENT_TYPE) * len);
         }
@@ -137,7 +139,9 @@ FLUSH();
         dst  += start;
 PRINTF("scalar copy from mic data = %x dst = %x\n", data, dst);
 FLUSH();
-// #pragma offload target(mic:run_where) out(tmp[0:len]:into(dst[0:len]) preallocated alloc_if(1))
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) out(tmp[0:len]:into(dst[0:len]) preallocated alloc_if(1))
+#endif
         {
             tmp = (ELEMENT_TYPE*)data;
         }
@@ -203,7 +207,9 @@ FLUSH();
             else
                 tmp[i] = 0;
         }
-// #pragma offload target(mic:run_where) in(tmp:length(len))
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) in(tmp:length(len))
+#endif
         {
             j2c_array<ELEMENT_TYPE> *arr = (j2c_array<ELEMENT_TYPE>*)dst;
             for (int64_t i = 0; i < len; i++)
@@ -220,7 +226,7 @@ FLUSH();
    // Return host pointer of type j2c_array<ELEMENT_TYPE>*
    static inline void copy_from_mic(int run_where, j2c_array<ELEMENT_TYPE> *dst, uintptr_t data, int64_t start, int64_t len) {
         uintptr_t _data[len];
-//#pragma offload target(mic:run_where) out(tmpdata[0:len]:into(_data[0:len]) preallocated targetptr alloc_if(1))
+//        #pragma offload target(mic:run_where) out(tmpdata[0:len]:into(_data[0:len]) preallocated targetptr alloc_if(1))
 //        #pragma offload target(mic:run_where) inout(_data:length(len))
         {
             for (int i = 0; i < len; i++)
@@ -568,7 +574,9 @@ FLUSH();
     uintptr_t inline to_mic(const int run_where, int64_t _num_dim, int64_t lower[], int64_t upper[]) {
         uintptr_t _arr, _data;
         assert(num_dim == _num_dim);
-// #pragma offload target(mic:run_where) in(dims) out(_arr) out(_data)
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) in(dims) out(_arr) out(_data)
+#endif
         {
             j2c_array<ELEMENT_TYPE> *tmp = new j2c_array<ELEMENT_TYPE>(NULL, num_dim, dims);
             _arr = (uintptr_t)tmp;
@@ -597,7 +605,9 @@ FLUSH();
 
     uintptr_t inline to_mic(const int run_where) {
         uintptr_t _arr, _data;
-// #pragma offload target(mic:run_where) in(dims) out(_arr) out(_data)
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) in(dims) out(_arr) out(_data)
+#endif
         {
             j2c_array<ELEMENT_TYPE> *tmp = new j2c_array<ELEMENT_TYPE>(NULL, num_dim, dims);
             _arr = (uintptr_t)tmp;
@@ -641,7 +651,9 @@ FLUSH();
         assert(num_dim == _num_dim);
         int64_t obj_num_dim;
         uintptr_t _data;
-// #pragma offload target(mic:run_where) out(_data) out(obj_num_dim)
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) out(_data) out(obj_num_dim)
+#endif
         {
             j2c_array<ELEMENT_TYPE> *tmp = (j2c_array<ELEMENT_TYPE>*)obj;
             _data = (uintptr_t)tmp->data;
@@ -673,7 +685,9 @@ FLUSH();
         unsigned num_dim, len;
         int64_t dims[MAX_DIM], *tmpdims;
         uintptr_t data;
-// #pragma offload target(mic:run_where) out(data) out(num_dim) out(tmpdims[0:MAX_DIM]:into(dims[0:MAX_DIM]) preallocated alloc_if(1))
+#ifdef J2C_ARRAY_OFFLOAD
+#pragma offload target(mic:run_where) out(data) out(num_dim) out(tmpdims[0:MAX_DIM]:into(dims[0:MAX_DIM]) preallocated alloc_if(1))
+#endif
         {
             j2c_array<ELEMENT_TYPE> *tmp = (j2c_array<ELEMENT_TYPE>*)obj;
             data = (uintptr_t)tmp->data;
