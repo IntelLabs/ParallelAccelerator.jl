@@ -2023,7 +2023,7 @@ function from_expr(ast::Expr)
 
     elseif head == :body
         @dprintln(3,"Compiling body")
-        if include_rand
+        if include_rand && (contains(string(ast),"rand!") || contains(string(ast),"randn!"))
             s *= "std::random_device cgen_rand_device;\n"
             s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
             s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
