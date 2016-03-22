@@ -1714,10 +1714,12 @@ function sub_cur_body_walk(x::Expr,
 
     dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
     if x.head == :call
-        dprintln(dbglvl,"sub_cur_body_walk xtype is call")
+        dprintln(dbglvl,"sub_cur_body_walk xtype is call x.args[1] = ", x.args[1], " type = ", typeof(x.args[1]))
         # Found a call to arrayref.
-        if x.args[1] == TopNode(:arrayref) || x.args[1] == TopNode(:unsafe_arrayref)
-            dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref")
+        if x.args[1] == TopNode(:arrayref) || 
+           x.args[1] == TopNode(:unsafe_arrayref) || 
+           x.args[1] == GlobalRef(ParallelAccelerator.API, :getindex)
+            dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref, unsafe_arrayref, or getindex")
             array_name = x.args[2]
             index      = x.args[3]
             assert(isa(array_name, SymNodeGen))
@@ -2841,6 +2843,31 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
 end
 
 """
+A nested lambda may contain labels that conflict with labels in the top-level statements of the function being processed.
+We take the maxLabel or those top-level statements and re-number labels in the nested lambda and update maxLabel.
+"""
+function integrateLabels(ast, maxLabel) 
+  state = CompilerTools.OptFramework.lmstate()
+  AstWalk(ast, CompilerTools.OptFramework.create_label_map, state)
+  @dprintln(3,"integrateLabels label mapping = ", state.label_map, " incoming maxLabel = ", maxLabel)
+  state.last_was_label = false
+
+  for entry in state.label_map
+    key   = entry[1]
+    value = entry[2]
+    if value <= maxLabel
+      delete!(state.label_map, key)
+      maxLabel = maxLabel + 1
+      state.label_map[key] = maxLabel
+    end
+  end
+  @dprintln(3,"integrateLabels updated label mapping = ", state.label_map, " new maxLabel = ", maxLabel)
+
+  ast = AstWalk(ast, CompilerTools.OptFramework.update_labels, state)
+  return (ast, maxLabel)
+end
+
+"""
 A routine similar to the main parallel IR entry put but designed to process the lambda part of
 domain IR AST nodes.
 """
@@ -2851,6 +2878,8 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
     @dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
 
     start_time = time_ns()
+
+    (ast, max_label) = integrateLabels(ast, max_label) 
 
     @dprintln(1,"Starting liveness analysis.")
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
@@ -3140,6 +3169,7 @@ function from_root(function_name, ast :: Expr)
     printLambda(3, ast)
 
     new_vars.block_lives = lives
+    @dprintln(3,"max_label before main Parallel IR = ", new_vars.max_label)
     @dprintln(3,"Lives before main Parallel IR = ")
     @dprintln(3,lives)
 

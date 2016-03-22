@@ -101,11 +101,11 @@ const USE_GCC = 1
 USE_OMP = 1
 
 function enableOMP()
-    USE_OMP = 1
+    global USE_OMP = 1
 end
 
 function disableOMP()
-    USE_OMP = 0
+    global USE_OMP = 0
 end
 
 function isDistributedMode()
@@ -134,15 +134,15 @@ if isfile("$package_root/deps/generated/config.jl")
 end
 
 if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
-    USE_OMP = 0
+    global USE_OMP = 0
 else # on osx, use OpenMP only when ICC is used since GCC/Clang doesn't support it
     @osx? (
     begin
-        USE_OMP = USE_ICC
+        global USE_OMP = USE_ICC
     end
     :
     begin
-        USE_OMP = 1
+        global USE_OMP = 1
     end
     )
 end
@@ -2023,7 +2023,7 @@ function from_expr(ast::Expr)
 
     elseif head == :body
         @dprintln(3,"Compiling body")
-        if include_rand
+        if include_rand && (contains(string(ast),"rand!") || contains(string(ast),"randn!"))
             s *= "std::random_device cgen_rand_device;\n"
             s *= "std::uniform_real_distribution<double> cgen_distribution(0.0,1.0);\n"
             s *= "std::normal_distribution<double> cgen_n_distribution(0.0,1.0);\n"
@@ -2748,6 +2748,15 @@ function writec(s, outfile_name=nothing; with_headers=false)
     return outfile_name
 end
 
+function getGccName()
+    ret = "g++"
+    @windows_only begin
+         ret = "x86_64-w64-mingw32-g++"
+    end
+
+    return ret
+end
+
 function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
   # return an error if this is not overwritten with a valid compiler
   compileCommand = `echo "invalid backend compiler"`
@@ -2784,7 +2793,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     # Generate dyn_lib
     compileCommand = `$comp $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
   elseif backend_compiler == USE_GCC
-    comp = "g++"
+    comp = getGccName()
     if isDistributedMode()
         comp = "mpic++"
     end
@@ -2881,7 +2890,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
     end
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   elseif backend_compiler == USE_GCC
-    comp = "g++"
+    comp = getGccName()
     if isDistributedMode()
         comp = "mpic++"
     end
@@ -2898,6 +2907,9 @@ end
 
 function link(outfile_name; flags=[])
     lib = "$generated_file_dir/lib$outfile_name.so.1.0"
+    @windows_only begin
+        lib = "$generated_file_dir/lib$outfile_name.dll"
+    end
     if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
         linkCommand = getLinkCommand(outfile_name, lib, flags)
         @dprintln(1,linkCommand)
