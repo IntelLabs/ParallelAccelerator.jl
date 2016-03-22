@@ -2953,6 +2953,8 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
 
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
+    processAndUpdateBody(ast, removeNothingStmts, nothing)
+
     @dprintln(1,"Doing conversion to parallel IR.")
     @dprintln(3,"ast = ", ast)
 
