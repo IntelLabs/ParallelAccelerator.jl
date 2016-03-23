@@ -3003,6 +3003,83 @@ function get_input_arrays(linfo::LambdaVarInfo)
     ret
 end
 
+function isarrayorbitarray(t)
+    return DomainIR.isarray(t) || DomainIR.isbitarray(t)
+end
+
+"""
+Returns a set of SymAllGen's that are arrays for which there are multiple statements that could define that
+array and by implication change its size.
+FIX ME!!!!!!!!!!!!!!!!!!!
+TO-DO!!!!!!!!!!!!!!!!!!!!
+This code doesn't work because it conflates changing the size of the array with changing its contents.
+Instead of scanning liveness information, we need to do precisely one scan of the AST looking for array
+creation points.  If there are multiple of such then we'll preclude that array from having a useful 
+equivalence class.
+"""
+function findMultipleArrayAssigns(lives :: CompilerTools.LivenessAnalysis.BlockLiveness, LambdaVarInfo)
+    ret   = Set{SymAllGen}()
+    found = Set{SymAllGen}()
+
+    # For every basic block.
+    for bb in lives.basic_blocks
+      BB = bb[2]    # get the BasicBlock
+      # Look at one statement at a time.
+      for stmt in BB.statements
+        # For each SymAllGen that is defined in that statement.
+        for d in stmt.def
+          # Get that SymAllGen's type.
+          dtyp = CompilerTools.LambdaHandling.getType(d, LambdaVarInfo)
+          # If it is an array.
+          if isarrayorbitarray(dtyp)
+            # See if we've previously seen another statement in which that SymAllGen was defined.
+            if in(d, found)
+              # If so, then there are multiple statements that define this SymAllGen and so add that to the return set.
+              push!(ret, d)
+            else
+              # We hadn't previously seen this SymAllGen defined in a statement so add it to "found".
+              push!(found, d)
+            end
+          end
+        end
+      end
+    end
+
+    return ret
+end
+
+wellknown_all_unmodified = Set{Any}()
+wellknown_only_first_modified = Set{Any}()
+
+function __init__()
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(./)), force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(.*)), force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(.+)), force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(.-)), force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(/)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(*)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(+)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(-)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(<=)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(<)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(>=)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(>)),  force = true))
+end
+
+function no_mod_impl(func :: GlobalRef, arg_type_tuple :: Array{DataType,1})
+    @dprintln(3, "no_mod_impl func = ", func, " arg_type_tuple = ", arg_type_tuple)
+    if in(func, wellknown_all_unmodified)
+        @dprintln(3, "found in wellknown_all_unmodified")
+        return ones(Int64, length(arg_type_tuple))
+    end
+
+    return nothing
+end
+
+function computeLiveness(ast)
+    return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, nothing, no_mod_cb=no_mod_impl)
+end
+
 """
 The main ENTRY point into ParallelIR.
 1) Do liveness analysis.
@@ -3116,6 +3193,9 @@ function from_root(function_name, ast :: Expr)
     @dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
     printLambda(3, ast)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+
+    #multipleArrayAssigns = findMultipleArrayAssigns(lives, LambdaVarInfo)
+    #@dprintln(3,"Arrays that are assigned multiple times = ", multipleArrayAssigns)
 
     if generalSimplification
         # motivated by logistic regression example
