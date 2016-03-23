@@ -1818,7 +1818,7 @@ function substitute_cur_body(x,
     @dprintln(3,"arrays_set_in_cur_body = ", arrays_set_in_cur_body)
     @dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
     # Walk the AST and call sub_cur_body_walk for each node.
-    return DomainIR.AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
+    return AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
 end
 
 """

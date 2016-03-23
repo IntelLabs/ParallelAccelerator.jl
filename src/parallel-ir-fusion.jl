@@ -52,6 +52,27 @@ function isSymbolsUsed(vars :: Dict{SymGen,SymGen}, top_level_numbers :: Array{I
     return false
 end
 
+function compareIndex(sn1 :: SymbolNode, sn2 :: SymbolNode)
+    @dprintln(3, "compareIndex SymbolNode to SymbolNode")
+    return sn1.name == sn2.name
+end
+function compareIndex(sn :: SymbolNode, s :: Symbol)
+    @dprintln(3, "compareIndex SymbolNode to Symbol")
+    return sn.name == s
+end
+function compareIndex(s1 :: Symbol, s2 :: Symbol)
+    @dprintln(3, "compareIndex Symbol to Symbol")
+    return s1 == s2
+end
+function compareIndex(ex :: Expr, s :: Symbol)
+    @dprintln(3, "compareIndex Expr to Symbol")
+    return false
+end
+function compareIndex(a :: Any, s :: Symbol)
+    @dprintln(3, "compareIndex Any to Symbol")
+    return false
+end
+
 """
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """
@@ -137,13 +158,54 @@ function fuse(body, body_index, cur::Expr, state)
         @dprintln(1, "Fusion won't happen because the first parfor wrote to some array index in a non-simple way that the second parfor needs to access.")
     end
 
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    prev_rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    cur_rws = CompilerTools.ReadWriteSet.from_exprs(cur_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    @dprintln(3, "Fusion prev_rws = ", prev_rws)
+    @dprintln(3, "Fusion cur_rws = ", cur_rws)
+    prev_write_set_array = Set(collect(keys(prev_rws.writeSet.arrays)))
+    #cur_read_set_array   = Set(collect(keys(cur_rws.readSet.arrays)))
+    #cur_read_with_aliases = getAllAliases(cur_read_set_array, map_prev_lhs_post)
+    @dprintln(3, "Fusion prev_write = ", prev_write_set_array)
+    #write_in_prev_read_in_cur = intersect(prev_write_with_aliases, cur_read_with_aliases)
+    #@dprintln(3, "Fusion intersection = ", write_in_prev_read_in_cur)
+    found_array_access_problem = false
+    @dprintln(3, "cur_parfor.loopNests = ", cur_parfor.loopNests)
+    for cur_read_array in collect(keys(cur_rws.readSet.arrays))
+        with_aliases = getAllAliases(Set{SymGen}([cur_read_array]), map_prev_lhs_post)
+        @dprintln(3, "Checking array ", cur_read_array, " with aliases = ", with_aliases)
+        if isempty(intersect(prev_write_set_array, with_aliases))
+            continue
+        end
+        @dprintln(3, "Array  ", cur_read_array, " produced by prev parfor.")
+        accesses = cur_rws.readSet.arrays[cur_read_array]
+        for index_expr in accesses
+            @dprintln(3, "Checking usage  ", index_expr)
+            for index = 1:length(index_expr)
+                if index > length(cur_parfor.loopNests)
+                    @dprintln(3, "Found index expression not just using this dimension's loop index variable")
+                    found_array_access_problem = true
+                    continue
+                end
+                good_index = cur_parfor.loopNests[index].indexVariable
+                @dprintln(3, "Good index here = ", good_index, " cur_index = ", index_expr[index])
+                if !compareIndex(good_index, index_expr[index])
+                    @dprintln(3, "Found index expression not just using this dimension's loop index variable")
+                    found_array_access_problem = true
+                end 
+            end
+        end
+    end
+
     if  prev_iei &&
         cur_iei  &&
         out_correlation == in_correlation &&
         !reduction_var_used &&
         isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) &&
         isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur) &&
-        (prev_num_dims == cur_num_dims)
+        (prev_num_dims == cur_num_dims) &&
+        !found_array_access_problem        
 
         @dprintln(3, "Fusion will happen here.")
 
