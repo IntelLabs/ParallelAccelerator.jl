@@ -227,7 +227,7 @@ FLUSH();
    static inline void copy_from_mic(int run_where, j2c_array<ELEMENT_TYPE> *dst, uintptr_t data, int64_t start, int64_t len) {
         uintptr_t _data[len];
 //        #pragma offload target(mic:run_where) out(tmpdata[0:len]:into(_data[0:len]) preallocated targetptr alloc_if(1))
-//        #pragma offload target(mic:run_where) inout(_data:length(len))
+        #pragma offload target(mic:run_where) inout(_data:length(len))
         {
             for (int i = 0; i < len; i++)
             {
