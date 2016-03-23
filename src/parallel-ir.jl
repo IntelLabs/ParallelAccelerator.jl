@@ -2954,6 +2954,9 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
     processAndUpdateBody(ast, removeNothingStmts, nothing)
+    @dprintln(1,"Re-starting liveness analysis.")
+    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    @dprintln(1,"Finished liveness analysis.")
 
     @dprintln(1,"Doing conversion to parallel IR.")
     @dprintln(3,"ast = ", ast)
