@@ -119,6 +119,7 @@ class j2c_array_copy {
    // FIXME: use into syntax if someone knows how to make it work
 PRINTF("scalar copy to mic data = %x start = %d len = %d\n", data, start, len);
 FLUSH();
+        if (!len) return; // skip zero-length copying
         data += start;
         dst  += sizeof(ELEMENT_TYPE) * start;
 #ifdef J2C_ARRAY_OFFLOAD
@@ -135,6 +136,7 @@ FLUSH();
 PRINTF("scalar copy from mic data = %x start = %d len = %d\n", data, start, len);
 FLUSH();
         ELEMENT_TYPE *tmp;
+        if (!len) return; // skip zero-length copying
         data += sizeof(ELEMENT_TYPE) * start;
         dst  += start;
 PRINTF("scalar copy from mic data = %x dst = %x\n", data, dst);
@@ -200,6 +202,7 @@ class j2c_array_copy<j2c_array<ELEMENT_TYPE> > {
         uintptr_t tmp[len];
 PRINTF("nested copy to mic data = %x start = %d len = %d\n", data, start, len);
 FLUSH();
+        if (!len) return; // skip zero-length copying
         for (int64_t i = 0; i < len; i++)
         {
             if (data[start + i].data != NULL)
@@ -227,7 +230,8 @@ FLUSH();
    static inline void copy_from_mic(int run_where, j2c_array<ELEMENT_TYPE> *dst, uintptr_t data, int64_t start, int64_t len) {
         uintptr_t _data[len];
 //        #pragma offload target(mic:run_where) out(tmpdata[0:len]:into(_data[0:len]) preallocated targetptr alloc_if(1))
-//        #pragma offload target(mic:run_where) inout(_data:length(len))
+        if (!len) return; // skip zero-length copying
+        #pragma offload target(mic:run_where) inout(_data:length(len))
         {
             for (int i = 0; i < len; i++)
             {
