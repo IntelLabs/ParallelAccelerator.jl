@@ -118,9 +118,7 @@ function multiScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::Fl
     return singleScaleOpticalFlow(i1, i2, lam, ni)
   end
   scale = Float32((Float64(w)/50.0)^(-1.0/ns))
-  local u, v  # initialised in the first iteration of the loop
-  u = Array(Float32, 0, 0) # dummy initialization to get type right
-  v = Array(Float32, 0, 0) # dummy initialization to get type right
+  local u::Array{Float32,2}, v::Array{Float32,2} # initialised in the first iteration of the loop
   i = ns
   while i >= 0 
     cw = round(Int, w*scale^Float32(i))

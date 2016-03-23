@@ -2398,7 +2398,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
             paramoffstr *= ", "
         end
         # return type related processing
-        for i in length(jtyp)
+        for i = 1:length(jtyp)
             sep = i < length(jtyp) ? ", " : ""
             typ = jtyp[i]
             j = string(i-1)
@@ -2419,10 +2419,13 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
                 paramoffstr *= rname * sep
             end
         end
+        if length(outstr) != "" 
+            outstr = "out(" * outstr * ")"
+        end
          unaliased_func_call = 
         "if (run_where >= 0) {
            $declstr
-           #pragma offload target(mic:run_where) out($outstr)
+           #pragma offload target(mic:run_where) $outstr
            {
              $initstr
              $unaliased_func($paramoffstr);
