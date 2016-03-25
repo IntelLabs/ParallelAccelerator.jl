@@ -2020,7 +2020,7 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
             lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.LambdaVarInfo)
             if isa(lhs_pa, SymNodeGen)
                 ppftyp = typeof(the_parfor.postParFor[end]) 
-                assert(isa(the_parfor.postParFor[end], SymNodeGen))
+                assert(ppftyp <: SymNodeGen)
                 rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
                 rhs = the_parfor.postParFor[end]
                 rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.LambdaVarInfo))
@@ -3636,7 +3636,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         args = from_exprs(args,depth,state)
     elseif head == :assert
         args = from_exprs(args,depth,state)
-    elseif head == :boundscheck
+    elseif head == :boundscheck || head == :inbounds
         # skip
     elseif head == :meta
         # skip

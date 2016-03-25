@@ -38,6 +38,7 @@ using CompilerTools.Helper
 using Core.Inference: to_tuple_type
 using Base.uncompressed_ast
 using CompilerTools.AliasAnalysis
+using Core: Box, IntrinsicFunction
 
 import ..H5SizeArr_t
 import ..SizeArr_t
@@ -500,10 +501,12 @@ function from_range(rhs::Expr)
     final = 1
     if is(rhs.head, :new) && isUnitRange(rhs.args[1]) &&
         isa(rhs.args[3], Expr) && is(rhs.args[3].head, :call) &&
-        isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
-        is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
-        is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
-        is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))
+        ((isa(rhs.args[3].args[1], GlobalRef) && 
+          rhs.args[3].args[1] == GlobalRef(Base, :select_value)) ||
+         (isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
+          is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
+          is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
+          is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))))
         # only look at final value in select_value of UnitRange
         start = rhs.args[2]
         step  = 1 # FIXME: could be wrong here!
@@ -967,7 +970,7 @@ function from_assignment(state, env, expr::Expr)
     rhstyp = typeOfOpr(state, rhs)
     lhstyp = typeOfOpr(state, lhs)
     dprintln(env, "from_assignment lhs=", lhs, " typ=", typ, " rhs.typ=", rhstyp)
-    if typ != rhstyp && rhstyp != Any
+    if typ != rhstyp && rhstyp != Any && rhstyp != Tuple{}
         #if rhstyp != lhstyp
             updateTyp(state, lhs, rhstyp)
         #end
@@ -992,7 +995,7 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     local ast = expr.args
     local typ = expr.typ
     @assert length(ast) >= 1 "call args cannot be empty"
-    local fun  = ast[1]
+    local fun  = lookupConstDefForArg(state, ast[1])
     local args = ast[2:end]
     dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
     if in(fun, funcIgnoreList)
@@ -1007,15 +1010,15 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     result
 end
 
-function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
+function translate_call(state, env, typ, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
     translate_call_globalref(state, env, typ, head, oldfun, oldargs, fun, args)
 end
 
-function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::Symbol, args)
+function translate_call(state, env, typ, head, oldfun::ANY, oldargs, fun::Symbol, args)
     translate_call_symbol(state, env, typ, head, oldfun, oldargs, fun, args)
 end
 
-function translate_call(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::ANY, args)
+function translate_call(state, env, typ, head, oldfun::ANY, oldargs, fun::ANY, args)
     @dprintln(3,"unrecognized fun type ", fun, " type ", typeof(fun), " args ", args)
     oldargs = normalize_args(state, env, oldargs)
     mk_expr(typ, head, oldfun, oldargs...)
@@ -1305,7 +1308,7 @@ end
     those that are DomainIR specific, such as :alloc, or
     a few exceptions.
 """
-function translate_call_symbol(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::Symbol, args::Array{Any,1})
+function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun::Symbol, args::Array{Any,1})
     local env_ = nextEnv(env)
     local expr::Expr
     expr = Expr(:null)
@@ -1869,10 +1872,11 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     domF = DomainLambda(argstyp, [ety], bodyF, linfo)
     expr::Expr = mk_parallel_for(params, dimExp, domF)
     for i=3:nargs # we have reduction here!
-        @assert (isa(args[i], Expr) && is(args[i].head, :call) && 
-                 is(args[i].args[1], TopNode(:tuple))) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(args[i])
-        redfunc = args[i].args[2]
-        redvar = args[i].args[3]
+        tup = lookupConstDefForArg(state, args[i])
+        @assert (isa(tup, Expr) && is(tup.head, :call) &&
+                 is(tup.args[1], TopNode(:tuple))) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(tup)
+        redfunc = lookupConstDefForArg(state, tup.args[2])
+        redvar = lookupConstDefForArg(state, tup.args[3])
         redvar = isa(redvar, SymbolNode) ? redvar.name : redvar
         rvtyp = typeOfOpr(state, redvar)
         dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
@@ -2098,7 +2102,7 @@ function translate_call_parallel_for(state, env, args::Array{Any,1})
 end
 
 # translate a function call to domain IR if it matches GlobalRef.
-function translate_call_globalref(state, env, typ::DataType, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
+function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
     dprintln(env, "translate_call fun ", fun, "::", typeof(fun), " args=", args, " typ=", typ)
@@ -2252,10 +2256,12 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
     end
     typ = typeOfOpr(state, ast)
     if isa(ast, SymbolNode) && ast.typ != typ
-        @dprintln(2, " SymbolNode ", ast, " updates its type to ", typ)
+        @dprintln(2, " SymbolNode ", ast, " gets updated type ", typ)
         return SymbolNode(ast.name, typ)
+    elseif isa(ast, Symbol)
+        @dprintln(2, " Symbol ", ast, " gets a type ", typ, " and becomes SymbolNode")
+        return SymbolNode(ast, typ)
     end
-    @dprintln(2, " not handled ", ast)
     return ast
 end
 
@@ -2314,6 +2320,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
           ast.args = normalize_args(state, env, args)
         end
         # ?
+    elseif is(head, :inbounds)
+        # skip
     elseif is(head, :meta)
         # skip
     elseif is(head, :static_typeof)

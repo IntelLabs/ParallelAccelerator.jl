@@ -36,6 +36,7 @@ using CompilerTools.Helper
 DebugMsg.init()
 
 using ..ParallelAccelerator
+using Core: IntrinsicFunction
 import ..ParallelIR
 import ..ParallelIR.DelayedFunc
 import CompilerTools

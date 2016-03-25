@@ -31,6 +31,7 @@ DebugMsg.init()
 import Base.show
 using CompilerTools.LambdaHandling
 using CompilerTools.LivenessAnalysis
+using Core: IntrinsicFunction
 
 type CallInfo
     func_sig                             # a tuple of (function, signature)

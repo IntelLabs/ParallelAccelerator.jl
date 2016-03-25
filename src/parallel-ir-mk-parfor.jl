@@ -782,7 +782,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
-    for(i = 1:length(inputInfo))
+    for i = 1:length(inputInfo)
         # If indexed_arrays[i] is not "use" in body_lives then we don't need to generate this statement.
         if CompilerTools.LivenessAnalysis.is_use(toSymGen(indexed_arrays[i]), body_lives)
             push!(out_body, mk_assignment_expr(indexed_arrays[i], mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
@@ -1110,7 +1110,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     # Make sure each input array is a SymbolNode.
     # Also, create indexed versions of those symbols for the loop body.
-    for(i = 1:length(inputInfo))
+    for i = 1:length(inputInfo)
         push!(out_body, mk_assignment_expr(
                            inputInfo[i].elementTemp, 
                            mk_arrayref1(
@@ -1167,7 +1167,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     end
     # Create each output array
     number_output_arrays = length(dl.outputs)
-    for(i = 1:number_output_arrays)
+    for i = 1:number_output_arrays
         new_array_name = string("parallel_ir_new_array_name_", unique_node_id, "_", i)
         @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
