@@ -489,9 +489,12 @@ State to aide in the copy propagation phase.
 type CopyPropagateState
     lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
     copies :: Dict{SymGen, Union{SymGen,Number}}
+    # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
+    safe_copies :: Dict{SymGen, Union{SymGen,Number}}
+    linfo
 
-    function CopyPropagateState(l, c)
-        new(l,c)
+    function CopyPropagateState(l, c,s,li)
+        new(l,c,s,li)
     end
 end
 
@@ -540,7 +543,8 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
 
         if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
             # Only copy propagate within a basic block.  this is now a new basic block.
-            data.copies = Dict{SymGen, SymGen}() 
+            # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
+            data.copies = copy(data.safe_copies)
         elseif isAssignmentNode(node)
             @dprintln(3,"Is an assignment node.")
             lhs = AstWalk(node.args[1], copy_propagate, data)
@@ -553,9 +557,17 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             end
             node.args[1] = lhs
             if isa(rhs, SymAllGen) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
+                lhs = toSymGen(lhs)
+                rhs = toSymGenOrNum(rhs)
                 @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
-                data.copies[toSymGen(lhs)] = toSymGenOrNum(rhs)
+                data.copies[lhs] = rhs
+                if (CompilerTools.LambdaHandling.getDesc(lhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
+                    (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
+                    @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
+                    #@bp
+                    data.safe_copies[lhs] = rhs
+                end
             end
             return node
         end
