@@ -621,13 +621,12 @@ function copy_propagate_helper(node::DomainLambda,
     
     # all copies of escaping_defs should be deleted, since there is no guarantee that their values
     # remain the same at when DomainLambda is actually called.
-    # TODO: what should happen to safe list?
     for (v, d) in node.linfo.escaping_defs
-        @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
-        if haskey(data.copies, v)
+        if haskey(data.copies, v) && !haskey(data.safe_copies, v)
+            @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
             delete!(data.copies, v)
+            @dprintln(3, "data.copies = ", data.copies)
         end
-        @dprintln(3, "data.copies = ", data.copies)
     end
 #=
     # For each statement in this basic block of the form "A = B".
