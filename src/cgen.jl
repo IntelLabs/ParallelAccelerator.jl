@@ -54,7 +54,7 @@ type LambdaGlobalData
     ompprivatelist::Array{Any, 1}
     globalUDTs::Dict{Any, Any}
     symboltable::Dict{Any, Any}
-  tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
+    tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
     compiledfunctions::Array{Any, 1}
     worklist::Array{Any, 1}
     jtypes::Dict{Type, AbstractString}
@@ -1236,7 +1236,7 @@ function from_intrinsic(f :: ANY, args)
         return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
     elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
-    elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext"
+    elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
         return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
     elseif intr == "trunc_llvm" || intr == "trunc"
         return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
@@ -2773,10 +2773,12 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
   if backend_compiler == USE_ICC
     comp = "icpc"
     if isDistributedMode()
-        if NERSC==1
+        if haskey(ENV,"HDF5_DIR")
             HDF5_DIR=ENV["HDF5_DIR"]
-            comp = "CC"
             push!(Opts, "-I$HDF5_DIR/include")
+        end
+        if NERSC==1
+            comp = "CC"
         else
             comp = "mpiicpc"
         end
@@ -2856,10 +2858,14 @@ function getLinkCommand(outfile_name, lib, flags=[])
         end
     end
     if USE_HDF5==1
-        if NERSC==1
-          HDF5_DIR=ENV["HDF5_DIR"]
-          push!(linkLibs,"-L$HDF5_DIR/lib")
-      end
+        if haskey(ENV,"HDF5_DIR")
+            HDF5_DIR=ENV["HDF5_DIR"]
+            push!(linkLibs,"-L$HDF5_DIR/lib")
+        end
+#        if NERSC==1
+#          HDF5_DIR=ENV["HDF5_DIR"]
+#          push!(linkLibs,"-L$HDF5_DIR/lib")
+#      end
       #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5")
       push!(linkLibs,"-lhdf5")
   end
