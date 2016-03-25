@@ -349,7 +349,7 @@ function from_includes()
         s *= "#include <random>\n"
     end
     if isDistributedMode()
-        s *= "#include <mpi.h>\n"
+        s *= "#include <mpi.h>\n#include <ctime>\n"
     end
     if USE_HDF5==1 
         s *= "#include \"hdf5.h\"\n"
