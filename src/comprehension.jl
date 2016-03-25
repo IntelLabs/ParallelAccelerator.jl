@@ -47,7 +47,11 @@ function comprehension_to_cartesianarray(ast)
     indices[i] = r.args[1]
     params[i] = gensym(string(indices[i]))
     ranges[i] = r.args[2]
-    headers[i] = Expr(:(=), indices[i], Expr(:call, GlobalRef(Base, :getindex), ranges[i], params[i]))
+    #headers[i] = Expr(:(=), indices[i], Expr(:call, GlobalRef(Base, :getindex), ranges[i], params[i]))
+    #first(v) + (i-1)*step(v)
+    first = GlobalRef(Base, :first)
+    step = GlobalRef(Base, :step)
+    headers[i] = :($(indices[i]) = $first($(ranges[i])) + ($(params[i]) - 1) * $step($(ranges[i])))
   end
   args = Expr(:tuple, params...)
   dims = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
