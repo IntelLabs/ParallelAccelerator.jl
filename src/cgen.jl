@@ -1008,7 +1008,7 @@ function get_alloc_shape(args, dims)
        ((isa(arg, SymbolNode) || isa(arg, Symbol) || isa(arg, GenSym)) &&
         istupletyp(getSymType(arg))) # in case where the argument is a tuple
         arg_str = from_expr(arg)
-        for i in 1:dims
+        for i in 0:dims-1
             push!(shp, arg_str * ".f" * string(i))
         end
     else
@@ -1032,7 +1032,7 @@ function from_arrayalloc(args)
     @dprintln(3,"Array alloc after ctype conversion typ = ", typ)
     shape = get_alloc_shape(args, dims)
     @dprintln(3,"Array alloc shape = ", shape)
-    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape);\n"
+    return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape)"
 end
 
 function from_builtins_comp(f, args)
@@ -1238,9 +1238,9 @@ function from_intrinsic(f :: ANY, args)
     elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
         return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
     elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
-        return "(" * toCtype(eval(args[1])) * ")" * from_expr(args[2])
+        return "(" * toCtype(args[1]) * ")" * from_expr(args[2])
     elseif intr == "trunc_llvm" || intr == "trunc"
-        return from_expr(args[1]) * "trunc(" * from_expr(args[2]) * ")"
+        return "(" * toCtype(args[1]) * ") trunc(" * from_expr(args[2]) * ")"
     elseif intr == "floor_llvm" || intr == "floor"
         return "floor(" * from_expr(args[1]) * ")"
     elseif intr == "ceil_llvm" || intr == "ceil"
@@ -1261,7 +1261,7 @@ function from_intrinsic(f :: ANY, args)
         #return "assert(" * "isNan(" * from_expr(args[1]) * ") && !isNan(" * from_expr(args[2]) * "))"
         return from_expr(args[1])
     elseif intr in ["checked_trunc_uint", "checked_trunc_sint"]
-        return "$(from_expr(args[1])) $(from_expr(args[2]))"
+        return "(" * toCtype(args[1]) * ")(" * from_expr(args[2]) * ")"
     else
         @dprintln(3,"Intrinsic ", intr, " is known but no translation available")
         throw("Unhandled Intrinsic...")
@@ -1271,6 +1271,7 @@ end
 function from_inlineable(f, args)
     @dprintln(3,"Checking if ", f, " can be inlined")
     @dprintln(3,"Args are: ", args)
+#=
     if has(_operators, string(f))
         if length(args) == 1
           return "(" * string(f) * from_expr(args[1]) * ")"
@@ -1279,6 +1280,8 @@ function from_inlineable(f, args)
           return s 
         end
     elseif has(_builtins, string(f))
+=#
+    if has(_builtins, string(f))
         return from_builtins(f, args)
     elseif has(_Intrinsics, string(f))
         return from_intrinsic(f, args)
@@ -1288,7 +1291,8 @@ function from_inlineable(f, args)
 end
 
 function isInlineable(f, args)
-    if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
+    #if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
+    if has(_builtins, string(f)) || has(_Intrinsics, string(f))
         return true
     end
     return false
@@ -1479,7 +1483,11 @@ function from_call(ast::Array{Any, 1})
         return fs
     end
     @dprintln(3,"Not inlinable")
-    funStr = "_" * string(fun)
+    if isa(mod, Module) 
+        funStr = "_" * from_expr(GlobalRef(mod, fun))
+    else
+        funStr = "_" * from_expr(fun)
+    end
 
     # If we have previously compiled this function
     # we fallthru and simply emit the call.
@@ -1505,7 +1513,7 @@ function from_call(ast::Array{Any, 1})
     s = ""
     map((i)->@dprintln(3,i[2]), lstate.worklist)
     map((i)->@dprintln(3,i), lstate.compiledfunctions)
-    s *= "_" * from_expr(fun) * "("
+    s *= funStr * "("
     argTyps = []
     for a in 1:length(args)
         s *= from_expr(args[a]) * (a < length(args) ? "," : "")
@@ -1536,8 +1544,8 @@ function from_call(ast::Array{Any, 1})
             @dprintln(3,name);
         end
         =#
-        @dprintln(3,"Inserting: ", fun, " : ", "_" * canonicalize(fun), " : ", arrayToTuple(argTyps))
-        insert(fun, mod, "_" * canonicalize(fun), arrayToTuple(argTyps))
+        @dprintln(3,"Inserting: ", fun, " : ", funStr, " : ", arrayToTuple(argTyps))
+        insert(fun, mod, funStr, arrayToTuple(argTyps))
     end
     s
 end
@@ -1636,18 +1644,19 @@ function from_comparison(args)
 end
 
 function from_globalref(ast)
+    ast = Base.resolve(ast, force=true)
     mod = ast.mod
     name = ast.name
     @dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
     # handle global constant
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
-        if isbits(def) && !isa(def, IntrinsicFunction)
+        if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
           return from_expr(def)
         end
     end
  
-    from_expr(name)
+    canonicalize(mod) * "_" * from_expr(name)
 end
 
 function from_topnode(ast)
@@ -2169,7 +2178,7 @@ function from_expr(ast::GenSym)
 end
 
 function from_expr(ast::Type)
-    s = ""
+    s = "{}" # because Type are translated to empty struct
 #    if isPrimitiveJuliaType(ast)
 #        s = "(" * toCtype(ast) * ")"
 #    else
