@@ -3116,7 +3116,7 @@ function from_root(function_name, ast :: Expr)
     
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
-    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}()))
+    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(),Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
@@ -3203,7 +3203,7 @@ function from_root(function_name, ast :: Expr)
         # initial round of size analysis (create_equivalence_classes) so arraysize() calls are replaced
         # main copy propagation round after arraysize() replacement
         # main size analysis after all size variables are propagated
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}()))
+        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(),Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
         new_vars = expr_state(lives, max_label, input_arrays)
@@ -3213,7 +3213,7 @@ function from_root(function_name, ast :: Expr)
         print_correlations(3, new_vars)
 
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}()))
+        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(), Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
         @dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
         printLambda(3, ast)
