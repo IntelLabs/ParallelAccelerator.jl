@@ -147,6 +147,7 @@ end
 
 end
 
+using Base.Test
 using MapReduceTest
 println("Testing map and reduce...")
 

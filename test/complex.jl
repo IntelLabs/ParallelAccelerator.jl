@@ -64,6 +64,8 @@ end
 
 end
 
+using Base.Test
+
 println("Testing complex number support...")
 @test ComplexTest.test1() 
 @test ComplexTest.test2()

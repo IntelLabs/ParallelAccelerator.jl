@@ -72,6 +72,8 @@ end
 
 end
 
+using Base.Test
+
 println("Testing BitArrays...")
 @test BitArrayTest.test1() == [1.1; 0.1; 0.1; 1.9]
 @test BitArrayTest.test2() == [1.1; 0.1; 0.1; 1.9]

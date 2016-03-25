@@ -26,6 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module TestLogisticRegression
 using ParallelAccelerator
 
+#ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.DomainIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
 

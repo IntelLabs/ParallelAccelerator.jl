@@ -65,6 +65,7 @@ end
 
 end
 
+using Base.Test
 
 println("Testing abs()...")
 @test AbsTest.test1() == 3

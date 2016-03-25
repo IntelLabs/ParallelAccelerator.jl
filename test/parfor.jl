@@ -26,7 +26,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module ParForTest
 
 using ParallelAccelerator
-
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
 @acc function parfor1(n)
  A = Array(Int, n, n)
  @par for i in 1:n, j in 1:n
@@ -44,7 +46,7 @@ end
     s = s + A[i,j]
     m = m + 1
  end
- return s .* m
+ return s * m
 end
 
 @acc function parfor3(n)
