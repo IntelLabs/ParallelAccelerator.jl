@@ -302,7 +302,7 @@ function fuse(body, body_index, cur::Expr, state)
         end
 
         if parforArrayInput(prev_parfor)
-            first_arraylen = getFirstArrayLens(prev_parfor.preParFor, prev_num_dims)
+            first_arraylen = getFirstArrayLens(prev_parfor, prev_num_dims, state)
         end
 
         # Merge each part of the two parfor nodes.

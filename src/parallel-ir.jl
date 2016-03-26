@@ -1671,9 +1671,10 @@ end
 """
 Get the variable which holds the length of the first input array to a parfor.
 """
-function getFirstArrayLens(prestatements, num_dims)
+function getFirstArrayLens(parfor, num_dims, state)
     ret = Any[]
-
+#@bp
+    prestatements = parfor.preParFor
     # Scan the prestatements and find the assignment nodes.
     # If it is an assignment from arraysize.
     for i = 1:length(prestatements)
@@ -1683,6 +1684,19 @@ function getFirstArrayLens(prestatements, num_dims)
             rhs = x.args[2]
             if (typeof(lhs) == SymbolNode) && (typeof(rhs) == Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
                 push!(ret, lhs)
+            end
+        end
+    end
+    # if arraysize calls were replaced for constant size array
+    if length(ret)==0
+        # assuming first_input is valid at this point since it is before fusion of this parfor
+        arr = parfor.first_input.array
+        arr_class = state.array_length_correlation[arr]
+        for (d, v) in state.symbol_array_correlation
+            if v==arr_class
+                #
+                ret = d
+                break
             end
         end
     end

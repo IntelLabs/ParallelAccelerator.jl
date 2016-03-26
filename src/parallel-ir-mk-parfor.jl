@@ -360,7 +360,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # Create empty arrays to hold pre and post statements.
     pre_statements  = copy(inputInfo.pre_offsets)
     post_statements = Any[]
-    save_array_lens  = AbstractString[]
+    save_array_lens  = []
     input_array_rangeconds = Array(Any, num_dim_inputs)
 
     # Insert a statement to assign the length of the input arrays to a var
@@ -397,7 +397,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             end
         end 
         CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        push!(save_array_lens, save_array_len)
+        push!(save_array_lens, symbol(save_array_len))
         loop_nest = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int), 1)
         if red_dim > 0
             if red_dim == i
@@ -707,15 +707,35 @@ end
 function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, inputInfo, unique_node_id, parfor_index_syms, state)
     loopNests = Array(PIRLoopNest, num_dim_inputs)
     @dprintln(3, "gen_pir_loopnest for ", inputInfo[1])
+    # don't generate arraysize calls if input array's size is constant
+    # this will help allocation of mmap output have constant size enabling optimizations
+    arr = toSymGen(inputInfo[1].array)
+    const_sizes = []
+    if haskey(state.array_length_correlation, arr)
+        arr_class = state.array_length_correlation[arr]
+        for (d, v) in state.symbol_array_correlation
+            if v==arr_class
+                #
+                const_sizes = d
+                @dprintln(3, "parfor input array size found: ", const_sizes)
+                break
+            end
+        end
+    end
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
         save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
         @dprintln(3, "Creating expr for ", save_array_len)
-        array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
+        if length(const_sizes)!=0
+            array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), const_sizes[i], state)
+            push!(save_array_lens, const_sizes[i])
+        else
+            push!(save_array_lens, symbol(save_array_len))
+            array1_len = mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), mk_arraylen_expr(inputInfo[1],i), state)
+        end
+        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_len)
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        push!(save_array_lens, save_array_len)
         loopNests[num_dim_inputs - i + 1] = PIRLoopNest(SymbolNode(parfor_index_syms[i],Int), 1, SymbolNode(symbol(save_array_len),Int),1)
     end
     return loopNests
@@ -759,7 +779,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     post_statements = Any[]
 
    # not used here?
-    save_array_lens = AbstractString[]
+    save_array_lens = []
     # generates loopnests and updates pre_statements
     loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs,inputInfo,unique_node_id, parfor_index_syms, state)
 
@@ -1106,7 +1126,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     post_statements = Any[]
     # To hold the names of newly created output arrays.
     new_array_symbols = Symbol[]
-    save_array_lens   = AbstractString[]
+    save_array_lens   = []
 
     # Make sure each input array is a SymbolNode.
     # Also, create indexed versions of those symbols for the loop body.
@@ -1172,11 +1192,11 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
         if num_dim_inputs == 1
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1])), state)
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
         elseif num_dim_inputs == 2
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2])), state)
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2]), state)
         elseif num_dim_inputs == 3
-            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, symbol(save_array_lens[1]), symbol(save_array_lens[2]), symbol(save_array_lens[3])), state)
+            new_ass_expr = mk_assignment_expr(SymbolNode(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2], save_array_lens[3]), state)
         else
             throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
         end
