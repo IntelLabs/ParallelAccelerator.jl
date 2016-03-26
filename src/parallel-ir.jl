@@ -1673,7 +1673,6 @@ Get the variable which holds the length of the first input array to a parfor.
 """
 function getFirstArrayLens(parfor, num_dims, state)
     ret = Any[]
-#@bp
     prestatements = parfor.preParFor
     # Scan the prestatements and find the assignment nodes.
     # If it is an assignment from arraysize.
@@ -1690,7 +1689,7 @@ function getFirstArrayLens(parfor, num_dims, state)
     # if arraysize calls were replaced for constant size array
     if length(ret)==0
         # assuming first_input is valid at this point since it is before fusion of this parfor
-        arr = parfor.first_input.array
+        arr = toSymGen(parfor.first_input.array)
         arr_class = state.array_length_correlation[arr]
         for (d, v) in state.symbol_array_correlation
             if v==arr_class
@@ -2885,7 +2884,7 @@ end
 A routine similar to the main parallel IR entry put but designed to process the lambda part of
 domain IR AST nodes.
 """
-function nested_function_exprs(max_label, domain_lambda, dl_inputs)
+function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     @dprintln(2,"nested_function_exprs max_label = ", max_label)
     @dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
     (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
@@ -2937,6 +2936,8 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
+    # import correlations of escaping variables to enable optimizations
+    setEscCorrelations!(new_vars, domain_lambda, out_state, length(input_arrays))
     @dprintln(3,"Creating equivalence classes.")
     AstWalk(ast, create_equivalence_classes, new_vars)
     @dprintln(3,"Done creating equivalence classes.")
@@ -2987,6 +2988,30 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     (new_vars.max_label, ast, ast.args[3].args, new_vars.block_lives)
+end
+
+"""
+Import correlations of escaping variables from outer lambda
+to enable further optimizations.
+"""
+function setEscCorrelations!(new_vars, domain_lambda, out_state, input_length)
+    # intersection of escaping variables and out lambda's correlation variables
+    esc_vars = getEscapingVariables(domain_lambda.linfo)
+    out_length_vars = collect(keys(out_state.array_length_correlation))
+    intersect_vars = intersect(esc_vars, out_length_vars)
+    for arr in intersect_vars
+        corr_class = out_state.array_length_correlation[arr]
+        new_vars.array_length_correlation[arr] = corr_class+input_length+1
+        for (s,c) in out_state.symbol_array_correlation
+            if c==corr_class
+                new_vars.symbol_array_correlation[s] = c+input_length+1
+            end
+        end
+    end
+    if length(new_vars.array_length_correlation)!=0
+        new_vars.next_eq_class = maximum(values(new_vars.array_length_correlation))+1
+    end
+    nothing
 end
 
 function addStatementsToBeginning(lambda :: Expr, stmts :: Array{Any,1})

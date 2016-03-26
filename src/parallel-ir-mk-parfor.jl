@@ -257,7 +257,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     init_var = SymbolNode(symbol("temp_neutral_val"), neutral_val.inputs[1])
     neutral_val_inputs = [init_var]
-    (max_label, nested_lambda, neutral_val_body) = nested_function_exprs(state.max_label, neutral_val, neutral_val_inputs)
+    (max_label, nested_lambda, neutral_val_body) = nested_function_exprs(state.max_label, neutral_val, neutral_val_inputs, state)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
     neutral_val_body = CompilerTools.LambdaHandling.replaceExprWithDict!(neutral_val_body, gensym_map, AstWalk)
     state.max_label = max_label
@@ -275,7 +275,7 @@ end
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
     # call domain ir to generate most of the body of the function (except for saving the output)
     reduction_func_inputs = [reduction_var, delta_var]
-    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, reduction_func, reduction_func_inputs)
+    (max_label, nested_lambda, temp_body) = nested_function_exprs(state.max_label, reduction_func, reduction_func_inputs, state)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
     temp_body = CompilerTools.LambdaHandling.replaceExprWithDict!(temp_body, gensym_map, AstWalk)
     state.max_label = max_label
@@ -796,7 +796,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     dl_inputs = with_indices ? vcat(indexed_arrays, [SymbolNode(s, Int) for s in parfor_index_syms ]) : indexed_arrays
     @dprintln(3,"dl_inputs = ", dl_inputs)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, nested_body, body_lives) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    (max_label, nested_lambda, nested_body, body_lives) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
     gensym_map  = mergeLambdaIntoOuterState(state, nested_lambda)
     nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
 
@@ -928,7 +928,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         #redvar_map[redvar] = out_var.name
     end
     dl_inputs = [SymbolNode(s, Int) for s in loopvars]
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs)
+    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
     #gensym_map = merge(mergeLambdaIntoOuterState(state, nested_lambda), redvar_map)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
     nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map, AstWalk)
@@ -1158,7 +1158,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays)
+    (max_label, nested_lambda, nested_body) = nested_function_exprs(state.max_label, dl, indexed_arrays, state)
     gensym_map = mergeLambdaIntoOuterState(state, nested_lambda)
     nested_body = CompilerTools.LambdaHandling.replaceExprWithDict!(nested_body, gensym_map)
     state.max_label = max_label
