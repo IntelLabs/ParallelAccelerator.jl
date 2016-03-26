@@ -1271,7 +1271,7 @@ end
 function from_inlineable(f, args)
     @dprintln(3,"Checking if ", f, " can be inlined")
     @dprintln(3,"Args are: ", args)
-#=
+
     if has(_operators, string(f))
         if length(args) == 1
           return "(" * string(f) * from_expr(args[1]) * ")"
@@ -1280,8 +1280,8 @@ function from_inlineable(f, args)
           return s 
         end
     elseif has(_builtins, string(f))
-=#
-    if has(_builtins, string(f))
+
+#    if has(_builtins, string(f))
         return from_builtins(f, args)
     elseif has(_Intrinsics, string(f))
         return from_intrinsic(f, args)
@@ -1291,8 +1291,8 @@ function from_inlineable(f, args)
 end
 
 function isInlineable(f, args)
-    #if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
-    if has(_builtins, string(f)) || has(_Intrinsics, string(f))
+    if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
+    #if has(_builtins, string(f)) || has(_Intrinsics, string(f))
         return true
     end
     return false
