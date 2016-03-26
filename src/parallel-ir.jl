@@ -655,6 +655,7 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 """
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
+
     ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
     new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
@@ -669,9 +670,9 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        #arg_types,
        atype,
        0,
-       SymbolNode(length1,Int),
+       get_length_expr(length1),
        0,
-       SymbolNode(length2,Int),
+       get_length_expr(length2), 
        0)
 end
 
@@ -683,7 +684,7 @@ function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
     ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
-
+    
     TypedExpr(
        atype,
        :call,
@@ -693,11 +694,11 @@ function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
        new_svec,
        atype,
        0,
-       SymbolNode(length1,Int),
+       get_length_expr(length1),
        0,
-       SymbolNode(length2,Int),
+       get_length_expr(length2),
        0,
-       SymbolNode(length3,Int),
+       get_length_expr(length3),
        0)
 end
 
