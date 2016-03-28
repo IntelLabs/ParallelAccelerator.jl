@@ -161,6 +161,16 @@ end
 external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
 external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs)->"")
 
+type CgenUserOptions
+    includeStatements
+end
+
+userOptions = CgenUserOptions[]
+
+function addCgenUserOptions(value)
+    push!(userOptions, value)
+end
+
 """
 Other packages can set external functions for pattern matching calls in CGen
 """
@@ -349,7 +359,7 @@ function from_includes()
         s *= "#include <random>\n"
     end
     if isDistributedMode()
-        s *= "#include <mpi.h>\n#include <ctime>\n"
+        s *= "#include <mpi.h>\n"
     end
     if USE_HDF5==1 
         s *= "#include \"hdf5.h\"\n"
@@ -380,6 +390,10 @@ function from_includes()
     "#include \"$packageroot/deps/include/pse-types.h\"\n",
     "#include \"$packageroot/deps/include/cgen_intrinsics.h\"\n")
     )
+    for userOption in userOptions
+        s *= userOption.includeStatements
+    end
+    
     return s
 end
 
@@ -2718,7 +2732,7 @@ function from_worklist()
             a = ParallelAccelerator.Driver.code_typed(a, typs)
         end
         if length(a) != 1
-            error("Error: expect 1 AST for ", a, " with signature ", types, " but got: ", length(a))
+            error("Error: expect 1 AST for ", a, " with signature ", typs, " but got: ", length(a))
         else
             @dprintln(3,"============ Compiling AST for ", fname, " ============")
             fi, si = from_root_nonentry(a[1], fname, Dict{DataType,Int64}())
