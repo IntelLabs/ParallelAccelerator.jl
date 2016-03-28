@@ -26,7 +26,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module Comprehension
 
 export @comprehend
-
 import CompilerTools
 import ..API
 
@@ -52,6 +51,11 @@ function comprehension_to_cartesianarray(ast)
     first = GlobalRef(Base, :first)
     step = GlobalRef(Base, :step)
     headers[i] = :($(indices[i]) = $first($(ranges[i])) + ($(params[i]) - 1) * $step($(ranges[i])))
+    # if range is 1:N, generate simple assignment instead of formula
+    # this helps copy propagation for nested comprehensions (motivated by K-Means)
+    if isStart1UnitRange(ranges[i])
+        headers[i] = :($(indices[i]) = $(params[i]))
+    end
   end
   args = Expr(:tuple, params...)
   dims = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
@@ -61,6 +65,13 @@ function comprehension_to_cartesianarray(ast)
   ast = Expr(:call, GlobalRef(API, :cartesianarray), 
                 :($args -> let $(headers...); $body end), Expr(:static_typeof, tmpret), :($dims))
   Expr(:block, typetest, ast) 
+end
+
+function isStart1UnitRange(node::Expr)
+    if node.head==:(:) && length(node.args)==2 && node.args[1]==1
+        return true
+    end
+    return false
 end
 
 """
