@@ -19,6 +19,9 @@ matrix:
   allow_failures:
     - julia: nightly
 
+env:
+    - PROSPECT_DEV_MODE=1
+
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
   # Pull in and build CompilerTools dependency.
