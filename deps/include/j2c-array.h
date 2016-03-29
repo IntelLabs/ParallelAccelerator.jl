@@ -441,6 +441,14 @@ FLUSH();
         }
     }
 
+    void serialize(j2c_array_io *s) {
+        j2c_array_copy<ELEMENT_TYPE>::serialize(num_dim, dims, data, s, false);
+    }
+
+    void deserialize(j2c_array_io *s) {
+        j2c_array_copy<ELEMENT_TYPE>::deserialize(s);
+    }
+
     void increment(void) {
       if (refcount) {
 PRINTF("increment %x => %d + 1\n", data, *refcount);
