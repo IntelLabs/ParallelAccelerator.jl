@@ -672,6 +672,14 @@ function toCtype(typ::Tuple)
     return "Tuple" * mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", typ)
 end
 
+function toCtype(typ::GlobalRef)
+    if typ.mod == Base
+        return toCtype(eval(typ))
+    else
+        error("Not implemented")
+    end
+end
+
 # Generate a C++ type name for a Julia type
 function toCtype(typ::DataType)
     if haskey(lstate.jtypes, typ)
