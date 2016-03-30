@@ -737,7 +737,7 @@ function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: 
     if temp_type == nothing
         temp_type = getArrayElemType(array_sn, state)
     end
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", get_unique_num(), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 
