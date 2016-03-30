@@ -1883,8 +1883,9 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         @assert (isa(redvar, Symbol)) "Expect a Symbol or SymbolNode at the position of the reduction variable, but got " * string(redvar)
         nlinfo = LambdaVarInfo()
         addEscapingVariable(redvar, Int, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
+        nval = translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])
         neutral = DomainLambda([rvtyp], [],  
-                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])),
+                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], nval),
                                     Expr(:tuple, lhs[1]) ], nlinfo)
         (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
