@@ -1218,8 +1218,9 @@ function getElemTypeFromAllocExp(typExp::GlobalRef)
 end
 
 function translate_call_copy!(state, env, args)
-    @assert (length(args) == 4) "Expect only one argument to copy!, but got " * string(args)
-    args = normalize_args(state, env, Any[args[2], args[4]])
+    nargs = length(args)
+    @assert (nargs == 2 || nargs == 4) "Expect either 2 or 4 argument to copy!, but got " * string(args)
+    args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
     dprintln(env,"got copy!, args=", args)
     argtyp = typeOfOpr(state, args[1])
     if isarray(argtyp)
