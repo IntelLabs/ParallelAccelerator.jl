@@ -2937,8 +2937,11 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
+    ast_linfo = lambdaExprToLambdaVarInfo(ast)
     # import correlations of escaping variables to enable optimizations
-    setEscCorrelations!(new_vars, domain_lambda, out_state, length(input_arrays))
+    setEscCorrelations!(new_vars, ast_linfo, out_state, length(input_arrays))
+    # meta may have changed, need to update ast
+    ast.args[2] = LambdaHandling.createMeta(ast_linfo)
     @dprintln(3,"Creating equivalence classes.")
     AstWalk(ast, create_equivalence_classes, new_vars)
     @dprintln(3,"Done creating equivalence classes.")
@@ -2995,9 +2998,10 @@ end
 Import correlations of escaping variables from outer lambda
 to enable further optimizations.
 """
-function setEscCorrelations!(new_vars, domain_lambda, out_state, input_length)
+function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     # intersection of escaping variables and out lambda's correlation variables
-    esc_vars = getEscapingVariables(domain_lambda.linfo)
+    esc_vars = getEscapingVariables(linfo)
+    @dprintln(3, "escaping variables = ", esc_vars)
     out_length_vars = collect(keys(out_state.array_length_correlation))
     intersect_vars = intersect(esc_vars, out_length_vars)
     for arr in intersect_vars
@@ -3006,6 +3010,22 @@ function setEscCorrelations!(new_vars, domain_lambda, out_state, input_length)
         for (s,c) in out_state.symbol_array_correlation
             if c==corr_class
                 new_vars.symbol_array_correlation[s] = c+input_length+1
+                for v in s
+                    if !in(v, esc_vars) 
+                        if isa(v, Symbol) || isa(v, SymbolNode)
+                            v = isa(v, SymbolNode) ? v.name : v
+                            if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
+                                error("Correlation variable ", v, " is a conflict with local variables")
+                            end
+                            typ = LambdaHandling.getType(v, out_state.LambdaVarInfo)
+                            desc = LambdaHandling.getDesc(v, out_state.LambdaVarInfo) 
+                            @dprintln(3, "setEscCorrelations! addEscapingVariable for ", v)
+                            LambdaHandling.addEscapingVariable(v, typ, desc, linfo)
+                        else
+                            @dprintln(3, "setEscCorrelations! cannot addEscapingVariable for ", v)
+                        end
+                    end
+                end
             end
         end
     end
