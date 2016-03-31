@@ -2305,6 +2305,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         end
         #emptyLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
         #fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(emptyLambdaVarInfo, TypedExpr(nothing, :body, this_parfor.body...))
+        @dprintln(3,"typeof(cbdata) = ", typeof(cbdata))
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
         fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
         @dprintln(3,"fake_body = ", fake_body)
@@ -3116,8 +3117,8 @@ function no_mod_impl(func :: GlobalRef, arg_type_tuple :: Array{DataType,1})
     return nothing
 end
 
-function computeLiveness(ast)
-    return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, nothing, no_mod_cb=no_mod_impl)
+function computeLiveness(ast, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
 """
