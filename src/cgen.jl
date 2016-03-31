@@ -592,10 +592,16 @@ function from_assignment(args::Array{Any,1})
 
     from_assignment_fix_tupple(lhs, rhs)
 
+    @dprintln(3,"from_assignment: ", lhs, " ", rhs)
+    @dprintln(3,external_pattern_match_call)
+    @dprintln(3,external_pattern_match_assignment)
     external_match = external_pattern_match_assignment.func(lhs, rhs)
     if external_match!=""
+        @dprintln(3,"external pattern match returned something")
         return external_match
     end
+
+    @dprintln(3,"external pattern match returned nothing")
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs)
     if match_hvcat!=""
@@ -614,7 +620,7 @@ function from_assignment(args::Array{Any,1})
         return ""
     end
 
-  if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
+    if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
         if typeAvailable(rhs)
             lstate.symboltable[lhs] = rhs.typ
         elseif haskey(lstate.symboltable, rhs)
