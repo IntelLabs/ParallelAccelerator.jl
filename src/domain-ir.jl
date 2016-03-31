@@ -1218,8 +1218,9 @@ function getElemTypeFromAllocExp(typExp::GlobalRef)
 end
 
 function translate_call_copy!(state, env, args)
-    @assert (length(args) == 4) "Expect only one argument to copy!, but got " * string(args)
-    args = normalize_args(state, env, Any[args[2], args[4]])
+    nargs = length(args)
+    @assert (nargs == 2 || nargs == 4) "Expect either 2 or 4 argument to copy!, but got " * string(args)
+    args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
     dprintln(env,"got copy!, args=", args)
     argtyp = typeOfOpr(state, args[1])
     if isarray(argtyp)
@@ -1883,8 +1884,9 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         @assert (isa(redvar, Symbol)) "Expect a Symbol or SymbolNode at the position of the reduction variable, but got " * string(redvar)
         nlinfo = LambdaVarInfo()
         addEscapingVariable(redvar, Int, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
+        nval = translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])
         neutral = DomainLambda([rvtyp], [],  
-                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])),
+                  (linfo,lhs)->Any[ Expr(:(=), isa(lhs[1], SymbolNode) ? lhs[1].name : lhs[1], nval),
                                     Expr(:tuple, lhs[1]) ], nlinfo)
         (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
