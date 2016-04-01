@@ -43,3 +43,6 @@ script:
   - julia --code-coverage=user examples/wave-2d/wave-2d.jl
 after_success:
       - julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
+      - sudo apt-get install -y nodejs npm
+      - npm install travis-ci
+      - node trigger-build.js
