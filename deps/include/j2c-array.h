@@ -446,7 +446,7 @@ FLUSH();
     }
 
     void deserialize(j2c_array_io *s) {
-        j2c_array_copy<ELEMENT_TYPE>::deserialize(s);
+        *this = j2c_array_copy<ELEMENT_TYPE>::deserialize(s);
     }
 
     void increment(void) {
