@@ -2581,10 +2581,10 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     # of the roots
     emitunaliasedroots = (vectorizationlevel == VECDEFAULT ? true : false)
 
+    @dprintln(3,"============ Compiling AST for ", functionName, " ============")
     @dprintln(3,"vectorizationlevel = ", vectorizationlevel)
     @dprintln(3,"emitunaliasedroots = ", emitunaliasedroots)
     @dprintln(1,"Ast = ", ast)
-    @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
     linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
