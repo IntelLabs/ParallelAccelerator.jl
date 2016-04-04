@@ -832,6 +832,11 @@ end
 If we somehow determine that two sets of correlations are actually the same length then merge one into the other.
 """
 function merge_correlations(state, unchanging, eliminate)
+    if unchanging < 0 || eliminate < 0
+        @dprintln(3,"merge_correlations will not merge because ", unchanging, " and/or ", eliminate, " represents an array that is multiply defined within the function.")
+        return unchanging
+    end
+
     # For each array in the dictionary.
     for i in state.array_length_correlation
         # If it is in the "eliminate" class...
@@ -2944,7 +2949,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     # meta may have changed, need to update ast
     ast.args[2] = LambdaHandling.createMeta(ast_linfo)
     @dprintln(3,"Creating equivalence classes.")
-    AstWalk(ast, create_equivalence_classes, new_vars)
+    genEquivalenceClasses(ast, new_vars)
     @dprintln(3,"Done creating equivalence classes.")
 
     @dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
@@ -3141,6 +3146,61 @@ function computeLiveness(ast, linfo :: CompilerTools.LambdaHandling.LambdaVarInf
     return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
+type markMultState
+    LambdaVarInfo
+    assign_dict
+end
+
+function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.ParallelIR.markMultState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    if node.head == :lambda
+        # TODD: I'm not sure about this.  Should arrays in a nested lambda be considered multiply assigned?
+        save_LambdaVarInfo  = state.LambdaVarInfo
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(node)
+        body = CompilerTools.LambdaHandling.getBody(node)
+        AstWalk(body, mark_multiple_assign_equiv, state)
+        state.LambdaVarInfo = save_LambdaVarInfo
+        return node
+    end
+
+    if is_top_level
+        @dprintln(3,"mark_multiple_assign_equiv is_top_level")
+
+        if isAssignmentNode(node)
+            lhs = toSymGen(node.args[1])
+            if DomainIR.isarray(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
+                if !haskey(state.assign_dict, lhs)
+                    state.assign_dict[lhs] = 0
+                end
+                state.assign_dict[lhs] = state.assign_dict[lhs] + 1
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.ParallelIR.markMultState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function genEquivalenceClasses(ast, new_vars)
+    empty!(new_vars.array_length_correlation)
+    empty!(new_vars.symbol_array_correlation)
+    empty!(new_vars.range_correlation)
+    mms = markMultState(new_vars.LambdaVarInfo, Dict{SymGen,Int64}())
+    AstWalk(ast, mark_multiple_assign_equiv, mms)
+    @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
+    multi_correlation = -1
+    for array_assign in mms.assign_dict
+        if array_assign[2] > 1
+            @dprintln(3, "Giving array ", array_assign[1], " a negative equivalence class so it will never merge.")
+            new_vars.array_length_correlation[array_assign[1]] = multi_correlation
+            multi_correlation -= 1
+        end
+    end
+    AstWalk(ast, create_equivalence_classes, new_vars)
+end
+
 """
 The main ENTRY point into ParallelIR.
 1) Do liveness analysis.
@@ -3269,7 +3329,7 @@ function from_root(function_name, ast :: Expr)
 
         new_vars = expr_state(lives, max_label, input_arrays)
         @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
-        AstWalk(ast, create_equivalence_classes, new_vars)
+        genEquivalenceClasses(ast, new_vars)
         @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
         print_correlations(3, new_vars)
 
@@ -3289,7 +3349,7 @@ function from_root(function_name, ast :: Expr)
 
     new_vars = expr_state(lives, max_label, input_arrays)
     @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
-    AstWalk(ast, create_equivalence_classes, new_vars)
+    genEquivalenceClasses(ast, new_vars)
     @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
     print_correlations(3, new_vars)
 
