@@ -53,7 +53,7 @@ function comprehension_to_cartesianarray(ast)
     headers[i] = :($(indices[i]) = $first($(ranges[i])) + ($(params[i]) - 1) * $step($(ranges[i])))
     # if range is 1:N, generate simple assignment instead of formula
     # this helps copy propagation for nested comprehensions (motivated by K-Means)
-    if isStart1UnitRange(ranges[i])
+    if isa(ranges[i], Expr) && isStart1UnitRange(ranges[i])
         headers[i] = :($(indices[i]) = $(params[i]))
     end
   end
