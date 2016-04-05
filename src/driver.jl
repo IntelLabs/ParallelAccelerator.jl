@@ -106,11 +106,26 @@ end
 
 alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
 
+# ParallelAccelerator doesn't really function well on callsites anymore so we would like to give an
+# error if somebody tries to use it in that way.  This is a little difficult with @acc because where at callsite
+# or on a function declaration, what the optimization pass will see is still a Function Expr.
+# There is one difference though.  If there is @acc at a callsite then the ParallelAccelerator macro passes
+# will not be called on the function.  In this global, we record which functions/signatures have passed through
+# the ParallelAccelerator macro passes.  Then, in the domain IR pass, we check if the macro passes saw the
+# function/signature and if not then throw an error.
+seenByMacroPass = Set()
+
 """
 A pass that translates supported operators and function calls to
 those defined in ParallelAccelerator.API.
 """
 function captureOperators(func, ast, sig)
+  # See the comment on the global varibale seenByMacroPass for a description of this code.
+  push!(seenByMacroPass, func)
+  @dprintln(3, "captureOperators func = ", func, "func type = ", typeof(func), " ast = ", ast, " sig = ", sig, " typeof(ast) = ", typeof(ast))
+  if typeof(ast) == Expr
+    @dprintln(3, "ast.head = ", ast.head)
+  end
   AstWalk(ast, API.Capture.process_node, nothing)
   return ast
 end
@@ -141,6 +156,12 @@ function expandParMacro(func, ast, sig)
 end
 
 function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+  # See the comment on the global varibale seenByMacroPass for a description of this code.
+  if !in(func, seenByMacroPass)
+    #throw(string("ParallelAccelerator no longer supports @acc at callsites.  Please add @acc to the declarations of functions that you want to optimize.  Function tried to optimize = ", func, " with signature = ", signature))
+    println("ParallelAccelerator no longer supports @acc at callsites.  Please add @acc to the declarations of functions that you want to optimize.  Function tried to optimize = ", func, " with signature = ", signature)
+    exit(-1)
+  end
   dir_start = time_ns()
   fname = bytestring(convert(Cstring, func.name))
   code = DomainIR.from_expr(fname, func.mod, ast)
@@ -385,6 +406,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
 
   try
     if !haskey(alreadyOptimized, (func, signature))
+      push!(seenByMacroPass, func_ref)
       # place holder to prevent recursive accelerate
       alreadyOptimized[(func, signature)] = ast 
       dir_ast::Expr = toDomainIR(func_ref, ast, signature)
