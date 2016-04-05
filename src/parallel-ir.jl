@@ -3187,9 +3187,10 @@ function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.Pa
 end
 
 function genEquivalenceClasses(ast, new_vars)
-    empty!(new_vars.array_length_correlation)
-    empty!(new_vars.symbol_array_correlation)
-    empty!(new_vars.range_correlation)
+    # no need to empty them since equivalence class will be overwritten if it needs to be negative
+    #empty!(new_vars.array_length_correlation)
+    #empty!(new_vars.symbol_array_correlation)
+    #empty!(new_vars.range_correlation)
     mms = markMultState(new_vars.LambdaVarInfo, Dict{SymGen,Int64}())
     AstWalk(ast, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
