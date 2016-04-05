@@ -103,12 +103,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
       merge_correlations(irState, main_length_correlation, this_correlation)
     end
   end
-  local kernArgs = Array(Any, 3)
-  kernArgs[1] = idxNodes
-  kernArgs[2] = strideNodes
-  kernArgs[3] = bufs
-  @dprintln(3,"kernArgs = ", kernArgs)
-  bodyExpr = relabel(kernelF.genBody(linfo, kernArgs).args, irState)
+  bodyExpr = relabel(DomainIR.stencilGenBody(stat, kernelF, idxNodes, strideNodes, bufs, linfo), irState)
   # rotate
   assert(is(bodyExpr[end].head, :tuple))
   @dprintln(3,"bodyExpr = ")

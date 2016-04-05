@@ -628,33 +628,6 @@ function copy_propagate_helper(node::DomainLambda,
             @dprintln(3, "data.copies = ", data.copies)
         end
     end
-#=
-    # For each statement in this basic block of the form "A = B".
-    for copy in data.copies
-        # If the DomainLambda has an escaping def of the left-hand side
-        if haskey(node.linfo.escaping_defs, copy[1]) 
-            ed = node.linfo.escaping_defs[copy[1]]
-            @dprintln(3, "Found escaping_def ", copy[1], " that is also a lhs in data.copies. ed = ", ed, " type = ", typeof(ed))
-            if typeof(copy[2]) == Symbol
-                ed.name = copy[2]
-                intersection_dict[copy[1]] = SymbolNode(copy[2], ed.typ)
-                delete!(node.linfo.escaping_defs, copy[1])
-                node.linfo.escaping_defs[copy[2]] = ed
-            else
-                @dprintln(3, "copy_progation didn't replace in DomainLambda since rhs is GenSym")
-            end
-        end
-    end
-    @dprintln(3,"Intersection dict = ", intersection_dict)
-    @dprintln(3,"node.linfo.escaping_defs = ", node.linfo.escaping_defs)
-    
-    if !isempty(intersection_dict)
-        origBody      = node.genBody
-        newBody(linfo, args) = CompilerTools.LambdaHandling.replaceExprWithDict(origBody(linfo, args), intersection_dict)
-        node.genBody  = newBody
-        return node
-    end
-=#
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
