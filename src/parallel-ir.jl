@@ -2950,11 +2950,12 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     setEscCorrelations!(new_vars, ast_linfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
     ast.args[2] = LambdaHandling.createMeta(ast_linfo)
-    @dprintln(3,"Creating equivalence classes.")
+    @dprintln(3,"Creating nested equivalence classes. Imported correlations:")
+    print_correlations(3, new_vars)
     genEquivalenceClasses(ast, new_vars)
-    @dprintln(3,"Done creating equivalence classes.")
-
-    @dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+    @dprintln(3,"Done creating nested equivalence classes.")
+    print_correlations(3, new_vars)
+    @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
 
     rep_start = time_ns()
 
