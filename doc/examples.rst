@@ -23,7 +23,7 @@ For the first function you accelerate in a given Julia session, you
 might notice a much longer time being reported for *SELFPRIMED*.  This
 delay (about 20 seconds on an 8-core desktop machine) is the time it
 takes for Julia to load the ParallelAccelerator package itself.  See
-`Speeding up package load time via userimg.jl <http://parallelacceleratorjl.readthedocs.org/en/latest/compiletime.html>` for a workaround.
+`Speeding up package load time via userimg.jl <http://parallelacceleratorjl.readthedocs.org/en/latest/compiletime.html>`_ for a workaround.
 
 Pass the ``--help`` option to see usage information for each example::
 
