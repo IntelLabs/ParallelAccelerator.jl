@@ -34,7 +34,7 @@ operations:
 
 * Unary functions: ``-``, ``+``, ``acos``, ``acosh``, ``angle``,
   ``asin``, ``asinh``, ``atan``, ``atanh``, ``cbrt``, ``cis``,
-  ``cos``, ``cosh``, exp10``, ``exp2``, ``exp``, ``expm1``,
+  ``cos``, ``cosh``, ``exp10``, ``exp2``, ``exp``, ``expm1``,
   ``lgamma``, ``log10``, ``log1p``, ``log2``, ``log``, ``sin``,
   ``sinh``, ``sqrt``, ``tan``, ``tanh``, ``abs``, ``copy``, ``erf``
 
@@ -49,9 +49,8 @@ that takes two inputs arrays, ``a`` and ``b``, and updates ``a`` in-place.
 
 Array operations that compute a single result by repeating an associative
 and commutative operator on all input array elements are called *reduce* operations.
-The following are recognized by ``@acc`` as ``reduce`` operations::
-
-    ``minimum``, ``maximum``, ``sum``, ``prod``, ``any``, ``all``
+The following are recognized by ``@acc`` as ``reduce`` operations:
+``minimum``, ``maximum``, ``sum``, ``prod``, ``any``, ``all``.
 
 
 We also support range operations to a limited extent. For example, ``a[r] =
