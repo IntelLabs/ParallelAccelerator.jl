@@ -183,12 +183,13 @@ function fuse(body, body_index, cur::Expr, state)
         for index_expr in accesses
             @dprintln(3, "Checking usage  ", index_expr)
             for index = 1:length(index_expr)
-                if index > length(cur_parfor.loopNests)
+                lnindex = length(cur_parfor.loopNests) + 1 - index
+                if lnindex < 1 || lnindex > length(cur_parfor.loopNests)
                     @dprintln(3, "Found index expression not just using this dimension's loop index variable")
                     found_array_access_problem = true
                     continue
                 end
-                good_index = cur_parfor.loopNests[index].indexVariable
+                good_index = cur_parfor.loopNests[lnindex].indexVariable
                 @dprintln(3, "Good index here = ", good_index, " cur_index = ", index_expr[index])
                 if !compareIndex(good_index, index_expr[index])
                     @dprintln(3, "Found index expression not just using this dimension's loop index variable")
