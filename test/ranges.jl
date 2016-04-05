@@ -71,7 +71,7 @@ end
 
 end
 
-using RangeTest
+using Base.Test
 println("Testing ranges...")
 
 @test RangeTest.test1() > 1.66e3

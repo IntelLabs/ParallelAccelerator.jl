@@ -2,7 +2,7 @@
 
 *********
 Speeding up package load time via userimg.jl
-********
+*********
 
 When running ParallelAccelerator, you may notice that the first time
 an accelerated function is run, it is in fact quite slow.  This delay

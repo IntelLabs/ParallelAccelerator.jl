@@ -1456,13 +1456,15 @@ end
 
 """
 Pull the information from the inner lambda into the outer lambda.
+Return the body (as an array) after application.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
     inner_LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(inner_lambda)
     @dprintln(3,"mergeLambdaIntoOuterState")
     @dprintln(3,"state.LambdaVarInfo = ", state.LambdaVarInfo)
     @dprintln(3,"inner_LambdaVarInfo = ", inner_LambdaVarInfo)
-    CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, inner_LambdaVarInfo)
+    gensym_map = CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, inner_LambdaVarInfo)
+    CompilerTools.LambdaHandling.replaceExprWithDict!(inner_lambda.args[3].args, gensym_map, AstWalk)
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
@@ -2836,7 +2838,9 @@ function getMaxLabel(max_label, stmts :: Array{Any, 1})
 end
 
 """
-Form a Julia :lambda Expr from a DomainLambda.
+Form a Julia :lambda Expr from a DomainLambda after applying the lambda to real
+input arguments (in dl_inputs). The returned lambda AST will have the real arguments
+(must be SymbolNodes) in its parameters instead.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     @dprintln(3,"lambdaFromDomainLambda dl_inputs = ", dl_inputs)
@@ -2853,11 +2857,12 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     @dprintln(3,"types = ", type_data)
     @dprintln(3,"DomainLambda is:")
     pirPrintDl(3, domain_lambda)
-    newLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
-    CompilerTools.LambdaHandling.addInputParameters(type_data, newLambdaVarInfo)
-    stmts = domain_lambda.genBody(newLambdaVarInfo, dl_inputs)
-    newLambdaVarInfo.escaping_defs = copy(domain_lambda.linfo.escaping_defs)
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(newLambdaVarInfo, Expr(:body, stmts...))
+    stmts = DomainIR.genBody(domain_lambda, dl_inputs)
+    linfo = CompilerTools.LambdaHandling.LambdaVarInfo(domain_lambda.linfo)
+    CompilerTools.LambdaHandling.setParamsNoSelf(Any[], linfo)
+    CompilerTools.LambdaHandling.addInputParameters(type_data, linfo)
+    @dprintln(3, "stmts = ", stmts)
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(linfo, Expr(:body, stmts...))
     # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
     return (ast, input_arrays) 
 end
@@ -2913,9 +2918,6 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
         @dprintln(1, "starting mmap to mmap! transformation.")
         uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
         @dprintln(3, "uniqSet = ", uniqSet)
-        mmapInline(ast, lives, uniqSet)
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
         mmapToMmap!(ast, lives, uniqSet)
         @dprintln(1, "Finished mmap to mmap! transformation.")
         @dprintln(3, "AST = ", ast)
@@ -2948,11 +2950,12 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     setEscCorrelations!(new_vars, ast_linfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
     ast.args[2] = LambdaHandling.createMeta(ast_linfo)
-    @dprintln(3,"Creating equivalence classes.")
+    @dprintln(3,"Creating nested equivalence classes. Imported correlations:")
+    print_correlations(3, new_vars)
     genEquivalenceClasses(ast, new_vars)
-    @dprintln(3,"Done creating equivalence classes.")
-
-    @dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+    @dprintln(3,"Done creating nested equivalence classes.")
+    print_correlations(3, new_vars)
+    @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
 
     rep_start = time_ns()
 
@@ -2997,7 +3000,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     @dprintln(3,"Final ParallelIR = ", ast)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-    (new_vars.max_label, ast, ast.args[3].args, new_vars.block_lives)
+    (new_vars.max_label, ast, new_vars.block_lives)
 end
 
 """
@@ -3184,9 +3187,10 @@ function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.Pa
 end
 
 function genEquivalenceClasses(ast, new_vars)
-    empty!(new_vars.array_length_correlation)
-    empty!(new_vars.symbol_array_correlation)
-    empty!(new_vars.range_correlation)
+    # no need to empty them since equivalence class will be overwritten if it needs to be negative
+    #empty!(new_vars.array_length_correlation)
+    #empty!(new_vars.symbol_array_correlation)
+    #empty!(new_vars.range_correlation)
     mms = markMultState(new_vars.LambdaVarInfo, Dict{SymGen,Int64}())
     AstWalk(ast, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
@@ -3255,9 +3259,6 @@ function from_root(function_name, ast :: Expr)
         @dprintln(1, "starting mmap to mmap! transformation.")
         uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
         @dprintln(3, "uniqSet = ", uniqSet)
-        mmapInline(ast, lives, uniqSet)
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
         mmapToMmap!(ast, lives, uniqSet)
         @dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
         printLambda(3, ast)
@@ -3684,7 +3685,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         head = :parfor
         @assert (length(args) == 2) "expect Domain IR select expr to have two arguments, but got " * args
         etyp = eltype(typ)
-        args = Any[[DomainIR.mk_select(args...)], DomainIR.DomainLambda(Type[etyp], Type[etyp], (linfo, as) -> [Expr(:tuple, as...)], CompilerTools.LambdaHandling.LambdaVarInfo())]
+        args = Any[[DomainIR.mk_select(args...)], DomainIR.DomainLambda(Type[etyp], Type[etyp], as -> Any[Expr(:tuple, as...)], CompilerTools.LambdaHandling.LambdaVarInfo())]
         domain_oprs = [DomainOperation(:mmap, args)]
         args = mk_parfor_args_from_mmap(args[1], args[2], domain_oprs, state)
         @dprintln(1,"switching to parfor node for :select, got ", args)

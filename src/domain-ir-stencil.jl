@@ -115,30 +115,6 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   krnExpr = expr
   assert(stat.initialized)            # check if stat is indeed created
 
-  # The genBody function returns the kernel computation.
-  # It is supposed to be part of DomainLambda, and will have
-  # to make fresh local variables (idxSym, strideSym, bufSym, etc)
-  # on every invocation. Thus, these names are passed in as arguments.
-  function genBody(dict, idxSymNodes, strideSymNodes, bufSymNodes)
-    # assert(length(stat.idxSym) == length(idxSymNodes))
-    # assert(length(stat.strideSym) == length(strideSymNodes))
-    # assert(2 == length(bufSymNodes))
-    # we first rename all GenSym to parent
-    @dprintln(3, "in stencil genBody, dict = ", dict)
-    # CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
-    local idxDict = Dict{SymGen, Any}(zip(stat.idxSym, idxSymNodes))
-    local strideDict = Dict{SymGen, Any}(zip(stat.strideSym, strideSymNodes))
-    local bufDict = Dict{SymGen, Any}(zip(bufSyms, bufSymNodes))
-    local ldict = merge(dict, bufDict, idxDict, strideDict)
-    @dprintln(3,"stencil genBody")
-    @dprintln(3,"idxDict = ", idxDict)
-    @dprintln(3,"strideDict = ", strideDict)
-    @dprintln(3,"bufDict = ", bufDict)
-    @dprintln(3,"ldict = ", ldict)
-    @dprintln(3,"krnExpr = ", krnExpr)
-    # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, ldict)
-  end
   # Remove those with no definition from locals as a sanity cleanup.
   # Note that among those removed are the input arguments, but this
   # what we want since they are useful in kernel specification, but
@@ -149,7 +125,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
   #  end
   #end
   # warn(string("return from analyze kernel: ", (stat, state.linfo, krnExpr)))
-  return stat, genBody
+  return stat, krnExpr
 end
 
 """
@@ -251,40 +227,35 @@ end
  Border specification in runStencil can only be Symbols.
 """
 function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
-  local linfo = lambdaExprToLambdaVarInfo(kernelExp)
-  local typs = Type[ typeOfOpr(state_, a) for a in bufs ]
-  local state = newState(linfo, Dict(), state_)
-  local stat, genBody
-  
+  linfo = lambdaExprToLambdaVarInfo(kernelExp)
+  typs = Type[ typeOfOpr(state_, a) for a in bufs ]
+  state = newState(linfo, Dict(), state_)
   #if !(isa(borderExp, QuoteNode))
   #  error("Border specification in runStencil can only be Symbols.")
   #end
-  
   borderSty = borderExp.value 
   if !in(borderSty, supportedBorderStyle)
     error("Expect stencil border style to be one of ", supportedBorderStyle, ", but got ", borderSty)
   end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
-  stat, genBody = analyze_kernel(state, typs, kernelExp, borderSty)
-  # f expects input of either [indices, strides, buffers] or [symbols].
-  # the latter is used in show method for DomainLambda
-  function f(plinfo, inputs)
-    local indices, strides
-    # warn(string("sizeof(inputs)=",length(inputs)))
-    if isa(inputs[1], Array) # real inputs
-      indices = inputs[1]
-      strides = inputs[2]
-      bufs = inputs[3]
-    else # mock up inputs from show
-      indices = stat.idxSym
-      strides = stat.strideSym
-      bufs = inputs
-    end
-    dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo)
-    body = genBody(dict, indices, strides, bufs)
-  end
-  return stat, DomainLambda(typs, typs, f, state.linfo)
+  stat, krnBody = analyze_kernel(state, typs, kernelExp, borderSty)
+  return stat, DomainLambda(LambdaVarInfoToLambdaExpr(linfo, krnBody))
 end
 
-
-
+function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)
+    dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, kernelF.linfo)
+    @dprintln(3, "in stencilGenBody, dict = ", dict)
+    # CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
+    idxDict = Dict{SymGen, Any}(zip(stat.idxSym, idxSymNodes))
+    strideDict = Dict{SymGen, Any}(zip(stat.strideSym, strideSymNodes))
+    bufDict = Dict{SymGen, Any}(zip(stat.bufSym, bufSymNodes))
+    ldict = merge(dict, bufDict, idxDict, strideDict)
+    krnExpr = kernelF.lambda.args[3].args # body Expr array
+    @dprintln(3,"idxDict = ", idxDict)
+    @dprintln(3,"strideDict = ", strideDict)
+    @dprintln(3,"bufDict = ", bufDict)
+    @dprintln(3,"ldict = ", ldict)
+    @dprintln(3,"krnExpr = ", krnExpr)
+    # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
+    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, ldict)
+end

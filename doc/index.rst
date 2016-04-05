@@ -29,6 +29,7 @@ Contents:
    basic
    howitworks
    advanced
+   compiletime
    limits
    comments
 
