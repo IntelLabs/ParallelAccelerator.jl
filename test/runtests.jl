@@ -56,6 +56,7 @@ include("../examples/pi/pi.jl")
 @test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
 
 include("../examples/opt-flow/opt-flow.jl")
+include("../examples/k-means/k-means.jl")
 
 # Delete file left behind by opt-flow.
 dir = pwd()
