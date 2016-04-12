@@ -25,13 +25,18 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module CallGraph
 
+using CompilerTools
 import CompilerTools.DebugMsg
 DebugMsg.init()
 
 import Base.show
+import CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
 using CompilerTools.LivenessAnalysis
 using Core: IntrinsicFunction
+using DataStructures
+using DataStructures.Queue
+using ..ParallelAccelerator
 
 type CallInfo
     func_sig                             # a tuple of (function, signature)
@@ -40,18 +45,24 @@ type CallInfo
 end
 
 type FunctionInfo
-    func_sig                             # a tuple of (function, signature)
+    func :: GlobalRef
+    ast  :: Expr
+    sig  :: Tuple
     calls :: Array{CallInfo,1}
     array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
     can_parallelize :: Bool              # false if a global is written in this function
     recursive_parallelize :: Bool
     LambdaVarInfo :: LambdaVarInfo
+
+    function FunctionInfo(f, a, s)
+      new(f, a, s, CallInfo[], Set(), true, true, LambdaVarInfo())
+    end
 end
 
 type extractStaticCallGraphState
     cur_func_sig
     mapNameFuncInfo :: Dict{Any,FunctionInfo}
-    functionsToProcess :: Set
+    functionsToProcess :: Queue{FunctionInfo}
 
     calls :: Array{CallInfo,1}
     globalWrites :: Set
@@ -116,24 +127,24 @@ function resolveFuncByName(cur_func_sig , func :: Symbol, call_sig_arg_tuple, lo
     throw(string("Failed to resolve symbol ", func, " in ", Base.function_name(cur_func_sig[1])))
 end
 
-function isGlobal(sym :: Symbol, varDict :: Dict{Symbol,Array{Any,1}})
-    return !haskey(varDict, sym)
+function isGlobal(sym :: Symbol, state)
+    return !haskey(state.LambdaVarInfo.var_defs, sym)
 end
 
-function getGlobalOrArrayParam(varDict :: Dict{Symbol, Array{Any,1}}, params, real_args)
+function getGlobalOrArrayParam(state, real_args)
     possibleGlobalArgs = Set()
     possibleArrayArgs  = Dict{Int,Any}()
 
-    @dprintln(3,"getGlobalOrArrayParam ", real_args, " varDict ", varDict, " params ", params)
+    @dprintln(3,"getGlobalOrArrayParam ", real_args)
     for i = 1:length(real_args)
         atyp = typeof(real_args[i])
         @dprintln(3,"getGlobalOrArrayParam arg ", i, " ", real_args[i], " type = ", atyp)
         if atyp == Symbol || atyp == SymbolNode
-            aname = ParallelIR.getSName(real_args[i])
-            if isGlobal(aname, varDict)
+            aname = ParallelAccelerator.ParallelIR.getSName(real_args[i])
+            if isGlobal(aname, state)
                 # definitely a global so add
                 push!(possibleGlobalArgs, i)
-            elseif in(aname, params)
+            elseif CompilerTools.LambdaHandling.isInputParameter(aname, state.LambdaVarInfo)
                 possibleArrayArgs[i] = aname
             end
         else
@@ -167,7 +178,11 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
             if typeof(fsym) == QuoteNode
                 fsym = fsym.value
             end
-            func = getfield(Main.(func_expr.args[2]), fsym)
+            if typeof(func_expr.args[2]) == GlobalRef
+                func = getfield(eval(func_expr.args[2]), fsym)
+            else
+                func = getfield(Main.(func_expr.args[2]), fsym)
+            end
         else
             func = eval(func_expr)
         end
@@ -184,20 +199,45 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
     assert(ftyp == Function || ftyp == IntrinsicFunction || ftyp == LambdaStaticData)
 
     if ftyp == Function
-        fs = (func, call_sig_arg_tuple)
+        if !isgeneric(func)
+            @dprintln(3,func, " is not generic.")
+            return nothing
+        end
+        fgr = GlobalRef(Base.function_module(func, call_sig_arg_tuple), Base.function_name(func))
+        fs  = (fgr, call_sig_arg_tuple)
 
         if !haskey(state.mapNameFuncInfo, fs)
             @dprintln(3,"Adding ", func, " to functionsToProcess")
-            push!(state.functionsToProcess, fs)
+            method = methods(func, call_sig_arg_tuple)
+            if length(method) < 1
+                @dprintln(3,"Skipping function not found. ", func, " ", Base.function_name(func), " ", call_sig_arg_tuple)
+                return nothing
+            else
+                @dprintln(3,"method = ", method)
+            end
+
+            ct = code_typed(func, call_sig_arg_tuple)
+            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct[1], call_sig_arg_tuple))
             @dprintln(3,state.functionsToProcess)
         end
         push!(state.calls, CallInfo(fs, possibleGlobals, possibleArrayParams))
     elseif ftyp == LambdaStaticData
-        fs = (func, call_sig_arg_tuple)
+        fgr = GlobalRef(Base.function_module(func, call_sig_arg_tuple), Base.function_name(func))
+        fs  = (fgr, call_sig_arg_tuple)
 
         if !haskey(state.mapNameFuncInfo, fs)
             @dprintln(3,"Adding ", func, " to functionsToProcess")
-            push!(state.functionsToProcess, fs)
+
+            method = methods(func, call_sig_arg_tuple)
+            if length(method) < 1
+                @dprintln(3,"Skipping function not found. ", func, " ", Base.function_name(func), " ", call_sig_arg_tuple)
+                return nothing
+            else
+                @dprintln(3,"method = ", method)
+            end
+
+            ct = code_typed(func, call_sig_arg_tuple)
+            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct[1], call_sig_arg_tuple))
             @dprintln(3,state.functionsToProcess)
         end
         push!(state.calls, CallInfo(fs, possibleGlobals, possibleArrayParams))
@@ -224,12 +264,21 @@ function extractStaticCallGraphWalk(node::Expr,
         end
     elseif head == :call || head == :call1
         func_expr = args[1]
-        call_args = args[2:end]
-        call_sig = Expr(:tuple)
-        call_sig.args = map(x -> typeOfOpr(state.LambdaVarInfo, x), call_args)
-        call_sig_arg_tuple = eval(call_sig)
         @dprintln(4,"func_expr = ", func_expr)
+        if func_expr == TopNode(:ccall)
+            state.cant_analyze = true
+            return node
+        end
+        call_args = args[2:end]
+        @dprintln(4,"call_args = ", call_args)
+        call_sig = Expr(:tuple)
+        call_sig.args = map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), call_args)
+        call_sig_arg_tuple = eval(call_sig)
         @dprintln(4,"Arg tuple = ", call_sig_arg_tuple)
+        if in(Any, call_sig.args)
+            state.cant_analyze = true
+            return node
+        end
 
         pmap_name = symbol("__pmap#39__")
         if func_expr == TopNode(pmap_name)
@@ -240,7 +289,7 @@ function extractStaticCallGraphWalk(node::Expr,
             push!(call_sig.args, ParallelIR.getArrayElemType(call_args[4]))
             call_sig_arg_tuple = eval(call_sig)
             @dprintln(3,"Found pmap with func = ", func_expr, " and arg = ", call_sig_arg_tuple)
-            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state.types, state.params, [call_args[4]])...)
+            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state, [call_args[4]])...)
             return node
         elseif func_expr == :map
             func_expr = call_args[1]
@@ -248,7 +297,7 @@ function extractStaticCallGraphWalk(node::Expr,
             push!(call_sig.args, ParallelIR.getArrayElemType(call_args[2]))
             call_sig_arg_tuple = eval(call_sig)
             @dprintln(3,"Found map with func = ", func_expr, " and arg = ", call_sig_arg_tuple)
-            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state.types, state.params, [call_args[2]])...)
+            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state, [call_args[2]])...)
             return node
         elseif func_expr == :broadcast!
             assert(length(call_args) == 4)
@@ -262,7 +311,7 @@ function extractStaticCallGraphWalk(node::Expr,
             push!(call_sig.args, ParallelIR.getArrayElemType(catype))
             call_sig_arg_tuple = eval(call_sig)
             @dprintln(3,"Found broadcast! with func = ", func_expr, " and arg = ", call_sig_arg_tuple)
-            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state.types, state.params, call_args[2:4])...)
+            processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state, call_args[2:4])...)
             return node
         elseif func_expr == :cartesianarray
             new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
@@ -271,19 +320,19 @@ function extractStaticCallGraphWalk(node::Expr,
                 AstWalker.AstWalk(call_args[i], extractStaticCallGraphWalk, state)
             end
             return node
-        elseif ParallelIR.isArrayset(func_expr) || func_expr == :setindex!
-            @dprintln(3,"arrayset or setindex! found")
-            array_name = call_args[1]
-            if in(ParallelIR.getSName(array_name), state.params)
-                @dprintln(3,"can't analyze due to write to array")
-                # Writing to an array parameter which could be a global passed to this function makes parallelization analysis unsafe.
-                #state.cant_analyze = true
-                push!(state.array_params_set_or_aliased, indexin(ParallelIR.getSName(array_name), state.params))
-            end
-            return node
+#        elseif ParallelIR.isArrayset(func_expr) || func_expr == :setindex!
+#            @dprintln(3,"arrayset or setindex! found")
+#            array_name = call_args[1]
+#            if in(ParallelIR.getSName(array_name), state.params)
+#                @dprintln(3,"can't analyze due to write to array")
+#                # Writing to an array parameter which could be a global passed to this function makes parallelization analysis unsafe.
+#                #state.cant_analyze = true
+#                push!(state.array_params_set_or_aliased, indexin(ParallelIR.getSName(array_name), state.params))
+#            end
+#            return node
         end
 
-        processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state.types, state.params, call_args)...)
+        processFuncCall(state, func_expr, call_sig_arg_tuple, getGlobalOrArrayParam(state, call_args)...)
     elseif head == :(=)
         lhs = args[1]
         rhs = args[2]
@@ -294,7 +343,7 @@ function extractStaticCallGraphWalk(node::Expr,
             return node
         elseif rhstyp == SymbolNode || rhstyp == Symbol
             rhsname = ParallelIR.getSName(rhs)
-            if in(rhsname, state.params)
+            if CompilerTools.LambdaHandling.isInputParameter(rhsname, state.LambdaVarInfo)
                 rhsname_typ = state.types[rhsname][2]
                 if rhsname_typ.name == Array.name
                     # if an array parameter is the right-hand side of an assignment then we give up on tracking whether some parallelization requirement is violated for this parameter
@@ -315,9 +364,9 @@ function extractStaticCallGraphWalk(node::Symbol,
                                     is_top_level::Bool,
                                     read::Bool)
     @dprintln(4,"escgw: ", node, " type = Symbol")
-    @dprintln(4,"Symbol ", node, " found in extractStaticCallGraphWalk. ", read, " ", isGlobal(node, state.types))
-    if !read && isGlobal(node, state.types)
-        @dprintln(3,"Detected a global write to ", node, " ", state.types)
+    @dprintln(4,"Symbol ", node, " found in extractStaticCallGraphWalk. ", read, " ", isGlobal(node, state))
+    if !read && isGlobal(node, state)
+        @dprintln(3,"Detected a global write to ", node, " ", state)
         push!(state.globalWrites, node)
     end
 
@@ -331,8 +380,8 @@ function extractStaticCallGraphWalk(node::SymbolNode,
                                     is_top_level::Bool,
                                     read::Bool)
     @dprintln(4,"escgw: ", node, " type = SymbolNode")
-    @dprintln(4,"SymbolNode ", node, " found in extractStaticCallGraphWalk.", read, " ", isGlobal(node.name, state.types))
-    if !read && isGlobal(node.name, state.types)
+    @dprintln(4,"SymbolNode ", node, " found in extractStaticCallGraphWalk.", read, " ", isGlobal(node.name, state))
+    if !read && isGlobal(node.name, state)
         @dprintln(3,"Detected a global write to ", node.name, " ", state.types)
         push!(state.globalWrites, node.name)
     end
@@ -439,45 +488,50 @@ function propagate(mapNameFuncInfo)
 end
 
 
-function extractStaticCallGraph(func, sig)
-    assert(typeof(func) == Function)
-
-    functionsToProcess = Set()
-    push!(functionsToProcess, (func,sig))
-
+function extractStaticCallGraph(func :: GlobalRef, ast :: Expr, sig :: Tuple)
+    functionsToProcess = Queue(FunctionInfo)
+    enqueue!(functionsToProcess, FunctionInfo(func,ast,sig)) 
     mapNameFuncInfo = Dict{Any,FunctionInfo}()
 
-    while length(functionsToProcess) > 0
-        cur_func_sig = first(functionsToProcess)
-        delete!(functionsToProcess, cur_func_sig)
-        the_func = cur_func_sig[1]
-        the_sig  = cur_func_sig[2]
-        ftyp     = typeof(the_func)
+    while !isempty(functionsToProcess)
+        cur_func_sig = dequeue!(functionsToProcess)
         @dprintln(3,"functionsToProcess left = ", functionsToProcess)
 
-        if ftyp == Function
-            @dprintln(3,"Processing function ", the_func, " ", Base.function_name(the_func), " ", the_sig)
+        @dprintln(3,"Processing function ", cur_func_sig)
 
-            method = methods(the_func, the_sig)
-            if length(method) < 1
-                @dprintln(3,"Skipping function not found. ", the_func, " ", Base.function_name(the_func), " ", the_sig)
-                continue
-            end
-            ct = code_typed(the_func, the_sig)
-            @dprintln(4,ct[1])
-            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
-            AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
-            @dprintln(4,state)
-            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
-        elseif ftyp == LambdaStaticData
-            @dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
-            ast = ParallelIR.uncompressed_ast(the_func)
-            @dprintln(4,ast)
-            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
-            AstWalker.AstWalk(ast, extractStaticCallGraphWalk, state)
-            @dprintln(4,state)
-            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
-        end
+        state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
+        AstWalker.AstWalk(cur_func_sig.ast, extractStaticCallGraphWalk, state)
+        @dprintln(4,state)
+        cur_func_sig.calls = state.calls
+        cur_func_sig.array_params_set_or_aliased = state.array_params_set_or_aliased
+        cur_func_sig.can_parallelize = !state.cant_analyze && length(state.globalWrites) == 0
+        cur_func_sig.recursive_parallelize = true
+        cur_func_sig.LambdaVarInfo = state.LambdaVarInfo
+        mapNameFuncInfo[(cur_func_sig.func, cur_func_sig.sig)] = cur_func_sig
+
+#        if ftyp == Function
+#            @dprintln(3,"Processing function ", the_func, " ", Base.function_name(the_func), " ", the_sig)
+#
+#            method = methods(the_func, the_sig)
+#            if length(method) < 1
+#                @dprintln(3,"Skipping function not found. ", the_func, " ", Base.function_name(the_func), " ", the_sig)
+#                continue
+#            end
+#            ct = code_typed(the_func, the_sig)
+#            @dprintln(4,ct[1])
+#            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
+#            AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
+#            @dprintln(4,state)
+#            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
+#        elseif ftyp == LambdaStaticData
+#            @dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
+#            ast = ParallelIR.uncompressed_ast(the_func)
+#            @dprintln(4,ast)
+#            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
+#            AstWalker.AstWalk(ast, extractStaticCallGraphWalk, state)
+#            @dprintln(4,state)
+#            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
+#        end
     end
 
     propagate(mapNameFuncInfo)
