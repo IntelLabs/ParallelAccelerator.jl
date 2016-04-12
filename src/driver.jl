@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro, extractCallGraph
 
 using CompilerTools
 using CompilerTools.AstWalker
@@ -153,6 +153,16 @@ Pass for to convert @par to cartesianmapreduce. Without this pass, @par is a no-
 function expandParMacro(func, ast, sig)
   AstWalk(ast, API.Capture.process_par_macro, nothing)
   return ast
+end
+
+function extractCallGraph(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+    if use_extract_static_call_graph != 0
+      callgraph = extractStaticCallGraph(func, ast, signature)
+      @dprintln(3,"Callgraph:")
+      @dprintln(3,callgraph)
+      #throw(string("stop after cb"))
+    end
+    return ast
 end
 
 function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
