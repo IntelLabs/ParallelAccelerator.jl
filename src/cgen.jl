@@ -1989,7 +1989,7 @@ function mk_parallel_loophead(loopvars::Vector{Symbol},
                               stops::Vector{Union{Symbol,Int}}; 
                               num_threads::Int=0, schedule::AbstractString="") 
     Expr(:parallel_loophead, loopvars, starts, stops, 
-         Set{Union{GenSym, Symbol}}(), num_threads, "")
+         Set{Union{GenSym, Symbol}}(), num_threads, schedule)
 end
 
 export mk_parallel_loophead
