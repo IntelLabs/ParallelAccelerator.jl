@@ -231,7 +231,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
             "raw_arrayref", "raw_arrayset", "raw_pointer",
-            "convert", "unsafe_convert"
+            "convert", "unsafe_convert", "setfield!"
 ]
 
 # Intrinsics
@@ -933,6 +933,15 @@ function istupletyp(typ)
     isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
+function from_setfield!(args)
+    @dprintln(3,"from_setfield! args are: ", args)
+    @assert (length(args)==3) "Expect 3 arguments to setfield!, but got " * string(args)
+    tgt = from_expr(args[1])
+    @assert (isa(args[2], QuoteNode)) "CGen only handles setfield! with a fixed field name, but not " * string(args[2])
+    fld = from_expr(args[2].value)
+    tgt * "." * fld * " = " * from_expr(args[3])
+end
+
 function from_getfield(args)
     @dprintln(3,"from_getfield args are: ", args)
     tgt = from_expr(args[1])
@@ -1124,6 +1133,8 @@ function from_builtins(f, args)
         return from_pointer(args)
     elseif tgt == "getfield"
         return from_getfield(args)
+    elseif tgt == "setfield!"
+        return from_setfield!(args)
     elseif tgt == "unsafe_arrayref"
         return from_getindex(args)
     elseif tgt == "safe_arrayref"
@@ -1989,7 +2000,7 @@ function mk_parallel_loophead(loopvars::Vector{Symbol},
                               stops::Vector{Union{Symbol,Int}}; 
                               num_threads::Int=0, schedule::AbstractString="") 
     Expr(:parallel_loophead, loopvars, starts, stops, 
-         Set{Union{GenSym, Symbol}}(), num_threads, "")
+         Set{Union{GenSym, Symbol}}(), num_threads, schedule)
 end
 
 export mk_parallel_loophead

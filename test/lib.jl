@@ -23,43 +23,67 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+module APILibTest
+
 using ParallelAccelerator
+importall ParallelAccelerator.API.Lib
+
+#ParallelAccelerator.set_debug_level(3)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+
+@acc minMax(A) = (indmin(A), indmax(A))
+
+@acc vecLen(A) = sqrt(sumabs2(A))
+
+@acc diagTest(A) = sum(diag(diagm(A)))
+
+@acc traceTest(A) = trace(diagm(A)) 
+
+@acc testEye(A) = eye(A) .* A
+
+@acc testRepMat(A) = sum(repmat(A, 2, 3), 1)
+
+function test1()
+  A = rand(5)
+  minMax(A) == (@noacc minMax(A)) && minMax(A) == (Base.indmin(A), Base.indmax(A))
+end
+
+function test2()
+  A = rand(5)
+  abs(vecLen(A) - (@noacc vecLen(A))) < 1.0e-10 &&
+  abs(vecLen(A) - sqrt(Base.sumabs2(A))) < 1.0e-10
+end
+
+function test3()
+  A = rand(5)
+  abs(diagTest(A) - sum(A)) < 1.0e-10
+end
+
+function test4()
+  A = rand(5)
+  abs(diagTest(A) - sum(A)) < 1.0e-10
+end
+
+function test5()
+  A = rand(5, 5)
+  abs(sum(testEye(A) .- Base.eye(A) .* A)) < 1.0e-10
+end
+
+function test6()
+  A = rand(4, 3)
+  abs(sum(testRepMat(A) .- sum(repmat(A, 2, 3), 1))) < 1.0e-10
+end
+
+end
+
 using Base.Test
+println("Testing parallel library functions...")
+@test APILibTest.test1() 
+@test APILibTest.test2() 
+@test APILibTest.test3()
+@test APILibTest.test4() 
+@test APILibTest.test5() 
+@test APILibTest.test6() 
+println("Done testing parallel library functions.") 
 
-include("lib.jl")
-include("parfor.jl")
-include("mapreduce.jl")
-include("abs.jl")
-include("const_promote.jl")
-include("rand.jl")
-include("BitArray.jl")
-include("range.jl")
-include("seq.jl")
-include("cat.jl")
-include("ranges.jl")
-include("misc.jl")
-include("aug_assign.jl")
-include("complex.jl")
-include("print.jl")
-include("strings.jl")
-include("test_lr.jl")
-
-# Examples.  We're not including them all here, because it would take
-# too long, but just including black-scholes and opt-flow seems like a
-# good compromise that exercises much of ParallelAccelerator.
-
-include("../examples/black-scholes/black-scholes.jl")
-# black-scholes should have only 1 allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/pi/pi.jl")
-# pi should have no allocation and 1 parfor after optimization
-@test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
-
-include("../examples/opt-flow/opt-flow.jl")
-include("../examples/k-means/k-means.jl")
-
-# Delete file left behind by opt-flow.
-dir = pwd()
-img_file = joinpath(dir, "out.flo")
-rm(img_file)
