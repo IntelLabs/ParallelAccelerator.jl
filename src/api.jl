@@ -208,14 +208,13 @@ end
     Base.reduce(f, a...)
 end
 
-const operators = Set(vcat(unary_operators, binary_operators, 
+operators = Set(vcat(unary_operators, binary_operators, 
     Symbol[:map, :map!, :reduce, :setindex!, :getindex]))
 
 for opr in operators
   @eval export $opr
 end
 
-include("api-capture.jl")
 include("api-stencil.jl")
 
 @noinline function pointer(args...)
@@ -254,8 +253,23 @@ macro par(args...)
 end
 
 import .Stencil.runStencil
-
 export @par, cartesianmapreduce, cartesianarray, parallel_for, runStencil, pointer
+
+include("api-lib.jl")
+importall .Lib
+export indmin, indmax, sumabs2, diag, diagm, trace, scale, eye, repmat
+
+function enableLib()
+  global operators
+  union!(operators, delete!(Set(names(Lib)), :Lib))
+end
+
+function disableLib()
+  global operators
+  setdiff!(operators, delete!(Set(names(Lib)), :Lib))
+end
+
+include("api-capture.jl")
 
 end
 
