@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module RangeTest
+module RangesTest
 using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
@@ -74,10 +74,10 @@ end
 using Base.Test
 println("Testing ranges...")
 
-@test RangeTest.test1() > 1.66e3
-@test RangeTest.test2() > 1.66e3
-@test RangeTest.test3() == [2.2; 6.6]
-@test ndims(RangeTest.test4()) == 2
+@test RangesTest.test1() > 1.66e3
+@test RangesTest.test2() > 1.66e3
+@test RangesTest.test3() == [2.2; 6.6]
+@test ndims(RangesTest.test4()) == 2
 
 println("Done testing ranges.")
 
