@@ -2441,7 +2441,7 @@ function hasNoSideEffects(node :: Union{LambdaStaticData, Number, Function})
     return true
 end
 
-function hasNoSideEffects(node)
+function hasNoSideEffects(node :: ANY)
     return false
 end
 
@@ -2453,13 +2453,13 @@ function hasNoSideEffects(node :: Expr)
     elseif node.head == :ccall
         func = node.args[1]
         if func == QuoteNode(:jl_alloc_array_1d) ||
-            func == QuoteNode(:jl_alloc_array_2d)
+           func == QuoteNode(:jl_alloc_array_2d)
             return true
         end
     elseif node.head == :call1
         func = node.args[1]
         if func == TopNode(:apply_type) ||
-            func == TopNode(:tuple)
+           func == TopNode(:tuple)
             return true
         end
     elseif node.head == :lambda
@@ -2483,10 +2483,28 @@ function hasNoSideEffects(node :: Expr)
             func == GlobalRef(Core.Intrinsics, :add_int) ||
             func == GlobalRef(Core.Intrinsics, :mul_int) 
             return true
+        elseif func == TopNode(:apply_type) ||
+               func == TopNode(:tuple)
+            return true
         end
     end
 
     return false
+end
+
+type SideEffectWalkState
+    hasSideEffect
+
+    function SideEffectWalkState()
+        new(false)
+    end
+end
+
+function hasNoSideEffectWalk(node :: ANY, data :: SideEffectWalkState, top_level_number, is_top_level, read)
+    if !hasNoSideEffects(node)
+        data.hasSideEffect = true
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function from_assignment_fusion(args::Array{Any,1}, depth, state)
