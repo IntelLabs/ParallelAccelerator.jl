@@ -168,7 +168,7 @@ function type_expr(typ, expr)
     return expr
 end
 
-export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isarray, isbitarray
+export DomainLambda, KernelStat, AstWalk, arraySwap, lambdaSwapArg, isbitmask
 
 """
 A representation for anonymous lambda used in domainIR.
@@ -193,7 +193,7 @@ type DomainLambda
         li = lambdaExprToLambdaVarInfo(lambda)
         inps = Type[getType(x, li) for x in getParamsNoSelf(li)]
         rtyp = getReturnType(li)
-        outs = istupletyp(rtyp) ? Type[t for t in rtyp.parameters] : Type[rtyp]
+        outs = isTupleType(rtyp) ? Type[t for t in rtyp.parameters] : Type[rtyp]
         new(lam, inps, outs, li)
     end
 
@@ -490,29 +490,11 @@ end
 
 include("domain-ir-stencil.jl")
 
-
-function istupletyp(typ::DataType)
-    is(typ.name, Tuple.name)
+function isbitmask(typ::DataType)
+    isBitArrayType(typ) || (isArrayType(typ) && is(eltype(typ), Bool))
 end
 
-function istupletyp(typ::ANY)
-    false
-end
-
-function isarray(typ::DataType)
-    is(typ.name, Array.name)
-end
-
-function isarray(typ::ANY)
-    return false
-end
-
-function isbitarray(typ::DataType)
-    is(typ.name, BitArray.name) ||
-    (isarray(typ) && is(eltype(typ), Bool))
-end
-
-function isbitarray(typ::ANY)
+function isbitmask(typ::ANY)
     false
 end
 
@@ -537,12 +519,12 @@ function isrange(typ)
 end
 
 function ismask(state, r::SymbolNode)
-    return isrange(r.typ) || isbitarray(r.typ)
+    return isrange(r.typ) || isbitmask(r.typ)
 end
 
 function ismask(state, r::SymGen)
     typ = getType(r, state.linfo)
-    return isrange(typ) || isbitarray(typ)
+    return isrange(typ) || isbitmask(typ)
 end
 
 function ismask(state, r::GlobalRef)
@@ -551,7 +533,7 @@ end
 
 function ismask(state, r::Any)
     typ = typeOfOpr(state, r)
-    return isrange(typ) || isbitarray(typ)
+    return isrange(typ) || isbitmask(typ)
 end
 
 # never used!
@@ -612,7 +594,7 @@ end
 
 function rangeToMask(state, r::SymAllGen, arraysize)
     typ = getType(r, state.linfo)
-    if isbitarray(typ)
+    if isbitmask(typ)
         mk_tomask(r)
     elseif isUnitRange(typ)
         r = lookupConstDefForArg(state, r)
@@ -769,7 +751,7 @@ end
 get elem type T from an Array{T} type
 """
 function elmTypOf(x::DataType)
-    @assert isarray(x) || isbitarray(x) "expect Array type"
+    @assert isArrayType(x) "expect Array type"
     return eltype(x)
 end
 
@@ -1206,7 +1188,7 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
             push!(realArgs, elemtyp)
             dprintln(env, "normalize_callname: fun = :ccall args = ", args)
             for i = 6:2:length(args)
-                if istupletyp(typeOfOpr(state, args[i]))
+                if isTupleType(typeOfOpr(state, args[i]))
                     dprintln(env, "found tuple arg: ", args[i])
                     def = lookupConstDefForArg(state, args[i])
                     dprintln(env, "definition: ", def)
@@ -1302,7 +1284,7 @@ function translate_call_copy!(state, env, args)
     args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
     dprintln(env,"got copy!, args=", args)
     argtyp = typeOfOpr(state, args[1])
-    if isarray(argtyp)
+    if isArrayType(argtyp)
         eltyp = eltype(argtyp)
         expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
         dprintln(env, "turn copy! into mmap! ", expr)
@@ -1319,7 +1301,7 @@ function translate_call_copy(state, env, args)
     args = normalize_args(state, env, args[1:1])
     dprintln(env,"got copy, args=", args)
     argtyp = typeOfOpr(state, args[1])
-    if isarray(argtyp)
+    if isArrayType(argtyp)
         eltyp = eltype(argtyp)
         expr = mk_mmap(args, DomainLambda(Type[eltyp],Type[eltyp],params->Any[Expr(:tuple, params[1])], state.linfo))
         dprintln(env, "turn copy into mmap ", expr)
@@ -1685,7 +1667,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
     end
     dprintln(env, "updated params = ", params)
     # modify the last return statement if it's a tuple
-    if istupletyp(args1_typ)
+    if isTupleType(args1_typ)
         # take a shortcut if the second last statement is the tuple creation
         exp = body.args[end-1]
         if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
@@ -1760,7 +1742,7 @@ function translate_call_map(state, env, typ, args::Array{Any,1})
     dprintln(env, "argtyps =", argtyps)
     inptyps = DataType[ isArrayType(t) ? elmTypOf(t) : t for t in argtyps ]
     (ast, ety) = get_lambda_for_arg(state, env, args[1], inptyps) 
-    etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
+    etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     # assume return dimension is the same as the first array argument
     rdim = ndims(argtyps[1])
@@ -1787,7 +1769,7 @@ function translate_call_map!(state, env, typ, args::Array{Any,1})
     dprintln(env, "argtyps =", argtyps)
     inptyps = DataType[ isArrayType(t) ? elmTypOf(t) : t for t in argtyps ]
     (ast, ety) = get_lambda_for_arg(state, env, args[1], nargs == 2 ? inptyps : inptyps[2:end]) 
-    etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
+    etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     # assume return dimension is the same as the first array argument
     rdim = ndims(argtyps[1])
@@ -1810,9 +1792,9 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
     args = normalize_args(state, env, args)
     typ = typeOfOpr(state, args[1])
     local expr::Expr
-    if isarray(typ)
+    if isArrayType(typ)
         typ_second_arg = typeOfOpr(state, args[2])
-        if isarray(typ_second_arg) || isbitarray(typ_second_arg)
+        if isArrayType(typ_second_arg) || isbitmask(typ_second_arg)
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :(===)), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[1]), mk_expr(Int64, :call, GlobalRef(Base,:arraylen), args[2])))
         else
             @dprintln(0, args[2], " typ_second_arg = ", typ_second_arg)
@@ -1911,7 +1893,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     argstyp = Any[ Int for i in 1:ndim ] 
     
     (ast, ety) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
-    #etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
+    #etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "ety = ", ety)
     #@assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
     # create tmp arrays to store results
@@ -1989,7 +1971,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     argstyp = Any[ Int for i in 1:ndim ] 
     
     (ast, ety) = get_lambda_for_arg(state, env, args[1], argstyp)     # first argument is the lambda
-    etys = istupletyp(ety) ? [ety.parameters...] : DataType[ety]
+    etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
     # create tmp arrays to store results

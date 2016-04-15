@@ -25,8 +25,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module J2CArray
 
-export to_j2c_array, from_j2c_array, j2c_array_delete
-import ..DomainIR.isarray
+export to_j2c_array, from_j2c_array, j2c_array_delete, from_ascii_string
+import CompilerTools.Helper.isArrayType
 import ..getPackageRoot
 
 #eval(x) = Core.eval(J2CArray, x)
@@ -107,6 +107,20 @@ function __init__()
     function j2c_array_deref(arr::Ptr{Void})
       ccall((:j2c_array_deref,$dyn_lib), Void, (Ptr{Void},), arr)
     end
+
+    # convert ASCIIString to J2C_Array and to C's ASCIIString 
+    function to_j2c_array(inp::ASCIIString, ptr_array_dict, mapAtypeKey, j2c_array_new)
+      arr = to_j2c_array(inp.data, ptr_array_dict, mapAtypeKey, j2c_array_new)
+      ccall((:new_ascii_string, $dyn_lib), Ptr{Void}, (Ptr{Void}, ), arr)
+    end
+
+    # convert C's ASCIIString to Julia's Array{UInt8,1}
+    function from_ascii_string(str::Ptr{Void}, ptr_array_dict)
+      data = ccall((:from_ascii_string, $dyn_lib), Ptr{Void}, (Ptr{Void}, ), str)
+      arr = _from_j2c_array(data, UInt8, 1, ptr_array_dict)
+      ccall((:delete_ascii_string, $dyn_lib), Void, (Ptr{Void}, ), str)
+      return arr
+    end
   end
 end
 
@@ -151,7 +165,7 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
     else
       arr = pointer_to_array(convert(Ptr{elem_typ}, array_ptr), tuple(dims...), true)
     end
-  elseif isarray(elem_typ)
+  elseif isArrayType(elem_typ)
     arr = Array(elem_typ, dims...)
     sub_type = elem_typ.parameters[1]
     sub_dim  = elem_typ.parameters[2]

@@ -28,34 +28,53 @@ using ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
-#ParallelAccelerator.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
+ParallelAccelerator.set_debug_level(4)
 
-# @acc function f1()
-#     x = "hello"
-#     y = x[3]
-#     # FIXME: right now we can't handle returning Chars
-#     return UInt8(y)
-# end
+@acc function f1()
+    x = "hello"
+    y = x[3]
+    return UInt8(y)
+end
 
-# FIXME: string representation in C and passing strings to C should work simultaneously
-#@acc function f2()
-#    x = "hello"
-#    return length(x)
-#end
+@acc function f2()
+    x = "hello"
+    return length(x)
+end
 
-# function test1()
-#     return f1()
-# end
+@acc function f3(x)
+    println(x, " world!")
+    return "OK"
+end
 
-#function test2()
-#    return f2()
-#end
+@acc function f4(x)
+    return x * "bar"
+end
+
+function test1()
+    f1() == 108 # ASCII 'l' is 108
+end
+
+function test2()
+    f2() == 5
+end
+
+function test3()
+    f3("Hello")  == "OK"
+end
+
+function test4()
+    f4("foo")  == "foobar"
+end
 
 end
 
-#println("Testing strings...")
-# @test StringTest.test1() == 108 # ASCII 'l' is 108
-#@test StringTest.test2() == 5
-#println("Done testing strings...")
+using Base.Test
+
+println("Testing strings...")
+@test StringTest.test1() 
+@test StringTest.test2() 
+@test StringTest.test3() 
+@test StringTest.test4() 
+println("Done testing strings...")
 

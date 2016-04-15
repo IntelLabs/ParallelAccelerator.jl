@@ -2654,7 +2654,7 @@ function from_assignment(lhs, rhs, depth, state)
         end
     elseif typeof(rhs) == SymbolNode
         out_typ = rhs.typ
-        if DomainIR.isarray(out_typ)
+        if isArrayType(out_typ)
             # Add a length correlation of the form "a = b".
             @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
             add_merge_correlations(toSymGen(rhs), lhsName, state)
@@ -3090,10 +3090,6 @@ function get_input_arrays(linfo::LambdaVarInfo)
     ret
 end
 
-function isarrayorbitarray(t)
-    return DomainIR.isarray(t) || DomainIR.isbitarray(t)
-end
-
 """
 Returns a set of SymAllGen's that are arrays for which there are multiple statements that could define that
 array and by implication change its size.
@@ -3118,7 +3114,7 @@ function findMultipleArrayAssigns(lives :: CompilerTools.LivenessAnalysis.BlockL
           # Get that SymAllGen's type.
           dtyp = CompilerTools.LambdaHandling.getType(d, LambdaVarInfo)
           # If it is an array.
-          if isarrayorbitarray(dtyp)
+          if isArrayType(dtyp)
             # See if we've previously seen another statement in which that SymAllGen was defined.
             if in(d, found)
               # If so, then there are multiple statements that define this SymAllGen and so add that to the return set.
@@ -3188,7 +3184,7 @@ function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.P
 
         if isAssignmentNode(node)
             lhs = toSymGen(node.args[1])
-            if DomainIR.isarray(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
+            if isArrayType(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
                 if !haskey(state.assign_dict, lhs)
                     state.assign_dict[lhs] = 0
                 end

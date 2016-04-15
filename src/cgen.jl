@@ -76,7 +76,6 @@ type LambdaGlobalData
             Bool    =>  "bool",
             Char    =>  "char",
             Void    =>  "void",
-            ASCIIString =>  "char*",
             H5SizeArr_t => "hsize_t*",
             SizeArr_t => "uint64_t*"
     )
@@ -708,6 +707,8 @@ function toCtype(typ::DataType)
         # implementations
         btyp, ptyps = parseParametricType(typ)
         return canonicalize(btyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+    elseif typ == Any
+        return "void*"
     else
         return canonicalize(typ)
     end
@@ -1082,7 +1083,8 @@ function from_array_ptr(args)
 end
 
 function from_sizeof(args)
-    return "sizeof($(toCtype(args[1])))"
+    s = toCtype(args[1])
+    return "sizeof($s)"
 end
 
 function from_pointer(args)
@@ -1562,6 +1564,8 @@ function from_call(ast::Array{Any, 1})
                 push!(argTyps, args[a].typ)
             elseif isPrimitiveJuliaType(typeof(args[a]))
                 push!(argTyps, typeof(args[a]))
+            elseif isa(args[a], AbstractString)
+                push!(argTyps, typeof(args[a]))
             elseif haskey(lstate.symboltable, args[a])
                 push!(argTyps, lstate.symboltable[args[a]])
             end
@@ -1964,7 +1968,7 @@ function from_new(args)
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
             s = ctyp * "{"
-            s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+            s *= (isempty(args[2:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end])) * "}"
         else
             throw(string("CGen Error: unhandled args in from_new ", args))
         end
@@ -2319,7 +2323,7 @@ function from_formalargs(params, vararglist, unaliased=false)
         if haskey(lstate.symboltable, params[p])
             typ = lstate.symboltable[params[p]]
             ptyp = toCtype(typ)
-            is_array = isArrayType(typ)
+            is_array = isArrayType(typ) || isStringType(typ)
             s *= ptyp * ((is_array ? "&" : "")
                 * (is_array || is_raw_array(typ) ? " $ql " : " ")
                 * canonicalize(params[p])
@@ -2371,7 +2375,7 @@ end
 
 
 function isScalarType(typ::Type)
-    !isArrayType(typ) && !isCompositeType(typ)
+    !(isArrayType(typ) || isCompositeType(typ) || isStringType(typ))
 end
 
 # Creates an entrypoint that dispatches onto host or MIC.
@@ -2401,7 +2405,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
             delim = i < length(jtyp) ? ", " : ""
             retSlot *= toCtype(jtyp[i]) *
                 (isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
-            if isArrayType(jtyp[i])
+            if isArrayType(jtyp[i]) || isStringType(jtyp[i])
                 typ = toCtype(jtyp[i])
                 allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
             end
