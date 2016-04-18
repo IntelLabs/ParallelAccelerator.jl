@@ -2232,6 +2232,10 @@ end
 
 function from_expr(ast::Char)
     s = "'$(string(ast))'"
+    # We do not handle widechar in C, force a conversion here
+    if ast > Char(255) 
+      s = "(char)L" * s
+    end
 end
 
 function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
