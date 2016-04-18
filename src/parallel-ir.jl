@@ -2924,6 +2924,17 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     (ast, max_label) = integrateLabels(ast, max_label) 
 
+    # Create CFG from AST.  This will automatically filter out dead basic blocks.
+    cfg = CompilerTools.CFGs.from_ast(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    input_arrays = get_input_arrays(LambdaVarInfo)
+    body = CompilerTools.LambdaHandling.getBody(ast)
+    # Re-create the body minus any dead basic blocks.
+    body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+    # Re-create the lambda minus any dead basic blocks.
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
+    @dprintln(1,"ast after dead blocks removed, ast = ", ast)
+
     @dprintln(1,"Starting liveness analysis.")
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     @dprintln(1,"Finished liveness analysis.")
