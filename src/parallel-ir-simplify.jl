@@ -274,6 +274,13 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                     end
                 end
 
+                # See if there are any calls with side-effects that could prevent moving.
+                sews = SideEffectWalkState()
+                ParallelAccelerator.ParallelIR.AstWalk(node, hasNoSideEffectWalk, sews)
+                if sews.hasSideEffect
+                    dep_only_on_parameter = false
+                end
+
                 if dep_only_on_parameter 
                     # If this statement is defined in more than one place then it isn't hoistable.
                     for i in live_info.def 

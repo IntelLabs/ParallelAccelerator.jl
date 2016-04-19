@@ -25,13 +25,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro, extractCallGraph
 
 using CompilerTools
 using CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 
-import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..DomainIR.isarray, ..DomainIR.isbitarray, ..API
+import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..API
 import ..dprint, ..dprintln, ..@dprint, ..@dprintln, ..DEBUG_LVL
 import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
@@ -40,20 +41,20 @@ using ..J2CArray
 const TOPLEVEL=1
 const PROXYONLY=3
 
-isarrayorbitarray(x) = isarray(x) || isbitarray(x)
+isArrayOrStringType(x) = isArrayType(x) || isStringType(x)
 
 # Convert regular Julia types to make them appropriate for calling C code.
 # Note that it only handles conversion of () and Array, not tuples.
 function convert_to_ccall_typ(typ)
   @dprintln(3,"convert_to_ccall_typ typ = ", typ, " typeof(typ) = ", typeof(typ))
   # if there a better way to check for typ being an array DataType?
-  if isarrayorbitarray(typ)
+  if isArrayType(typ)
     # If it is an Array type then convert to Ptr type.
     return (Ptr{Void},ndims(typ))
   elseif is(typ, ())
     return (Void, 0)
-  elseif is(typ,AbstractString) || is(typ,ASCIIString)
-      return (Ptr{UInt8},0)
+  elseif isStringType(typ)
+      return (Ptr{UInt8},1)
   else
     # Else no conversion needed.
     return (typ,0)
@@ -155,6 +156,16 @@ function expandParMacro(func, ast, sig)
   return ast
 end
 
+function extractCallGraph(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+    if use_extract_static_call_graph != 0
+      callgraph = extractStaticCallGraph(func, ast, signature)
+      @dprintln(3,"Callgraph:")
+      @dprintln(3,callgraph)
+      #throw(string("stop after cb"))
+    end
+    return ast
+end
+
 function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   # See the comment on the global varibale seenByMacroPass for a description of this code.
   if !in(func, seenByMacroPass)
@@ -204,10 +215,15 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   array_types_in_sig = Dict{DataType,Int64}()
   atiskey = 1;
   for t in signature
-      while isarrayorbitarray(t)
-          array_types_in_sig[t] = atiskey;
+      if isStringType(t)
+          array_types_in_sig[Array{UInt8, 1}] = atiskey
           atiskey += 1
-          t = eltype(t)
+      else
+          while isArrayType(t)
+              array_types_in_sig[t] = atiskey;
+              atiskey += 1
+              t = eltype(t)
+          end
       end
   end
   @dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
@@ -215,15 +231,20 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   LambdaVarInfo = lambdaExprToLambdaVarInfo(code)
   ret_type = getReturnType(LambdaVarInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
-  ret_typs = DomainIR.istupletyp(ret_type) ? [ (convert_to_Julia_typ(x), isarrayorbitarray(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isarrayorbitarray(ret_type)) ]
+  ret_typs = isTupleType(ret_type) ? [ (convert_to_Julia_typ(x), isArrayOrStringType(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isArrayOrStringType(ret_type)) ]
 
   # Add arrays from the return type to array_types_in_sig.
   for rt in ret_typs
       t = rt[1]
-      while isarrayorbitarray(t)
-          array_types_in_sig[t] = atiskey;
+      if isStringType(t)
+          array_types_in_sig[Array{UInt8,1}] = atiskey
           atiskey += 1
-          t = eltype(t)
+      else
+          while isArrayType(t)
+              array_types_in_sig[t] = atiskey;
+              atiskey += 1
+              t = eltype(t)
+          end
       end
   end
   @dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
@@ -343,11 +364,15 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
       result = Array(Any, $num_rets)
       for i = 1:$num_rets
         (t, is_array) = $(ret_typs)[i]
-        #dprintln(3, "ret=", ret_args[i][1], "t=", t, " is_array=", is_array)
+        dprintln(3, "ret=", ret_args[i][1], "t=", t, " is_array=", is_array)
         if is_array
-          result[i] = from_j2c_array(ret_args[i][1], eltype(t), ndims(t), ptr_array_dict)
-          if isbitarray(t)
-             result[i] = convert(BitArray, result[i])
+          if isStringType(t)
+             result[i] = convert(t, from_ascii_string(ret_args[i][1], ptr_array_dict))
+          else
+             result[i] = from_j2c_array(ret_args[i][1], eltype(t), ndims(t), ptr_array_dict)
+             if isBitArrayType(t)
+                 result[i] = convert(BitArray, result[i])
+             end
           end
         else
           result[i] = convert(t, (ret_args[i][1]))

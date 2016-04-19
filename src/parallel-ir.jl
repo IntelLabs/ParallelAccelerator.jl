@@ -2441,7 +2441,7 @@ function hasNoSideEffects(node :: Union{LambdaStaticData, Number, Function})
     return true
 end
 
-function hasNoSideEffects(node)
+function hasNoSideEffects(node :: ANY)
     return false
 end
 
@@ -2453,13 +2453,13 @@ function hasNoSideEffects(node :: Expr)
     elseif node.head == :ccall
         func = node.args[1]
         if func == QuoteNode(:jl_alloc_array_1d) ||
-            func == QuoteNode(:jl_alloc_array_2d)
+           func == QuoteNode(:jl_alloc_array_2d)
             return true
         end
     elseif node.head == :call1
         func = node.args[1]
         if func == TopNode(:apply_type) ||
-            func == TopNode(:tuple)
+           func == TopNode(:tuple)
             return true
         end
     elseif node.head == :lambda
@@ -2483,10 +2483,28 @@ function hasNoSideEffects(node :: Expr)
             func == GlobalRef(Core.Intrinsics, :add_int) ||
             func == GlobalRef(Core.Intrinsics, :mul_int) 
             return true
+        elseif func == TopNode(:apply_type) ||
+               func == TopNode(:tuple)
+            return true
         end
     end
 
     return false
+end
+
+type SideEffectWalkState
+    hasSideEffect
+
+    function SideEffectWalkState()
+        new(false)
+    end
+end
+
+function hasNoSideEffectWalk(node :: ANY, data :: SideEffectWalkState, top_level_number, is_top_level, read)
+    if !hasNoSideEffects(node)
+        data.hasSideEffect = true
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function from_assignment_fusion(args::Array{Any,1}, depth, state)
@@ -2636,7 +2654,7 @@ function from_assignment(lhs, rhs, depth, state)
         end
     elseif typeof(rhs) == SymbolNode
         out_typ = rhs.typ
-        if DomainIR.isarray(out_typ)
+        if isArrayType(out_typ)
             # Add a length correlation of the form "a = b".
             @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
             add_merge_correlations(toSymGen(rhs), lhsName, state)
@@ -2906,6 +2924,17 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     (ast, max_label) = integrateLabels(ast, max_label) 
 
+    # Create CFG from AST.  This will automatically filter out dead basic blocks.
+    cfg = CompilerTools.CFGs.from_ast(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    input_arrays = get_input_arrays(LambdaVarInfo)
+    body = CompilerTools.LambdaHandling.getBody(ast)
+    # Re-create the body minus any dead basic blocks.
+    body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+    # Re-create the lambda minus any dead basic blocks.
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
+    @dprintln(1,"ast after dead blocks removed, ast = ", ast)
+
     @dprintln(1,"Starting liveness analysis.")
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     @dprintln(1,"Finished liveness analysis.")
@@ -3072,10 +3101,6 @@ function get_input_arrays(linfo::LambdaVarInfo)
     ret
 end
 
-function isarrayorbitarray(t)
-    return DomainIR.isarray(t) || DomainIR.isbitarray(t)
-end
-
 """
 Returns a set of SymAllGen's that are arrays for which there are multiple statements that could define that
 array and by implication change its size.
@@ -3100,7 +3125,7 @@ function findMultipleArrayAssigns(lives :: CompilerTools.LivenessAnalysis.BlockL
           # Get that SymAllGen's type.
           dtyp = CompilerTools.LambdaHandling.getType(d, LambdaVarInfo)
           # If it is an array.
-          if isarrayorbitarray(dtyp)
+          if isArrayType(dtyp)
             # See if we've previously seen another statement in which that SymAllGen was defined.
             if in(d, found)
               # If so, then there are multiple statements that define this SymAllGen and so add that to the return set.
@@ -3170,7 +3195,7 @@ function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.P
 
         if isAssignmentNode(node)
             lhs = toSymGen(node.args[1])
-            if DomainIR.isarray(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
+            if isArrayType(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
                 if !haskey(state.assign_dict, lhs)
                     state.assign_dict[lhs] = 0
                 end

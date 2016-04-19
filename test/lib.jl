@@ -23,58 +23,67 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-module StringTest
+module APILibTest
+
 using ParallelAccelerator
+importall ParallelAccelerator.API.Lib
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
-#ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.set_debug_level(3)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
 
-@acc function f1()
-    x = "hello"
-    y = x[3]
-    return UInt8(y)
-end
+@acc minMax(A) = (indmin(A), indmax(A))
 
-@acc function f2()
-    x = "hello"
-    return length(x)
-end
+@acc vecLen(A) = sqrt(sumabs2(A))
 
-@acc function f3(x)
-    println(x, " world!")
-    return "OK"
-end
+@acc diagTest(A) = sum(diag(diagm(A)))
 
-@acc function f4(x)
-    return x * "bar"
-end
+@acc traceTest(A) = trace(diagm(A)) 
+
+@acc testEye(A) = eye(A) .* A
+
+@acc testRepMat(A) = sum(repmat(A, 2, 3), 1)
 
 function test1()
-    f1() == 108 # ASCII 'l' is 108
+  A = rand(5)
+  minMax(A) == (@noacc minMax(A)) && minMax(A) == (Base.indmin(A), Base.indmax(A))
 end
 
 function test2()
-    f2() == 5
+  A = rand(5)
+  abs(vecLen(A) - (@noacc vecLen(A))) < 1.0e-10 &&
+  abs(vecLen(A) - sqrt(Base.sumabs2(A))) < 1.0e-10
 end
 
 function test3()
-    f3("Hello")  == "OK"
+  A = rand(5)
+  abs(diagTest(A) - sum(A)) < 1.0e-10
 end
 
 function test4()
-    f4("foo")  == "foobar"
+  A = rand(5)
+  abs(diagTest(A) - sum(A)) < 1.0e-10
+end
+
+function test5()
+  A = rand(5, 5)
+  abs(sum(testEye(A) .- Base.eye(A) .* A)) < 1.0e-10
+end
+
+function test6()
+  A = rand(4, 3)
+  abs(sum(testRepMat(A) .- sum(repmat(A, 2, 3), 1))) < 1.0e-10
 end
 
 end
 
 using Base.Test
-
-println("Testing strings...")
-@test StringTest.test1() 
-@test StringTest.test2() 
-@test StringTest.test3() 
-@test StringTest.test4() 
-println("Done testing strings...")
+println("Testing parallel library functions...")
+@test APILibTest.test1() 
+@test APILibTest.test2() 
+@test APILibTest.test3()
+@test APILibTest.test4() 
+@test APILibTest.test5() 
+@test APILibTest.test6() 
+println("Done testing parallel library functions.") 
 

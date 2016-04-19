@@ -377,7 +377,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
                 @dprintln(3, "mask_array = ", mask_array)
-                assert(DomainIR.isbitarray(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
+                assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, SymbolNode) # a hack to change type to Array{Bool}
                     mask_array = SymbolNode(mask_array.name, Array{Bool, mask_array.typ.parameters[1]})
                 end

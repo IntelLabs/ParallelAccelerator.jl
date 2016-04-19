@@ -76,7 +76,6 @@ type LambdaGlobalData
             Bool    =>  "bool",
             Char    =>  "char",
             Void    =>  "void",
-            ASCIIString =>  "char*",
             H5SizeArr_t => "hsize_t*",
             SizeArr_t => "uint64_t*"
     )
@@ -235,7 +234,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "convert", "unsafe_convert"
+            "convert", "unsafe_convert", "setfield!"
 ]
 
 # Intrinsics
@@ -707,6 +706,8 @@ function toCtype(typ::DataType)
         # implementations
         btyp, ptyps = parseParametricType(typ)
         return canonicalize(btyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+    elseif typ == Any
+        return "void*"
     else
         return canonicalize(typ)
     end
@@ -941,6 +942,15 @@ function istupletyp(typ)
     isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
+function from_setfield!(args)
+    @dprintln(3,"from_setfield! args are: ", args)
+    @assert (length(args)==3) "Expect 3 arguments to setfield!, but got " * string(args)
+    tgt = from_expr(args[1])
+    @assert (isa(args[2], QuoteNode)) "CGen only handles setfield! with a fixed field name, but not " * string(args[2])
+    fld = from_expr(args[2].value)
+    tgt * "." * fld * " = " * from_expr(args[3])
+end
+
 function from_getfield(args)
     @dprintln(3,"from_getfield args are: ", args)
     tgt = from_expr(args[1])
@@ -1081,7 +1091,8 @@ function from_array_ptr(args)
 end
 
 function from_sizeof(args)
-    return "sizeof($(toCtype(args[1])))"
+    s = toCtype(args[1])
+    return "sizeof($s)"
 end
 
 function from_pointer(args)
@@ -1136,6 +1147,8 @@ function from_builtins(f, args)
         return from_pointer(args)
     elseif tgt == "getfield"
         return from_getfield(args)
+    elseif tgt == "setfield!"
+        return from_setfield!(args)
     elseif tgt == "unsafe_arrayref"
         return from_getindex(args)
     elseif tgt == "safe_arrayref"
@@ -1557,6 +1570,8 @@ function from_call(ast::Array{Any, 1})
                 push!(argTyps, args[a].typ)
             elseif isPrimitiveJuliaType(typeof(args[a]))
                 push!(argTyps, typeof(args[a]))
+            elseif isa(args[a], AbstractString)
+                push!(argTyps, typeof(args[a]))
             elseif haskey(lstate.symboltable, args[a])
                 push!(argTyps, lstate.symboltable[args[a]])
             end
@@ -1959,7 +1974,7 @@ function from_new(args)
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
             s = ctyp * "{"
-            s *= (isempty(args[4:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[4:end])) * "}"
+            s *= (isempty(args[2:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end])) * "}"
         else
             throw(string("CGen Error: unhandled args in from_new ", args))
         end
@@ -2223,6 +2238,10 @@ end
 
 function from_expr(ast::Char)
     s = "'$(string(ast))'"
+    # We do not handle widechar in C, force a conversion here
+    if ast > Char(255) 
+      s = "(char)L" * s
+    end
 end
 
 function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
@@ -2314,7 +2333,7 @@ function from_formalargs(params, vararglist, unaliased=false)
         if haskey(lstate.symboltable, params[p])
             typ = lstate.symboltable[params[p]]
             ptyp = toCtype(typ)
-            is_array = isArrayType(typ)
+            is_array = isArrayType(typ) || isStringType(typ)
             s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
                 * (is_array ? " $ql " : " ")
                 * canonicalize(params[p])
@@ -2366,7 +2385,7 @@ end
 
 
 function isScalarType(typ::Type)
-    !isArrayType(typ) && !isCompositeType(typ)
+    !(isArrayType(typ) || isCompositeType(typ) || isStringType(typ))
 end
 
 # Creates an entrypoint that dispatches onto host or MIC.
@@ -2396,7 +2415,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
             delim = i < length(jtyp) ? ", " : ""
             retSlot *= toCtype(jtyp[i]) *
                 (isScalarType(jtyp[i]) ? "" : "*") * "* __restrict ret" * string(i-1) * delim
-            if isArrayType(jtyp[i])
+            if isArrayType(jtyp[i]) || isStringType(jtyp[i])
                 typ = toCtype(jtyp[i])
                 allocResult *= "*ret" * string(i-1) * " = new $typ();\n"
             end

@@ -38,6 +38,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <array>
 #include <set>
+#include <string>
 #ifdef ALIAS_ANA
 #include "../intel-runtime/include/pse-runtime.h"
 #endif
@@ -463,7 +464,7 @@ FLUSH();
     j2c_array() : data(NULL), refcount(NULL), offsets(global_zero), max_size(dims) {
 PRINTF("default constructor called on %x\n", this);
 FLUSH();
-}
+    }
 
     j2c_array(const j2c_array<ELEMENT_TYPE> &rhs) :
         data(rhs.data),
@@ -1061,27 +1062,69 @@ bool j2c_alias_test(const std::array<j2c_array_interface *, N> &jai) {
  * A class for representing Julia ASCIIStrings as j2c_arrays.
  */
 class ASCIIString {
- public:
-  j2c_array<uint8_t> data;
+  public:
+    j2c_array<uint8_t> data;
+         
+    ASCIIString() { }
 
-  ASCIIString() { }
+    ASCIIString(const char* s) {
+        uint64_t string_len = strlen(s);
+        data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
+        strncpy((char *)data.data, s, string_len);
+    }
 
-  ASCIIString(const char* s) {
-    uint64_t string_len = strlen(s);
-    data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
-    strncpy((char *)data.data, s, string_len);
-  }
+    ASCIIString(const j2c_array<uint8_t> &a) {
+        data = a;
+    }
 
-  ASCIIString(const ASCIIString &s) {
-    data = s.data;
-  }
+    ASCIIString(const ASCIIString &s) {
+        data = s.data;
+    }
 
-  ASCIIString & operator=(const ASCIIString &rhs) {
-    uint64_t string_len = rhs.data.ARRAYLEN();
-    data = rhs.data;
-    return *this;
-  }
+    ASCIIString & operator=(const ASCIIString &rhs) {
+        uint64_t string_len = rhs.data.ARRAYLEN();
+        data = rhs.data;
+        return *this;
+    }
 
+    ASCIIString & operator=(const char *s) {
+        ASCIIString rhs(s);
+        data = rhs.data;
+        return *this;
+    }
 };
 
+std::ostream& operator<<(std::ostream& out, ASCIIString& p)
+{
+    out << std::string((char*)p.data.data, p.data.ARRAYLEN());
+    return out;
+}
+
+std::istream& operator>>(std::istream& in, ASCIIString& p)
+{
+    std::string s;
+    in >> s;
+    p = s.c_str();
+    return in;
+}
+
+extern "C" 
+void *new_ascii_string(j2c_array<uint8_t> *a)
+{
+    ASCIIString *p = new ASCIIString(*a);
+    return p;
+}
+
+extern "C" 
+void *from_ascii_string(ASCIIString *s)
+{
+    return (void*)&(s->data);
+}
+
+extern "C" 
+void delete_ascii_string(ASCIIString *s)
+{
+    delete(s);
+}
+ 
 #endif /* PSE_ARRAY_H_ */
