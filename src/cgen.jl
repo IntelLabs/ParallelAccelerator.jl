@@ -100,6 +100,11 @@ const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
 USE_OMP = 1
+const CGEN_RAW_ARRAY_MODE = false
+
+function set_raw_array_mode(mode=true)
+    global CGEN_RAW_ARRAY_MODE = mode
+end
 
 function enableOMP()
     global USE_OMP = 1
@@ -230,7 +235,6 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "raw_arrayref", "raw_arrayset", "raw_pointer",
             "convert", "unsafe_convert"
 ]
 
@@ -300,13 +304,6 @@ end
 file_counter = -1
 
 #### End of globals ####
-
-type RawArray{T,N} <: AbstractArray{T,N}
-end
-
-export RawArray
-
-is_raw_array(arg) = arg <: RawArray
 
 function generate_new_file_name()
     global file_counter
@@ -694,9 +691,11 @@ function toCtype(typ::DataType)
         atyp, dims = parseArrayType(typ)
         atyp = toCtype(atyp)
         assert(dims >= 0)
-        return " j2c_array< $(atyp) > "
-    elseif is_raw_array(typ)
-        return "$(toCtype(eltype(typ))) *"
+        if CGEN_RAW_ARRAY_MODE
+            return "$(atyp) * "
+        else
+            return " j2c_array< $(atyp) > "
+        end
     elseif isPtrType(typ)
         return "$(toCtype(eltype(typ))) *"
     elseif typ == Complex64
@@ -806,24 +805,41 @@ function from_getindex(args)
     end
     s = ""
     src = from_expr(args[1])
-    s *= src * ".ARRAYELEM("
+    if CGEN_RAW_ARRAY_MODE
+        s *= src * "["
+    else
+        s *= src * ".ARRAYELEM("
+    end
     idxs = map(from_expr, args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
-    s *= ")"
+    if CGEN_RAW_ARRAY_MODE
+        s *= " - 1]"
+    else
+        s *= ")"
+    end
     s
 end
 
 function from_setindex(args)
     s = ""
     src = from_expr(args[1])
-    s *= src * ".ARRAYELEM("
+    if CGEN_RAW_ARRAY_MODE
+        s *= src * "["
+    else
+        s *= src * ".ARRAYELEM("
+    end
     idxs = map(from_expr, args[3:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
-    s *= ") = " * from_expr(args[2])
+    if CGEN_RAW_ARRAY_MODE
+        s *= " - 1] = " 
+    else
+        s *= ") = " 
+    end
+    s *= from_expr(args[2])
     s
 end
 
@@ -914,19 +930,11 @@ function from_arrayset(args)
     idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
     src = from_expr(args[1])
     val = from_expr(args[2])
-    "$src.ARRAYELEM($idxs) = $val"
-end
-
-function from_raw_arrayset(args)
-    @assert length(args) == 3
-    src = from_expr(args[1])
-    val = from_expr(args[2])
-    return "$src[$(from_expr(args[3])) - 1] = $val"
-end
-
-function from_raw_arrayref(args)
-    src = from_expr(args[1])
-    return src * "[$(from_expr(args[2])) - 1]"
+    if CGEN_RAW_ARRAY_MODE
+        return "$src[$idxs - 1] = $val"
+    else
+        return "$src.ARRAYELEM($idxs) = $val"
+    end
 end
 
 function istupletyp(typ)
@@ -1077,11 +1085,15 @@ function from_sizeof(args)
 end
 
 function from_pointer(args)
-    if length(args) == 1
-        return "$(from_expr(args[1])).data"
+    if CGEN_RAW_ARRAY_MODE
+        s = "$(from_expr(args[1]))"
     else
-        return "$(from_expr(args[1])).data + $(from_expr(args[2]))"
+        s =  "$(from_expr(args[1])).data"
     end
+    if length(args) > 1
+        s *= " + $(from_expr(args[2]))"
+    end
+    s
 end
 
 function from_raw_pointer(args)
@@ -1138,12 +1150,6 @@ function from_builtins(f, args)
         return from_sizeof(args)
     elseif tgt =="steprange_last"
         return from_steprange_last(args)
-    elseif tgt == "raw_arrayref"
-        return from_raw_arrayref(args)
-    elseif tgt == "raw_arrayset"
-        return from_raw_arrayset(args)
-    elseif tgt == "raw_pointer"
-        return from_raw_pointer(args)
     elseif tgt == "convert" || tgt == "unsafe_convert"
         return from_typecast(args[1], [args[2]])
     elseif isdefined(Base, f) 
@@ -2309,8 +2315,8 @@ function from_formalargs(params, vararglist, unaliased=false)
             typ = lstate.symboltable[params[p]]
             ptyp = toCtype(typ)
             is_array = isArrayType(typ)
-            s *= ptyp * ((is_array ? "&" : "")
-                * (is_array || is_raw_array(typ) ? " $ql " : " ")
+            s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
+                * (is_array ? " $ql " : " ")
                 * canonicalize(params[p])
                 * (p < length(params) ? ", " : ""))
         # We may have a varags expression
@@ -2552,7 +2558,7 @@ function check_params(emitunaliasedroots, params)
         end
     end
     @dprintln(3,"canAliasCheck = ", canAliasCheck, " array_list = ", array_list)
-    if canAliasCheck && num_array_params > 0
+    if canAliasCheck && num_array_params > 0 && !CGEN_RAW_ARRAY_MODE
         alias_check = "j2c_alias_test<" * string(num_array_params) * ">({{" * array_list * "}})"
         @dprintln(3,"alias_check = ", alias_check)
     else
