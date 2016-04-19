@@ -99,7 +99,7 @@ const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
 USE_OMP = 1
-const CGEN_RAW_ARRAY_MODE = false
+CGEN_RAW_ARRAY_MODE = false
 
 function set_raw_array_mode(mode=true)
     global CGEN_RAW_ARRAY_MODE = mode
@@ -2242,6 +2242,7 @@ function from_expr(ast::Char)
     if ast > Char(255) 
       s = "(char)L" * s
     end
+    s
 end
 
 function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
