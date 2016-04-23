@@ -154,7 +154,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     # warn(string("lhs=",lhs, " typ=",typ))
     updateDef(state, lhs, rhs)
   end
-  # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are SymGen.
+  # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are LHSVar.
   if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
      (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
       is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
@@ -227,7 +227,7 @@ end
  Border specification in runStencil can only be Symbols.
 """
 function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
-  linfo = lambdaExprToLambdaVarInfo(kernelExp)
+  linfo = lambdaToLambdaVarInfo(kernelExp)
   typs = Type[ typeOfOpr(state_, a) for a in bufs ]
   state = newState(linfo, Dict(), state_)
   #if !(isa(borderExp, QuoteNode))
@@ -239,16 +239,16 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
   end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, krnBody = analyze_kernel(state, typs, kernelExp, borderSty)
-  return stat, DomainLambda(LambdaVarInfoToLambdaExpr(linfo, krnBody))
+  return stat, DomainLambda(LambdaVarInfoToLambda(linfo, krnBody.args))
 end
 
 function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)
     dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, kernelF.linfo)
     @dprintln(3, "in stencilGenBody, dict = ", dict)
     # CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
-    idxDict = Dict{SymGen, Any}(zip(stat.idxSym, idxSymNodes))
-    strideDict = Dict{SymGen, Any}(zip(stat.strideSym, strideSymNodes))
-    bufDict = Dict{SymGen, Any}(zip(stat.bufSym, bufSymNodes))
+    idxDict = Dict{LHSVar, Any}(zip(stat.idxSym, idxSymNodes))
+    strideDict = Dict{LHSVar, Any}(zip(stat.strideSym, strideSymNodes))
+    bufDict = Dict{LHSVar, Any}(zip(stat.bufSym, bufSymNodes))
     ldict = merge(dict, bufDict, idxDict, strideDict)
     krnExpr = kernelF.lambda.args[3].args # body Expr array
     @dprintln(3,"idxDict = ", idxDict)

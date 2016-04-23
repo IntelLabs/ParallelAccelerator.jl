@@ -190,7 +190,7 @@ type DomainLambda
         @assert (lam.head == :lambda) "Expects Expr(:lambda, ...) but got " * string(lam)
         @dprintln(3, "create DomainLambda with ", lam)
         lambda = lam
-        li = lambdaExprToLambdaVarInfo(lambda)
+        li = lambdaToLambdaVarInfo(lambda)
         inps = Type[getType(x, li) for x in getParamsNoSelf(li)]
         rtyp = getReturnType(li)
         outs = isTupleType(rtyp) ? Type[t for t in rtyp.parameters] : Type[rtyp]
@@ -228,11 +228,11 @@ type DomainLambda
             body[end] = Expr(:tuple, lastExpr)
         end
         body[end].typ = li.return_type
-        ast_body = Expr(:body)
-        ast_body.args = body
-        ast_body.typ = li.return_type
-dprintln(3, "li = ", li)
-        expr = LambdaVarInfoToLambdaExpr(li, ast_body)
+        #ast_body = Expr(:body)
+        #ast_body.args = body
+        #ast_body.typ = li.return_type
+        dprintln(3, "li = ", li)
+        expr = LambdaVarInfoToLambda(li, body)
         DomainLambda(expr)
     end
 
@@ -298,55 +298,48 @@ end
 
 type IRState
     linfo  :: LambdaVarInfo
-    defs   :: Dict{Union{Symbol,Int}, Any}  # stores local definition of LHS = RHS
-    boxtyps:: Dict{Union{Symbol,Int}, Any}  # finer types for those have Box type
+    defs   :: Dict{LHSVar, Any}  # stores local definition of LHS = RHS
+    boxtyps:: Dict{LHSVar, Any}  # finer types for those have Box type
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
 end
 
-emptyState() = IRState(LambdaVarInfo(), Dict{Union{Symbol,Int},Any}(), Dict{Union{Symbol,Int},Any}(), Any[], nothing)
-newState(linfo, defs, state::IRState) = IRState(linfo, defs, Dict{Union{Symbol,Int},Any}(), Any[], state)
+emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{LHSVar,Any}(), Any[], nothing)
+newState(linfo, defs, state::IRState) = IRState(linfo, defs, Dict{LHSVar,Any}(), Any[], state)
 
 """
 Update the type of a variable.
 """
-function updateTyp(state::IRState, s::SymAllGen, typ)
+function updateTyp(state::IRState, s::RHSVar, typ)
     updateType(state.linfo, s, typ)
 end
 
-function updateBoxType(state::IRState, s::SymAllGen, typ)
-    x = isa(s, SymbolNode) ? s.name : s
-    y = isa(s, GenSym) ? s.id : x
-    state.boxtyps[y] = typ
+function updateBoxType(state::IRState, s::RHSVar, typ)
+    state.boxtyps[toLHSVar(y)] = typ
 end
 
-function getBoxType(state::IRState, s::SymAllGen)
-    x = isa(s, SymbolNode) ? s.name : s
-    y = isa(s, GenSym) ? s.id : x
-    state.boxtyps[y] 
+function getBoxType(state::IRState, s::RHSVar)
+    state.boxtyps[toLHSVar(s)] 
 end
 
 """
 Update the definition of a variable.
 """
-function updateDef(state::IRState, s::SymAllGen, rhs)
-    s = isa(s, SymbolNode) ? s.name : s
+function updateDef(state::IRState, s::RHSVar, rhs)
+    s = toLHSVar(s)
     #@dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
     @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
     (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
     (isa(s, Symbol) && isInputParameter(s, state.linfo)) ||
     (isa(s, Symbol) && isEscapingVariable(s, state.linfo))) state.linfo
-    s = isa(s, GenSym) ? s.id : s
     state.defs[s] = rhs
 end
 
 """
 Delete a definition of a variable from current state.
 """
-function deleteDef(state::IRState, s::SymAllGen)
-    s = isa(s, SymbolNode) ? s.name : s
-    s = isa(s, GenSym) ? s.id : s
-    delete!(state.defs, s)
+function deleteDef(state::IRState, s::RHSVar)
+    delete!(state.defs, toLHSVar(s))
 end
 
 
@@ -354,9 +347,8 @@ end
 Look up a definition of a variable.
 Return nothing If none is found.
 """
-function lookupDef(state::IRState, s::SymAllGen)
-    s = isa(s, SymbolNode) ? s.name : (isa(s, GenSym) ? s.id : s)
-    get(state.defs, s, nothing)
+function lookupDef(state::IRState, s::RHSVar)
+    get(state.defs, toLHSVar(s), nothing)
 end
 
 function lookupDef(state, s)
@@ -367,7 +359,7 @@ end
 Look up a definition of a variable only when it is const or assigned once.
 Return nothing If none is found.
 """
-function lookupConstDef(state::IRState, s::SymAllGen)
+function lookupConstDef(state::IRState, s::RHSVar)
     def = lookupDef(state, s)
     # we assume all GenSym is assigned once 
     desc = isa(s, SymbolNode) ? getDesc(s.name, state.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
@@ -398,7 +390,7 @@ end
 Look up a definition of a variable throughout nested states until a definition is found.
 Return nothing If none is found.
 """
-function lookupDefInAllScopes(state::IRState, s::SymAllGen)
+function lookupDefInAllScopes(state::IRState, s::RHSVar)
     def = lookupDef(state, s)
     if is(def, nothing) && !is(state.parent, nothing)
         return lookupDefInAllScopes(state.parent, s)
@@ -522,7 +514,7 @@ function ismask(state, r::SymbolNode)
     return isrange(r.typ) || isbitmask(r.typ)
 end
 
-function ismask(state, r::SymGen)
+function ismask(state, r::LHSVar)
     typ = getType(r, state.linfo)
     return isrange(typ) || isbitmask(typ)
 end
@@ -592,7 +584,7 @@ function rangeToMask(state, r::Int, arraysize)
     return r
 end
 
-function rangeToMask(state, r::SymAllGen, arraysize)
+function rangeToMask(state, r::RHSVar, arraysize)
     typ = getType(r, state.linfo)
     if isbitmask(typ)
         mk_tomask(r)
@@ -703,7 +695,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     local old_params = getParamsNoSelf(f.linfo)
     local new_params = Array(Any, 0)
     #local pre_body = Array(Any, 0)
-    local repl_dict = Dict{SymGen,Any}()
+    local repl_dict = Dict{LHSVar,Any}()
     for i = 1:len
         local typ = typs[i]
         if isArrayType(typ)
@@ -734,12 +726,12 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     if !isempty(repl_dict)
         body = replaceExprWithDict!(body, repl_dict)
     end
-    body_expr = Expr(:body)
-    body_expr.args = body
-    body_expr.typ = getReturnType(f.linfo)
+    #body_expr = Expr(:body)
+    #body_expr.args = body
+    #body_expr.typ = getReturnType(f.linfo)
     setParamsNoSelf(new_params, f.linfo)
     f.inputs = new_inps
-    f.lambda = LambdaVarInfoToLambdaExpr(f.linfo, body_expr)
+    f.lambda = LambdaVarInfoToLambda(f.linfo, body)
     return (nonarrays, args_[1:j], f.inputs, f)
 end
 
@@ -868,15 +860,15 @@ function from_lambda(state, env, expr::Expr, closure = nothing)
     local ast  = expr.args
     local typ  = expr.typ
     assert(length(ast) == 3)
-    linfo = lambdaExprToLambdaVarInfo(expr) 
+    linfo = lambdaToLambdaVarInfo(expr) 
     local body  = ast[3]
     assert(isa(body, Expr) && is(body.head, :body))
-    defs = Dict{Union{Symbol,Int},Any}()
+    defs = Dict{LHSVar,Any}()
     if !is(closure, nothing)
         # Julia 0.5 feature, closure refers to the #self# argument
         if isa(closure, Expr)
             def = closure
-        elseif isa(closure, SymAllGen)
+        elseif isa(closure, RHSVar)
             def = lookupDef(state, closure) # somehow closure variables are not Const defs
             dprintln(env, "closure ", closure, " = ", def) 
         else 
@@ -914,7 +906,7 @@ function from_lambda(state, env, expr::Expr, closure = nothing)
     #for (k, t) in state_.boxtyps
     #    updateType(linfo, k, t)
     #end
-    return LambdaVarInfoToLambdaExpr(linfo, body)
+    return LambdaVarInfoToLambda(linfo, body.args)
 end
 
 """
@@ -963,6 +955,7 @@ function from_body(state, env, expr::Expr)
             error("Cannot figure out return type from function body")
         end
     end
+    setReturnType(typ, state.linfo)
     return mk_expr(typ, head, state.stmts...)
 end
 
@@ -972,7 +965,7 @@ function mmapRemoveDupArg!(expr::Expr)
     arr = expr.args[1]
     f = expr.args[2]
     linfo = f.linfo
-    posMap = Dict{SymGen, Int}()
+    posMap = Dict{LHSVar, Int}()
     hasDup = false
     n = 1
     old_inps = f.inputs
@@ -991,7 +984,7 @@ function mmapRemoveDupArg!(expr::Expr)
             t = getType(v, linfo)
             push!(pre_body, Expr(:(=), old_params[i], SymbolNode(v,t)))
         else
-            if isa(s,SymAllGen) 
+            if isa(s,RHSVar) 
                 posMap[s] = n
             end
             push!(new_arr, arr[i])
@@ -1007,7 +1000,7 @@ function mmapRemoveDupArg!(expr::Expr)
     body.args = vcat(pre_body, body.args)
     f.inputs = new_inps
     setParamsNoSelf(new_params, f.linfo)
-    f.lambda = LambdaVarInfoToLambdaExpr(f.linfo, body)
+    f.lambda = LambdaVarInfoToLambda(f.linfo, body.args)
     expr.args[1] = new_arr
     expr.args[2] = f
     dprintln(3, "MMRD: expr becomes ", expr)
@@ -1025,7 +1018,7 @@ function from_assignment(state, env, expr::Expr)
     @assert length(ast)==2 "DomainIR: assignment nodes should have two arguments."
     local lhs = ast[1]
     local rhs = ast[2]
-    lhs = toSymGen(lhs)
+    lhs = toLHSVar(lhs)
     
     rhs = from_expr(state, env_, rhs)
     rhstyp = typeOfOpr(state, rhs)
@@ -1154,9 +1147,9 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
             # destination array is a new bitarray
             fun   = args[1]
             args  = args[3:end]
-            if isa(fun, Symbol) || isa(fun, GenSym) || isa(fun, SymbolNode)
+            if isa(fun, RHSVar)
                 # fun could be a variable 
-                fun = get(state.defs, fun, nothing)
+                fun = get(state.defs, toLHSVar(fun), nothing)
             end
             if isa(fun, GlobalRef)
                 func = getfield(fun.mod, fun.name)  # should give back a function
@@ -1227,7 +1220,7 @@ end
 
 # if a definition of arr is getindex(a, ...), return select(a, ranges(...))
 # otherwise return arr unchanged.
-function inline_select(env, state, arr::SymAllGen)
+function inline_select(env, state, arr::RHSVar)
     range_extra = Any[]
 
     # TODO: this requires safety check. Local lookups are only correct if free variables in the definition have not changed.
@@ -1324,7 +1317,7 @@ function translate_call_alloc(state, env_, typ, typ_arg, args_in)
 end
 
 function translate_call_rangeshortcut(state, arg1::GenSym, arg2::QuoteNode)
-    local ret::Union{SymAllGen,Expr,Int}
+    local ret::Union{RHSVar,Expr,Int}
     ret = Expr(:null)
     if arg2.value==:stop || arg2.value==:start || arg2.value==:step
         rTyp = getType(arg1, state.linfo)
@@ -1441,7 +1434,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
     elseif is(fun, :getfield) && length(args) == 2
         # Shortcut range object access
-        range_out::Union{SymAllGen,Expr,Int} = translate_call_rangeshortcut(state, args[1],args[2])
+        range_out::Union{RHSVar,Expr,Int} = translate_call_rangeshortcut(state, args[1],args[2])
         if range_out!=Expr(:null)
             return range_out
         end
@@ -1654,7 +1647,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
             end
         end
     end
-    linfo = lambdaExprToLambdaVarInfo(ast)
+    linfo = lambdaToLambdaVarInfo(ast)
     lastExp::Expr = body.args[end]
     assert(is(lastExp.head, :return))
     args1_typ::DataType = Void
@@ -1695,7 +1688,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
                 push!(body.args, retExprs[i])
             end
             push!(body.args, mk_expr(typs, :tuple, retNodes...))
-            ast = LambdaVarInfoToLambdaExpr(linfo, body)
+            ast = LambdaVarInfoToLambda(linfo, body.args)
         end
     else
         lastExp.head = :tuple
@@ -1713,7 +1706,7 @@ end
 Lookup a function object for the given argument (variable),
 infer its type and return the result ast together with return type.
 """
-function get_lambda_for_arg(state, env, func::SymNodeGen, argstyp)
+function get_lambda_for_arg(state, env, func::RHSVar, argstyp)
     dprintln(env, "get_lambda_for_arg: lookup ", func)
     lambda = lookupConstDefForArg(state, func)
     dprintln(env, "get_lambda_for_arg: got ", lambda)
@@ -1832,7 +1825,7 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
     @assert nargs >= 3 "runstencil needs at least a function, and two buffers"
     local iterations = 1               # default
     local borderExp = nothing          # default
-    local kernelExp_var::SymNodeGen = args[1]
+    local kernelExp_var::RHSVar = args[1]
     local bufs = Any[]
     local bufstyp = Any[]
     local i
@@ -1883,7 +1876,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     nargs = length(args)
     assert(nargs >= 2) # needs at least a function, and a dimension tuple
     args_ = normalize_args(state, env, args[1:2])
-    local dimExp_var::SymNodeGen = args_[2]     # last argument is the dimension tuple
+    local dimExp_var::RHSVar = args_[2]     # last argument is the dimension tuple
     
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
@@ -1927,7 +1920,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         nval = translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])
         redparam = gensym(string(redvar))
         addInputParameter(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
-        neutral_ast = LambdaVarInfoToLambdaExpr(nlinfo, Expr(:body, Expr(:(=), redparam, nval), Expr(:tuple, SymbolNode(redparam, rvtyp))))
+        neutral_ast = LambdaVarInfoToLambda(nlinfo, Any[Expr(:(=), redparam, nval), Expr(:tuple, SymbolNode(redparam, rvtyp))])
         neutral = DomainLambda(neutral_ast)
         (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
@@ -1961,7 +1954,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     nargs = length(args)
     args = normalize_args(state, env, args)
     assert(nargs >= 3) # needs at least a function, one or more types, and a dimension tuple
-    local dimExp_var::SymNodeGen = args[end]     # last argument is the dimension tuple
+    local dimExp_var::RHSVar = args[end]     # last argument is the dimension tuple
     
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
@@ -1988,7 +1981,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     end
     # produce a DomainLambda
     body::Expr = ast.args[3]
-    linfo = lambdaExprToLambdaVarInfo(ast)
+    linfo = lambdaToLambdaVarInfo(ast)
     params = getParamsNoSelf(linfo)
     dprintln(env, "params = ", params)
     dummy_params = Array(Symbol, length(etys))
@@ -1997,7 +1990,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         addLocalVariable(dummy_params[i], etys[i], 0, linfo)
     end
     setParamsNoSelf(vcat(dummy_params, params), linfo)
-    domF = DomainLambda(LambdaVarInfoToLambdaExpr(linfo, body))
+    domF = DomainLambda(LambdaVarInfoToLambda(linfo, body.args))
     expr::Expr = mk_mmap!(tmpNodes, domF, true)
     expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
     dprintln(env, "cartesianarray return type = ", expr.typ)
@@ -2063,10 +2056,10 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         redparam = gensym("redvar")
         rednode = SymbolNode(redparam, arrtyp)
         addInputParameter(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
-        neutral_ast = Expr(:body, Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
-                                  mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], linfo)),
-                                  Expr(:tuple, rednode))
-        neutral = DomainLambda(LambdaVarInfoToLambdaExpr(linfo, neutral_ast))
+        neutral_ast = Any[ Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
+                           mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], linfo)),
+                           Expr(:tuple, rednode)]
+        neutral = DomainLambda(LambdaVarInfoToLambda(linfo, neutral_ast))
         outtyp = arrtyp
         opr, reorder, cast = specializeOp(fun, [etyp])
         # ignore reorder and cast since they are always id function
@@ -2079,7 +2072,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], LambdaVarInfo())
         inner_expr = mk_mmap!(params, inner_dl)
         inner_expr.typ = outtyp 
-        f = DomainLambda(LambdaVarInfoToLambdaExpr(linfo, mk_expr(outtyp, :body, mk_expr(outtyp, :tuple, inner_expr))))
+        f = DomainLambda(LambdaVarInfoToLambda(linfo, Any[mk_expr(outtyp, :tuple, inner_expr)]))
     else
         red_dim = []
         neutral = neutralelt
@@ -2366,7 +2359,7 @@ end
 
 function from_expr(state::IRState, env::IREnv, ast::LabelNode)
     # clear defs for every basic block.
-    state.defs = Dict{Union{Symbol,Int}, Any}()
+    state.defs = Dict{LHSVar, Any}()
     return ast
 end
 
@@ -2618,8 +2611,8 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         assert(length(args) == 2)
         #@dprintln(3,"liveness: assertEqShape ", args[1], " ", args[2], " ", typeof(args[1]), " ", typeof(args[2]))
         expr_to_process = Any[]
-        push!(expr_to_process, toSymGen(args[1]))
-        push!(expr_to_process, toSymGen(args[2]))
+        push!(expr_to_process, toLHSVar(args[1]))
+        push!(expr_to_process, toLHSVar(args[2]))
         return expr_to_process
     elseif head == :assert
         expr_to_process = Any[]
@@ -2680,8 +2673,8 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
             tmp = tmp.args[1] 
         end 
-        toSymGen = x -> isa(x, SymbolNode) ? x.name : x
-        return AliasAnalysis.lookup(state, toSymGen(tmp))
+        toLHSVar = x -> isa(x, SymbolNode) ? x.name : x
+        return AliasAnalysis.lookup(state, toLHSVar(tmp))
     elseif head == :reduce
         # TODO: inspect the lambda body to rule out assignment?
         return AliasAnalysis.NotArray
@@ -2714,8 +2707,8 @@ function dir_alias_cb(ast::Expr, state, cbdata)
     elseif head == :ranges
         return AliasAnalysis.NotArray
     elseif is(head, :tomask)
-        toSymGen = x -> isa(x, SymbolNode) ? x.name : x
-        return AliasAnalysis.lookup(state, toSymGen(args[1]))
+        toLHSVar = x -> isa(x, SymbolNode) ? x.name : x
+        return AliasAnalysis.lookup(state, toLHSVar(args[1]))
     elseif is(head, :arraysize)
         return AliasAnalysis.NotArray
     elseif is(head, :tuple)

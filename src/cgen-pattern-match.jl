@@ -149,7 +149,7 @@ function getSymType(a::SymbolNode)
     return lstate.symboltable[a.name]
 end
 
-function pattern_match_call_gemm(fun::GlobalRef, C::SymAllGen, tA::Char, tB::Char, A::SymAllGen, B::SymAllGen)
+function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar)
     if fun.mod!=Base.LinAlg || fun.name!=:gemm_wrapper!
         return ""
     end
@@ -248,7 +248,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
 
             rows = lstate.tupleTable[rhs.args[2]]
             values = rhs.args[3:end]
-            arr_var = toSymGen(lhs)
+            arr_var = toLHSVar(lhs)
             atyp, arr_dims = parseArrayType(lstate.symboltable[arr_var])
             typ = toCtype(atyp)
         end

@@ -36,12 +36,11 @@ function flattenParfors(function_name, ast::Expr)
  
     start_time = time_ns()
 
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     body = CompilerTools.LambdaHandling.getBody(ast)
 
-    args = body.args
     expanded_args = Any[]
-    flattenParfors(expanded_args, args)
+    flattenParfors(expanded_args, body.args)
     args = expanded_args
 
     @dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
@@ -52,7 +51,7 @@ function flattenParfors(function_name, ast::Expr)
     end
 
     if shortcut_array_assignment != 0
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo), :body, args...))
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, args)
         new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, LambdaVarInfo)
 
         for i = 1:length(args)
@@ -74,8 +73,7 @@ function flattenParfors(function_name, ast::Expr)
         end
     end
 
-    body.args = args
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, args)
     return lambda
 end
 

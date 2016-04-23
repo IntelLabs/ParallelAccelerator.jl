@@ -183,7 +183,7 @@ type RangeData
     skip
     last
     exprs :: RangeExprs
-    offset_temp_var :: SymAllGen        # New temp variables to hold offset from iteration space for each dimension.
+    offset_temp_var :: RHSVar        # New temp variables to hold offset from iteration space for each dimension.
 
     function RangeData(s, sk, l, sv, skv, lv, temp_var)
         new(s, sk, l, RangeExprs(sv, skv, lv), temp_var)
@@ -212,7 +212,7 @@ function isStartOneRange(re :: RangeExprs)
 end
 
 type MaskSelector
-    value :: SymAllGen
+    value :: RHSVar
 end
 
 function hash(x :: MaskSelector)
@@ -226,8 +226,8 @@ function isequal(x :: MaskSelector, y :: MaskSelector)
 end
 
 type SingularSelector
-    value :: Union{SymAllGen,Number}
-    offset_temp_var :: SymAllGen        # New temp variables to hold offset from iteration space for each dimension.
+    value :: Union{RHSVar,Number}
+    offset_temp_var :: RHSVar        # New temp variables to hold offset from iteration space for each dimension.
 end
 
 function hash(x :: SingularSelector)
@@ -340,15 +340,15 @@ type PIRParForAst
     rws          :: ReadWriteSet.ReadWriteSetType
 
     unique_id
-    array_aliases :: Dict{SymGen, SymGen}
+    array_aliases :: Dict{LHSVar, LHSVar}
 
     # instruction count estimate of the body
     # To get the total loop instruction count, multiply this value by (upper_limit - lower_limit)/step for each loop nest
     # This will be "nothing" if we don't know how to estimate.  If not "nothing" then it is an expression which may
     # include calls.
     instruction_count_expr
-    arrays_written_past_index :: Set{SymGen}
-    arrays_read_past_index :: Set{SymGen}
+    arrays_written_past_index :: Set{LHSVar}
+    arrays_read_past_index :: Set{LHSVar}
 
     function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
         r = CompilerTools.ReadWriteSet.from_exprs(b)
@@ -362,7 +362,7 @@ end
 
 function parforArrayInput(parfor :: PIRParForAst)
     return !parforRangeInput(parfor)
-#    return isa(parfor.first_input, SymAllGen)
+#    return isa(parfor.first_input, RHSVar)
 end
 function parforRangeInput(parfor :: PIRParForAst)
     return isRange(parfor.first_input)
@@ -371,7 +371,7 @@ end
 
 """
 Not currently used but might need it at some point.
-Search a whole PIRParForAst object and replace one SymAllGen with another.
+Search a whole PIRParForAst object and replace one RHSVar with another.
 """
 function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
     parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map)
@@ -397,7 +397,7 @@ type PIRParForStartEnd
     loopNests  :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
-    private_vars :: Array{SymAllGen,1}
+    private_vars :: Array{RHSVar,1}
 end
 
 """
@@ -409,19 +409,19 @@ type expr_state
     # Arrays created from each other are known to have the same size. Store such correlations here.
     # If two arrays have the same dictionary value, they are equal in size.
     next_eq_class            :: Int
-    array_length_correlation :: Dict{SymGen,Int} # map array var -> size group
-    symbol_array_correlation :: Dict{Array{Union{SymAllGen,Int},1},Int} # map size -> size group
+    array_length_correlation :: Dict{LHSVar,Int} # map array var -> size group
+    symbol_array_correlation :: Dict{Array{Union{RHSVar,Int},1},Int} # map size -> size group
     # keep values for constant tuples. They are often used for allocating and reshaping arrays.
-    tuple_table              :: Dict{SymAllGen,Array{Union{SymAllGen,Int},1}}
+    tuple_table              :: Dict{RHSVar,Array{Union{RHSVar,Int},1}}
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     LambdaVarInfo :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
 
     # Initialize the state for parallel IR translation.
     function expr_state(bl, max_label, input_arrays)
-        init_corr = Dict{SymGen,Int}()
-        init_sym_corr = Dict{Array{Union{SymAllGen,Int},1},Int}()
-        init_tup_table =  Dict{SymAllGen,Array{Union{SymAllGen,Int},1}}()
+        init_corr = Dict{LHSVar,Int}()
+        init_sym_corr = Dict{Array{Union{RHSVar,Int},1},Int}()
+        init_tup_table =  Dict{RHSVar,Array{Union{RHSVar,Int},1}}()
         # For each input array, insert into the correlations table with a different value.
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
@@ -514,14 +514,14 @@ end
 Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
-function mk_assignment_expr(lhs::SymAllGen, rhs, state :: expr_state)
+function mk_assignment_expr(lhs::RHSVar, rhs, state :: expr_state)
     expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)    
     @dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
     TypedExpr(expr_typ, symbol('='), lhs, rhs)
 end
 
 function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
-    throw(string("mk_assignment_expr lhs is not of type SymAllGen, is of this type instead: ", typeof(lhs)))
+    throw(string("mk_assignment_expr lhs is not of type RHSVar, is of this type instead: ", typeof(lhs)))
 end
 
 
@@ -555,7 +555,7 @@ end
 """
 Create an expression whose value is the length of the input array.
 """
-function mk_arraylen_expr(x :: SymAllGen, dim :: Int64)
+function mk_arraylen_expr(x :: RHSVar, dim :: Int64)
     TypedExpr(Int64, :call, TopNode(:arraysize), :($x), dim)
 end
 
@@ -637,16 +637,12 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        0)
 end
 
-function get_length_expr(length::Union{SymbolNode,Int64})
+function get_length_expr(length::Union{RHSVar,Int64})
     return length
 end
 
-function get_length_expr(length::Symbol)
-    return SymbolNode(length, Int)
-end
-
 function get_length_expr(length::Any)
-    throw(string("Unhandled length type in mk_alloc_array_1d_expr."))
+    throw(string("Unhandled length type ", typeof(length), " in mk_alloc_array_1d_expr."))
 end
 
 """
@@ -705,7 +701,7 @@ end
 """
 Returns the element type of an Array.
 """
-function getArrayElemType(array :: SymAllGen, state :: expr_state)
+function getArrayElemType(array :: RHSVar, state :: expr_state)
     atyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     return eltype(atyp)
 end
@@ -713,7 +709,7 @@ end
 """
 Return the number of dimensions of an Array.
 """
-function getArrayNumDims(array :: SymAllGen, state :: expr_state)
+function getArrayNumDims(array :: RHSVar, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
     @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
     ndims(gstyp)
@@ -732,8 +728,8 @@ end
 """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForArray(array_sn :: SymAllGen, unique_id :: Int64, state :: expr_state, temp_type = nothing)
-    key = toSymGen(array_sn) 
+function createTempForArray(array_sn :: RHSVar, unique_id :: Int64, state :: expr_state, temp_type = nothing)
+    key = toLHSVar(array_sn) 
     if temp_type == nothing
         temp_type = getArrayElemType(array_sn, state)
     end
@@ -766,7 +762,7 @@ function simpleIndex(dict)
             for j = 1:length(ae)
                 # If the indexing expression isn't simple then return false.
                 if (!isa(ae[j], Number) &&
-                    !isa(ae[j], SymAllGen) &&
+                    !isa(ae[j], RHSVar) &&
                     (typeof(ae[j]) != Expr ||
                     ae[j].head != :(::)   ||
                     typeof(ae[j].args[1]) != Symbol))
@@ -784,21 +780,21 @@ end
 """
 Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
 """
-function toSymNodeGen(x :: Symbol, typ)
+function toRHSVar(x :: Symbol, typ)
     return SymbolNode(x, typ)
 end
 
-function toSymNodeGen(x :: SymbolNode, typ)
+function toRHSVar(x :: SymbolNode, typ)
     return x
 end
 
-function toSymNodeGen(x :: GenSym, typ)
+function toRHSVar(x :: GenSym, typ)
     return x
 end
 
-function toSymNodeGen(x, typ)
+function toRHSVar(x, typ)
     xtyp = typeof(x)
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSymNodeGen and don't know what to do with it."))
+    throw(string("Found object type ", xtyp, " for object ", x, " in toRHSVar and don't know what to do with it."))
 end
 
 """
@@ -812,7 +808,7 @@ end
 """
 Given an array whose name is in "x", allocate a new equivalence class for this array.
 """
-function addUnknownArray(x :: SymGen, state :: expr_state)
+function addUnknownArray(x :: LHSVar, state :: expr_state)
     @dprintln(3, "addUnknownArray x = ", x, " next = ", state.next_eq_class)
     m = state.next_eq_class
     state.next_eq_class += 1
@@ -867,7 +863,7 @@ end
 If we somehow determine that two arrays must be the same length then 
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
-function add_merge_correlations(old_sym :: SymGen, new_sym :: SymGen, state :: expr_state)
+function add_merge_correlations(old_sym :: LHSVar, new_sym :: LHSVar, state :: expr_state)
     @dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym)
     print_correlations(3, state)
     old_corr = getOrAddArrayCorrelation(old_sym, state)
@@ -882,7 +878,7 @@ end
 """
 Return a correlation set for an array.  If the array was not previously added then add it and return it.
 """
-function getOrAddArrayCorrelation(x :: SymGen, state :: expr_state)
+function getOrAddArrayCorrelation(x :: LHSVar, state :: expr_state)
     if !haskey(state.array_length_correlation, x)
         @dprintln(3,"Correlation for array not found = ", x)
         addUnknownArray(x, state)
@@ -1045,7 +1041,7 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
             # is that of the entire array and so we can establish a correlation between the
             # DimensionSelector and the whole array.
             if all_mask
-                masked_array_corr = getOrAddArrayCorrelation(toSymGen(array), state)
+                masked_array_corr = getOrAddArrayCorrelation(toLHSVar(array), state)
                 @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
                 range_corr = merge_correlations(state, masked_array_corr, range_corr)
 
@@ -1071,7 +1067,7 @@ end
 """
 A new array is being created with an explicit size specification in dims.
 """
-function getOrAddSymbolCorrelation(array :: SymGen, state :: expr_state, dims :: Array{Union{SymGen,Int},1})
+function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims :: Array{Union{RHSVar,Int},1})
     if !haskey(state.symbol_array_correlation, dims)
         # We haven't yet seen this combination of dims used to create an array.
         @dprintln(3,"Correlation for symbol set not found, dims = ", dims)
@@ -1106,11 +1102,11 @@ include("parallel-ir-mk-parfor.jl")
 The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
-function getPrivateSetInner(x::Expr, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::Expr, state :: Set{RHSVar}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     # If the node is an assignment node or a loop head node.
     if isAssignmentNode(x) || isLoopheadNode(x)
         lhs = x.args[1]
-        assert(isa(lhs, SymAllGen))
+        assert(isa(lhs, RHSVar))
         if isa(lhs, GenSym)
             push!(state, lhs)
         else
@@ -1130,7 +1126,7 @@ function getPrivateSetInner(x::Expr, state :: Set{SymAllGen}, top_level_number :
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function getPrivateSetInner(x::ANY, state :: Set{SymAllGen}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::ANY, state :: Set{RHSVar}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -1140,7 +1136,7 @@ Go through the body of a parfor and collect those Symbols, GenSyms, etc. that ar
 function getPrivateSet(body :: Array{Any,1})
     @dprintln(3,"getPrivateSet")
     printBody(3, body)
-    private_set = Set{SymAllGen}()
+    private_set = Set{RHSVar}()
     for i = 1:length(body)
         AstWalk(body[i], getPrivateSetInner, private_set)
     end
@@ -1192,7 +1188,7 @@ function from_lambda(lambda :: Expr, depth, state)
 
     # Save the current LambdaVarInfo away so we can restore it later.
     save_LambdaVarInfo  = state.LambdaVarInfo
-    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(lambda)
+    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
     body = CompilerTools.LambdaHandling.getBody(lambda)
 
     # Process the lambda's body.
@@ -1214,7 +1210,7 @@ function from_lambda(lambda :: Expr, depth, state)
     body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
     # Write the LambdaVarInfo back to the lambda AST node.
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, body)
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body.args)
     @dprintln(3,"new lambda = ", lambda)
 
     state.LambdaVarInfo = save_LambdaVarInfo
@@ -1257,7 +1253,7 @@ function isBareParfor(node)
 end
 
 
-function isParforAssignmentNodeInner(lhs::SymAllGen, rhs::Expr)
+function isParforAssignmentNodeInner(lhs::RHSVar, rhs::Expr)
     if rhs.head==:parfor
         @dprintln(4,"Found a parfor assignment node.")
         return true
@@ -1459,7 +1455,7 @@ Pull the information from the inner lambda into the outer lambda.
 Return the body (as an array) after application.
 """
 function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
-    inner_LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(inner_lambda)
+    inner_LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(inner_lambda)
     @dprintln(3,"mergeLambdaIntoOuterState")
     @dprintln(3,"state.LambdaVarInfo = ", state.LambdaVarInfo)
     @dprintln(3,"inner_LambdaVarInfo = ", inner_LambdaVarInfo)
@@ -1509,7 +1505,7 @@ function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either
     (createRetTupleType(all_array, unique_id, state), all_array, false)
 end
 
-function getAllAliases(input :: Set{SymGen}, aliases :: Dict{SymGen, SymGen})
+function getAllAliases(input :: Set{LHSVar}, aliases :: Dict{LHSVar, LHSVar})
     @dprintln(3,"getAllAliases input = ", input, " aliases = ", aliases)
     out = Set()
 
@@ -1568,7 +1564,7 @@ end
 function is_dead_arrayset(x, all_aliased_outputs :: Set)
     if isArraysetCall(x)
         array_to_set = x.args[2]
-        if !in(toSymGen(array_to_set), all_aliased_outputs)
+        if !in(toLHSVar(array_to_set), all_aliased_outputs)
             return true
         end
     end
@@ -1642,11 +1638,11 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
             array_name = x.args[2]
             value      = x.args[3]
             index      = x.args[4]
-            assert(isa(array_name, SymNodeGen))
+            assert(isa(array_name, RHSVar))
             # If the array being assigned to is in temp_map.
-            if in(toSymGen(array_name), cbd.arrays_set_in_cur_body)
+            if in(toLHSVar(array_name), cbd.arrays_set_in_cur_body)
                 return nothing
-            elseif !in(toSymGen(array_name), cbd.output_items_with_aliases)
+            elseif !in(toLHSVar(array_name), cbd.output_items_with_aliases)
                 return nothing
             else
                 dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
@@ -1697,7 +1693,7 @@ function getFirstArrayLens(parfor, num_dims, state)
     # if arraysize calls were replaced for constant size array
     if length(ret)==0
         # assuming first_input is valid at this point since it is before fusion of this parfor
-        arr = toSymGen(parfor.first_input.array)
+        arr = toLHSVar(parfor.first_input.array)
         arr_class = state.array_length_correlation[arr]
         for (d, v) in state.symbol_array_correlation
             if v==arr_class
@@ -1715,10 +1711,10 @@ end
 Holds the data for substitute_cur_body AST walk.
 """
 type cur_body_data
-    temp_map  :: Dict{SymGen, SymNodeGen}    # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
-    index_map :: Dict{SymGen, SymGen}        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
-    arrays_set_in_cur_body :: Set{SymGen}    # Used as output.  Collects the arrays set in the current body.
-    replace_array_name_in_arrayset :: Dict{SymGen, SymGen}  # Map from one array to another.  Replace first array with second when used in arrayset context.
+    temp_map  :: Dict{LHSVar, RHSVar}    # Map of array name to temporary.  Use temporary instead of arrayref of the array name.
+    index_map :: Dict{LHSVar, LHSVar}        # Map index variables from parfor being fused to the index variables of the parfor it is being fused with.
+    arrays_set_in_cur_body :: Set{LHSVar}    # Used as output.  Collects the arrays set in the current body.
+    replace_array_name_in_arrayset :: Dict{LHSVar, LHSVar}  # Map from one array to another.  Replace first array with second when used in arrayset context.
     state :: expr_state
 end
 
@@ -1743,9 +1739,9 @@ function sub_cur_body_walk(x::Expr,
             dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref, unsafe_arrayref, or getindex")
             array_name = x.args[2]
             index      = x.args[3]
-            assert(isa(array_name, SymNodeGen))
-            lowered_array_name = toSymGen(array_name)
-            assert(isa(lowered_array_name, SymGen))
+            assert(isa(array_name, RHSVar))
+            lowered_array_name = toLHSVar(array_name)
+            assert(isa(lowered_array_name, LHSVar))
             dprintln(dbglvl, "array_name = ", array_name, " index = ", index, " lowered_array_name = ", lowered_array_name)
             # If the array name is in cbd.temp_map then replace the arrayref call with the mapped variable.
             if haskey(cbd.temp_map, lowered_array_name)
@@ -1754,11 +1750,11 @@ function sub_cur_body_walk(x::Expr,
             end
         elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
             array_name = x.args[2]
-            assert(isa(array_name, SymNodeGen))
-            push!(cbd.arrays_set_in_cur_body, toSymGen(array_name))
-            if haskey(cbd.replace_array_name_in_arrayset, toSymGen(array_name))
-                new_symgen = cbd.replace_array_name_in_arrayset[toSymGen(array_name)]
-                x.args[2]  = toSymNodeGen(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.LambdaVarInfo))
+            assert(isa(array_name, RHSVar))
+            push!(cbd.arrays_set_in_cur_body, toLHSVar(array_name))
+            if haskey(cbd.replace_array_name_in_arrayset, toLHSVar(array_name))
+                new_symgen = cbd.replace_array_name_in_arrayset[toLHSVar(array_name)]
+                x.args[2]  = toRHSVar(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.LambdaVarInfo))
             end
         end
     end
@@ -1828,10 +1824,10 @@ temp_map holds array names for which arrayrefs should be converted to a variable
     replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
 """
 function substitute_cur_body(x, 
-    temp_map :: Dict{SymGen, SymNodeGen}, 
-    index_map :: Dict{SymGen, SymGen}, 
-    arrays_set_in_cur_body :: Set{SymGen}, 
-    replace_array_name_in_arrayset :: Dict{SymGen, SymGen},
+    temp_map :: Dict{LHSVar, RHSVar}, 
+    index_map :: Dict{LHSVar, LHSVar}, 
+    arrays_set_in_cur_body :: Set{LHSVar}, 
+    replace_array_name_in_arrayset :: Dict{LHSVar, LHSVar},
     state :: expr_state)
     @dprintln(3,"substitute_cur_body ", x)
     @dprintln(3,"temp_map = ", temp_map)
@@ -1935,7 +1931,7 @@ end
 """
 Add to the map of symbol names to types.
 """
-function rememberTypeForSym(sym_to_type :: Dict{SymGen, DataType}, sym :: SymGen, typ :: DataType)
+function rememberTypeForSym(sym_to_type :: Dict{LHSVar, DataType}, sym :: LHSVar, typ :: DataType)
     if typ == Any
         @dprintln(0, "rememberTypeForSym: sym = ", sym, " typ = ", typ)
     end
@@ -1975,12 +1971,12 @@ end
 """
 Get the equivalence class of a domain IR input in inputInfo.
 """
-function getCorrelation(sng :: SymAllGen, state :: expr_state)
-    @dprintln(3, "getCorrelation for SymNodeGen = ", sng)
-    return getOrAddArrayCorrelation(toSymGen(sng), state)
+function getCorrelation(sng :: RHSVar, state :: expr_state)
+    @dprintln(3, "getCorrelation for RHSVar = ", sng)
+    return getOrAddArrayCorrelation(toLHSVar(sng), state)
 end
 
-function getCorrelation(array :: SymAllGen, are :: Array{DimensionSelector,1}, state :: expr_state)
+function getCorrelation(array :: RHSVar, are :: Array{DimensionSelector,1}, state :: expr_state)
     @dprintln(3, "getCorrelation for Array{DimensionSelector,1} = ", are)
     return getOrAddRangeCorrelation(array, are, state)
 end
@@ -2006,9 +2002,9 @@ parfor_assignment is the AST of the whole expression.
 the_parfor is the PIRParForAst type part of the incoming assignment.
 sym_to_type is an out parameter that maps symbols in the output mapping to their types.
 """
-function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, sym_to_type :: Dict{SymGen, DataType}, state :: expr_state)
-    map_lhs_post_array     = Dict{SymGen, SymGen}()
-    map_lhs_post_reduction = Dict{SymGen, SymGen}()
+function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, sym_to_type :: Dict{LHSVar, DataType}, state :: expr_state)
+    map_lhs_post_array     = Dict{LHSVar, LHSVar}()
+    map_lhs_post_reduction = Dict{LHSVar, LHSVar}()
 
     if is_multi
         last_post = the_parfor.postParFor[end]
@@ -2020,17 +2016,17 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
         for i = 4:length(parfor_assignment.args)
             corresponding_elem = last_post[i-3]
 
-            assert(isa(parfor_assignment.args[i], SymNodeGen))
-            rememberTypeForSym(sym_to_type, toSymGen(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.LambdaVarInfo))
-            rememberTypeForSym(sym_to_type, toSymGen(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.LambdaVarInfo))
+            assert(isa(parfor_assignment.args[i], RHSVar))
+            rememberTypeForSym(sym_to_type, toLHSVar(parfor_assignment.args[i]), CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.LambdaVarInfo))
+            rememberTypeForSym(sym_to_type, toLHSVar(corresponding_elem), CompilerTools.LambdaHandling.getType(corresponding_elem, state.LambdaVarInfo))
             if isArrayType(CompilerTools.LambdaHandling.getType(parfor_assignment.args[i], state.LambdaVarInfo))
                 # For fused parfors, the last post statement is a tuple variable.
                 # That tuple variable is declared in the previous statement (end-1).
                 # The statement is an Expr with head == :call and top(:tuple) as the first arg.
                 # So, the first member of the tuple is at offset 2 which corresponds to index 4 of this loop, ergo the "i-2".
-                map_lhs_post_array[toSymGen(parfor_assignment.args[i])]     = toSymGen(corresponding_elem)
+                map_lhs_post_array[toLHSVar(parfor_assignment.args[i])]     = toLHSVar(corresponding_elem)
             else
-                map_lhs_post_reduction[toSymGen(parfor_assignment.args[i])] = toSymGen(corresponding_elem)
+                map_lhs_post_reduction[toLHSVar(parfor_assignment.args[i])] = toLHSVar(corresponding_elem)
             end
         end
     else
@@ -2039,17 +2035,17 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
             lhs_pa = getLhsFromAssignment(parfor_assignment)
             ast_lhs_pa_typ = typeof(lhs_pa)
             lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.LambdaVarInfo)
-            if isa(lhs_pa, SymNodeGen)
+            if isa(lhs_pa, RHSVar)
                 ppftyp = typeof(the_parfor.postParFor[end]) 
-                assert(ppftyp <: SymNodeGen)
-                rememberTypeForSym(sym_to_type, toSymGen(lhs_pa), lhs_pa_typ)
+                assert(ppftyp <: RHSVar)
+                rememberTypeForSym(sym_to_type, toLHSVar(lhs_pa), lhs_pa_typ)
                 rhs = the_parfor.postParFor[end]
-                rememberTypeForSym(sym_to_type, toSymGen(rhs), CompilerTools.LambdaHandling.getType(rhs, state.LambdaVarInfo))
+                rememberTypeForSym(sym_to_type, toLHSVar(rhs), CompilerTools.LambdaHandling.getType(rhs, state.LambdaVarInfo))
 
                 if isArrayType(lhs_pa_typ)
-                    map_lhs_post_array[toSymGen(lhs_pa)]     = toSymGen(the_parfor.postParFor[end])
+                    map_lhs_post_array[toLHSVar(lhs_pa)]     = toLHSVar(the_parfor.postParFor[end])
                 else
-                    map_lhs_post_reduction[toSymGen(lhs_pa)] = toSymGen(the_parfor.postParFor[end])
+                    map_lhs_post_reduction[toLHSVar(lhs_pa)] = toLHSVar(the_parfor.postParFor[end])
                 end
             elseif typeof(lhs_pa) == Symbol
                 throw(string("lhs_pa as a symbol no longer supported"))
@@ -2067,7 +2063,7 @@ end
 Given an "input" Symbol, use that Symbol as key to a dictionary.  While such a Symbol is present
 in the dictionary replace it with the corresponding value from the dict.
 """
-function fullyLowerAlias(dict :: Dict{SymGen, SymGen}, input :: SymGen)
+function fullyLowerAlias(dict :: Dict{LHSVar, LHSVar}, input :: LHSVar)
     while haskey(dict, input)
         input = dict[input]
     end
@@ -2079,7 +2075,7 @@ Take a single-step alias map, e.g., a=>b, b=>c, and create a lowered dictionary,
 maps each array to the transitively lowered array.
 """
 function createLoweredAliasMap(dict1)
-    ret = Dict{SymGen, SymGen}()
+    ret = Dict{LHSVar, LHSVar}()
 
     for i in dict1
         ret[i[1]] = fullyLowerAlias(dict1, i[2])
@@ -2262,7 +2258,7 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, this_parfor.loopNests[i].step)
         end
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(cbdata, this_parfor.body)
         @dprintln(3,"fake_body = ", fake_body)
 
         body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
@@ -2311,10 +2307,10 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, this_parfor.loopNests[i].step)
         end
         #emptyLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
-        #fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(emptyLambdaVarInfo, TypedExpr(nothing, :body, this_parfor.body...))
+        #fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(emptyLambdaVarInfo, TypedExpr(nothing, :body, this_parfor.body...))
         @dprintln(3,"typeof(cbdata) = ", typeof(cbdata))
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(cbdata, TypedExpr(nothing, :body, this_parfor.body...))
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(cbdata, this_parfor.body)
         @dprintln(3,"fake_body = ", fake_body)
 
         body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
@@ -2525,7 +2521,7 @@ function from_assignment_fusion(args::Array{Any,1}, depth, state)
 
     # Eliminate assignments to variables which are immediately dead.
     # The variable name.
-    lhsName = toSymGen(lhs)
+    lhsName = toLHSVar(lhs)
     # Get liveness information for the current statement.
     statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
     @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
@@ -2553,7 +2549,7 @@ function from_assignment_fusion(args::Array{Any,1}, depth, state)
         assert(typeof(args[i]) == SymbolNode)
         assert(typeof(rhs_entry) == SymbolNode)
         if rhs_entry.typ.name == Array.name
-            add_merge_correlations(toSymGen(rhs_entry), toSymGen(args[i]), state)
+            add_merge_correlations(toLHSVar(rhs_entry), toLHSVar(args[i]), state)
         end
     end
 
@@ -2584,7 +2580,7 @@ function from_assignment(lhs, rhs, depth, state)
 
     # Eliminate assignments to variables which are immediately dead.
     # The variable name.
-    lhsName = toSymGen(lhs)
+    lhsName = toLHSVar(lhs)
     # Get liveness information for the current statement.
     statement_live_info = CompilerTools.LivenessAnalysis.find_top_number(state.top_level_number, state.block_lives)
     @assert statement_live_info!=nothing "$(state.top_level_number) $(state.block_lives)"
@@ -2611,7 +2607,7 @@ function from_assignment(lhs, rhs, depth, state)
             the_parfor = rhs.args[1]
             if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
                 @dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
-                add_merge_correlations(toSymGen(the_parfor.postParFor[end]), lhsName, state)
+                add_merge_correlations(toLHSVar(the_parfor.postParFor[end]), lhsName, state)
             end
             # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
             # statically if our array length correlations indicate they are in the same length set.
@@ -2633,7 +2629,7 @@ function from_assignment(lhs, rhs, depth, state)
                         si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.LambdaVarInfo)
                         if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
                             @dprintln(3, "Will establish array length correlation for const size ", dim1)
-                            getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name])
+                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1.name])
                         end
                     end
                 elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
@@ -2645,7 +2641,7 @@ function from_assignment(lhs, rhs, depth, state)
                         si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.LambdaVarInfo)
                         if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
                             @dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-                            getOrAddSymbolCorrelation(lhsName, state, SymGen[dim1.name, dim2.name])
+                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1.name, dim2.name])
                             print_correlations(3, state)
                         end
                     end
@@ -2657,7 +2653,7 @@ function from_assignment(lhs, rhs, depth, state)
         if isArrayType(out_typ)
             # Add a length correlation of the form "a = b".
             @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
-            add_merge_correlations(toSymGen(rhs), lhsName, state)
+            add_merge_correlations(toLHSVar(rhs), lhsName, state)
         end
     else
         # Get the type of the lhs from its metadata declaration.
@@ -2880,7 +2876,7 @@ function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     CompilerTools.LambdaHandling.setParamsNoSelf(Any[], linfo)
     CompilerTools.LambdaHandling.addInputParameters(type_data, linfo)
     @dprintln(3, "stmts = ", stmts)
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(linfo, Expr(:body, stmts...))
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(linfo, stmts)
     # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
     return (ast, input_arrays) 
 end
@@ -2926,13 +2922,13 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
     cfg = CompilerTools.CFGs.from_ast(ast)
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     input_arrays = get_input_arrays(LambdaVarInfo)
-    body = CompilerTools.LambdaHandling.getBody(ast)
+    # body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
-    body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+    body = CompilerTools.CFGs.createFunctionBody(cfg)
     # Re-create the lambda minus any dead basic blocks.
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
     @dprintln(1,"ast after dead blocks removed, ast = ", ast)
 
     @dprintln(1,"Starting liveness analysis.")
@@ -2958,7 +2954,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     # the code will detect statements that depend only on array params and move them to the top which
     # leaves other non-array operations after that and so prevents fusion.
     @dprintln(3,"All params = ", ast.args[1])
-    non_array_params = Set{SymGen}()
+    non_array_params = Set{LHSVar}()
     for param in ast.args[1]
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
             push!(non_array_params, param)
@@ -2974,7 +2970,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
-    ast_linfo = lambdaExprToLambdaVarInfo(ast)
+    ast_linfo = lambdaToLambdaVarInfo(ast)
     # import correlations of escaping variables to enable optimizations
     setEscCorrelations!(new_vars, ast_linfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
@@ -3102,7 +3098,7 @@ function get_input_arrays(linfo::LambdaVarInfo)
 end
 
 """
-Returns a set of SymAllGen's that are arrays for which there are multiple statements that could define that
+Returns a set of RHSVar's that are arrays for which there are multiple statements that could define that
 array and by implication change its size.
 FIX ME!!!!!!!!!!!!!!!!!!!
 TO-DO!!!!!!!!!!!!!!!!!!!!
@@ -3112,26 +3108,26 @@ creation points.  If there are multiple of such then we'll preclude that array f
 equivalence class.
 """
 function findMultipleArrayAssigns(lives :: CompilerTools.LivenessAnalysis.BlockLiveness, LambdaVarInfo)
-    ret   = Set{SymAllGen}()
-    found = Set{SymAllGen}()
+    ret   = Set{RHSVar}()
+    found = Set{RHSVar}()
 
     # For every basic block.
     for bb in lives.basic_blocks
       BB = bb[2]    # get the BasicBlock
       # Look at one statement at a time.
       for stmt in BB.statements
-        # For each SymAllGen that is defined in that statement.
+        # For each RHSVar that is defined in that statement.
         for d in stmt.def
-          # Get that SymAllGen's type.
+          # Get that RHSVar's type.
           dtyp = CompilerTools.LambdaHandling.getType(d, LambdaVarInfo)
           # If it is an array.
           if isArrayType(dtyp)
-            # See if we've previously seen another statement in which that SymAllGen was defined.
+            # See if we've previously seen another statement in which that RHSVar was defined.
             if in(d, found)
-              # If so, then there are multiple statements that define this SymAllGen and so add that to the return set.
+              # If so, then there are multiple statements that define this RHSVar and so add that to the return set.
               push!(ret, d)
             else
-              # We hadn't previously seen this SymAllGen defined in a statement so add it to "found".
+              # We hadn't previously seen this RHSVar defined in a statement so add it to "found".
               push!(found, d)
             end
           end
@@ -3183,7 +3179,7 @@ function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.P
     if node.head == :lambda
         # TODD: I'm not sure about this.  Should arrays in a nested lambda be considered multiply assigned?
         save_LambdaVarInfo  = state.LambdaVarInfo
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(node)
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
         body = CompilerTools.LambdaHandling.getBody(node)
         AstWalk(body, mark_multiple_assign_equiv, state)
         state.LambdaVarInfo = save_LambdaVarInfo
@@ -3194,7 +3190,7 @@ function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.P
         @dprintln(3,"mark_multiple_assign_equiv is_top_level")
 
         if isAssignmentNode(node)
-            lhs = toSymGen(node.args[1])
+            lhs = toLHSVar(node.args[1])
             if isArrayType(CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo))
                 if !haskey(state.assign_dict, lhs)
                     state.assign_dict[lhs] = 0
@@ -3216,7 +3212,7 @@ function genEquivalenceClasses(ast, new_vars)
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
     #empty!(new_vars.range_correlation)
-    mms = markMultState(new_vars.LambdaVarInfo, Dict{SymGen,Int64}())
+    mms = markMultState(new_vars.LambdaVarInfo, Dict{LHSVar,Int64}())
     AstWalk(ast, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
     multi_correlation = -1
@@ -3250,13 +3246,13 @@ function from_root(function_name, ast :: Expr)
 
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
     cfg = CompilerTools.CFGs.from_ast(ast)
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     input_arrays = get_input_arrays(LambdaVarInfo)
-    body = CompilerTools.LambdaHandling.getBody(ast)
+    #body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
-    body.args = CompilerTools.CFGs.createFunctionBody(cfg)
+    body = CompilerTools.CFGs.createFunctionBody(cfg)
     # Re-create the lambda minus any dead basic blocks.
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(LambdaVarInfo, body)
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
     @dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
 
     #CompilerTools.LivenessAnalysis.set_debug_level(3)
@@ -3266,7 +3262,7 @@ function from_root(function_name, ast :: Expr)
     
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
-    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(),Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
+    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
     ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
@@ -3295,7 +3291,7 @@ function from_root(function_name, ast :: Expr)
     # the code will detect statements that depend only on array params and move them to the top which
     # leaves other non-array operations after that and so prevents fusion.
     @dprintln(3,"All params = ", ast.args[1])
-    non_array_params = Set{SymGen}()
+    non_array_params = Set{LHSVar}()
     for param in ast.args[1]
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
             push!(non_array_params, param)
@@ -3350,7 +3346,7 @@ function from_root(function_name, ast :: Expr)
         # initial round of size analysis (create_equivalence_classes) so arraysize() calls are replaced
         # main copy propagation round after arraysize() replacement
         # main size analysis after all size variables are propagated
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(),Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
+        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
 
         new_vars = expr_state(lives, max_label, input_arrays)
@@ -3360,7 +3356,7 @@ function from_root(function_name, ast :: Expr)
         print_correlations(3, new_vars)
 
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{SymGen, Union{SymGen,Number}}(), Dict{SymGen, Union{SymGen,Number}}(),LambdaVarInfo))
+        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
         @dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
         printLambda(3, ast)
@@ -3461,8 +3457,8 @@ function set_pir_stats(ast::Expr)
 end
 
 type rm_allocs_state
-    defs::Set{SymGen}
-    removed_arrs::Dict{SymGen,Array{Any,1}}
+    defs::Set{LHSVar}
+    removed_arrs::Dict{LHSVar,Array{Any,1}}
     LambdaVarInfo
 end
 
@@ -3472,16 +3468,16 @@ removes extra allocations
 """
 function remove_extra_allocs(ast)
     @dprintln(3,"starting remove extra allocs")
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, LambdaVarInfo)
     #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
-    defs = Set{SymGen}()
+    defs = Set{LHSVar}()
     for i in values(lives.basic_blocks)
         defs = union(defs, i.def)
     end
     @dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Dict{SymGen,Array{Any,1}}(), LambdaVarInfo)
+    rm_state = rm_allocs_state(defs, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(ast, rm_allocs_cb, rm_state)
 
     return;
@@ -3491,7 +3487,7 @@ function toSynGemOrInt(a::SymbolNode)
     return a.name
 end
 
-function toSynGemOrInt(a::Union{Int,SymGen})
+function toSynGemOrInt(a::Union{Int,LHSVar})
     return a
 end
 
@@ -3500,7 +3496,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
     head = ast.head
     args = ast.args
     if head == :(=) && isAllocation(args[2])
-        arr = toSymGen(args[1])
+        arr = toLHSVar(args[1])
         if in(arr, state.defs)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
@@ -3524,7 +3520,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function rm_allocs_cb_call(state::rm_allocs_state, func::TopNode, arr::SymAllGen, rest_args::Array{Any,1})
+function rm_allocs_cb_call(state::rm_allocs_state, func::TopNode, arr::RHSVar, rest_args::Array{Any,1})
     if func.name==:arraysize && in(arr, keys(state.removed_arrs))
         shape = state.removed_arrs[arr]
         return shape[rest_args[1]]
@@ -3534,7 +3530,7 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::TopNode, arr::SymAllGen
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::SymAllGen, rest_args::Array{Any,1})
+function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::RHSVar, rest_args::Array{Any,1})
     if (func==GlobalRef(Base,:arraylen) || func==GlobalRef(Core.Intrinsics, :arraylen)) && in(arr, keys(state.removed_arrs))
         shape = state.removed_arrs[arr]
         dim = length(shape)
@@ -3625,7 +3621,7 @@ function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level
     return from_expr(ast, depth, state, top_level)
 end
 
-function from_expr(ast::Union{SymAllGen,TopNode,LineNumberNode,LabelNode,Char,
+function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
     GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]

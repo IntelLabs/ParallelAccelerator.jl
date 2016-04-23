@@ -29,7 +29,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 Returns true if any variable in the collection "vars" is used in any statement whose top level number is in "top_level_numbers".
 We use expr_state "state" to get the block liveness information from which we use "def" and "use" to determine if a variable usage is present.
 """
-function isSymbolsUsed(vars :: Dict{SymGen,SymGen}, top_level_numbers :: Array{Int,1}, state)
+function isSymbolsUsed(vars :: Dict{LHSVar,LHSVar}, top_level_numbers :: Array{Int,1}, state)
     @dprintln(3,"isSymbolsUsed: vars = ", vars, " typeof(vars) = ", typeof(vars), " top_level_numbers = ", top_level_numbers)
     bl = state.block_lives
 
@@ -92,7 +92,7 @@ function fuse(body, body_index, cur::Expr, state)
     prev_parfor = getParforNode(prev)
     cur_parfor  = getParforNode(cur)
 
-    sym_to_type = Dict{SymGen, DataType}()
+    sym_to_type = Dict{LHSVar, DataType}()
 
     @dprintln(2, "prev = ", prev)
     @dprintln(2, "cur = ", cur)
@@ -173,7 +173,7 @@ function fuse(body, body_index, cur::Expr, state)
     found_array_access_problem = false
     @dprintln(3, "cur_parfor.loopNests = ", cur_parfor.loopNests)
     for cur_read_array in collect(keys(cur_rws.readSet.arrays))
-        with_aliases = getAllAliases(Set{SymGen}([cur_read_array]), map_prev_lhs_post)
+        with_aliases = getAllAliases(Set{LHSVar}([cur_read_array]), map_prev_lhs_post)
         @dprintln(3, "Checking array ", cur_read_array, " with aliases = ", with_aliases)
         if isempty(intersect(prev_write_set_array, with_aliases))
             continue
@@ -227,7 +227,7 @@ function fuse(body, body_index, cur::Expr, state)
         # Get the variables live after the previous parfor.
         live_in_prev = prev_stmt_live_first.live_in
         # def_prev     = prev_stmt_live_first.def
-        def_prev = Set{SymGen}()
+        def_prev = Set{LHSVar}()
         # The "def" for a fused parfor is to a first approximation the union of the "def" of each statement in the parfor.  
         # Some variables will be eliminated by fusion so we follow this first approximation up by an intersection with the
         # live_out of the last statement of the previous parfor.
@@ -275,7 +275,7 @@ function fuse(body, body_index, cur::Expr, state)
 
         # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
         # that don't die during the current parfor.
-        output_map = Dict{SymGen, SymGen}()
+        output_map = Dict{LHSVar, LHSVar}()
         for i in map_prev_lhs_all
             if !in(i[1], not_used_after_cur)
                 output_map[i[1]] = i[2]
@@ -285,7 +285,7 @@ function fuse(body, body_index, cur::Expr, state)
             output_map[i[1]] = i[2]
         end
 
-        new_aliases = Dict{SymGen, SymGen}()
+        new_aliases = Dict{LHSVar, LHSVar}()
         for i in map_prev_lhs_post
             if !in(i[1], not_used_after_cur)
                 new_aliases[i[1]] = i[2]
@@ -311,7 +311,7 @@ function fuse(body, body_index, cur::Expr, state)
         # loopNests - nothing needs to be done to the loopNests
         # But we use them to establish a mapping between corresponding indices in the two parfors.
         # Then, we use that map to convert indices in the second parfor to the corresponding ones in the first parfor.
-        index_map = Dict{SymGen, SymGen}()
+        index_map = Dict{LHSVar, LHSVar}()
         assert(length(prev_parfor.loopNests) == length(cur_parfor.loopNests))
         for i = 1:length(prev_parfor.loopNests)
             index_map[cur_parfor.loopNests[i].indexVariable.name] = prev_parfor.loopNests[i].indexVariable.name
@@ -341,24 +341,24 @@ function fuse(body, body_index, cur::Expr, state)
 
         # Create a dictionary of arrays to the last variable containing the array's value at the current index space.
         save_body = prev_parfor.body
-        arrayset_dict = Dict{SymGen, SymNodeGen}()
+        arrayset_dict = Dict{LHSVar, RHSVar}()
         for i = 1:length(save_body)
             x = save_body[i]
             if isArraysetCall(x)
                 # Here we have a call to arrayset.
                 array_name = x.args[2]
                 value      = x.args[3]
-                assert(isa(array_name, SymNodeGen))
-                assert(isa(value, SymNodeGen))
-                arrayset_dict[toSymGen(array_name)] = value
+                assert(isa(array_name, RHSVar))
+                assert(isa(value, RHSVar))
+                arrayset_dict[toLHSVar(array_name)] = value
             elseif typeof(x) == Expr && x.head == :(=)
                 lhs = x.args[1]
                 rhs = x.args[2]
-                #assert(isa(lhs, SymNodeGen))
+                #assert(isa(lhs, RHSVar))
                 if isArrayrefCall(rhs)
                     array_name = rhs.args[2]
-                    assert(isa(array_name, SymNodeGen))
-                    arrayset_dict[toSymGen(array_name)] = lhs
+                    assert(isa(array_name, RHSVar))
+                    arrayset_dict[toLHSVar(array_name)] = lhs
                 end
             end
         end
@@ -374,7 +374,7 @@ function fuse(body, body_index, cur::Expr, state)
 
         # body - Append cur body to prev body but replace arrayset's in prev with a temp variable
         # and replace arrayref's in cur with the same temp.
-        arrays_set_in_cur_body = Set{SymGen}()
+        arrays_set_in_cur_body = Set{LHSVar}()
         # Convert the cur_parfor body.
         new_cur_body = map(x -> substitute_cur_body(x, arrayset_dict, index_map, arrays_set_in_cur_body, loweredAliasMap, state), cur_parfor.body)
         arrays_set_in_cur_body_with_aliases = getAllAliases(arrays_set_in_cur_body, prev_parfor.array_aliases)
@@ -484,7 +484,7 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     body = ast.args[3]
     assert(isa(body, Expr) && is(body.head, :body))
     # For each statement in the body.
@@ -495,7 +495,7 @@ function mmapToMmap!(ast, lives, uniqSet)
             lhs = expr.args[1]
             rhs = expr.args[2]
             # right now assume all
-            assert(isa(lhs, SymAllGen))
+            assert(isa(lhs, RHSVar))
             lhsTyp = CompilerTools.LambdaHandling.getType(lhs, LambdaVarInfo) 
             # If the right-hand side is an mmap.
             if isa(rhs, Expr) && is(rhs.head, :mmap)

@@ -26,7 +26,7 @@ type ReplacedRegion
 end
 
 type EntityType
-    name :: SymAllGen
+    name :: RHSVar
     typ
 end
 
@@ -484,7 +484,7 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
         dprintln(debug_level,head, " ", args)
     end
     if head == :lambda
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     elseif head == :body || head == :block || head == :(::) || head == :line || head == :& || head == :(.) || head == :copyast
         # skip
     elseif head == :(=)
@@ -1255,7 +1255,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     # Start to form the lambda VarDef array for the locals to the task function.
     locals_array = CompilerTools.LambdaHandling.VarDef[]
     gensyms = Any[]
-    gensyms_table = Dict{SymGen, Any}()
+    gensyms_table = Dict{LHSVar, Any}()
     for i in locals
         if isa(i, Symbol) 
             push!(locals_array, CompilerTools.LambdaHandling.getVarDef(i,state.LambdaVarInfo))
@@ -1419,7 +1419,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     task_body = CompilerTools.LambdaHandling.replaceExprWithDict!(task_body, gensyms_table)
     # Create the new :lambda Expr for the task function.
-    code = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(newLambdaVarInfo, task_body)
+    code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(newLambdaVarInfo, task_body)
 
     @dprintln(3, "New task = ", code)
 

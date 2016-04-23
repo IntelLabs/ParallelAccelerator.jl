@@ -68,8 +68,8 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local linfo = irState.LambdaVarInfo
   # println(stat)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
-  local toSymGen(x) = isa(x, SymbolNode) ? x.name : x 
-  main_length_correlation = getOrAddArrayCorrelation(toSymGen(bufs[1]), irState)
+  local toLHSVar(x) = isa(x, SymbolNode) ? x.name : x 
+  main_length_correlation = getOrAddArrayCorrelation(toLHSVar(bufs[1]), irState)
   local n = stat.dimension
   local sizeNodes = [ addGenSym(Int, linfo) for i = 1:n ]
   local sizeInitExpr = [ TypedExpr(Int, :(=), sizeNodes[i],
@@ -98,7 +98,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     # bufs[i].typ = arrTyp
     tmpBufs[i] = DomainIR.addFreshLocalVariable("tmp", arrTyp, ISASSIGNED, linfo)
 
-    this_correlation = getOrAddArrayCorrelation(toSymGen(bufs[i]), irState)
+    this_correlation = getOrAddArrayCorrelation(toLHSVar(bufs[i]), irState)
     if this_correlation != main_length_correlation
       merge_correlations(irState, main_length_correlation, this_correlation)
     end
@@ -116,12 +116,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     @dprintln(3,"bodyExpr[end].args = ", rets)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), rets[i]))
-      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toSymGen(tmpBufs[i]), bufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toLHSVar(tmpBufs[i]), rets[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toLHSVar(tmpBufs[i]), bufs[i]))
     end
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toSymGen(bufs[i]), tmpBufs[i]))
-      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toSymGen(rets[i]), tmpBufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toLHSVar(bufs[i]), tmpBufs[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toLHSVar(rets[i]), tmpBufs[i]))
     end
   end
   bodyExpr = bodyExpr[1:end-1]
@@ -135,7 +135,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
-  borderHead = Any[ TypedExpr(Int, :(=), toSymGen(idxNodes[1]),
+  borderHead = Any[ TypedExpr(Int, :(=), toLHSVar(idxNodes[1]),
                       TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
@@ -193,12 +193,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   borderExpr = vcat(borderHead, relabel(borderExpr, irState), LabelNode(afterBorderLabel))
   # borderCond = [ borderHead, lowerGotos, upperGotos, borderExpr, borderTail ]
   borderCond = oob_skip ? Any[] : Any[TypedExpr(Void, head,
-        PIRParForAst(InputInfo(toSymGen(buf)),
+        PIRParForAst(InputInfo(toLHSVar(buf)),
             vcat(lowerGotos, upperGotos, borderExpr),
             [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
             PIRReduction[],
-            [], [], irState.top_level_number, get_unique_num(), Set{SymGen}(), Set{SymGen}([toSymGen(x) for x in bufs])))]
+            [], [], irState.top_level_number, get_unique_num(), Set{LHSVar}(), Set{LHSVar}([toLHSVar(x) for x in bufs])))]
 
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
@@ -218,7 +218,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
     get_unique_num(), 
-    Set{SymGen}(), 
-    Set{SymGen}([toSymGen(x) for x in bufs]))
+    Set{LHSVar}(), 
+    Set{LHSVar}([toLHSVar(x) for x in bufs]))
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

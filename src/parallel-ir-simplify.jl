@@ -85,11 +85,11 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                             if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
                                 rhs.args = rhs.args[1:6]
                                 for s in d
-                                    if isa(s,Int)
+                                    #if isa(s,Int)
                                         push!(rhs.args, s)
-                                    else
-                                        push!(rhs.args, SymbolNode(s, Int))
-                                    end
+                                    #else
+                                    #    push!(rhs.args, SymbolNode(s, Int))
+                                    #end
                                     push!(rhs.args, 0)
                                 end
                                 @dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
@@ -111,7 +111,7 @@ function isDeadCall(rhs::Expr, live_out)
             println(rhs)
             return true
         elseif in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
-                !in(toSymGen(rhs.args[2]), live_out)
+                !in(toLHSVar(rhs.args[2]), live_out)
             return true
         end
     end
@@ -133,12 +133,12 @@ State for the remove_no_deps and insert_no_deps_beginning phases.
 type RemoveNoDepsState
     lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
     top_level_no_deps :: Array{Any,1}
-    hoistable_scalars :: Set{SymGen}
-    dict_sym          :: Dict{SymGen, DictInfo}
+    hoistable_scalars :: Set{LHSVar}
+    dict_sym          :: Dict{LHSVar, DictInfo}
     change            :: Bool
 
     function RemoveNoDepsState(l, hs)
-        new(l, Any[], hs, Dict{SymGen, DictInfo}(), false)
+        new(l, Any[], hs, Dict{LHSVar, DictInfo}(), false)
     end
 end
 
@@ -170,7 +170,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
 
         if head==:gotoifnot
             # Empty the state at the end or begining of a basic block
-            data.dict_sym = Dict{SymGen,DictInfo}()
+            data.dict_sym = Dict{LHSVar,DictInfo}()
         end
 
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
@@ -184,7 +184,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
             @dprintln(3,"remove_no_deps live_info = ", live_info)
             @dprintln(3,"remove_no_deps live_info.use = ", live_info.use)
 
-            if isa(node, Number) || isa(node, SymAllGen)
+            if isa(node, Number) || isa(node, RHSVar)
                 @dprintln(3,"Eliminating dead node: ", node)
                 return CompilerTools.AstWalker.ASTWALK_REMOVE
             elseif isAssignmentNode(node)
@@ -199,8 +199,8 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                     @dprintln(3, "keep assignment due to parfor or mmap! node")
                     return node
                 end
-                if isa(lhs, SymAllGen)
-                    lhs_sym = toSymGen(lhs)
+                if isa(lhs, RHSVar)
+                    lhs_sym = toLHSVar(lhs)
                     @dprintln(3,"remove_no_deps found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
@@ -216,8 +216,8 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                         end
                     else
                         @dprintln(3,"remove_no_deps lhs is live out")
-                        if isa(rhs, SymAllGen)
-                            rhs_sym = toSymGen(rhs)
+                        if isa(rhs, RHSVar)
+                            rhs_sym = toLHSVar(rhs)
                             @dprintln(3,"remove_no_deps rhs is symbol ", rhs_sym)
                             if !in(rhs_sym, live_info.live_out)
                                 @dprintln(3,"remove_no_deps rhs is NOT live out")
@@ -313,7 +313,7 @@ end
 function remove_no_deps(node::Union{LabelNode,GotoNode}, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
     if is_top_level
         # Empty the state at the end or begining of a basic block
-        data.dict_sym = Dict{SymGen,DictInfo}()
+        data.dict_sym = Dict{LHSVar,DictInfo}()
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
@@ -407,10 +407,10 @@ State to aide in the transpose propagation phase.
 """
 type TransposePropagateState
     lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-    transpose_map :: Dict{SymGen, SymGen} # transposed output -> matrix in
+    transpose_map :: Dict{LHSVar, LHSVar} # transposed output -> matrix in
 
     function TransposePropagateState(l)
-        new(l, Dict{SymGen, SymGen}())
+        new(l, Dict{LHSVar, LHSVar}())
     end
 end
 
@@ -450,11 +450,11 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
             empty!(data.transpose_map) 
         elseif isAssignmentNode(node)
             @dprintln(3,"Is an assignment node.")
-            lhs = toSymGen(node.args[1])
+            lhs = toLHSVar(node.args[1])
             rhs = node.args[2]
             if isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base,:transpose!)
-                original_matrix = toSymGen(rhs.args[3])
-                transpose_var1 = toSymGen(rhs.args[2])
+                original_matrix = toLHSVar(rhs.args[3])
+                transpose_var1 = toLHSVar(rhs.args[2])
                 transpose_var2 = lhs
                 data.transpose_map[transpose_var1] = original_matrix
                 data.transpose_map[transpose_var2] = original_matrix
@@ -495,9 +495,9 @@ State to aide in the copy propagation phase.
 """
 type CopyPropagateState
     lives  :: CompilerTools.LivenessAnalysis.BlockLiveness
-    copies :: Dict{SymGen, Union{SymGen,Number}}
+    copies :: Dict{LHSVar, Union{LHSVar,Number}}
     # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
-    safe_copies :: Dict{SymGen, Union{SymGen,Number}}
+    safe_copies :: Dict{LHSVar, Union{LHSVar,Number}}
     linfo
 
     function CopyPropagateState(l, c,s,li)
@@ -564,13 +564,13 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
             @dprintln(4,rhs)
             # sometimes lhs can already be replaced with a constant
-            if !isa(lhs, SymAllGen)
+            if !isa(lhs, RHSVar)
                 return node
             end
             node.args[1] = lhs
-            if isa(rhs, SymAllGen) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
-                lhs = toSymGen(lhs)
-                rhs = toSymGenOrNum(rhs)
+            if isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
+                lhs = toLHSVar(lhs)
+                rhs = toLHSVarOrNum(rhs)
                 @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                 # Record that the left-hand side is a copy of the right-hand side.
                 data.copies[lhs] = rhs
@@ -624,7 +624,7 @@ function copy_propagate_helper(node::DomainLambda,
                                read)
 
     @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-    intersection_dict = Dict{SymGen,Any}()
+    intersection_dict = Dict{LHSVar,Any}()
     
     # all copies of escaping_defs should be deleted, since there is no guarantee that their values
     # remain the same at when DomainLambda is actually called.
@@ -699,7 +699,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             end
         elseif rhs.args[1] == TopNode(:arraysize)
             # replace arraysize calls when size is known and constant
-            arr = toSymGen(rhs.args[2])
+            arr = toLHSVar(rhs.args[2])
             if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
                 arr_class = state.array_length_correlation[arr]
                 for (d, v) in state.symbol_array_correlation
@@ -749,8 +749,8 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
         rhs_corr = extractArrayEquivalencies(rhs, state)
         @dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
-        if rhs_corr != nothing && isa(lhs, SymAllGen)
-            lhs_corr = getOrAddArrayCorrelation(toSymGen(lhs), state)
+        if rhs_corr != nothing && isa(lhs, RHSVar)
+            lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
             merge_correlations(state, lhs_corr, rhs_corr)
             @dprintln(3,"Correlations after map merge into lhs")
             print_correlations(3, state)
@@ -797,7 +797,7 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
 
     if node.head == :lambda
         save_LambdaVarInfo  = state.LambdaVarInfo
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(node)
+        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
         body = CompilerTools.LambdaHandling.getBody(node)
         AstWalk(body, create_equivalence_classes, state)
         state.LambdaVarInfo = save_LambdaVarInfo
@@ -858,8 +858,8 @@ function extractArrayEquivalencies(node :: Expr, state)
         throw(string("extractArrayEquivalencies second input_args should be a DomainLambda but is of type ", typeof(input_args[2])))
     end
 
-#    if !isa(input_arrays[1], SymAllGen)
-#        @dprintln(1, "extractArrayEquivalencies input_arrays[1] is not SymAllGen")
+#    if !isa(input_arrays[1], RHSVar)
+#        @dprintln(1, "extractArrayEquivalencies input_arrays[1] is not RHSVar")
 #        return nothing
 #    end
 
@@ -872,7 +872,7 @@ function extractArrayEquivalencies(node :: Expr, state)
 
     main_length_correlation = getCorrelation(inputInfo[1], state)
     # Get the correlation set of the first input array.
-    #main_length_correlation = getOrAddArrayCorrelation(toSymGen(input_arrays[1]), state)
+    #main_length_correlation = getOrAddArrayCorrelation(toLHSVar(input_arrays[1]), state)
 
     # Make sure each input array is a SymbolNode
     # Also, create indexed versions of those symbols for the loop body
@@ -895,13 +895,13 @@ Make sure all the dimensions are SymbolNodes or constants.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
-function checkAndAddSymbolCorrelation(lhs :: SymGen, state, dim_array)
-    dim_names = Union{SymGen,Int}[]
+function checkAndAddSymbolCorrelation(lhs :: LHSVar, state, dim_array)
+    dim_names = Union{RHSVar,Int}[]
 
     for i = 1:length(dim_array)
         # constant sizes are either SymbolNodes, Symbols or Ints, TODO: expand to GenSyms that are constant
-        if !(isa(dim_array[i],SymAll) || typeof(dim_array[i])==Int)
-            @dprintln(3, "checkAndAddSymbolCorrelation dim not Int or SymAll ", dim_array[i])
+        if !(isa(dim_array[i],RHSVar) || isa(dim_array[i], Int))
+            @dprintln(3, "checkAndAddSymbolCorrelation dim not Int or RHSVar ", dim_array[i])
             return false
         end
         if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
@@ -949,8 +949,8 @@ function from_assertEqShape(node::Expr, state)
     @dprintln(3,"from_assertEqShape ", node)
     a1 = node.args[1]    # first array to compare
     a2 = node.args[2]    # second array to compare
-    a1_corr = getOrAddArrayCorrelation(toSymGen(a1), state)  # get the length set of the first array
-    a2_corr = getOrAddArrayCorrelation(toSymGen(a2), state)  # get the length set of the second array
+    a1_corr = getOrAddArrayCorrelation(toLHSVar(a1), state)  # get the length set of the first array
+    a2_corr = getOrAddArrayCorrelation(toLHSVar(a2), state)  # get the length set of the second array
     if a1_corr == a2_corr
         # If they are the same then return an empty array so that the statement is eliminated.
         @dprintln(3,"assertEqShape statically verified and eliminated for ", a1, " and ", a2)

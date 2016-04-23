@@ -228,7 +228,7 @@ function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
   end
   @dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
 
-  LambdaVarInfo = lambdaExprToLambdaVarInfo(code)
+  LambdaVarInfo = lambdaToLambdaVarInfo(code)
   ret_type = getReturnType(LambdaVarInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
   ret_typs = isTupleType(ret_type) ? [ (convert_to_Julia_typ(x), isArrayOrStringType(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isArrayOrStringType(ret_type)) ]

@@ -27,9 +27,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 Look at the arrays that are accessed and see if they use a forward index, i.e.,
 an index that could be greater than 1.
 """
-function getPastIndex(arrays :: Dict{SymGen, Array{Array{Any,1},1}})
+function getPastIndex(arrays :: Dict{LHSVar, Array{Array{Any,1},1}})
     @dprintln(3, "getPastIndex ", arrays)
-    ret = Set{SymGen}()
+    ret = Set{LHSVar}()
     for entry in arrays
         array = entry[1]
         index_locations = entry[2]
@@ -37,7 +37,7 @@ function getPastIndex(arrays :: Dict{SymGen, Array{Array{Any,1},1}})
             for subscript in location
                 # If the indexing expression isn't simple then return false.
                 if (!isa(subscript, Number) &&
-                    !isa(subscript, SymAllGen) &&
+                    !isa(subscript, RHSVar) &&
                     (typeof(subscript) != Expr ||
                     subscript.head != :(::)   ||
                     typeof(subscript.args[1]) != Symbol))
@@ -267,7 +267,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     neutral_val_body = top_level_expand_pre(neutral_val_body, state)
     flattenParfors(neutral_val_flatten_body, neutral_val_body)
     @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
-    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(init_var.name, var)))
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(init_var.name, var)))
     return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
 end
 
@@ -287,7 +287,7 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     reduce_flatten_body = Any[]
     flattenParfors(reduce_flatten_body, deepcopy(temp_body))
     @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{SymGen,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(snode.name, var), Pair(atm.name, val)))
     reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_var, delta_var])
     return temp_body, reduce_func 
 end
@@ -339,7 +339,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # Also, create indexed versions of those symbols for the loop body
     #argtyp = typeof(input_array)
     #@dprintln(3,"mk_parfor_args_from_reduce input_array[1] = ", input_array, " type = ", argtyp)
-    #assert(argtyp <: SymNodeGen)
+    #assert(argtyp <: RHSVar)
 
     reduce_body = Any[]
     if red_dim == 0 
@@ -511,15 +511,15 @@ end
 """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
-function createTempForRangedArray(array_sn :: SymAllGen, range :: Array{DimensionSelector,1}, unique_id :: Int64, state :: expr_state)
-    key = toSymGen(array_sn) 
+function createTempForRangedArray(array_sn :: RHSVar, range :: Array{DimensionSelector,1}, unique_id :: Int64, state :: expr_state)
+    key = toLHSVar(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     # Is it okay to just use range[1] here instead of all the ranges?
     return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
-function createTempForRangeInfo(array_sn :: SymAllGen, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)
-    key = toSymGen(array_sn) 
+function createTempForRangeInfo(array_sn :: RHSVar, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)
+    key = toLHSVar(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
@@ -541,7 +541,7 @@ function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
         throw(string(":range or :tomask expression expected"))
     end
 end
-function rangeToRangeData(other :: Union{SymAllGen,Number}, arr, range_num :: Int, state)
+function rangeToRangeData(other :: Union{RHSVar,Number}, arr, range_num :: Int, state)
     @dprintln(3,"rangeToRangeData for non-Expr")
     singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
     return SingularSelector(other, singular_temp_var)
@@ -620,8 +620,8 @@ function get_mmap_input_info(input_array :: Expr, state)
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
         thisInfo.out_dim = thisInfo.dim
         argtyp = typeof(thisInfo.array)
-        @dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: SymAllGen)
-        @assert (argtyp <: SymAllGen) "input array argument type should be SymAllGen"
+        @dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: RHSVar)
+        @assert (argtyp <: RHSVar) "input array argument type should be RHSVar"
 
         selector    = input_array.args[2]
         select_kind = selector.head
@@ -662,7 +662,7 @@ function get_mmap_input_info(input_array :: Expr, state)
     return thisInfo
 end
 
-function get_mmap_input_info(input_array :: SymAllGen, state)
+function get_mmap_input_info(input_array :: RHSVar, state)
     thisInfo = InputInfo()
     thisInfo.array = input_array
     thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
@@ -707,7 +707,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     @dprintln(3, "gen_pir_loopnest for ", inputInfo[1])
     # don't generate arraysize calls if input array's size is constant
     # this will help allocation of mmap output have constant size enabling optimizations
-    arr = toSymGen(inputInfo[1].array)
+    arr = toLHSVar(inputInfo[1].array)
     const_sizes = []
     if haskey(state.array_length_correlation, arr)
         arr_class = state.array_length_correlation[arr]
@@ -803,7 +803,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     # Also, create indexed versions of those symbols for the loop body
     for i = 1:length(inputInfo)
         # If indexed_arrays[i] is not "use" in body_lives then we don't need to generate this statement.
-        if CompilerTools.LivenessAnalysis.is_use(toSymGen(indexed_arrays[i]), body_lives)
+        if CompilerTools.LivenessAnalysis.is_use(toLHSVar(indexed_arrays[i]), body_lives)
             push!(out_body, mk_assignment_expr(indexed_arrays[i], mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
         end
     end
@@ -909,7 +909,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     dl = args[3]
     # the remaining arguments are about reductions
     reductions = PIRReduction[]
-    redvar_map = Dict{SymGen,Any}()
+    redvar_map = Dict{LHSVar,Any}()
     for i = 1:length(args)-3
         @dprintln(3, "mk_parfor_args_from_parallel_for. reduction ", i, " = ", args[i+3])
         (redvar, neutral, redfunc) = args[i+3]

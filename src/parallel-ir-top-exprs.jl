@@ -811,7 +811,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     end
 
     @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
-    fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo), :body, body...))
+    fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
     @dprintln(3,"fake_body = ", fake_body)
     new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
     @dprintln(1,"Starting loop analysis.")
@@ -820,7 +820,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     if hoist_allocation == 1
         body = hoistAllocation(body, new_lives, loop_info, state)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambdaExpr(state.LambdaVarInfo, TypedExpr(CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo), :body, body...))
+        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
         new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
         @dprintln(1,"Starting loop analysis again.")
         loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)

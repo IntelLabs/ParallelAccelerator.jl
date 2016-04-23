@@ -480,10 +480,10 @@ end
 
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x) 
                      for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
-    vars = CompilerTools.LambdaHandling.getLocalVariables(linfo)
+    vars = CompilerTools.LambdaHandling.getLocalNoParams(linfo)
 
     decls = ""
     global lstate
@@ -2372,7 +2372,7 @@ end
 function from_callee(ast::Expr, functionName::ASCIIString)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
@@ -2613,7 +2613,7 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     @dprintln(1,"Ast = ", ast)
 
     set_includes(ast)
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
@@ -2681,7 +2681,7 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    linfo = CompilerTools.LambdaHandling.lambdaExprToLambdaVarInfo(ast)
+    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body

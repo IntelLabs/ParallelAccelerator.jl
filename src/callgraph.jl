@@ -255,7 +255,7 @@ function extractStaticCallGraphWalk(node::Expr,
     args = node.args
     if head == :lambda
         if state.LambdaVarInfo == nothing
-            state.LambdaVarInfo = lambdaExprToLambdaVarInfo(node)
+            state.LambdaVarInfo = lambdaToLambdaVarInfo(node)
             @dprintln(3, "LambdaVarInfo = ", state.LambdaVarInfo)
         else
             new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
