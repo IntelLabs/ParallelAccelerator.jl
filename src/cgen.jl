@@ -481,7 +481,7 @@ end
 function from_lambda(ast::Expr, args::Array{Any,1})
     s = ""
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x) 
+    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x, linfo) 
                      for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
     vars = CompilerTools.LambdaHandling.getLocalNoParams(linfo)
 

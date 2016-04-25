@@ -477,7 +477,7 @@ function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaVar
         unique = !isLocalVariable(name, linfo)
     end
     addLocalVariable(name, t, desc, linfo)
-    return SymbolNode(name, t)
+    return getTypedVar(name, t, linfo)
 end
 
 include("domain-ir-stencil.jl")
@@ -1903,7 +1903,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     #end
     # produce a DomainLambda
     domF = DomainLambda(ast)
-    params = Symbol[parameterToSymbol(x) for x in getParamsNoSelf(domF.linfo)]
+    params = Symbol[parameterToSymbol(x, state.linfo) for x in getParamsNoSelf(domF.linfo)]
     expr::Expr = mk_parallel_for(params, dimExp, domF)
     for i=3:nargs # we have reduction here!
         tup = lookupConstDefForArg(state, args[i])
