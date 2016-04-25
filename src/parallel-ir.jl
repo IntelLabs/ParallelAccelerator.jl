@@ -414,7 +414,7 @@ type expr_state
     # keep values for constant tuples. They are often used for allocating and reshaping arrays.
     tuple_table              :: Dict{RHSVar,Array{Union{RHSVar,Int},1}}
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
-    LambdaVarInfo :: CompilerTools.LambdaHandling.LambdaVarInfo
+    LambdaVarInfo            :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
 
     # Initialize the state for parallel IR translation.
@@ -719,10 +719,10 @@ end
 Add a local variable to the current function's LambdaVarInfo.
 Returns a symbol node of the new variable.
 """
-function createStateVar(state, name, typ, access)
+function createStateVar(state :: expr_state, name, typ, access)
     new_temp_sym = symbol(name)
     CompilerTools.LambdaHandling.addLocalVar(new_temp_sym, typ, access, state.LambdaVarInfo)
-    return SymbolNode(new_temp_sym, typ)
+    return getTypedVar(new_temp_sym, typ, state.LambdaVarInfo)
 end
 
 """
@@ -773,28 +773,6 @@ function simpleIndex(dict)
     end
     # All indexing expressions must have been fine so return true.
     return true
-end
-
-
-
-"""
-Form a SymbolNode with the given typ if possible or a GenSym if that is what is passed in.
-"""
-function toRHSVar(x :: Symbol, typ)
-    return SymbolNode(x, typ)
-end
-
-function toRHSVar(x :: SymbolNode, typ)
-    return x
-end
-
-function toRHSVar(x :: GenSym, typ)
-    return x
-end
-
-function toRHSVar(x, typ)
-    xtyp = typeof(x)
-    throw(string("Found object type ", xtyp, " for object ", x, " in toRHSVar and don't know what to do with it."))
 end
 
 """
@@ -1754,7 +1732,7 @@ function sub_cur_body_walk(x::Expr,
             push!(cbd.arrays_set_in_cur_body, toLHSVar(array_name))
             if haskey(cbd.replace_array_name_in_arrayset, toLHSVar(array_name))
                 new_symgen = cbd.replace_array_name_in_arrayset[toLHSVar(array_name)]
-                x.args[2]  = toRHSVar(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.LambdaVarInfo))
+                x.args[2]  = toRHSVar(new_symgen, CompilerTools.LambdaHandling.getType(new_symgen, cbd.state.LambdaVarInfo), cbd.state.LambdaVarInfo)
             end
         end
     end
