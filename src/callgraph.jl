@@ -139,7 +139,7 @@ function getGlobalOrArrayParam(state, real_args)
     for i = 1:length(real_args)
         atyp = typeof(real_args[i])
         @dprintln(3,"getGlobalOrArrayParam arg ", i, " ", real_args[i], " type = ", atyp)
-        if atyp == Symbol || atyp == SymbolNode
+        if atyp<:RHSvar
             aname = getSymbol(real_args[i], state.LambdaVarInfo)
             if isGlobal(aname, state)
                 # definitely a global so add
@@ -161,7 +161,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
     fetyp = typeof(func_expr)
 
     @dprintln(3,"processFuncCall ", func_expr, " ", call_sig_arg_tuple, " ", fetyp, " ", possibleGlobals)
-    if fetyp == Symbol || fetyp == SymbolNode
+    if fetyp<:RHSVar
         func = resolveFuncByName(state.cur_func_sig, getSymbol(func_expr, state.LambdaVarInfo), call_sig_arg_tuple, state.local_lambdas)
     elseif fetyp == TopNode
         return nothing
@@ -283,8 +283,8 @@ function extractStaticCallGraphWalk(node::Expr,
         pmap_name = symbol("__pmap#39__")
         if func_expr == TopNode(pmap_name)
             func_expr = call_args[3]
-            assert(typeof(func_expr) == SymbolNode)
-            func_expr = func_expr.name
+            assert(typeof(func_expr) == TypedVar)
+            func_expr = toLHSVar(func_expr)
             call_sig = Expr(:tuple)
             push!(call_sig.args, ParallelIR.getArrayElemType(call_args[4]))
             call_sig_arg_tuple = eval(call_sig)
@@ -341,7 +341,7 @@ function extractStaticCallGraphWalk(node::Expr,
         if rhstyp == LambdaStaticData
             state.local_lambdas[lhs] = rhs
             return node
-        elseif rhstyp == SymbolNode || rhstyp == Symbol
+        elseif rhstyp<:RHSVar
             rhsname = getSymbol(rhs, state.LambdaVarInfo)
             if CompilerTools.LambdaHandling.isInputParameter(rhsname, state.LambdaVarInfo)
                 rhsname_typ = state.types[rhsname][2]
@@ -374,18 +374,19 @@ function extractStaticCallGraphWalk(node::Symbol,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function extractStaticCallGraphWalk(node::SymbolNode,
+function extractStaticCallGraphWalk(node::TypedVar,
                                     state::extractStaticCallGraphState,
                                     top_level_number::Int64,
                                     is_top_level::Bool,
                                     read::Bool)
-    @dprintln(4,"escgw: ", node, " type = SymbolNode")
-    @dprintln(4,"SymbolNode ", node, " found in extractStaticCallGraphWalk.", read, " ", isGlobal(node.name, state))
-    if !read && isGlobal(node.name, state)
-        @dprintln(3,"Detected a global write to ", node.name, " ", state.types)
-        push!(state.globalWrites, node.name)
+    @dprintln(4,"escgw: ", node, " type = TypedVar")
+    node_sym = getSymbol(node, state.LambdaVarInfo)
+    @dprintln(4,"TypedVar ", node, " found in extractStaticCallGraphWalk.", read, " ", isGlobal(node_sym, state))
+    if !read && isGlobal(node_sym, state)
+        @dprintln(3,"Detected a global write to ", node_sym, " ", state.types)
+        push!(state.globalWrites, node_sym)
     end
-    if node.typ == Function
+    if getType(node, state.LambdaVarInfo) == Function
         throw(string("Unhandled function in extractStaticCallGraphWalk."))
     end
 
