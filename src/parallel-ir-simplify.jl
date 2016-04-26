@@ -63,12 +63,11 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
         @dprintln(3, "HA: line before head is ", ast[preHead-1])
         # Is iterating through statement indices this way safe?
         for i = head:tail
-            
             if isAssignmentNode(ast[i]) && isAllocation(ast[i].args[2])
                 @dprintln(3, "HA: found allocation at line ", i, ": ", ast[i])
                 lhs = ast[i].args[1]
                 rhs = ast[i].args[2]
-                if isa(lhs, SymbolNode) lhs = lhs.name end
+                lhs = toLHSVar(lhs)
                 if (haskey(state.array_length_correlation, lhs))
                     c = state.array_length_correlation[lhs]
                     for (d, v) in state.symbol_array_correlation
@@ -85,11 +84,7 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                             if ok && length(rhs.args) - 6 == 2 * length(d) # dimension must match
                                 rhs.args = rhs.args[1:6]
                                 for s in d
-                                    #if isa(s,Int)
-                                        push!(rhs.args, s)
-                                    #else
-                                    #    push!(rhs.args, SymbolNode(s, Int))
-                                    #end
+                                    push!(rhs.args, s)
                                     push!(rhs.args, 0)
                                 end
                                 @dprintln(3, "HA: hoist ", ast[i], " out of loop before line ", head)
@@ -379,7 +374,7 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                 rhs = node.args[2]
                 @dprintln(4,rhs)
 
-                if typeof(lhs) == SymbolNode || typeof(lhs) == Symbol
+                if isa(lhs,RHSVar)
                     lhs_sym = toLHSVar(lhs)
                     @dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
@@ -602,16 +597,17 @@ function copy_propagate_helper(node::Union{Symbol,GenSym},
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function copy_propagate_helper(node::SymbolNode,
+function copy_propagate_helper(node::TypedVar,
                                data::CopyPropagateState,
                                top_level_number,
                                is_top_level,
                                read)
 
-    if haskey(data.copies, node.name)
-        @dprintln(3,"Replacing ", node.name, " with ", data.copies[node.name])
-        tmp_node = data.copies[node.name]
-        return isa(tmp_node, Symbol) ? SymbolNode(tmp_node, node.typ) : tmp_node
+    lhsVar = toLHSVar(node)
+    if haskey(data.copies, lhsVar)
+        @dprintln(3,"Replacing ", lhsVar, " with ", data.copies[lhsVar])
+        tmp_node = data.copies[lhsVar]
+        return isa(tmp_node, Symbol) ? getTypedVar(tmp_node, getType(node, data.linfo), data.linfo) : tmp_node
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -690,12 +686,12 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         elseif rhs.args[1] == TopNode(:arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
-            assert(isa(array_param, SymbolNode) || isa(array_param, GenSym)) # should be a SymbolNode or GenSym
+            assert(isa(array_param, RHSVar))
             array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.LambdaVarInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
                 dim_symbols = [toLHSVar(lhs)]
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
-                checkAndAddSymbolCorrelation(isa(array_param, SymbolNode) ? array_param.name : array_param, state, dim_symbols)
+                checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
         elseif rhs.args[1] == TopNode(:arraysize)
             # replace arraysize calls when size is known and constant
@@ -715,15 +711,16 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             if length(rhs.args) == 2
                 array_param = rhs.args[2]                  # length takes one param, which is the array
-                assert(typeof(array_param) == SymbolNode)  # should be a SymbolNode
-                array_param_type = array_param.typ         # get its type
+                assert(isa(array_param, TypedVar))         # should be a TypedVar
+                array_param_type = getType(array_param, state.LambdaVarInfo)  # get its type
                 array_dims = ndims(array_param_type)
                 dim_symbols = Symbol[]
                 for dim_i = 1:array_dims
                     push!(dim_symbols, lhs[dim_i])
                 end
-                @dprintln(3,"Adding symbol correlation from arraysize, name = ", rhs.args[2].name, " dims = ", dim_symbols)
-                checkAndAddSymbolCorrelation(rhs.args[2].name, state, dim_symbols)
+                lhsVar = toLHSVar(rhs.args[2])
+                @dprintln(3,"Adding symbol correlation from arraysize, name = ", lhsVar, " dims = ", dim_symbols)
+                checkAndAddSymbolCorrelation(lhsVar, state, dim_symbols)
             elseif length(rhs.args) == 3
                 @dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
             else
@@ -737,7 +734,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         elseif rhs.args[1]==TopNode(:tuple)
             ok = true
             for s in rhs.args[2:end]
-                if !(isa(s,SymbolNode) || isa(s,Int))
+                if !(isa(s,TypedVar) || isa(s,Int))
                     ok = false
                 end
             end
@@ -874,7 +871,7 @@ function extractArrayEquivalencies(node :: Expr, state)
     # Get the correlation set of the first input array.
     #main_length_correlation = getOrAddArrayCorrelation(toLHSVar(input_arrays[1]), state)
 
-    # Make sure each input array is a SymbolNode
+    # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
     for i = 2:length(inputInfo)
         @dprintln(3,"extractArrayEquivalencies input_array[i] = ", input_arrays[i], " type = ", typeof(input_arrays[i]))
@@ -891,7 +888,7 @@ function extractArrayEquivalencies(node :: Expr, state)
 end
 
 """
-Make sure all the dimensions are SymbolNodes or constants.
+Make sure all the dimensions are TypedVars or constants.
 Make sure each dimension variable is assigned to only once in the function.
 Extract just the dimension variables names into dim_names and then register the correlation from lhs to those dimension names.
 """
@@ -899,12 +896,12 @@ function checkAndAddSymbolCorrelation(lhs :: LHSVar, state, dim_array)
     dim_names = Union{RHSVar,Int}[]
 
     for i = 1:length(dim_array)
-        # constant sizes are either SymbolNodes, Symbols or Ints, TODO: expand to GenSyms that are constant
+        # constant sizes are either TypedVars, Symbols or Ints, TODO: expand to GenSyms that are constant
         if !(isa(dim_array[i],RHSVar) || isa(dim_array[i], Int))
             @dprintln(3, "checkAndAddSymbolCorrelation dim not Int or RHSVar ", dim_array[i])
             return false
         end
-        if isa(dim_array[i], SymbolNode) dim_array[i]=dim_array[i].name end
+        dim_array[i] = toLHSVar(dim_array[i])
         desc = 0
         if isa(dim_array[i],Symbol) && !(CompilerTools.LambdaHandling.getType(dim_array[i], state.LambdaVarInfo)<:Int)
             @dprintln(3, "checkAndAddSymbolCorrelation dim symbol not Int ", dim_array[i])
