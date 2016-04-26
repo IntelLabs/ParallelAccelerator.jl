@@ -62,13 +62,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   oob_src_zero = is(border, :oob_src_zero)
   oob_wraparound = is(border, :oob_wraparound)
   local iterations = args[2]
-  # convert all SymbolNode in bufs to just Symbol
+  # convert all TypedVar in bufs to just Symbol
   local bufs = args[3]
   local kernelF :: DomainLambda = args[4] 
   local linfo = irState.LambdaVarInfo
   # println(stat)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
-  local toLHSVar(x) = isa(x, SymbolNode) ? x.name : x 
   main_length_correlation = getOrAddArrayCorrelation(toLHSVar(bufs[1]), irState)
   local n = stat.dimension
   local sizeNodes = [ addGenSym(Int, linfo) for i = 1:n ]
@@ -90,7 +89,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                                  1)
                      for i in n:-1:1 ]
   local nbufs = length(bufs)
-  tmpBufs = Array(SymbolNode, nbufs)
+  tmpBufs = Array(TypedVar, nbufs)
   for i = 1:length(bufs)
     elmTyp = DomainIR.elmTypOf(getType(bufs[i], linfo))
     arrTyp = Array{elmTyp, n}
@@ -145,8 +144,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     for expr in bodyExpr
       expr = deepcopy(expr)
       if is(expr.head, :call) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :unsafe_arrayset)
-        assert(isa(expr.args[2], SymbolNode))
-        zero = Base.convert(DomainIR.elmTypOf(expr.args[2].typ), 0)
+        zero = Base.convert(DomainIR.elmTypOf(getType(expr.args[2], linfo)), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
     end
