@@ -121,7 +121,7 @@ end
 Create an array access descriptor for "array".
 Presumes that for point "i" in the iteration space that only index "i" is accessed.
 """
-function create1D_array_access_desc(array :: SymbolNode)
+function create1D_array_access_desc(array :: TypedVar)
     ret = pir_array_access_desc()
     push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
     ret
@@ -131,7 +131,7 @@ end
 Create an array access descriptor for "array".
 Presumes that for points "(i,j)" in the iteration space that only indices "(i,j)" is accessed.
 """
-function create2D_array_access_desc(array :: SymbolNode)
+function create2D_array_access_desc(array :: TypedVar)
     ret = pir_array_access_desc()
     push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 1), 1, 0, 0, 0 ))
     push!(ret.dim_info, pir_aad_dim(mk_arraylen_expr(array, 2), 1, 0, 0, 0 ))
@@ -141,7 +141,7 @@ end
 """
 Create an array access descriptor for "array".
 """
-function create_array_access_desc(array :: SymbolNode)
+function create_array_access_desc(array :: TypedVar)
     if array.typ.parameters[2] == 1
         return create1D_array_access_desc(array)
     elseif array.typ.parameters[2] == 2
@@ -155,13 +155,9 @@ end
 A Julia representation of the argument metadata that will be passed to the runtime.
 """
 type pir_arg_metadata
-    value   :: SymbolNode
+    value   :: TypedVar
     options :: Int
     access  # nothing OR pir_array_access_desc
-
-    function pir_arg_metadata()
-        new(nothing, 0, 0, nothing)
-    end
 
     function pir_arg_metadata(v, o)
         new(v, o, nothing)
@@ -512,7 +508,7 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function estimateInstrCount(ast::Union{Symbol,SymbolNode,TopNode,LineNumberNode,LabelNode,DataType,Void,Module},
+function estimateInstrCount(ast::Union{Symbol,TypedVar,TopNode,LineNumberNode,LabelNode,DataType,Void,Module},
                             state :: eic_state,
                             top_level_number,
                             is_top_level,
@@ -1120,28 +1116,28 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
         CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
-        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", SymbolNode(:ranges, pir_range_actual)))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", getTypedVar(:ranges, pir_range_actual,newLambdaVarInfo)))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym2_sym,Int64), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym0_sym,StepRange{Int64,Int64}), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), SymbolNode(gensym2_sym,Int64)), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), Expr(:call, TopNode(:getfield), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), QuoteNode(:start)), state))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_second_unless))
+           push!(new_body, mk_assignment_expr(getTypedVar(gensym2_sym,Int64,newLambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+           push!(new_body, mk_assignment_expr(getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), getTypedVar(gensym2_sym,Int64,newLambdaVarInfo)), state))
+           push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), Expr(:call, TopNode(:getfield), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), QuoteNode(:start)), state))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_second_unless))
            push!(new_body, LabelNode(label_after_first_unless))
 
 #           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym3_sym,Int64), SymbolNode(pound_s1_sym,Int64), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(gensym4_sym,Int64), Expr(:call, mk_parallelir_ref(:assign_gs4), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), state))
-           push!(new_body, mk_assignment_expr(this_nest.indexVariable, SymbolNode(gensym3_sym,Int64), state))
-           push!(new_body, mk_assignment_expr(SymbolNode(pound_s1_sym,Int64), SymbolNode(gensym4_sym,Int64), state))
+           push!(new_body, mk_assignment_expr(getTypedVar(gensym3_sym,Int64,newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), state))
+           push!(new_body, mk_assignment_expr(getTypedVar(gensym4_sym,Int64,newLambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), state))
+           push!(new_body, mk_assignment_expr(this_nest.indexVariable, getTypedVar(gensym3_sym,Int64,newLambdaVarInfo), state))
+           push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), getTypedVar(gensym4_sym,Int64,newLambdaVarInfo), state))
 
            recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaVarInfo)
 
            push!(new_body, LabelNode(label_before_second_unless))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), SymbolNode(gensym0_sym,StepRange{Int64,Int64}), SymbolNode(pound_s1_sym,Int64)), label_after_first_unless))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_first_unless))
            push!(new_body, LabelNode(label_after_second_unless))
            push!(new_body, LabelNode(label_last))
     end
@@ -1184,8 +1180,8 @@ end
 function toTaskArgName(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     x
 end
-function toTaskArgName(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
-    x.name
+function toTaskArgName(x :: TypedVar, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
+    getSymbol(x, LambdaVarInfo)
 end
 function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     newstr = string("parforToTask_gensym_", x.id)
@@ -1197,8 +1193,8 @@ end
 function toTaskArgVarDef(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     CompilerTools.LambdaHandling.getVarDef(x, LambdaVarInfo)
 end
-function toTaskArgVarDef(x :: SymbolNode, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
-    CompilerTools.LambdaHandling.getVarDef(x.name, LambdaVarInfo)
+function toTaskArgVarDef(x :: TypedVar, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
+    CompilerTools.LambdaHandling.getVarDef(getSymbol(x, LambdaVarInfo), LambdaVarInfo)
 end
 function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     gsmap[x]
