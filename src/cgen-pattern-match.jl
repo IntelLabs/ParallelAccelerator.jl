@@ -28,7 +28,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :isnan])
 #using Debug
 
-function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
+function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type, linfo)
     s = ""
     isDouble = typ == Float64 
     isFloat = typ == Float32
@@ -48,24 +48,24 @@ function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type)
     return s
 end
 
-function pattern_match_call_math(fun::TopNode, input::GenSym)
-  pattern_match_call_math(fun, from_expr(input), lstate.symboltable[input])
+function pattern_match_call_math(fun::TopNode, input::GenSym, linfo)
+  pattern_match_call_math(fun, from_expr(input, linfo), lstate.symboltable[input],linfo)
 end
 
 
-function pattern_match_call_math(fun::TopNode, input::SymbolNode)
-  pattern_match_call_math(fun, from_expr(input), input.typ)
+function pattern_match_call_math(fun::TopNode, input::SymbolNode, linfo)
+  pattern_match_call_math(fun, from_expr(input,linfo), input.typ, linfo)
 end
 
-function pattern_match_call_math(fun::GlobalRef, input)
-    return pattern_match_call_math(TopNode(fun.name), input)
+function pattern_match_call_math(fun::GlobalRef, input, linfo)
+    return pattern_match_call_math(TopNode(fun.name), input,linfo)
 end
 
-function pattern_match_call_math(fun::ANY, input::ANY)
+function pattern_match_call_math(fun::ANY, input::ANY, linfo)
     return ""
 end
 
-function pattern_match_call_throw(fun::GlobalRef, input)
+function pattern_match_call_throw(fun::GlobalRef, input, linfo)
     s = ""
     if fun.name==:throw
         s = "throw(\"Julia throw() called.\")"
@@ -73,23 +73,23 @@ function pattern_match_call_throw(fun::GlobalRef, input)
     return s
 end
 
-function pattern_match_call_throw(fun::ANY, input::ANY)
+function pattern_match_call_throw(fun::ANY, input::ANY, linfo)
     return ""
 end
 
-function pattern_match_call_powersq(fun::GlobalRef, x::Number, y::Integer)
+function pattern_match_call_powersq(fun::GlobalRef, x::Number, y::Integer, linfo)
     s = ""
     if fun.name==:power_by_squaring
-        s = "cgen_pown("*from_expr(x)*","*from_expr(y)*")"
+        s = "cgen_pown("*from_expr(x,linfo)*","*from_expr(y,linfo)*")"
     end
     return s
 end
 
-function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY)
+function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
+function pattern_match_call_rand(linfo, fun::TopNode, RNG::Any, args...)
     res = ""
     if(fun.name==:rand!)
         if USE_OMP==1
@@ -101,11 +101,11 @@ function pattern_match_call_rand(fun::TopNode, RNG::Any, args...)
     return res 
 end
 
-function pattern_match_call_rand(fun::ANY, RNG::ANY, args...)
+function pattern_match_call_rand(linfo, fun::ANY, RNG::ANY, args...)
     return ""
 end
 
-function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
+function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any,linfo)
     res = ""
     if(fun.name==:randn!)
         if USE_OMP==1
@@ -117,19 +117,19 @@ function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any)
     return res 
 end
 
-function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY)
+function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::Union{SymbolNode,Symbol,GenSym})
+function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::Union{SymbolNode,Symbol,GenSym}, linfo)
     res = ""
     if(fun.mod == Base && fun.name==:reshape)
         typ = getSymType(shape)
         if istupletyp(typ)
             dim = length(typ.parameters)
-            sh = from_expr(shape)
+            sh = from_expr(shape,linfo)
             shapes = mapfoldl(i->sh*".f"*string(i-1), (a,b) -> a*","*b, 1:dim)
-            res = from_expr(inp) * ".reshape(" * shapes * ");\n"
+            res = from_expr(inp,linfo) * ".reshape(" * shapes * ");\n"
         else
             error("call to reshape expects a tuple, but got ", typ)
         end
@@ -137,7 +137,7 @@ function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::Union{Symbo
     return res 
 end
 
-function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY)
+function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY,linfo)
     return ""
 end
 
@@ -149,7 +149,7 @@ function getSymType(a::SymbolNode)
     return lstate.symboltable[a.name]
 end
 
-function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar)
+function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar,linfo)
     if fun.mod!=Base.LinAlg || fun.name!=:gemm_wrapper!
         return ""
     end
@@ -165,13 +165,13 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
     else
         return ""
     end
-    s = "$(from_expr(C)); "
-    m = (tA == 'N') ? from_arraysize(A,1) : from_arraysize(A,2) 
-    k = (tA == 'N') ? from_arraysize(A,2) : from_arraysize(A,1) 
-    n = (tB == 'N') ? from_arraysize(B,2) : from_arraysize(B,1)
+    s = "$(from_expr(C,linfo)); "
+    m = (tA == 'N') ? from_arraysize(A,1,linfo) : from_arraysize(A,2,linfo) 
+    k = (tA == 'N') ? from_arraysize(A,2,linfo) : from_arraysize(A,1,linfo) 
+    n = (tB == 'N') ? from_arraysize(B,2,linfo) : from_arraysize(B,1,linfo)
 
-    lda = from_arraysize(A,1)
-    ldb = from_arraysize(B,1)
+    lda = from_arraysize(A,1,linfo)
+    ldb = from_arraysize(B,1,linfo)
     ldc = m
 
     CblasNoTrans = 111 
@@ -183,47 +183,47 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
 
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
-        $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, 0.0, $(from_expr(C)).data, $ldc)"
+        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, 0.0, $(from_expr(C,linfo)).data, $ldc)"
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
-        s *= "cgen_$(cblas_fun)($(from_expr(tA!='N')), $(from_expr(tB!='N')), $m,$n,$k, $(from_expr(A)).data, $lda, $(from_expr(B)).data, $ldb, $(from_expr(C)).data, $ldc)"
+        s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $(from_expr(tB!='N',linfo)), $m,$n,$k, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, $(from_expr(C,linfo)).data, $ldc)"
     end
 
     return s
 end
 
-function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY)
+function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY,linfo)
     return ""
 end
 
 
-function pattern_match_call(ast::Array{Any, 1})
+function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
     s = ""
 
     if(length(ast)==2)
-        s = pattern_match_call_throw(ast[1],ast[2])
-        s *= pattern_match_call_math(ast[1],ast[2])
+        s = pattern_match_call_throw(ast[1],ast[2],linfo)
+        s *= pattern_match_call_math(ast[1],ast[2],linfo)
     end
     
     if(length(ast)==3) # randn! call has 3 args
-        s *= pattern_match_call_randn(ast[1],ast[2],ast[3])
+        s *= pattern_match_call_randn(ast[1],ast[2],ast[3],linfo)
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
-        s *= pattern_match_call_reshape(ast[1],ast[2],ast[3])
+        s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
     end
     if(length(ast)>=2) # rand! has 2 or more args
-        s *= pattern_match_call_rand(ast...)
+        s *= pattern_match_call_rand(linfo, ast...)
     end
     # gemm calls have 6 args
     if(length(ast)==6)
-        s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6])
+        s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
     end
     return s
 end
 
 
-function from_assignment_match_hvcat(lhs, rhs::Expr)
+function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
     if rhs.head==:call && (checkTopNodeName(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
@@ -255,31 +255,31 @@ function from_assignment_match_hvcat(lhs, rhs::Expr)
 
         nr = length(rows)
         nc = rows[1] # all rows should have the same size
-        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
-        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nc)),(i-1)%nc+1])*";", (a, b) -> "$a $b", 1:length(values))
+        s *= from_expr(lhs,linfo) * " = j2c_array<$typ>::new_j2c_array_2d(NULL, $nr, $nc);\n"
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],convert(Int64,ceil(i/nc)),(i-1)%nc+1],linfo)*";", (a, b) -> "$a $b", 1:length(values))
     end
     return s
 end
 
-function from_assignment_match_hvcat(lhs, rhs::ANY)
+function from_assignment_match_hvcat(lhs, rhs::ANY, linfo)
     return ""
 end
 
-function from_assignment_match_cat_t(lhs, rhs::Expr)
+function from_assignment_match_cat_t(lhs, rhs::Expr, linfo)
     s = ""
     if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
         dims = rhs.args[2]
         @assert dims==2 "CGen: only 2d cat_t() is supported now"
         size = length(rhs.args[4:end])
         typ = toCtype(eval(rhs.args[3].name))
-        s *= from_expr(lhs) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
+        s *= from_expr(lhs,linfo) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
         values = rhs.args[4:end]
-        s *= mapfoldl((i) -> from_setindex([lhs,values[i],i])*";", (a, b) -> "$a $b", 1:length(values))
+        s *= mapfoldl((i) -> from_setindex([lhs,values[i],i],linfo)*";", (a, b) -> "$a $b", 1:length(values))
     end
     return s
 end
 
-function from_assignment_match_cat_t(lhs, rhs::ANY)
+function from_assignment_match_cat_t(lhs, rhs::ANY, linfo)
     return ""
 end
 

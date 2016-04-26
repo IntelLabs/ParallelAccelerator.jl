@@ -162,8 +162,8 @@ type ExternalPatternMatchCall
     func::Function
 end
 
-external_pattern_match_call = ExternalPatternMatchCall(ast::Array{Any,1}->"")
-external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs)->"")
+external_pattern_match_call = ExternalPatternMatchCall((ast::Array{Any,1},linfo)->"")
+external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs,linfo)->"")
 
 type CgenUserOptions
     includeStatements
@@ -502,7 +502,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         end
     end
 
-    bod = from_expr(args[3])
+    bod = from_expr(args[3], linfo)
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
@@ -514,11 +514,11 @@ function from_lambda(ast::Expr, args::Array{Any,1})
 end
 
 
-function from_exprs(args::Array)
+function from_exprs(args::Array, linfo)
     s = ""
     for a in args
         @dprintln(3, "from_exprs working on = ", a)
-        se = from_expr(a)
+        se = from_expr(a, linfo)
         s *= se * (!isempty(se) ? ";\n" : "")
     end
     s
@@ -569,7 +569,7 @@ end
 
 
 
-function from_assignment_fix_tupple(lhs, rhs::Expr)
+function from_assignment_fix_tuple(lhs, rhs::Expr, linfo)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
   if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
     @dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
@@ -577,21 +577,21 @@ function from_assignment_fix_tupple(lhs, rhs::Expr)
   end
 end
 
-function from_assignment_fix_tupple(lhs, rhs::ANY)
+function from_assignment_fix_tuple(lhs, rhs::ANY, linfo)
 end
 
 
-function from_assignment(args::Array{Any,1})
+function from_assignment(args::Array{Any,1}, linfo)
     global lstate
     lhs = args[1]
     rhs = args[2]
 
-    from_assignment_fix_tupple(lhs, rhs)
+    from_assignment_fix_tuple(lhs, rhs, linfo)
 
     @dprintln(3,"from_assignment: ", lhs, " ", rhs)
     @dprintln(3,external_pattern_match_call)
     @dprintln(3,external_pattern_match_assignment)
-    external_match = external_pattern_match_assignment.func(lhs, rhs)
+    external_match = external_pattern_match_assignment.func(lhs, rhs, linfo)
     if external_match!=""
         @dprintln(3,"external pattern match returned something")
         return external_match
@@ -599,19 +599,19 @@ function from_assignment(args::Array{Any,1})
 
     @dprintln(3,"external pattern match returned nothing")
 
-    match_hvcat = from_assignment_match_hvcat(lhs, rhs)
+    match_hvcat = from_assignment_match_hvcat(lhs, rhs, linfo)
     if match_hvcat!=""
         return match_hvcat
     end
 
-    match_cat_t = from_assignment_match_cat_t(lhs, rhs)
+    match_cat_t = from_assignment_match_cat_t(lhs, rhs, linfo)
     if match_cat_t!=""
         return match_cat_t
     end
 
 
-    lhsO = from_expr(lhs)
-    rhsO = from_expr(rhs)
+    lhsO = from_expr(lhs, linfo)
+    rhsO = from_expr(rhs, linfo)
     if lhsO == rhsO # skip x = x due to issue with j2c_array 
         return ""
     end
@@ -633,7 +633,7 @@ function from_assignment(args::Array{Any,1})
         # that doesn't have a type
         if typeAvailable(rhs) && is(rhs.typ, Any) &&
         hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
-            m, f, t = resolveCallTarget(rhs.args)
+            m, f, t = resolveCallTarget(rhs.args,linfo)
             f = string(f)
             if f == "fpext"
                 @dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
@@ -761,16 +761,16 @@ function parseParametricType_s(typ)
     return baseTyp, pTyps
 end
 
-function from_tupleref(args)
+function from_tupleref(args, linfo)
     # We could generate std::tuples instead of structs
-    from_expr(args[1]) * ".f" * string(parse(Int, (from_expr(args[2])))-1)
+    from_expr(args[1], linfo) * ".f" * string(parse(Int, (from_expr(args[2], linfo)))-1)
 end
 
-function from_safegetindex(args)
+function from_safegetindex(args,linfo)
     s = ""
-    src = from_expr(args[1])
+    src = from_expr(args[1], linfo)
     s *= src * ".SAFEARRAYELEM("
-    idxs = map(from_expr, args[2:end])
+    idxs = map(x->from_expr(x,linfo), args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -778,9 +778,9 @@ function from_safegetindex(args)
     s
 end
 
-function from_getslice(args)
+function from_getslice(args, linfo)
     s = ""
-    src = from_expr(args[1])
+    src = from_expr(args[1], linfo)
     s *= src * ".slice("
     idxs = Any[]
     i = 0
@@ -789,7 +789,7 @@ function from_getslice(args)
         if isa(a, GlobalRef) && a.name == :(:)
         else
             push!(idxs, string(i))
-            push!(idxs, from_expr(a))
+            push!(idxs, from_expr(a, linfo))
         end
     end
     for i in 1:length(idxs)
@@ -799,19 +799,19 @@ function from_getslice(args)
     s
 end
 
-function from_getindex(args)
+function from_getindex(args, linfo)
     # if args has any range indexing, it is slicing
     if any([isa(a, GlobalRef) && a.name == :(:) for a in args])
-       return from_getslice(args)
+       return from_getslice(args, linfo)
     end
     s = ""
-    src = from_expr(args[1])
+    src = from_expr(args[1], linfo)
     if CGEN_RAW_ARRAY_MODE
         s *= src * "["
     else
         s *= src * ".ARRAYELEM("
     end
-    idxs = map(from_expr, args[2:end])
+    idxs = map(x->from_expr(x,linfo), args[2:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -823,15 +823,15 @@ function from_getindex(args)
     s
 end
 
-function from_setindex(args)
+function from_setindex(args, linfo)
     s = ""
-    src = from_expr(args[1])
+    src = from_expr(args[1], linfo)
     if CGEN_RAW_ARRAY_MODE
         s *= src * "["
     else
         s *= src * ".ARRAYELEM("
     end
-    idxs = map(from_expr, args[3:end])
+    idxs = map(x->from_expr(x,linfo), args[3:end])
     for i in 1:length(idxs)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
@@ -840,7 +840,7 @@ function from_setindex(args)
     else
         s *= ") = " 
     end
-    s *= from_expr(args[2])
+    s *= from_expr(args[2], linfo)
     s
 end
 
@@ -851,37 +851,37 @@ end
 # codegen but we would have to extend the j2c_array runtime to support
 # all the other operations allowed on Julia arrays
 
-function from_unsafe_setindex!(args)
+function from_unsafe_setindex!(args, linfo)
     @assert (length(args) == 4) "Array operation unsafe_setindex! has unexpected number of arguments"
     @assert !isArrayType(args[2]) "Array operation unsafe_setindex! has unexpected format"
-    src = from_expr(args[2])
-    v = from_expr(args[3])
-    mask = from_expr(args[4])
+    src = from_expr(args[2], linfo)
+    v = from_expr(args[3], linfo)
+    mask = from_expr(args[4], linfo)
     "for(uint64_t i = 1; i < $(src).ARRAYLEN(); i++) {\n\t if($(mask)[i]) \n\t $(src)[i] = $(v);}\n"
 end
 
-function from_tuple(args)
-    "{" * mapfoldl(from_expr, (a, b) -> "$a, $b", args) * "}"
+function from_tuple(args, linfo)
+    "{" * mapfoldl(x->from_expr(x, linfo), (a, b) -> "$a, $b", args) * "}"
 end
 
-function from_arraysize(args)
-    s = from_expr(args[1])
+function from_arraysize(args, linfo)
+    s = from_expr(args[1], linfo)
     if length(args) == 1
         s *= ".ARRAYLEN()"
     else
-        s *= ".ARRAYSIZE(" * from_expr(args[2]) * ")"
+        s *= ".ARRAYSIZE(" * from_expr(args[2],linfo) * ")"
     end
     s
 end
 
-function from_arraysize(arr, dim::Int)
-    s = from_expr(arr)
-    s *= ".ARRAYSIZE(" * from_expr(dim) * ")"
+function from_arraysize(arr, dim::Int, linfo)
+    s = from_expr(arr, linfo)
+    s *= ".ARRAYSIZE(" * from_expr(dim, linfo) * ")"
     s
 end
 
 
-function from_ccall(args)
+function from_ccall(args, linfo)
     @dprintln(3,"ccall args:")
     @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
     @dprintln(3,"return type: ", args[2])
@@ -893,11 +893,11 @@ function from_ccall(args)
     @dprintln(3,"End of ccall args")
     fun = args[1]
     if isInlineable(fun, args)
-        return from_inlineable(fun, args)
+        return from_inlineable(fun, args, linfo)
     end
 
     if isa(fun, QuoteNode)
-        s = from_symbol(fun)
+        s = from_symbol(fun, linfo)
     elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
         s = canonicalize(string(fun.args[2]))
         @dprintln(3,"ccall target: ", s)
@@ -910,27 +910,27 @@ function from_ccall(args)
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
         if mkl_lib!=""
-            s *= "(CBLAS_LAYOUT) $(from_expr(args[4])), "
+            s *= "(CBLAS_LAYOUT) $(from_expr(args[4], linfo)), "
         else
-            s *= "(CBLAS_ORDER) $(from_expr(args[4])), "
+            s *= "(CBLAS_ORDER) $(from_expr(args[4], linfo)), "
         end
-        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6])), "
-        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8])), "
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6], linfo)), "
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8], linfo)), "
         argsStart = 10
     end
     to_fold = args[argsStart:2:end]
     if length(to_fold) > 0
-        s *= mapfoldl(from_expr, (a, b)-> "$a, $b", to_fold)
+        s *= mapfoldl(x->from_expr(x,linfo), (a, b)-> "$a, $b", to_fold)
     end
     s *= ")"
     @dprintln(3,"from_ccall: ", s)
     s
 end
 
-function from_arrayset(args)
-    idxs = mapfoldl(from_expr, (a, b) -> "$a, $b", args[3:end])
-    src = from_expr(args[1])
-    val = from_expr(args[2])
+function from_arrayset(args, linfo)
+    idxs = mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[3:end])
+    src = from_expr(args[1], linfo)
+    val = from_expr(args[2], linfo)
     if CGEN_RAW_ARRAY_MODE
         return "$src[$idxs - 1] = $val"
     else
@@ -942,22 +942,22 @@ function istupletyp(typ)
     isa(typ, DataType) && is(typ.name, Tuple.name)
 end
 
-function from_setfield!(args)
+function from_setfield!(args, linfo)
     @dprintln(3,"from_setfield! args are: ", args)
     @assert (length(args)==3) "Expect 3 arguments to setfield!, but got " * string(args)
-    tgt = from_expr(args[1])
+    tgt = from_expr(args[1], linfo)
     @assert (isa(args[2], QuoteNode)) "CGen only handles setfield! with a fixed field name, but not " * string(args[2])
-    fld = from_expr(args[2].value)
-    tgt * "." * fld * " = " * from_expr(args[3])
+    fld = from_expr(args[2].value, linfo)
+    tgt * "." * fld * " = " * from_expr(args[3], linfo)
 end
 
-function from_getfield(args)
+function from_getfield(args, linfo)
     @dprintln(3,"from_getfield args are: ", args)
-    tgt = from_expr(args[1])
+    tgt = from_expr(args[1], linfo)
     @dprintln(4,"from_getfield tgt: ", tgt)
-    if isa(args[1], SymbolNode)
+    if isa(args[1], TypedVar)
       args1typ = args[1].typ
-      @dprintln(4,"from_getfield args[1] is SymbolNode, args1typ: ", args1typ)
+      @dprintln(4,"from_getfield args[1] is ", args[1], " args1typ: ", args1typ)
     elseif isa(args[1], GenSym) || isa(args[1], Symbol)
       args1typ = lstate.symboltable[args[1]]
       @dprintln(4,"from_getfield args[1] is GenSym or Symbol, args1typ: ", args1typ)
@@ -970,7 +970,7 @@ function from_getfield(args)
         @dprintln(4,"from_getfield found tupletyp, eltype: ", eltype(args1typ), " field type: ", fieldtype)
         if isa(args[2], Int)
             @dprintln(4,"from_getfield args[2] is Int so using simple field reference via from_tupleref")
-            return from_tupleref(args)
+            return from_tupleref(args, linfo)
         else
             # TO-DO!
             # What we really need to do here is when you create a Tuple type that you create an
@@ -979,38 +979,38 @@ function from_getfield(args)
             # offset, cast as a pointer to the type of the field, and then dereference.
             eltyp = toCtype(eltype(args1typ))
             @dprintln(4,"from_getfield eltyp: ", eltyp)
-            return "(($eltyp *)&$(tgt))[" * from_expr(args[2]) * " - 1]"
+            return "(($eltyp *)&$(tgt))[" * from_expr(args[2], linfo) * " - 1]"
         end
     end
     throw(string("Unhandled call to getfield ",args1typ, " ", eltype(args1typ)))
     #=
-    mod, tgt = resolveCallTarget(args[1], args[2:end])
+    mod, tgt = resolveCallTarget(args[1], args[2:end],linfo)
     if mod == "Intrinsics"
-        return from_expr(tgt)
+        return from_expr(tgt, linfo)
     elseif isInlineable(tgt, args[2:end])
-        return from_inlineable(tgt, args[2:end])
+        return from_inlineable(tgt, args[2:end], linfo)
     end
-    from_expr(mod) * "." * from_expr(tgt)
+    from_expr(mod, linfo) * "." * from_expr(tgt, linfo)
     =#
 end
 
-function from_nfields(arg::Union{Symbol,GenSym})
+function from_nfields(arg::Union{Symbol,GenSym}, linfo)
     @dprintln(3,"Arg is: ", arg)
     @dprintln(3,"Arg type = ", typeof(arg))
     #string(nfields(args[1].typ))
     string(nfields(lstate.symboltable[arg]))
 end
 
-function from_nfields(arg::SymbolNode)
+function from_nfields(arg::TypedVar, linfo)
     @dprintln(3,"Arg is: ", arg)
     @dprintln(3,"Arg type = ", typeof(arg))
     string(nfields(arg.typ))
 end
 
-function from_steprange_last(args)
-  start = "(" * from_expr(args[1]) * ")"
-  step  = "(" * from_expr(args[2]) * ")"
-  stop  = "(" * from_expr(args[3]) * ")"
+function from_steprange_last(args, linfo)
+  start = "(" * from_expr(args[1], linfo) * ")"
+  step  = "(" * from_expr(args[2], linfo) * ")"
+  stop  = "(" * from_expr(args[3], linfo) * ")"
   return "("*stop*"-("*stop*"-"*start*")%"*step*")"
 end
 
@@ -1023,50 +1023,49 @@ function isTupleGlobalRef(arg::Any)
     return false
 end
 
-function get_shape_from_tupple(arg::Expr)
+function get_shape_from_tuple(arg::Expr, linfo)
     res = ""
     if arg.head==:call && isTupleGlobalRef(arg.args[1])
         shp = AbstractString[]
         for i in 2:length(arg.args)
-            push!(shp, from_expr(arg.args[i]))
+            push!(shp, from_expr(arg.args[i], linfo))
         end
         res = foldl((a, b) -> "$a, $b", shp)
     end
     return res
 end
 
-function get_shape_from_tupple(arg::ANY)
+function get_shape_from_tuple(arg::ANY, linfo)
     return ""
 end
 
-function get_alloc_shape(args, dims)
+function get_alloc_shape(args, dims, linfo)
     res = ""
-    # in cases like rand(s1,s2), array allocation has only a tupple
+    # in cases like rand(s1,s2), array allocation has only a tuple
     if length(args)==7
-        res = get_shape_from_tupple(args[6])
+        res = get_shape_from_tuple(args[6], linfo)
     end
     if res!=""
         return res
     end
     shp = AbstractString[]
     arg = args[6]
-    if (isa(arg, Expr) && isa(arg.typ, Tuple)) ||
-       ((isa(arg, SymbolNode) || isa(arg, Symbol) || isa(arg, GenSym)) &&
-        istupletyp(getSymType(arg))) # in case where the argument is a tuple
-        arg_str = from_expr(arg)
+    if (isa(arg, Expr) && isa(arg.typ, Tuple)) || 
+       (isa(arg, RHSVar) && istupletyp(getSymType(arg))) # in case where the argument is a tuple
+        arg_str = from_expr(arg, linfo)
         for i in 0:dims-1
             push!(shp, arg_str * ".f" * string(i))
         end
     else
         for i in 1:dims
-            push!(shp, from_expr(args[6+(i-1)*2]))
+            push!(shp, from_expr(args[6+(i-1)*2], linfo))
         end 
     end
     res = foldl((a, b) -> "$a, $b", shp)
     return res
 end
 
-function from_arrayalloc(args)
+function from_arrayalloc(args, linfo)
     @dprintln(3,"Array alloc args:")
     map((i)->@dprintln(3,args[i]), 1:length(args))
     @dprintln(3,"----")
@@ -1076,101 +1075,101 @@ function from_arrayalloc(args)
     @dprintln(3,"Array alloc dims = ", dims)
     typ = toCtype(typ)
     @dprintln(3,"Array alloc after ctype conversion typ = ", typ)
-    shape = get_alloc_shape(args, dims)
+    shape = get_alloc_shape(args, dims, linfo)
     @dprintln(3,"Array alloc shape = ", shape)
     return "j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, $shape)"
 end
 
-function from_builtins_comp(f, args)
+function from_builtins_comp(f, args, linfo)
     tgt = string(f)
     return eval(parse("from_$cmd()"))
 end
 
-function from_array_ptr(args)
-    return "$(from_expr(args[4])).data"
+function from_array_ptr(args, linfo)
+    return "$(from_expr(args[4], linfo)).data"
 end
 
-function from_sizeof(args)
+function from_sizeof(args, linfo)
     s = toCtype(args[1])
     return "sizeof($s)"
 end
 
-function from_pointer(args)
+function from_pointer(args, linfo)
     if CGEN_RAW_ARRAY_MODE
-        s = "$(from_expr(args[1]))"
+        s = "$(from_expr(args[1], linfo))"
     else
-        s =  "$(from_expr(args[1])).data"
+        s =  "$(from_expr(args[1], linfo)).data"
     end
     if length(args) > 1
-        s *= " + $(from_expr(args[2]))"
+        s *= " + $(from_expr(args[2], linfo))"
     end
     s
 end
 
-function from_raw_pointer(args)
+function from_raw_pointer(args, linfo)
     if length(args) == 1
-        return "$(from_expr(args[1]))"
+        return "$(from_expr(args[1], linfo))"
     else
-        return "$(from_expr(args[1])) + $(from_expr(args[2]))"
+        return "$(from_expr(args[1], linfo)) + $(from_expr(args[2], linfo))"
     end
 end
 
-function from_builtins(f, args)
+function from_builtins(f, args, linfo)
     tgt = string(f)
     if tgt == "getindex" || tgt == "getindex!"
-        return from_getindex(args)
+        return from_getindex(args, linfo)
     elseif tgt == "setindex" || tgt == "setindex!"
-        return from_setindex(args)
+        return from_setindex(args, linfo)
     elseif tgt == "top"
         return ""
     elseif tgt == "box"
-        return from_box(args)
+        return from_box(args, linfo)
     elseif tgt == "arrayref"
-        return from_getindex(args)
+        return from_getindex(args, linfo)
     elseif tgt == "tupleref"
-        return from_tupleref(args)
+        return from_tupleref(args, linfo)
     elseif tgt == "tuple"
-        return from_tuple(args)
+        return from_tuple(args, linfo)
     elseif tgt == "arraylen"
-        return from_arraysize(args)
+        return from_arraysize(args, linfo)
     elseif tgt == "arraysize"
-        return from_arraysize(args)
+        return from_arraysize(args, linfo)
     elseif tgt == "ccall"
-        return from_ccall(args)
+        return from_ccall(args, linfo)
     elseif tgt == "arrayset"
-        return from_arrayset(args)
+        return from_arrayset(args, linfo)
     elseif tgt == ":jl_new_array" || tgt == ":jl_alloc_array_1d" || tgt == ":jl_alloc_array_2d" || tgt == ":jl_alloc_array_3d"
-        return from_arrayalloc(args)
+        return from_arrayalloc(args, linfo)
     elseif tgt == ":jl_array_ptr"
-        return from_array_ptr(args)
+        return from_array_ptr(args, linfo)
     elseif tgt == "pointer"
-        return from_pointer(args)
+        return from_pointer(args, linfo)
     elseif tgt == "getfield"
-        return from_getfield(args)
+        return from_getfield(args, linfo)
     elseif tgt == "setfield!"
-        return from_setfield!(args)
+        return from_setfield!(args, linfo)
     elseif tgt == "unsafe_arrayref"
-        return from_getindex(args)
+        return from_getindex(args, linfo)
     elseif tgt == "safe_arrayref"
-        return from_safegetindex(args)
+        return from_safegetindex(args, linfo)
     elseif tgt == "unsafe_arrayset" || tgt == "safe_arrayset"
-        return from_setindex(args)
+        return from_setindex(args, linfo)
     elseif tgt == "_unsafe_setindex!"
-        return from_unsafe_setindex!(args)
+        return from_unsafe_setindex!(args, linfo)
     elseif tgt == "nfields"
-        return from_nfields(args[1])
+        return from_nfields(args[1], linfo)
     elseif tgt == "sizeof"
-        return from_sizeof(args)
+        return from_sizeof(args, linfo)
     elseif tgt =="steprange_last"
-        return from_steprange_last(args)
+        return from_steprange_last(args, linfo)
     elseif tgt == "convert" || tgt == "unsafe_convert"
-        return from_typecast(args[1], [args[2]])
+        return from_typecast(args[1], [args[2]], linfo)
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
             # handle type casting
             @dprintln(3, "found a typecast: ", fval, "(", args, ")")
-            return from_typecast(fval, args)
+            return from_typecast(fval, args, linfo)
         end
     end
 
@@ -1178,69 +1177,69 @@ function from_builtins(f, args)
     throw("Unimplemented builtin")
 end
 
-function from_typecast(typ, args)
+function from_typecast(typ, args, linfo)
     @assert (length(args) == 1) "Expect only one argument in " * typ * "(" * args * ")"
-    return "(" * toCtype(typ) * ")" * "(" * from_expr(args[1]) * ")"
+    return "(" * toCtype(typ) * ")" * "(" * from_expr(args[1], linfo) * ")"
 end
 
-function from_box(args)
+function from_box(args, linfo)
     s = ""
     typ = args[1]
     val = args[2]
-    s *= from_expr(val)
+    s *= from_expr(val, linfo)
     s
 end
 
-function from_intrinsic(f :: ANY, args)
+function from_intrinsic(f :: ANY, args, linfo)
     intr = string(f)
     @dprintln(3,"Intrinsic ", intr, ", args are ", args)
 
     if intr == "mul_int"
-        return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
     elseif intr == "neg_int"
-        return "-" * "(" * from_expr(args[1]) * ")"
+        return "-" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "mul_float"
-        return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
     elseif intr == "urem_int"
-        return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) % ($(from_expr(args[2], linfo)))"
     elseif intr == "add_int"
-        return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
     elseif intr == "or_int"
-        return "($(from_expr(args[1]))) | ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) | ($(from_expr(args[2], linfo)))"
     elseif intr == "xor_int"
-        return "($(from_expr(args[1]))) ^ ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) ^ ($(from_expr(args[2], linfo)))"
     elseif intr == "and_int"
-        return "($(from_expr(args[1]))) & ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) & ($(from_expr(args[2], linfo)))"
     elseif intr == "sub_int"
-        return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
     elseif intr == "slt_int" || intr == "ult_int"
-        return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) < ($(from_expr(args[2], linfo)))"
     elseif intr == "sle_int"
-        return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) <= ($(from_expr(args[2], linfo)))"
     elseif intr == "lshr_int"
-        return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"
     elseif intr == "shl_int"
-        return "($(from_expr(args[1]))) << ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
     elseif intr == "checked_ssub" || intr == "checked_ssub_int"
-        return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
     elseif intr == "checked_sadd" || intr == "checked_sadd_int"
-        return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
     elseif intr == "checked_smul"
-        return "($(from_expr(args[1]))) * ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
     elseif intr == "zext_int"
-        return "($(toCtype(args[1]))) ($(from_expr(args[2])))"
+        return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "sext_int"
-        return "($(toCtype(args[1]))) ($(from_expr(args[2])))"
+        return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "smod_int"
-        m = from_expr(args[1])
-        n = from_expr(args[2])
+        m = from_expr(args[1], linfo)
+        n = from_expr(args[2], linfo)
         return "((($m) % ($n) + ($n)) % $n)"
     elseif intr == "srem_int" || intr == "checked_srem_int"
-        return "($(from_expr(args[1]))) % ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) % ($(from_expr(args[2], linfo)))"
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
     elseif intr == "flipsign_int"
-        return "-" * "(" * from_expr(args[1]) * ")"
+        return "-" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "check_top_bit"
         typ = typeof(args[1])
         if !isPrimitiveJuliaType(typ)
@@ -1249,89 +1248,89 @@ function from_intrinsic(f :: ANY, args)
             end
         end
         nshfts = 8*sizeof(typ) - 1
-        oprnd = from_expr(args[1])
+        oprnd = from_expr(args[1], linfo)
         return oprnd * " >> " * string(nshfts) * " == 0 ? " * oprnd * " : " * oprnd
     elseif intr == "select_value"
-        return "(" * from_expr(args[1]) * ")" * " ? " *
-        "(" * from_expr(args[2]) * ") : " * "(" * from_expr(args[3]) * ")"
+        return "(" * from_expr(args[1], linfo) * ")" * " ? " *
+        "(" * from_expr(args[2], linfo) * ") : " * "(" * from_expr(args[3], linfo) * ")"
     elseif intr == "not_int"
-        return "!" * "(" * from_expr(args[1]) * ")"
+        return "!" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "ctpop_int"
-        return "__builtin_popcount" * "(" * from_expr(args[1]) * ")"
+        return "__builtin_popcount" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "cttz_int"
-        return "cgen_cttz_int" * "(" * from_expr(args[1]) * ")"
+        return "cgen_cttz_int" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "ashr_int" || intr == "lshr_int"
-        return "($(from_expr(args[1]))) >> ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"
     elseif intr == "shl_int" 
-        return "($(from_expr(args[1]))) << ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
     elseif intr == "add_float"
-        return "($(from_expr(args[1]))) + ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
     elseif intr == "lt_float"
-        return "($(from_expr(args[1]))) < ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) < ($(from_expr(args[2], linfo)))"
     elseif intr == "eq_float" || intr == "eq_int"
-        return "($(from_expr(args[1]))) == ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) == ($(from_expr(args[2], linfo)))"
     elseif intr == "ne_float" || intr == "ne_int"
-        return "($(from_expr(args[1]))) != ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) != ($(from_expr(args[2], linfo)))"
     elseif intr == "le_float"
-        return "($(from_expr(args[1]))) <= ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) <= ($(from_expr(args[2], linfo)))"
     elseif intr == "neg_float"
-        return "-($(from_expr(args[1])))"
+        return "-($(from_expr(args[1], linfo)))"
     elseif intr == "abs_float"
-        return "fabs(" * from_expr(args[1]) * ")"
+        return "fabs(" * from_expr(args[1], linfo) * ")"
     elseif intr == "sqrt_llvm"
-        return "sqrt(" * from_expr(args[1]) * ")"
+        return "sqrt(" * from_expr(args[1], linfo) * ")"
     elseif intr == "sub_float"
-        return "($(from_expr(args[1]))) - ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
     elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
-        return "($(from_expr(args[1]))) / ($(from_expr(args[2])))"
+        return "($(from_expr(args[1], linfo))) / ($(from_expr(args[2], linfo)))"
     elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
-        return "(" * toCtype(args[1]) * ")" * from_expr(args[2])
+        return "(" * toCtype(args[1]) * ")" * from_expr(args[2], linfo)
     elseif intr == "trunc_llvm" || intr == "trunc"
-        return "(" * toCtype(args[1]) * ") trunc(" * from_expr(args[2]) * ")"
+        return "(" * toCtype(args[1]) * ") trunc(" * from_expr(args[2], linfo) * ")"
     elseif intr == "floor_llvm" || intr == "floor"
-        return "floor(" * from_expr(args[1]) * ")"
+        return "floor(" * from_expr(args[1], linfo) * ")"
     elseif intr == "ceil_llvm" || intr == "ceil"
-        return "ceil(" * from_expr(args[1]) * ")"
+        return "ceil(" * from_expr(args[1], linfo) * ")"
     elseif intr == "rint_llvm" || intr == "rint"
-        return "round(" * from_expr(args[1]) * ")"
+        return "round(" * from_expr(args[1], linfo) * ")"
     elseif f == :(===)
-        return "(" * from_expr(args[1]) * " == " * from_expr(args[2]) * ")"
+        return "(" * from_expr(args[1], linfo) * " == " * from_expr(args[2], linfo) * ")"
     elseif intr == "pow" || intr == "powi_llvm" 
-        return "pow(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
+        return "pow(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "powf" || intr == "powf_llvm"
-        return "powf(" * from_expr(args[1]) * ", " * from_expr(args[2]) * ")"
+        return "powf(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "nan_dom_err"
         @dprintln(3,"nan_dom_err is: ")
         for i in 1:length(args)
             @dprintln(3,args[i])
         end
-        #return "assert(" * "isNan(" * from_expr(args[1]) * ") && !isNan(" * from_expr(args[2]) * "))"
-        return from_expr(args[1])
+        #return "assert(" * "isNan(" * from_expr(args[1], linfo) * ") && !isNan(" * from_expr(args[2], linfo) * "))"
+        return from_expr(args[1], linfo)
     elseif intr in ["checked_trunc_uint", "checked_trunc_sint"]
-        return "(" * toCtype(args[1]) * ")(" * from_expr(args[2]) * ")"
+        return "(" * toCtype(args[1]) * ")(" * from_expr(args[2], linfo) * ")"
     else
         @dprintln(3,"Intrinsic ", intr, " is known but no translation available")
         throw("Unhandled Intrinsic...")
     end
 end
 
-function from_inlineable(f, args)
+function from_inlineable(f, args, linfo)
     @dprintln(3,"Checking if ", f, " can be inlined")
     @dprintln(3,"Args are: ", args)
 #=
     if has(_operators, string(f))
         if length(args) == 1
-          return "(" * string(f) * from_expr(args[1]) * ")"
+          return "(" * string(f) * from_expr(args[1], linfo) * ")"
         else 
-          s = "(" * mapfoldl(from_expr, (a,b)->"$a"*string(f)*"$b", args) * ")"
+          s = "(" * mapfoldl(\x->from_expr(x,linfo), (a,b)->"$a"*string(f)*"$b", args) * ")"
           return s 
         end
     elseif has(_builtins, string(f))
 =#
     if has(_builtins, string(f))
-        return from_builtins(f, args)
+        return from_builtins(f, args, linfo)
     elseif has(_Intrinsics, string(f))
-        return from_intrinsic(f, args)
+        return from_intrinsic(f, args, linfo)
     else
         throw("Unknown Operator or Method encountered: " * string(f))
     end
@@ -1349,34 +1348,34 @@ function arrayToTuple(a)
     ntuple((i)->a[i], length(a))
 end
 
-function from_symbol(ast)
+function from_symbol(ast, linfo)
     if ast in [:Inf, :Inf32]
         return "INFINITY"
     end
     hasfield(ast, :name) ? canonicalize(string(ast.name)) : canonicalize(ast)
 end
 
-function from_symbolnode(ast)
-    canonicalize(string(ast.name))
+function from_typedvar(ast, linfo)
+    canonicalize(string(getSymbol(ast, linfo)))
 end
 
-function from_linenumbernode(ast)
+function from_linenumbernode(ast, linfo)
     ""
 end
 
-function from_labelnode(ast)
+function from_labelnode(ast, linfo)
     "label" * string(ast.label) * " : "
 end
 
-function from_ref(args)
-    "&$(from_expr(args[1]))"
+function from_ref(args, linfo)
+    "&$(from_expr(args[1], linfo))"
 end
 
-function from_call1(ast::Array{Any, 1})
+function from_call1(ast::Array{Any, 1}, linfo)
     @dprintln(3,"Call1 args")
     s = ""
     for i in 2:length(ast)
-        s *= from_expr(ast[i])
+        s *= from_expr(ast[i], linfo)
         @dprintln(3,ast[i])
     end
     @dprintln(3,"Done with call1 args")
@@ -1393,35 +1392,35 @@ function isPendingCompilation(list, tgt)
     return false
 end
 
-function resolveCallTarget(ast::Array{Any, 1})
+function resolveCallTarget(ast::Array{Any, 1},linfo)
     # julia doesn't have GetfieldNode anymore
     #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
     #   M = args[1].value; s = args[1].name; t = ""
 
     @dprintln(3,"Trying to resolve target with args: ", ast)
-    return resolveCallTarget(ast[1], ast[2:end])
+    return resolveCallTarget(ast[1], ast[2:end],linfo)
 end
 
 #case 0:
-function resolveCallTarget(f::Symbol, args::Array{Any, 1})
+function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo)
     M = ""
     t = ""
     s = ""
     if isInlineable(f, args)
-        return M, string(f), from_inlineable(f, args)
+        return M, string(f), from_inlineable(f, args, linfo)
     elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
-        arglist = mapfoldl(from_expr, (a,b)->"$a, $b", args[2:end])
+        arglist = mapfoldl(x->from_expr(x,linfo), (a,b)->"$a, $b", args[2:end])
         if isa(args[1], DataType)
             t = "{" * arglist * "}"
         else
-            t = from_expr(args[1]) * "(" * arglist * ")"
+            t = from_expr(args[1],linfo) * "(" * arglist * ")"
         end
     end
     return M, s, t
 end
 
-function resolveCallTarget(f::Expr, args::Array{Any, 1})
+function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
     M = ""
     t = ""
     s = ""
@@ -1439,7 +1438,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1})
     return M, s, t
 end
     
-function resolveCallTarget(f::GlobalRef, args::Array{Any, 1})
+function resolveCallTarget(f::GlobalRef, args::Array{Any, 1},linfo)
     M = ""
     t = ""
     s = ""
@@ -1448,7 +1447,7 @@ function resolveCallTarget(f::GlobalRef, args::Array{Any, 1})
 end
     
     
-function resolveCallTarget(f::TopNode, args::Array{Any, 1})
+function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
     @dprintln(3,"Trying to resolve target with args: ", args)
     M = ""
     t = ""
@@ -1460,43 +1459,43 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1})
         if isa(args[1], Module)
             M = args[1]
         elseif (fname == :im || fname == :re) &&
-               (isa(args[1], Union{Symbol,SymbolNode,GenSym}) && 
+               (isa(args[1], RHSVar) && 
                 (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
             func = fname == :re ? "real" : "imag";
-            t = func * "(" * from_expr(args[1]) * ")"
+            t = func * "(" * from_expr(args[1],linfo) * ")"
         else
             #case 2:
-            t = from_expr(args[1]) * "." * string(fname)
+            t = from_expr(args[1],linfo) * "." * string(fname)
             #M, _s = resolveCallTarget([args[1]])
         end
         @dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
-        return resolveCallTarget(f)
+        return resolveCallTarget(f,linfo)
 
     # case 3:
     elseif isInlineable(f.name, args)
-        t = from_inlineable(f.name, args)
+        t = from_inlineable(f.name, args,linfo)
         @dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
     @dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
     return M, s, t
 end
 
-function resolveCallTarget(f::ANY, args::Array{Any, 1})
+function resolveCallTarget(f::ANY, args::Array{Any, 1},linfo)
     return "","",""
 end
 
 
 
-function from_call(ast::Array{Any, 1})
+function from_call(ast::Array{Any, 1},linfo)
 
-    pat_out = external_pattern_match_call.func(ast)
+    pat_out = external_pattern_match_call.func(ast,linfo)
     if pat_out != ""
         @dprintln(3, "external pattern matched: ",ast)
         return pat_out
     end
 
-    pat_out = pattern_match_call(ast)
+    pat_out = pattern_match_call(ast,linfo)
     if pat_out != ""
         @dprintln(3, "pattern matched: ",ast)
         return pat_out
@@ -1507,7 +1506,7 @@ function from_call(ast::Array{Any, 1})
         @dprintln(3,"Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
     end
     # Try and find the target of the call
-    mod, fun, t = resolveCallTarget(ast)
+    mod, fun, t = resolveCallTarget(ast,linfo)
 
     # resolveCallTarget will eagerly try to translate the call
     # if it can. If it does, then we are done.
@@ -1526,14 +1525,14 @@ function from_call(ast::Array{Any, 1})
 
     if isInlineable(fun, args)
         @dprintln(3,"Doing with inlining ", fun, "(", args, ")")
-        fs = from_inlineable(fun, args)
+        fs = from_inlineable(fun, args,linfo)
         return fs
     end
     @dprintln(3,"Not inlinable")
     if isa(mod, Module) 
-        funStr = "_" * from_expr(GlobalRef(mod, fun))
+        funStr = "_" * from_expr(GlobalRef(mod, fun),linfo)
     else
-        funStr = "_" * from_expr(fun)
+        funStr = "_" * from_expr(fun,linfo)
     end
 
     # If we have previously compiled this function
@@ -1546,7 +1545,7 @@ function from_call(ast::Array{Any, 1})
     if fun==:println || fun==:print
         s =  "std::cout << "
         for a in 2:length(args)
-            s *= from_expr(args[a]) * (a < length(args) ? "<<" : "")
+            s *= from_expr(args[a],linfo) * (a < length(args) ? "<<" : "")
         end
         if fun==:println
             s *= "<< std::endl;"
@@ -1563,7 +1562,7 @@ function from_call(ast::Array{Any, 1})
     s *= funStr * "("
     argTyps = []
     for a in 1:length(args)
-        s *= from_expr(args[a]) * (a < length(args) ? "," : "")
+        s *= from_expr(args[a],linfo) * (a < length(args) ? "," : "")
         if !skipCompilation
             # Attempt to find type
             if typeAvailable(args[a])
@@ -1605,7 +1604,7 @@ end
 # pushed into spreallocated slots in the argument list (ret0, ret1...)
 # If not, just return a tuple.
 
-function from_return(args)
+function from_return(args,linfo)
     global inEntryPoint
     @dprintln(3,"Return args are: ", args)
     retExp = ""
@@ -1622,77 +1621,77 @@ function from_return(args)
         if istupletyp(arg1_typ)
             retTyps = arg1_typ.parameters
             for i in 1:length(retTyps)
-                retExp *= "*ret" * string(i-1) * " = " * from_expr(arg1) * ".f" * string(i-1) * ";\n"
+                retExp *= "*ret" * string(i-1) * " = " * from_expr(arg1,linfo) * ".f" * string(i-1) * ";\n"
             end
         else
             # Skip the "*ret0 = ..." stmt for the special case of Void/nothing return value.
             if arg1 != nothing
-                retExp = "*ret0 = " * from_expr(arg1) * ";\n"
+                retExp = "*ret0 = " * from_expr(arg1,linfo) * ";\n"
             end
         end
         return retExp * "return"
     else
-        return "return " * from_expr(args[1])
+        return "return " * from_expr(args[1],linfo)
     end
 end
 
 
-function from_gotonode(ast, exp = "")
+function from_gotonode(ast, linfo)
     labelId = ast.label
     s = ""
     @dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
-    if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
-        s *= "if (!(" * from_expr(exp) * ")) "
+    if isa(exp, Expr) || isa(exp, RHSVar)
+        s *= "if (!(" * from_expr(exp,linfo) * ")) "
     end
     s *= "goto " * "label" * string(labelId)
     s
 end
 
-function from_gotoifnot(args)
+function from_gotoifnot(args,linfo)
     exp = args[1]
     labelId = args[2]
     s = ""
     @dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
-    if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol) || isa(exp, GenSym)
-        s *= "if (!(" * from_expr(exp) * ")) "
+    if isa(exp, Expr) || isa(exp, RHSVar)
+        s *= "if (!(" * from_expr(exp,linfo) * ")) "
     end
     s *= "goto " * "label" * string(labelId)
     s
 end
 #=
-function from_goto(exp, labelId)
+function from_goto(exp, labelId,linfo)
     s = ""
     @dprintln(3,"Compiling goto: ", exp, " ", typeof(exp))
-    if isa(exp, Expr) || isa(exp, SymbolNode) || isa(exp, Symbol)
-        s *= "if (!(" * from_expr(exp) * ")) "
+    if isa(exp, Expr) || isa(exp, RHSVar)
+        s *= "if (!(" * from_expr(exp,linfo) * ")) "
     end
     s *= "goto " * "label" * string(labelId)
     s
 end
 =#
 
-function from_if(args)
+function from_if(args,linfo)
     exp = args[1]
     true_exp = args[2]
     false_exp = args[3]
     s = ""
     @dprintln(3,"Compiling if: ", exp, " ", true_exp," ", false_exp)
-    s *= from_expr(exp) * "?" * from_expr(true_exp) * ":" * from_expr(false_exp)
+    s *= from_expr(exp,linfo) * "?" * from_expr(true_exp,linfo) * ":" * from_expr(false_exp,linfo)
     s
 end
 
-function from_comparison(args)
+function from_comparison(args,linfo)
     @assert length(args)==3 "CGen: invalid comparison"
     left = args[1]
     comp = args[2]
     right = args[3]
     s = ""
     @dprintln(3,"Compiling comparison: ", left, " ", comp," ", right)
-    s *= from_expr(left) * "$comp" * from_expr(right)
+    s *= from_expr(left,linfo) * "$comp" * from_expr(right,linfo)
     s
 end
 
-function from_globalref(ast)
+function from_globalref(ast,linfo)
     ast = Base.resolve(ast, force=true)
     mod = ast.mod
     name = ast.name
@@ -1701,26 +1700,26 @@ function from_globalref(ast)
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
         if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
-          return from_expr(def)
+          return from_expr(def,linfo)
         end
     end
  
-    canonicalize(mod) * "_" * from_expr(name)
+    canonicalize(mod) * "_" * from_expr(name,linfo)
 end
 
-function from_topnode(ast)
+function from_topnode(ast,linfo)
     canonicalize(ast)
 end
 
-function from_quotenode(ast)
-    from_symbol(ast)
+function from_quotenode(ast,linfo)
+    from_symbol(ast,linfo)
 end
 
-function from_line(args)
+function from_line(args,linfo)
     ""
 end
 
-function from_parforend(args)
+function from_parforend(args,linfo)
     global lstate
     s = ""
     parfor = args[1]
@@ -1739,11 +1738,11 @@ function from_parforend(args)
             rdv = rd.reductionVar
             rdvt = getSymType(rdv)
             rdvtyp = toCtype(rdvt)
-            rdvar = from_expr(rdv)
+            rdvar = from_expr(rdv,linfo)
             # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
-            #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv,linfo)
             rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
-            rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i")) * ";\n"
+            rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i"),linfo) * ";\n"
             if isPrimitiveJuliaType(rdvt) 
                 rdscleanup *= "free($(rdvar)_vec);\n";
             end
@@ -1757,12 +1756,12 @@ function from_parforend(args)
     s
 end
 
-function loopNestCount(loop)
-    "(((" * from_expr(loop.upper) * ") + 1 - (" * from_expr(loop.lower) * ")) / (" * from_expr(loop.step) * "))"
+function loopNestCount(loop,linfo)
+    "(((" * from_expr(loop.upper,linfo) * ") + 1 - (" * from_expr(loop.lower,linfo) * ")) / (" * from_expr(loop.step,linfo) * "))"
 end
 
 #TODO: Implement task mode support here
-function from_insert_divisible_task(args)
+function from_insert_divisible_task(args,linfo)
     inserttasknode = args[1]
     @dprintln(3,"Ranges: ", inserttasknode.ranges)
     @dprintln(3,"Args: ", inserttasknode.args)
@@ -1774,7 +1773,7 @@ function from_insert_divisible_task(args)
     throw("Task mode is not supported yet")
 end
 
-function from_loopnest(ivs, starts, stops, steps)
+function from_loopnest(ivs, starts, stops, steps, linfo)
     vecclause = (vectorizationlevel == VECFORCE) ? "#pragma simd\n" : ""
     mapfoldl(
         (i) ->
@@ -1785,23 +1784,23 @@ function from_loopnest(ivs, starts, stops, steps)
     )
 end
 
-function from_reductionVarInit(reductionVarInit :: ParallelIR.DelayedFunc, a) 
-    from_exprs(ParallelIR.callDelayedFuncWith(reductionVarInit,a))
+function from_reductionVarInit(reductionVarInit :: ParallelIR.DelayedFunc, a, linfo) 
+    from_exprs(ParallelIR.callDelayedFuncWith(reductionVarInit,a), linfo)
 end
 
-function from_reductionVarInit(reductionVarInit :: Any, a)
-    from_expr(a) * " = " * from_expr(reductionVarInit) * ";\n"
+function from_reductionVarInit(reductionVarInit :: Any, a, linfo)
+    from_expr(a, linfo) * " = " * from_expr(reductionVarInit, linfo) * ";\n"
 end
 
-function from_reductionFunc(reductionFunc :: Symbol, a, b) 
-    from_expr(a) * " " * string(reductionFunc) * " " * from_expr(b)
+function from_reductionFunc(reductionFunc :: Symbol, a, b, linfo) 
+    from_expr(a, linfo) * " " * string(reductionFunc) * " " * from_expr(b, linfo)
 end
 
-function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b) 
-    from_exprs(ParallelIR.callDelayedFuncWith(reductionFunc, a, b))
+function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b, linfo) 
+    from_exprs(ParallelIR.callDelayedFuncWith(reductionFunc, a, b), linfo)
 end
 
-function from_reductionFunc(reductionFunc :: Any, a, b)
+function from_reductionFunc(reductionFunc :: Any, a, b, linfo)
     throw(string("CGen Error: Unsupported redunction function: ", reductionFunc, " :: ", typeof(reductionFunc)))
 end
 
@@ -1814,7 +1813,7 @@ end
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
 
 
-function from_parforstart(args)
+function from_parforstart(args, linfo)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
 
@@ -1840,10 +1839,10 @@ function from_parforstart(args)
     deleteat!(private_vars, dups)
 
     # Translate metadata for the loop nests
-    ivs = map((a)->from_expr(a.indexVariable), lpNests)
-    starts = map((a)->from_expr(a.lower), lpNests)
-    stops = map((a)->from_expr(a.upper), lpNests)
-    steps = map((a)->from_expr(a.step), lpNests)
+    ivs = map((a)->from_expr(a.indexVariable, linfo), lpNests)
+    starts = map((a)->from_expr(a.lower, linfo), lpNests)
+    stops = map((a)->from_expr(a.upper, linfo), lpNests)
+    steps = map((a)->from_expr(a.step, linfo), lpNests)
 
     @dprintln(3,"ivs ",ivs);
     @dprintln(3,"starts ", starts);
@@ -1851,7 +1850,7 @@ function from_parforstart(args)
     @dprintln(3,"steps ", steps);
 
     # Generate the actual loop nest
-    loopheaders = from_loopnest(ivs, starts, stops, steps)
+    loopheaders = from_loopnest(ivs, starts, stops, steps, linfo)
 
     s = ""
 
@@ -1865,12 +1864,12 @@ function from_parforstart(args)
     nthreadsclause = ""
     instruction_count_expr = parfor.instruction_count_expr
     if num_threads_mode == 1 && instruction_count_expr != nothing
-        insncount = from_expr(instruction_count_expr)
+        insncount = from_expr(instruction_count_expr, linfo)
         preclause = "$nthreadsvar = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n"
         nthreadsclause = "num_threads($nthreadsvar) "
     elseif num_threads_mode == 2
         if instruction_count_expr != nothing
-            insncount = from_expr(instruction_count_expr)
+            insncount = from_expr(instruction_count_expr, linfo)
             preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
         else
             preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n"
@@ -1879,7 +1878,7 @@ function from_parforstart(args)
         nthreadsclause = "num_threads($nthreadsvar)"
     elseif num_threads_mode == 3
         if instruction_count_expr != nothing
-            insncount = from_expr(instruction_count_expr)
+            insncount = from_expr(instruction_count_expr, linfo)
             preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n"
         else
             preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n"
@@ -1905,9 +1904,9 @@ function from_parforstart(args)
         rdv = rd.reductionVar
         rdvt = getSymType(rdv)
         rdvtyp = toCtype(rdvt)
-        rdvar = from_expr(rdv)
+        rdvar = from_expr(rdv, linfo)
         rdv_tmp = gensym(rdvar)
-        rdvar_tmp = from_expr(rdv_tmp)
+        rdvar_tmp = from_expr(rdv_tmp, linfo)
         if parallel_reduction 
             if isPrimitiveJuliaType(rdvt) 
                 rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
@@ -1916,12 +1915,12 @@ function from_parforstart(args)
             end
             rdsprolog *= "for (int rds_init_loop_var = 0; rds_init_loop_var  < $nthreadsvar; rds_init_loop_var++) {\n"
             rdsprolog *= "$rdvtyp &$rdvar_tmp = $(rdvar)_vec[rds_init_loop_var];\n"
-            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv_tmp) * "}\n"
+            rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv_tmp, linfo) * "}\n"
             #push!(private_vars, rdv)
             rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
         else
             # The init is now handled in pre-statements
-            #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv)
+            #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv, linfo)
             # parallel IR no longer produces reductionFunc as a symbol
             #if isa(rd.reductionFunc, Symbol) 
             #   rdop = string(rd.reductionFunc)
@@ -1953,7 +1952,7 @@ end
 
 # TODO: Should simple objects be heap allocated ?
 # For now, we stick with stack allocation
-function from_new(args)
+function from_new(args, linfo)
     s = ""
     typ = args[1] #type of the object
     @dprintln(3,"from_new args = ", args)
@@ -1961,12 +1960,12 @@ function from_new(args)
         if typ == Complex64 || typ == Complex128
             assert(length(args) == 3)
             @dprintln(3, "new complex number")
-            s = toCtype(typ) * "(" * from_expr(args[2]) * ", " * from_expr(args[3]) * ")"
+            s = toCtype(typ) * "(" * from_expr(args[2], linfo) * ", " * from_expr(args[3], linfo) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
             s = ctyp * "{"
-            s *= mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end]) * "}"
+            s *= mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * "}"
         end
     elseif isa(typ, Expr)
         if isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
@@ -1974,7 +1973,7 @@ function from_new(args)
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
             s = ctyp * "{"
-            s *= (isempty(args[2:end]) ? "" : mapfoldl(from_expr, (a, b) -> "$a, $b", args[2:end])) * "}"
+            s *= (isempty(args[2:end]) ? "" : mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end])) * "}"
         else
             throw(string("CGen Error: unhandled args in from_new ", args))
         end
@@ -1986,18 +1985,18 @@ function body(ast)
     ast.args[3]
 end
 
-function from_loophead(args)
-    iv = from_expr(args[1])
+function from_loophead(args,linfo)
+    iv = from_expr(args[1],linfo)
     decl = "uint64_t"
     if haskey(lstate.symboltable, args[1])
         decl = toCtype(lstate.symboltable[args[1]])
     end
-    start = from_expr(args[2])
-    stop = from_expr(args[3])
+    start = from_expr(args[2],linfo)
+    stop = from_expr(args[3],linfo)
     "for($decl $iv = $start; $iv <= $stop; $iv += 1) {\n"
 end
 
-function from_loopend(args)
+function from_loopend(args,linfo)
     "}\n"
 end
 
@@ -2024,7 +2023,7 @@ Insert an openmp parallel for loop nest
     args[5]::Int (optional)            : Argument to num_threads clause
     args[6]::String (optional)         : Exact string for schedule clause (i.e. schedule(dynamic))
 """
-function from_parallel_loophead(args)
+function from_parallel_loophead(args,linfo)
     private = ""
     if length(args[4]) > 0
         private = "private("
@@ -2049,9 +2048,9 @@ function from_parallel_loophead(args)
     s = "#pragma omp parallel $private $num_threads \n{\n"
     s *= "#pragma omp for $schedule collapse($(length(args[1]))) $inner_private\n"
     for (iv, start, stop) in zip(args[1], args[2], args[3])
-        start = from_expr(start)
-        stop = from_expr(stop)
-        iv = from_expr(iv)
+        start = from_expr(start,linfo)
+        stop = from_expr(stop,linfo)
+        iv = from_expr(iv,linfo)
         s *="for(int64_t $iv = $start; $iv <= $stop; $iv += 1) {\n"
     end
     s
@@ -2061,7 +2060,7 @@ end
 Close a loopnest create by a :parallel_loophead
     args[1]::Int : The depth of the loopnest (>= 1)
 """
-function from_parallel_loopend(args)
+function from_parallel_loopend(args,linfo)
     s = "}\n"           # Close parallel region
     for i in 1:args[1]  # Close loops
         s *= "}\n"
@@ -2069,7 +2068,7 @@ function from_parallel_loopend(args)
     s
 end
 
-function from_expr(ast::Expr)
+function from_expr(ast::Expr, linfo)
     s = ""
     head = ast.head
     args = ast.args
@@ -2078,7 +2077,7 @@ function from_expr(ast::Expr)
     @dprintln(4, "from_expr = ", ast)
     if head == :block
         @dprintln(3,"Compiling block")
-        s *= from_exprs(args)
+        s *= from_exprs(args, linfo)
 
     elseif head == :body
         @dprintln(3,"Compiling body")
@@ -2093,11 +2092,11 @@ function from_expr(ast::Expr)
                 s *= "std::default_random_engine cgen_rand_generator(cgen_rand_device());\n"
             end
         end
-        s *= from_exprs(args)
+        s *= from_exprs(args, linfo)
 
     elseif head == :new
         @dprintln(3,"Compiling new")
-        s *= from_new(args)
+        s *= from_new(args, linfo)
 
     elseif head == :lambda
         @dprintln(3,"Compiling lambda")
@@ -2105,47 +2104,47 @@ function from_expr(ast::Expr)
 
     elseif head == :(=)
         @dprintln(3,"Compiling assignment ", ast)
-        s *= from_assignment(args)
+        s *= from_assignment(args, linfo)
 
     elseif head == :(&)
         @dprintln(3, "Compiling ref")
-        s *= from_ref(args)
+        s *= from_ref(args, linfo)
 
     elseif head == :call
         @dprintln(3,"Compiling call")
-        s *= from_call(args)
+        s *= from_call(args, linfo)
 
     elseif head == :call1
         @dprintln(3,"Compiling call1")
-        s *= from_call1(args)
+        s *= from_call1(args, linfo)
 
     elseif head == :return
         @dprintln(3,"Compiling return")
-        s *= from_return(args)
+        s *= from_return(args, linfo)
 
     elseif head == :line
-        s *= from_line(args)
+        s *= from_line(args, linfo)
 
     elseif head == :gotoifnot
         @dprintln(3,"Compiling gotoifnot : ", args)
-        s *= from_gotoifnot(args)
+        s *= from_gotoifnot(args, linfo)
     # :if and :comparison should only come from ?: expressions we generate
     # normal ifs should be inlined to gotoifnot
     elseif head == :if
         @dprintln(3,"Compiling if : ", args)
-        s *= from_if(args)
+        s *= from_if(args, linfo)
     elseif head == :comparison
         @dprintln(3,"Compiling comparison : ", args)
-        s *= from_comparison(args)
+        s *= from_comparison(args, linfo)
 
     elseif head == :parfor_start
-        s *= from_parforstart(args)
+        s *= from_parforstart(args, linfo)
 
     elseif head == :parfor_end
-        s *= from_parforend(args)
+        s *= from_parforend(args, linfo)
 
     elseif head == :insert_divisible_task
-        s *= from_insert_divisible_task(args)
+        s *= from_insert_divisible_task(args, linfo)
 
     elseif head == :boundscheck || head == :inbounds
         # Nothing
@@ -2159,16 +2158,16 @@ function from_expr(ast::Expr)
         # Nothing
 
     elseif head == :loophead
-        s *= from_loophead(args)
+        s *= from_loophead(args, linfo)
 
     elseif head == :loopend
-        s *= from_loopend(args)
+        s *= from_loopend(args, linfo)
 
     elseif head == :parallel_loophead
-        s *= from_parallel_loophead(args)
+        s *= from_parallel_loophead(args, linfo)
 
     elseif head == :parallel_loopend
-        s *= from_parallel_loopend(args)
+        s *= from_parallel_loopend(args, linfo)
 
     # type_goto is "a virtual control flow edge used to convey
     # type data to static_typeof, also to be removed."  We can
@@ -2184,49 +2183,49 @@ function from_expr(ast::Expr)
 end
 
 
-function from_expr(ast::Symbol)
-    s = from_symbol(ast)
+function from_expr(ast::Symbol, linfo)
+    s = from_symbol(ast, linfo)
 end
 
-function from_expr(ast::SymbolNode)
-    s = from_symbolnode(ast)
+function from_expr(ast::TypedVar, linfo)
+    s = from_typedvar(ast, linfo)
 end
 
-function from_expr(ast::LineNumberNode)
-    s = from_linenumbernode(ast)
+function from_expr(ast::LineNumberNode, linfo)
+    s = from_linenumbernode(ast, linfo)
 end
 
-function from_expr(ast::LabelNode)
-    s = from_labelnode(ast)
+function from_expr(ast::LabelNode, linfo)
+    s = from_labelnode(ast, linfo)
 end
 
-function from_expr(ast::GotoNode)
-    s = from_gotonode(ast)
+function from_expr(ast::GotoNode, linfo)
+    s = from_gotonode(ast, linfo)
 end
 
-function from_expr(ast::TopNode)
-    s = from_topnode(ast)
+function from_expr(ast::TopNode, linfo)
+    s = from_topnode(ast, linfo)
 end
 
-function from_expr(ast::QuoteNode)
+function from_expr(ast::QuoteNode, linfo)
     # All QuoteNode should have been explicitly handled, otherwise we ignore them.
     # s = from_quotenode(ast)
     return ""
 end
 
-function from_expr(ast::NewvarNode)
-    s = from_newvarnode(ast)
+function from_expr(ast::NewvarNode, linfo)
+    s = from_newvarnode(ast, linfo)
 end
 
-function from_expr(ast::GlobalRef)
-    s = from_globalref(ast)
+function from_expr(ast::GlobalRef, linfo)
+    s = from_globalref(ast, linfo)
 end
 
-function from_expr(ast::GenSym)
+function from_expr(ast::GenSym, linfo)
     s = "GenSym" * string(ast.id)
 end
 
-function from_expr(ast::Type)
+function from_expr(ast::Type, linfo)
     s = "{}" # because Type are translated to empty struct
 #    if isPrimitiveJuliaType(ast)
 #        s = "(" * toCtype(ast) * ")"
@@ -2236,7 +2235,7 @@ function from_expr(ast::Type)
     s
 end
 
-function from_expr(ast::Char)
+function from_expr(ast::Char, linfo)
     s = "'$(string(ast))'"
     # We do not handle widechar in C, force a conversion here
     if ast > Char(255) 
@@ -2245,7 +2244,7 @@ function from_expr(ast::Char)
     s
 end
 
-function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void})
+function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void}, linfo)
     if is(ast, Inf)
       "DBL_MAX"
     elseif is(ast, Inf32)
@@ -2259,23 +2258,23 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
     end
 end
 
-function from_expr(ast::Complex64)
-    "std::complex<float>(" * from_expr(ast.re) * " + " * from_expr(ast.im) * ")"
+function from_expr(ast::Complex64, linfo)
+    "std::complex<float>(" * from_expr(ast.re, linfo) * " + " * from_expr(ast.im, linfo) * ")"
 end
 
-function from_expr(ast::Complex128)
-    "std::complex<double>(" * from_expr(ast.re) * ", " * from_expr(ast.im) * ")"
+function from_expr(ast::Complex128, linfo)
+    "std::complex<double>(" * from_expr(ast.re, linfo) * ", " * from_expr(ast.im, linfo) * ")"
 end
 
-function from_expr(ast::Complex)
-    toCtype(typeof(ast)) * "{" * from_expr(ast.re) * ", " * from_expr(ast.im) * "}"
+function from_expr(ast::Complex, linfo)
+    toCtype(typeof(ast)) * "{" * from_expr(ast.re, linfo) * ", " * from_expr(ast.im, linfo) * "}"
 end
 
-function from_expr(ast::AbstractString)
+function from_expr(ast::AbstractString, linfo)
     return "\"$ast\""
 end
 
-function from_expr(ast::ANY)
+function from_expr(ast::ANY, linfo)
     #s *= dispatch(lstate.adp, ast, ast)
     asttyp = typeof(ast)
     @dprintln(3,"Unknown node type encountered: ", ast, " with type: ", asttyp)
@@ -2315,7 +2314,7 @@ end
 # However, the body still expects a packed representation and may perform
 # operations such as |getfield|. So we pack them here again.
 
-function from_varargpack(vargs)
+function from_varargpack(vargs, linfo)
     args = vargs[1]
     vsym = canonicalize(args[1])
     vtyps = args[2]
@@ -2323,7 +2322,7 @@ function from_varargpack(vargs)
         "{" * mapfoldl((i) -> vsym * string(i), (a, b) -> "$a, $b", 1:length(vtyps.types)) * "};"
 end
 
-function from_formalargs(params, vararglist, unaliased=false)
+function from_formalargs(params, vararglist, unaliased, linfo)
     s = ""
     ql = unaliased ? "__restrict" : ""
     @dprintln(3,"Compiling formal args: ", params)
@@ -2365,19 +2364,19 @@ function from_formalargs(params, vararglist, unaliased=false)
     s
 end
 
-function from_newvarnode(args...)
+function from_newvarnode(args, linfo)
     ""
 end
 
-function from_callee(ast::Expr, functionName::ASCIIString)
+function from_callee(ast::Expr, functionName::ASCIIString, linfo)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
-    bod = from_expr(ast)
-    args = from_formalargs(params, [], false)
+    bod = from_expr(ast, linfo)
+    args = from_formalargs(params, [], false, linfo)
     dumpSymbolTable(lstate.symboltable)
     s::ASCIIString = "$typ $functionName($args) { $bod } "
     s
@@ -2546,7 +2545,7 @@ function set_includes(ast)
     end
 end
 
-function check_params(emitunaliasedroots, params)
+function check_params(emitunaliasedroots, params, linfo)
     # Find varargs expression if present
     global lstate
     vararglist = []
@@ -2586,12 +2585,12 @@ function check_params(emitunaliasedroots, params)
     end
 
     # Translate arguments
-    args = from_formalargs(params, vararglist, false)
+    args = from_formalargs(params, vararglist, false, linfo)
 
     # If emitting unaliased versions, get "restrict"ed decls for arguments
-    argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true) : ""
+    argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true, linfo) : ""
 
-    vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist) 
+    vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist, linfo) 
 
     return vararg_bod, args, argsunal, alias_check
 end
@@ -2617,13 +2616,13 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
-    bod = from_expr(ast)
+    bod = from_expr(ast, linfo)
 
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
     end
 
-    vararg_bod, args, argsunal, alias_check = check_params(emitunaliasedroots, params)
+    vararg_bod, args, argsunal, alias_check = check_params(emitunaliasedroots, params, linfo)
     bod = vararg_bod * bod
 
     @dprintln(3,"returnType = ", returnType)
@@ -2685,9 +2684,9 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
-    bod = from_expr(ast)
+    bod = from_expr(ast, linfo)
 
-    vararg_bod, args, argsunal, alias_check = check_params(false, params)
+    vararg_bod, args, argsunal, alias_check = check_params(false, params, linfo)
     bod = vararg_bod * bod
 
     #hdr = from_header(false)
@@ -2715,12 +2714,6 @@ function insert(func::Any, mod::Any, name, typs)
 end
 
 function insert(func::TopNode, name, typs)
-    target = eval(func)
-    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
-    insert(target, name, typs)
-end
-
-function insert(func::SymbolNode, name, typs)
     target = eval(func)
     @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
     insert(target, name, typs)
