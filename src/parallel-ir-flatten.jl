@@ -60,10 +60,10 @@ function flattenParfors(function_name, ast::Expr)
                 lhs = node.args[1]
                 rhs = node.args[2]
                 @dprintln(3,"shortcut_array_assignment = ", node)
-                if typeof(lhs) == SymbolNode && isArrayType(lhs) && typeof(rhs) == SymbolNode
+                if isa(lhs, TypedVar) && isArrayType(lhs) && isa(rhs, TypedVar)
                     @dprintln(3,"shortcut_array_assignment to array detected")
                     live_info = CompilerTools.LivenessAnalysis.find_top_number(i, new_lives)
-                    if !in(rhs.name, live_info.live_out)
+                    if !in(toLHSVar(rhs), live_info.live_out)
                         @dprintln(3,"rhs is dead")
                         # The RHS of the assignment is not live out so we can do a special assignment where the j2c_array for the LHS takes over the RHS and the RHS is nulled.
                         push!(node.args, RhsDead())
