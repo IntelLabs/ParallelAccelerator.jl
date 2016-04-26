@@ -141,7 +141,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     elseif isa(e, RHSVar) 
       s = toLHSVar(e)
       if haskey(arrSymDict, s)
-        expr.args[i] = arrSymDict[e]
+        expr.args[i] = arrSymDict[s]
       end
     end
   end
