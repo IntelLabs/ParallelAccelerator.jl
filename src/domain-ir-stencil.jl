@@ -138,16 +138,16 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     e = expr.args[i]
     if isa(e, Expr)
       traverse(state, e, bufSyms, arrSymDict, stat, borderSty)
-    elseif isa(e, Symbol) && haskey(arrSymDict, e)
-      expr.args[i] = arrSymDict[e]
-    elseif isa(e, SymbolNode) && haskey(arrSymDict, e.name)
-      expr.args[i] = arrSymDict[e.name]
+    elseif isa(e, RHSVar) 
+      s = toLHSVar(e)
+      if haskey(arrSymDict, s)
+        expr.args[i] = arrSymDict[e]
+      end
     end
   end
   # fix assignment and fill in variable type
   if is(expr.head, :(=))
-    lhs = expr.args[1]
-    if isa(lhs, SymbolNode) lhs = lhs.name end
+    lhs = toLHSVar(expr.args[1])
     rhs = expr.args[2]
     typ = typeOfOpr(state, rhs)
     expr.typ = typ
@@ -190,8 +190,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     end
 
     if !isGet
-      v = expr.args[2]
-      if isa(v, SymbolNode) v = v.name end
+      v = toLHSVar(expr.args[2])
       for i = 1:length(stat.bufSym)
         if stat.bufSym[i] == v
           push!(stat.modified, i)
