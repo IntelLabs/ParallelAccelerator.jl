@@ -32,6 +32,7 @@ DebugMsg.init()
 import Base.show
 import CompilerTools.AstWalker
 using CompilerTools.LambdaHandling
+using CompilerTools.Helper
 using CompilerTools.LivenessAnalysis
 using Core: IntrinsicFunction
 using DataStructures

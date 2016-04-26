@@ -509,11 +509,13 @@ function mmapToMmap!(ast, lives, uniqSet)
                 # Find some input array to the mmap that is dead after this statement.
                 while j < length(args)
                     j = j + 1
-                    v = toLHSVar(args[j])
-                    if isa(v, LHSVar) && !in(v, tls.live_out) && in(v, uniqSet) &&
-                        CompilerTools.LambdaHandling.getType(v, LambdaVarInfo) == lhsTyp
-                        reuse = v  # Found a dying symbol.
-                        break
+                    if isa(args[j], RHSVar)
+                        v = toLHSVar(args[j])
+                        if isa(v, LHSVar) && !in(v, tls.live_out) && in(v, uniqSet) &&
+                            CompilerTools.LambdaHandling.getType(v, LambdaVarInfo) == lhsTyp
+                            reuse = v  # Found a dying symbol.
+                            break
+                        end
                     end
                 end
                 # If we found a dying array whose space we can reuse.
