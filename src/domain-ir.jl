@@ -199,21 +199,23 @@ type DomainLambda
 
     """
     Create a DomainLambda from simple expression (those with no local variables) by the
-    input types, output types, parameters, and body. Note that the linfo passed in is
-    not the linfo for the DomainLambda, but rather the linfo in which variable types
-    can be looked up.
+    input types, output types, and a body function that maps from parameters 
+    to an Array of Exprs. Note that the linfo passed in is not the linfo for the DomainLambda, 
+    but rather the linfo in which variable types can be looked up.
     """
-    function DomainLambda(inps::Array{Type,1}, outs::Array{Type,1}, params::Array{SymbolNode,1}, body::Array{Any,1}, linfo::LambdaVarInfo)
+    function DomainLambda(inps::Array{Type,1}, outs::Array{Type,1}, f::Function, linfo::LambdaVarInfo)
+        params = [ gensym("x") for t in inps ]
         li = LambdaVarInfo()
-        paramS = Set{Symbol}()
-        for v in params
-            addInputParameter(v.name, v.typ, 0, li)
-            push!(paramS, v.name)
+        paramS = Array(Any, length(params))
+        for i in 1:length(params)
+            addInputParameter(params[i], inps[i], 0, li)
+            paramS[i] = toRHSVar(params[i], inps[i], li)
         end
+        body = f(paramS)
         nouts = length(outs)
         li.return_type = nouts > 1 ? Tuple{outs...} : outs[1]
         for v in Traversal.getSymbols(body)
-            if !in(v, paramS)
+            if !in(v, params)
                 addEscapingVariable(v, getType(v, linfo), getDesc(v, linfo), li)
             end
         end
@@ -236,17 +238,6 @@ type DomainLambda
         DomainLambda(expr)
     end
 
-    """
-    Create a DomainLambda from simple expression (those with no local variables) by the
-    input types, output types, and a body function that maps from parameters (SymbolNodes)
-    to an Array of Exprs. Note that the linfo passed in is not the linfo for the DomainLambda, 
-    but rather the linfo in which variable types can be looked up.
-    """
-    function DomainLambda(inps::Array{Type,1}, outs::Array{Type,1}, f::Function, linfo::LambdaVarInfo)
-        params = SymbolNode[ SymbolNode(gensym("x"), t) for t in inps ]
-        DomainLambda(inps, outs, params, f(params), linfo)
-    end
-    
 end
 
 import Base.show
@@ -262,7 +253,7 @@ function fmap(f, dl::DomainLambda)
 end
 
 """
-Pass arguments (SymbolNodes) to DomainLambda, and return its body (an array)
+Pass arguments (TypedVar) to DomainLambda, and return its body (an array)
 """
 function genBody(dl::DomainLambda, args)
     params = getParamsNoSelf(dl.linfo)
@@ -271,9 +262,9 @@ function genBody(dl::DomainLambda, args)
     dict = Dict{Symbol,Symbol}()
     for i = 1:length(params)
         p = params[i]
-        p = isa(p, SymbolNode) ? p.name : p
-        @assert (isa(p, Symbol)) "Expect all params to be Symbol or SymbolNode, but got " * string(params)
-        @assert (isa(args[i], SymbolNode)) "Expect all arguments to be SymbolNode, but got " * string(args)
+        p = isa(p, TypedVar) ? getSymbol(p, dl.linfo) : p
+        @assert (isa(p, Symbol)) "Expect all params to be Symbol or TypedVar, but got " * string(params)
+        @assert (isa(args[i], TypedVar)) "Expect all arguments to be TypedVar, but got " * string(args)
         dict[p] = args[i].name
     end
     @dprintln(2, "genBody dict = ", dict)
@@ -360,9 +351,10 @@ Look up a definition of a variable only when it is const or assigned once.
 Return nothing If none is found.
 """
 function lookupConstDef(state::IRState, s::RHSVar)
+    s = toLHSVar(s)
     def = lookupDef(state, s)
     # we assume all GenSym is assigned once 
-    desc = isa(s, SymbolNode) ? getDesc(s.name, state.linfo) : (ISASSIGNEDONCE | ISASSIGNED)
+    desc = getDesc(s, state.linfo) 
     if !is(def, nothing) && ((desc & (ISASSIGNEDONCE | ISCONST)) != 0 || typeOfOpr(state, s) <: Function)
         return def
     end
@@ -375,7 +367,7 @@ Return the last rhs If found, or the input variable itself otherwise.
 """
 function lookupConstDefForArg(state::IRState, s::Any)
     s1 = s
-    while isa(s, Symbol) || isa(s, SymbolNode) || isa(s, GenSym)
+    while isa(s, RHSVar)
         s1 = s
         s = lookupConstDef(state, s1)
     end
@@ -510,12 +502,8 @@ function isrange(typ)
     isUnitRange(typ) || isStepRange(typ)
 end
 
-function ismask(state, r::SymbolNode)
-    return isrange(r.typ) || isbitmask(r.typ)
-end
-
-function ismask(state, r::LHSVar)
-    typ = getType(r, state.linfo)
+function ismask(state, r::RHSVar)
+    typ = getType(toLHSVar(r), state.linfo)
     return isrange(typ) || isbitmask(typ)
 end
 
@@ -712,8 +700,8 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
                 emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, args[i]))
                 args[i] = tmpv
             end
-            if isa(args[i], SymbolNode)
-                addEscapingVariable(args[i].name, args[i].typ, 0, f.linfo)
+            if isa(args[i], TypedVar)
+                addEscapingVariable(getSymbol(args[i], f.linfo), args[i].typ, 0, f.linfo)
             end
             #push!(pre_body, Expr(:(=), old_params[i], args[i]))
             repl_dict[old_params[i]] = args[i]
@@ -787,12 +775,7 @@ function simplify(state, expr::Expr)
     simplify(state, expr, expr)
 end 
 
-function simplify(state, expr::SymbolNode)
-    def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
-end
-
-function simplify(state, expr::GenSym)
+function simplify(state, expr::RHSVar)
     def = lookupConstDefForArg(state, expr)
     is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
 end
@@ -959,7 +942,7 @@ function from_body(state, env, expr::Expr)
     return mk_expr(typ, head, state.stmts...)
 end
 
-function mmapRemoveDupArg!(expr::Expr)
+function mmapRemoveDupArg!(state, expr::Expr)
     head = expr.head 
     @assert head==:mmap || head==:mmap! "Input to mmapRemoveDupArg!() must be :mmap or :mmap!"
     arr = expr.args[1]
@@ -976,15 +959,14 @@ function mmapRemoveDupArg!(expr::Expr)
     new_arr = Array(Any, 0)
     oldn = length(arr)
     for i = 1:oldn
-        s = arr[i]
-        if isa(s, SymbolNode) s = s.name end
+        s = isa(arr[i], RHSVar) ? toLHSVar(arr[i]) : arr[i]
         if haskey(posMap, s)
             hasDup = true
             v = old_params[posMap[s]] 
             t = getType(v, linfo)
-            push!(pre_body, Expr(:(=), old_params[i], SymbolNode(v,t)))
+            push!(pre_body, Expr(:(=), old_params[i], toRHSVar(v,t,state.linfo)))
         else
-            if isa(s,RHSVar) 
+            if isa(s,LHSVar) 
                 posMap[s] = n
             end
             push!(new_arr, arr[i])
@@ -1032,7 +1014,7 @@ function from_assignment(state, env, expr::Expr)
     end
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
     if isa(rhs, Expr) && is(rhs.head, :mmap) && length(rhs.args[1]) > 0 &&
-        (is(lhs, rhs.args[1][1]) || (isa(rhs.args[1][1], SymbolNode) && is(lhs, rhs.args[1][1].name)))
+        (isa(rhs.args[1][1], RHSVar) && lhs == toLHSVar(rhs.args[1][1]))
         rhs.head = :mmap!
         # NOTE that we keep LHS to avoid a bug (see issue #...)
         typ = getType(lhs, state.linfo)
@@ -1137,8 +1119,8 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
                 fun = fun.name
             end
             if isa(fun, Symbol)
-            elseif isa(fun, SymbolNode)
-                fun = lookupConstDef(state, fun.name)
+            elseif isa(fun, TypedVar)
+                fun = lookupConstDef(state, fun)
             else
                 error("DomainIR: cannot handle broadcast! with function ", fun)
             end
@@ -1205,7 +1187,7 @@ function normalize_callname(state::IRState, env, fun::TopNode, args)
     return (fun, args)
 end
 
-function normalize_callname(state::IRState, env, fun :: SymbolNode, args)
+function normalize_callname(state::IRState, env, fun :: TypedVar, args)
     def = lookupConstDefForArg(state, fun)
     if !is(def, nothing) && !isa(def, Expr)
         normalize_callname(state, env, def, args)
@@ -1456,7 +1438,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             #typeOfOpr(state, oldargs[1]) == Box
             # special handling for setting Box variables
             dprintln(env, "got setfield! with Box argument: ", oldargs)
-            assert(isa(oldargs[1], SymbolNode))
+            assert(isa(oldargs[1], TypedVar))
             typ = typeOfOpr(state, oldargs[3])
             updateTyp(state, oldargs[1], typ)
             updateBoxType(state, oldargs[1], typ)
@@ -1466,14 +1448,14 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
                 return oldargs[1]
-            elseif isa(oldargs[1], SymbolNode) && oldargs[1].name == symbol("#self#")
+            elseif isa(oldargs[1], TypedVar) && getSymbol(oldargs[1], state.linfo) == symbol("#self#")
                 fname = oldargs[2]
                 assert(isa(fname, QuoteNode))
                 dprintln(env, "lookup #self# closure field ", fname, " :: ", typeof(fname))
                 esc = isEscapingVariable(fname.value, state.linfo) 
                 dprintln(env, "isEscapingVariable = ", esc)
                 ftyp = getType(fname.value, state.linfo)
-                return SymbolNode(fname.value, ftyp) 
+                return toRHSVar(fname.value, ftyp, state.linfo) 
             end
         end
     else
@@ -1562,8 +1544,8 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                        tmpv = addFreshLocalVariable(string(args[i]), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
                        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, args[i]))
                        var = tmpv
-                    elseif isa(var, SymbolNode)
-                       var = var.name
+                    elseif isa(var, RHSVar)
+                       var = toLHSVar(var)
                     end
                     pop!(args)
                     f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
@@ -1606,7 +1588,7 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
         args[i] = arg_
     end
     expr::Expr = endswith(string(fun), '!') ? mk_mmap!(args, f) : mk_mmap(args, f)
-    expr = mmapRemoveDupArg!(expr)
+    expr = mmapRemoveDupArg!(state, expr)
     expr.typ = typ
     return expr
 end
@@ -1616,8 +1598,8 @@ Run type inference and domain process over the income function object.
 Return the result AST with a modified return statement, namely, return
 is changed to Expr(:tuple, retvals...)
 """
-function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,Expr}, argstyp)
-    if isa(func, SymbolNode) && func.typ <: Function
+function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Expr}, argstyp)
+    if isa(func, TypedVar) && func.typ <: Function
         # function/closure support is changed in julia 0.5
         lambda = func.typ #.name.primary
     elseif isa(func, Expr) && is(func.head, :new)
@@ -1638,8 +1620,8 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
     params = ast.args[1]
     for i = 1:length(params)
         dprintln(env, "params[$i] has type ", typeof(params[i]))
-        if isa(params[i], SymbolNode)
-            params[i] = params[i].name
+        if isa(params[i], RHSVar)
+            params[i] = parameterToSymbol(params[i])
         elseif isa(params[i], Expr)
             dprintln(env, "params[$i].args = ", params[i].args)
             if is(params[i].head, :(::)) && is(params[i].args[2], :Any)
@@ -1653,7 +1635,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,SymbolNode,
     args1_typ::DataType = Void
     if length(lastExp.args) > 0 
         args1 = lastExp.args[1]
-        if isa(args1, SymbolNode) || isa(args1, GenSym)
+        if isa(args1, RHSVar)
             args1_typ = getType(args1, linfo)
             dprintln(env, "lastExp=", lastExp, " args1=", args1, " typ=", args1_typ)
         end
@@ -1797,7 +1779,7 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
         if isIntType(typeOfOpr(state, args[2]))
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
             mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
-        elseif isa(args[2], SymbolNode) && (isUnitRange(args[2].typ) || isStepRange(args[2].typ))
+        elseif isa(args[2], TypedVar) && (isUnitRange(args[2].typ) || isStepRange(args[2].typ))
             def = lookupConstDefForArg(state, args[2])
             (start, step, final) = from_range(def)
             expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
@@ -1854,7 +1836,6 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
         borderExp = lookupConstDefForArg(state, borderExp)
     end
     dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
-    # assert(isa(kernelExp, SymbolNode) || isa(kernelExp, GenSym))
     (kernelExp, ety) = get_lambda_for_arg(state, env, kernelExp_var, tuple(bufstyp...))
     dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
     local stat, kernelF
@@ -1911,16 +1892,16 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
                  is(tup.args[1], TopNode(:tuple))) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(tup)
         redfunc = lookupConstDefForArg(state, tup.args[2])
         redvar = tup.args[3] # lookupConstDefForArg(state, tup.args[3])
-        redvar = isa(redvar, SymbolNode) ? redvar.name : redvar
+        redvar = toLHSVar(redvar)
         rvtyp = typeOfOpr(state, redvar)
         dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
-        @assert (isa(redvar, Symbol)) "Expect a Symbol or SymbolNode at the position of the reduction variable, but got " * string(redvar)
+        @assert (!isa(redvar, GenSym)) "Unexpected GenSym  at the position of the reduction variable, " * string(redvar)
         nlinfo = LambdaVarInfo()
         addEscapingVariable(redvar, rvtyp, 0, nlinfo)
-        nval = translate_call_copy(state, env, Any[SymbolNode(redvar, rvtyp)])
+        nval = translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)])
         redparam = gensym(string(redvar))
         addInputParameter(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
-        neutral_ast = LambdaVarInfoToLambda(nlinfo, Any[Expr(:(=), redparam, nval), Expr(:tuple, SymbolNode(redparam, rvtyp))])
+        neutral_ast = LambdaVarInfoToLambda(nlinfo, Any[Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, state.linfo))])
         neutral = DomainLambda(neutral_ast)
         (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
@@ -2043,7 +2024,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         etyp    = arrtyp.parameters[1]
         num_dim = arrtyp.parameters[2]
         red_dim = [args[2]]
-        sizeVars = Array(SymbolNode, num_dim)
+        sizeVars = Array(TypedVar, num_dim)
         linfo = LambdaVarInfo()
         for i = 1:num_dim
             sizeVars[i] = addFreshLocalVariable(string("red_dim_size"), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
@@ -2054,7 +2035,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
             addEscapingVariable(sizeVars[i].name, Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
         end
         redparam = gensym("redvar")
-        rednode = SymbolNode(redparam, arrtyp)
+        rednode = toRHSVar(redparam, arrtyp, state.linfo)
         addInputParameter(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
         neutral_ast = Any[ Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
                            mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], linfo)),
@@ -2063,10 +2044,11 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         outtyp = arrtyp
         opr, reorder, cast = specializeOp(fun, [etyp])
         # ignore reorder and cast since they are always id function
-        params = Any[ SymbolNode(gensym(x), outtyp) for x in [:x, :y]]
+        params = Any[ gensym(s) for s in [:x, :y]]
         linfo = LambdaVarInfo()
-        for x in params
-            addInputParameter(x.name, outtyp, 0, linfo) 
+        for i in 1:length(params)
+            addInputParameter(params[i], outtyp, 0, linfo) 
+            params[i] = toRHSVar(params[i], outtyp, linfo)
         end
         linfo.return_type = outtyp
         inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], LambdaVarInfo())
@@ -2079,7 +2061,6 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         outtyp = etyp
         opr, reorder, cast = specializeOp(fun, [etyp])
         # ignore reorder and cast since they are always id function
-        params = SymbolNode[ SymbolNode(gensym(x), outtyp) for x in [:x, :y]]
         f = DomainLambda(Type[outtyp, outtyp], Type[outtyp], 
                 params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], state.linfo)
     end
@@ -2102,7 +2083,7 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
         ival = tmpv
     end
     domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
-    expr = mmapRemoveDupArg!(mk_mmap!([arr], domF))
+    expr = mmapRemoveDupArg!(state, mk_mmap!([arr], domF))
     expr.typ = typ
     return expr
 end
@@ -2266,10 +2247,10 @@ function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
     return ast
 end
 
-function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
-    name = isa(ast, SymbolNode) ? ast.name : ast
+function from_expr(state::IRState, env::IREnv, ast::Union{Symbol,TypedVar})
     # if it is global const, we replace it with its const value
-    def = lookupDefInAllScopes(state, name)
+    def = lookupDefInAllScopes(state, ast)
+    name = getSymbol(ast, state.linfo)
     if is(def, nothing) && isdefined(env.cur_module, name) && ccall(:jl_is_const, Int32, (Any, Any), env.cur_module, name) == 1
         def = getfield(env.cur_module, name)
         if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
@@ -2277,12 +2258,12 @@ function from_expr(state::IRState, env::IREnv, ast::Union{SymbolNode,Symbol})
         end
     end
     typ = typeOfOpr(state, ast)
-    if isa(ast, SymbolNode) && ast.typ != typ
-        @dprintln(2, " SymbolNode ", ast, " gets updated type ", typ)
-        return SymbolNode(ast.name, typ)
+    if isa(ast, TypedVar) && ast.typ != typ
+        @dprintln(2, " Variable ", ast, " gets updated type ", typ)
+        return toRHSVar(ast.name, typ, state.linfo)
     elseif isa(ast, Symbol)
-        @dprintln(2, " Symbol ", ast, " gets a type ", typ, " and becomes SymbolNode")
-        return SymbolNode(ast, typ)
+        @dprintln(2, " Symbol ", ast, " gets a type ", typ)
+        return toRHSVar(ast, typ, state.linfo)
     end
     return ast
 end
@@ -2417,7 +2398,7 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_leve
                     ranges[i].args[j] = AstWalker.AstWalk(ranges[i].args[j], AstWalkCallback, dw)
                 end
             else
-                assert(isa(ranges[i], Integer) || isa(ranges[i], SymbolNode) || isa(ranges[i], GenSym))
+                assert(isa(ranges[i], Integer) || isa(ranges[i], RHSVar))
             end
         end
         return x
@@ -2673,7 +2654,6 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         if isa(tmp, Expr) && is(tmp.head, :select) # selecting a range
             tmp = tmp.args[1] 
         end 
-        toLHSVar = x -> isa(x, SymbolNode) ? x.name : x
         return AliasAnalysis.lookup(state, toLHSVar(tmp))
     elseif head == :reduce
         # TODO: inspect the lambda body to rule out assignment?
@@ -2689,8 +2669,8 @@ function dir_alias_cb(ast::Expr, state, cbdata)
             # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
             for i = 1:min(krnStat.rotateNum, length(bufs))
                 v = bufs[i]
-                if isa(v, SymbolNode)
-                    AliasAnalysis.update_unknown(state, v.name)
+                if isa(v, RHSVar)
+                    AliasAnalysis.update_unknown(state, toLHSVar(v))
                 end
             end
         end
@@ -2707,7 +2687,6 @@ function dir_alias_cb(ast::Expr, state, cbdata)
     elseif head == :ranges
         return AliasAnalysis.NotArray
     elseif is(head, :tomask)
-        toLHSVar = x -> isa(x, SymbolNode) ? x.name : x
         return AliasAnalysis.lookup(state, toLHSVar(args[1]))
     elseif is(head, :arraysize)
         return AliasAnalysis.NotArray
