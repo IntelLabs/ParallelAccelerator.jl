@@ -52,13 +52,13 @@ function isSymbolsUsed(vars :: Dict{LHSVar,LHSVar}, top_level_numbers :: Array{I
     return false
 end
 
-function compareIndex(sn1 :: SymbolNode, sn2 :: SymbolNode)
-    @dprintln(3, "compareIndex SymbolNode to SymbolNode")
-    return sn1.name == sn2.name
+function compareIndex(sn1 :: TypedVar, sn2 :: TypedVar)
+    @dprintln(3, "compareIndex TypedVar to TypedVar")
+    return toLHSVar(sn1) == toLHSVar(sn2)
 end
-function compareIndex(sn :: SymbolNode, s :: Symbol)
-    @dprintln(3, "compareIndex SymbolNode to Symbol")
-    return sn.name == s
+function compareIndex(sn :: TypedVar, s :: Symbol)
+    @dprintln(3, "compareIndex TypedVar to Symbol")
+    return toLHSVar(sn) == s
 end
 function compareIndex(s1 :: Symbol, s2 :: Symbol)
     @dprintln(3, "compareIndex Symbol to Symbol")
@@ -509,9 +509,8 @@ function mmapToMmap!(ast, lives, uniqSet)
                 # Find some input array to the mmap that is dead after this statement.
                 while j < length(args)
                     j = j + 1
-                    v = args[j]
-                    v = isa(v, SymbolNode) ? v.name : v
-                    if (isa(v, Symbol) || isa(v, GenSym)) && !in(v, tls.live_out) && in(v, uniqSet) &&
+                    v = toLHSVar(args[j])
+                    if isa(v, LHSVar) && !in(v, tls.live_out) && in(v, uniqSet) &&
                         CompilerTools.LambdaHandling.getType(v, LambdaVarInfo) == lhsTyp
                         reuse = v  # Found a dying symbol.
                         break
