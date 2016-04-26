@@ -86,7 +86,7 @@ end
 Holds the information about a loop in a parfor node.
 """
 type PIRLoopNest
-    indexVariable :: SymbolNode
+    indexVariable :: RHSVar
     lower
     upper
     step
@@ -96,7 +96,7 @@ end
 Holds the information about a reduction in a parfor node.
 """
 type PIRReduction
-    reductionVar  :: SymbolNode
+    reductionVar  :: RHSVar
     reductionVarInit
     reductionFunc
 end
@@ -256,15 +256,6 @@ function isequal(x :: Array{DimensionSelector,1}, y :: Array{DimensionSelector,1
         end
     end
     return true
-end
-
-function hash(x :: SymbolNode)
-    ret = hash(x.name)
-    @dprintln(4, "hash of SymbolNode ", x, " = ", ret)
-    return ret
-end
-function isequal(x :: SymbolNode, y :: SymbolNode)
-    return isequal(x.name, y.name) && isequal(x.typ, y.typ)
 end
 
 function hash(x :: Expr)
@@ -525,7 +516,7 @@ function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
 end
 
 
-function mk_assignment_expr(lhs :: SymbolNode, rhs)
+function mk_assignment_expr(lhs :: TypedVar, rhs)
     TypedExpr(lhs.typ, symbol('='), lhs, rhs)
 end
 
@@ -711,7 +702,7 @@ Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: RHSVar, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
-    @assert gstyp.name == Array.name || gstyp.name == BitArray.name "Array expected"
+    @assert isArrayType(gstyp) "Array expected"
     ndims(gstyp)
 end
 
@@ -1076,19 +1067,24 @@ end
 
 include("parallel-ir-mk-parfor.jl")
 
+type PrivateSetData
+    privates :: Set{RHSVar}
+    linfo    :: LambdaVarInfo
+end
+
 """
 The AstWalk callback function for getPrivateSet.
 For each AST in a parfor body, if the node is an assignment or loop head node then add the written entity to the state.
 """
-function getPrivateSetInner(x::Expr, state :: Set{RHSVar}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::Expr, state :: PrivateSetData, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     # If the node is an assignment node or a loop head node.
     if isAssignmentNode(x) || isLoopheadNode(x)
         lhs = x.args[1]
         assert(isa(lhs, RHSVar))
         if isa(lhs, GenSym)
-            push!(state, lhs)
+            push!(state.privates, lhs)
         else
-            sname = getSName(lhs)
+            sname = CompilerTools.LambdaHandling.getSymbol(lhs, state.linfo)
             red_var_start = "parallel_ir_reduction_output_"
             red_var_len = length(red_var_start)
             sstr = string(sname)
@@ -1098,28 +1094,28 @@ function getPrivateSetInner(x::Expr, state :: Set{RHSVar}, top_level_number :: I
                     return CompilerTools.AstWalker.ASTWALK_RECURSE
                 end
             end
-            push!(state, sname)
+            push!(state.privates, sname)
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function getPrivateSetInner(x::ANY, state :: Set{RHSVar}, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function getPrivateSetInner(x::ANY, state :: PrivateSetData, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 """
 Go through the body of a parfor and collect those Symbols, GenSyms, etc. that are assigned to within the parfor except reduction variables.
 """
-function getPrivateSet(body :: Array{Any,1})
+function getPrivateSet(body :: Array{Any,1}, linfo :: LambdaVarInfo)
     @dprintln(3,"getPrivateSet")
     printBody(3, body)
-    private_set = Set{RHSVar}()
+    state = PrivateSetData(Set{RHSVar}(), linfo)
     for i = 1:length(body)
-        AstWalk(body[i], getPrivateSetInner, private_set)
+        AstWalk(body[i], getPrivateSetInner, state)
     end
-    @dprintln(3,"private_set = ", private_set)
-    return private_set
+    @dprintln(3,"private_set = ", state.privates)
+    return state.privates
 end
 
 # ===============================================================================================================================
@@ -1130,21 +1126,26 @@ Convert a compressed LambdaStaticData format into the uncompressed AST format.
 uncompressed_ast(l::LambdaStaticData) =
 isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
+type CountAssignmentsState
+    symbol_assigns :: Dict{Symbol, Int}
+    linfo          :: LambdaVarInfo
+end
+
 """
-AstWalk callback to count the number of static times that a symbol is assigne within a method.
+AstWalk callback to count the number of static times that a symbol is assigned within a method.
 """
-function count_assignments(x, symbol_assigns :: Dict{Symbol, Int}, top_level_number, is_top_level, read)
+function count_assignments(x, state :: CountAssignmentsState, top_level_number, is_top_level, read)
     if isAssignmentNode(x) || isLoopheadNode(x)
         lhs = x.args[1]
         # GenSyms don't have descriptors so no need to count their assignment.
         if !hasSymbol(lhs)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
-        sname = getSName(lhs)
-        if !haskey(symbol_assigns, sname)
-            symbol_assigns[sname] = 0
+        sname = CompilerTools.LambdaHandling.getSymbol(lhs, state.linfo)
+        if !haskey(state.symbol_assigns, sname)
+            state.symbol_assigns[sname] = 0
         end
-        symbol_assigns[sname] = symbol_assigns[sname] + 1
+        state.symbol_assigns[sname] = state.symbol_assigns[sname] + 1
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE 
 end
@@ -1178,12 +1179,12 @@ function from_lambda(lambda :: Expr, depth, state)
     printBody(3, body)
 
     # Count the number of static assignments per var.
-    symbol_assigns = Dict{Symbol, Int}()
-    AstWalk(body, count_assignments, symbol_assigns)
+    cas = CountAssignmentsState(Dict{Symbol, Int}(), state.LambdaVarInfo)
+    AstWalk(body, count_assignments, cas)
 
     # After counting static assignments, update the LambdaVarInfo for those vars
     # to say whether the var is assigned once or multiple times.
-    CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, symbol_assigns)
+    CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, cas.symbol_assigns)
 
     body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
@@ -1340,22 +1341,15 @@ function getLhsOutputSet(lhs, assignment)
     if isFusionAssignment(assignment)
         # For each real output.
         for i = 4:length(assignment.args)
-            assert(typeof(assignment.args[i]) == SymbolNode)
+            assert(isa(assignment.args[i], TypedVar))
             @dprintln(3,"getLhsOutputSet FusionSentinal assignment with symbol ", assignment.args[i].name)
             # Add to output set.
             push!(ret,assignment.args[i].name)
         end
     else
-        # LHS could be Symbol or SymbolNode.
-        if typ == SymbolNode
-            push!(ret,lhs.name)
-            @dprintln(3,"getLhsOutputSet SymbolNode with symbol ", lhs.name)
-        elseif typ == Symbol
-            push!(ret,lhs)
-            @dprintln(3,"getLhsOutputSet symbol ", lhs)
-        else
-            @dprintln(0,"Unknown LHS type ", typ, " in getLhsOutputSet.")
-        end
+        lhsVar = toLHSVar(lhs)
+        push!(ret,lhsVar)
+        @dprintln(3,"getLhsOutputSet lhsVar = ", lhsVar)
     end
 
     ret
@@ -1370,18 +1364,18 @@ function mk_tuple_expr(tuple_fields, typ)
 end
 
 """
-Forms a SymbolNode given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
+Forms a TypedVar given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
 """
-function nameToSymbolNode(name :: Symbol, sym_to_type)
-    return SymbolNode(name, sym_to_type[name])
+function nameToRHSVar(name :: Symbol, sym_to_type, linfo :: LambdaVarInfo)
+    return getTypedVar(name, sym_to_type[name], linfo)
 end
 
-function nameToSymbolNode(name :: GenSym, sym_to_type)
+function nameToRHSVar(name :: GenSym, sym_to_type, linfo :: LambdaVarInfo)
     return name
 end
 
-function nameToSymbolNode(name, sym_to_type)
-    throw(string("Unknown name type ", typeof(name), " passed to nameToSymbolNode."))
+function nameToRHSVar(name, sym_to_type, linfo :: LambdaVarInfo)
+    throw(string("Unknown name type ", typeof(name), " passed to nameToRHSVar."))
 end
 
 function getAliasMap(loweredAliasMap, sym)
@@ -1402,17 +1396,17 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     # If there is only one output then all we need is the symbol to return.
     if length(output_map) == 1
         for i in output_map
-            new_lhs = nameToSymbolNode(i[1], sym_to_type)
-            new_rhs = nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type)
+            new_lhs = nameToRHSVar(i[1], sym_to_type, state.LambdaVarInfo)
+            new_rhs = nameToRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo)
             return (new_lhs, [new_lhs], true, [new_rhs])
         end
     end
 
-    lhs_order = Union{SymbolNode,GenSym}[]
-    rhs_order = Union{SymbolNode,GenSym}[]
+    lhs_order = RHSVar[]
+    rhs_order = RHSVar[]
     for i in output_map
-        push!(lhs_order, nameToSymbolNode(i[1], sym_to_type))
-        push!(rhs_order, nameToSymbolNode(getAliasMap(loweredAliasMap, i[2]), sym_to_type))
+        push!(lhs_order, nameToRHSVar(i[1], sym_to_type, state.LambdaVarInfo))
+        push!(rhs_order, nameToRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo))
     end
     num_map = length(lhs_order)
 
@@ -1442,15 +1436,15 @@ function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
-function createRetTupleType(rets :: Array{Union{SymbolNode, GenSym},1}, unique_id :: Int64, state :: expr_state)
+function createRetTupleType(rets :: Array{RHSVar,1}, unique_id :: Int64, state :: expr_state)
     # Form the type of the tuple var.
     tt_args = [ CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo) for x in rets]
     temp_type = Tuple{tt_args...}
 
     new_temp_name  = string("parallel_ir_ret_holder_",unique_id)
-    new_temp_snode = SymbolNode(symbol(new_temp_name), temp_type)
-    @dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
     CompilerTools.LambdaHandling.addLocalVar(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.LambdaVarInfo)
+    new_temp_snode = getTypedVar(symbol(new_temp_name), temp_type, state.LambdaVarInfo)
+    @dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
 
     new_temp_snode
 end
@@ -1470,11 +1464,11 @@ function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either
     end
     @dprintln(3,"create_arrays_assigned_to_by_either_parfor: outputs from previous parfor that continue to live = ", prev_minus_eliminations)
 
-    # Create an array of SymbolNode for real values to assign into.
-    all_array = map(x -> SymbolNode(x,sym_to_typ[x]), prev_minus_eliminations)
+    # Create an array of TypedVar for real values to assign into.
+    all_array = map(x -> getTypedVar(x,sym_to_typ[x], state.LambdaVarInfo), prev_minus_eliminations)
     @dprintln(3,"create_arrays_assigned_to_by_either_parfor: all_array = ", all_array, " typeof(all_array) = ", typeof(all_array))
 
-    # If there is only one such value then the left side is just a simple SymbolNode.
+    # If there is only one such value then the left side is just a simple TypedVar.
     if length(all_array) == 1
         return (all_array[1], all_array, true)
     end
@@ -1518,9 +1512,7 @@ function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
     if x.head == symbol('=')
-        lhs = x.args[1]
-        lhs = isa(lhs, SymbolNode) ? lhs.name : lhs
-        
+        lhs = toLHSVar(x.args[1])
         rhs = x.args[2]
         if isAllocation(rhs)
             @dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
@@ -1663,7 +1655,7 @@ function getFirstArrayLens(parfor, num_dims, state)
         if (typeof(x) == Expr) && (x.head == symbol('='))
             lhs = x.args[1]
             rhs = x.args[2]
-            if (typeof(lhs) == SymbolNode) && (typeof(rhs) == Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
+            if (isa(lhs, TypedVar)) && (isa(rhs, Expr)) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
                 push!(ret, lhs)
             end
         end
@@ -1760,19 +1752,20 @@ function sub_cur_body_walk(x::Symbol,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function sub_cur_body_walk(x::SymbolNode,
+function sub_cur_body_walk(x::TypedVar,
                            cbd::cur_body_data,
                            top_level_number::Int64,
                            is_top_level::Bool,
                            read::Bool)
     dbglvl = 3
     dprintln(dbglvl,"sub_cur_body_walk ", x)
+    lhsVar = toLHSVar(x)
 
-    dprintln(dbglvl,"sub_cur_body_walk xtype is SymbolNode")
-    if haskey(cbd.index_map, x.name)
+    dprintln(dbglvl,"sub_cur_body_walk xtype is TypedVar")
+    if haskey(cbd.index_map, lhsVar)
         # Detected the use of an index variable.  Change it to the first parfor's index variable.
-        dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[x.name])
-        x.name = cbd.index_map[x.name]
+        dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.index_map[lhsVar])
+        updateTypedVar(x, cbd.index_map[lhsVar], cbd.state.LambdaVarInfo)
         return x
     end
 
@@ -1824,7 +1817,6 @@ function is_eliminated_arraylen(x::Expr)
 
     @dprintln(3,"is_eliminated_arraylen is Expr")
     if x.head == symbol('=')
-        #assert(typeof(x.args[1]) == SymbolNode)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             @dprintln(3,"is_eliminated_arraylen is :call")
@@ -2082,51 +2074,6 @@ function oneIfOnly(x)
 end
 
 
-"""
-Returns true if the incoming AST node can be interpreted as a Symbol.
-"""
-function hasSymbol(ssn :: Symbol)
-    return true
-end
-
-function hasSymbol(ssn :: SymbolNode)
-    return true
-end
-
-function hasSymbol(ssn :: Expr)
-    return ssn.head == :(::)
-end
-
-function hasSymbol(ssn)
-    return false
-end
-
-"""
-Get the name of a symbol whether the input is a Symbol or SymbolNode or :(::) Expr.
-"""
-function getSName(ssn :: Symbol)
-    return ssn
-end
-
-function getSName(ssn :: SymbolNode)
-    return ssn.name
-end
-
-function getSName(ssn :: Expr)
-    @dprintln(0, "ssn.head = ", ssn.head)
-    assert(ssn.head == :(::))
-    return ssn.args[1]
-end
-
-function getSName(ssn :: GenSym)
-    return ssn
-end
-
-function getSName(ssn)
-    @dprintln(0, "getSName ssn = ", ssn, " stype = ", stype)
-    throw(string("getSName called with something of type ", stype))
-end
-
 #"""
 #Store information about a section of a body that will be translated into a task.
 #"""
@@ -2351,7 +2298,8 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         assert(length(args) == 3)
 
         expr_to_process = Any[]
-        push!(expr_to_process, mk_untyped_assignment(SymbolNode(args[1], Int64), 1))  # force args[1] to be seen as an rvalue
+        assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
+        push!(expr_to_process, mk_untyped_assignment(getTypedVar(args[1], Int64, cbdata), 1))  # force args[1] to be seen as an rvalue
         push!(expr_to_process, args[2])
         push!(expr_to_process, args[3])
 
@@ -2407,7 +2355,7 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node :: Union{Symbol, SymbolNode, GenSym, GlobalRef})
+function hasNoSideEffects(node :: Union{Symbol, TypedVar, GenSym, GlobalRef})
     return true
 end
 
@@ -2524,14 +2472,12 @@ function from_assignment_fusion(args::Array{Any,1}, depth, state)
     the_parfor = rhs.args[1]
     for i = 4:length(args)
         rhs_entry = the_parfor.postParFor[end][i-3]
-        assert(typeof(args[i]) == SymbolNode)
-        assert(typeof(rhs_entry) == SymbolNode)
-        if rhs_entry.typ.name == Array.name
+        if isArrayType(getType(rhs_entry, state.LambdaVarInfo))
             add_merge_correlations(toLHSVar(rhs_entry), toLHSVar(args[i]), state)
         end
     end
 
-    return [toSNGen(lhs, out_typ); rhs], out_typ
+    return [toRHSVar(lhs, out_typ, state.LambdaVarInfo); rhs], out_typ
 end
 
 """
@@ -2576,14 +2522,14 @@ function from_assignment(lhs, rhs, depth, state)
         return [], nothing
     end
 
-    if typeof(rhs) == Expr
+    if isa(rhs, Expr)
         out_typ = rhs.typ
         #@dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
 
         # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
         if rhs.head == :parfor
             the_parfor = rhs.args[1]
-            if !(isa(out_typ, Tuple)) && out_typ.name == Array.name # both lhs and out_typ could be a tuple
+            if !(isa(out_typ, Tuple)) && isArrayType(out_typ) # both lhs and out_typ could be a tuple
                 @dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
                 add_merge_correlations(toLHSVar(the_parfor.postParFor[end]), lhsName, state)
             end
@@ -2603,34 +2549,34 @@ function from_assignment(lhs, rhs, depth, state)
                 if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
                     dim1 = rhs.args[7]
                     @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                    if typeof(dim1) == SymbolNode
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.LambdaVarInfo)
+                    if isa(dim1, TypedVar)
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
                         if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
                             @dprintln(3, "Will establish array length correlation for const size ", dim1)
-                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1.name])
+                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1])
                         end
                     end
                 elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
                     dim1 = rhs.args[7]
                     dim2 = rhs.args[9]
                     @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                    if typeof(dim1) == SymbolNode && typeof(dim2) == SymbolNode
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1.name, state.LambdaVarInfo)
-                        si2 = CompilerTools.LambdaHandling.getDesc(dim2.name, state.LambdaVarInfo)
+                    if isa(dim1, TypedVar) && isa(dim2, TypedVar)
+                        si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
+                        si2 = CompilerTools.LambdaHandling.getDesc(dim2, state.LambdaVarInfo)
                         if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
                             @dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1.name, dim2.name])
+                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1, dim2])
                             print_correlations(3, state)
                         end
                     end
                 end
             end
         end
-    elseif typeof(rhs) == SymbolNode
-        out_typ = rhs.typ
+    elseif isa(rhs, TypedVar)
+        out_typ = getType(rhs, state.LambdaVarInfo)
         if isArrayType(out_typ)
             # Add a length correlation of the form "a = b".
-            @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs.name)
+            @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs)
             add_merge_correlations(toLHSVar(rhs), lhsName, state)
         end
     else
@@ -2638,28 +2584,7 @@ function from_assignment(lhs, rhs, depth, state)
         out_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)
     end
 
-    return [toSNGen(lhs, out_typ); rhs], out_typ
-end
-
-"""
-If we have the type, convert a Symbol to SymbolNode.
-If we have a GenSym then we have to keep it.
-"""
-function toSNGen(x :: Symbol, typ)
-    return SymbolNode(x, typ)
-end
-
-function toSNGen(x :: SymbolNode, typ)
-    return x
-end
-
-function toSNGen(x :: GenSym, typ)
-    return x
-end
-
-function toSNGen(x, typ)
-    xtyp = typeof(x)
-    throw(string("Found object type ", xtyp, " for object ", x, " in toSNGen and don't know what to do with it."))
+    return [toRHSVar(lhs, out_typ, state.LambdaVarInfo); rhs], out_typ
 end
 
 """
@@ -2832,7 +2757,7 @@ end
 """
 Form a Julia :lambda Expr from a DomainLambda after applying the lambda to real
 input arguments (in dl_inputs). The returned lambda AST will have the real arguments
-(must be SymbolNodes) in its parameters instead.
+in its parameters instead.
 """
 function lambdaFromDomainLambda(domain_lambda, dl_inputs)
     @dprintln(3,"lambdaFromDomainLambda dl_inputs = ", dl_inputs)
@@ -3024,8 +2949,8 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
                 new_vars.symbol_array_correlation[s] = c+input_length+1
                 for v in s
                     if !in(v, esc_vars) 
-                        if isa(v, Symbol) || isa(v, SymbolNode)
-                            v = isa(v, SymbolNode) ? v.name : v
+                        if isa(v, RHSVar)
+                            v = toLHSVar(v)
                             if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
                                 error("Correlation variable ", v, " is a conflict with local variables")
                             end
@@ -3066,7 +2991,7 @@ function get_input_arrays(linfo::LambdaVarInfo)
     for iv in input_vars
         it = getType(iv, linfo)
         @dprintln(3,"iv = ", iv, " type = ", it)
-        if it.name == Array.name
+        if isArrayType(it)
             @dprintln(3,"Parameter is an Array.")
             push!(ret, iv)
         end
@@ -3461,8 +3386,8 @@ function remove_extra_allocs(ast)
     return;
 end
 
-function toSynGemOrInt(a::SymbolNode)
-    return a.name
+function toSynGemOrInt(a::TypedVar)
+    return toLHSVar(a)
 end
 
 function toSynGemOrInt(a::Union{Int,LHSVar})

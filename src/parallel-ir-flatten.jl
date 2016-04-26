@@ -40,7 +40,7 @@ function flattenParfors(function_name, ast::Expr)
     body = CompilerTools.LambdaHandling.getBody(ast)
 
     expanded_args = Any[]
-    flattenParfors(expanded_args, body.args)
+    flattenParfors(expanded_args, body.args, LambdaVarInfo)
     args = expanded_args
 
     @dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
@@ -77,11 +77,11 @@ function flattenParfors(function_name, ast::Expr)
     return lambda
 end
 
-function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1})
+function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1}, linfo :: LambdaVarInfo)
     for i = 1:length(in_body)
         @dprintln(3,"Flatten index ", i, " ", in_body[i], " type = ", typeof(in_body[i]))
         if isBareParfor(in_body[i])
-            flattenParfor(out_body, in_body[i].args[1])
+            flattenParfor(out_body, in_body[i].args[1], linfo)
         else
             push!(out_body, in_body[i])
         end
@@ -94,16 +94,16 @@ body.  This parfor is in the nested (parfor code is in the parfor node itself) t
 pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
-function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
+function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, linfo :: LambdaVarInfo)
     @dprintln(2,"Flattening ", the_parfor)
 
-    private_set = getPrivateSet(the_parfor.body)
+    private_set = getPrivateSet(the_parfor.body, linfo)
     private_array = collect(private_set)
 
     # Output to the new body that this is the start of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
     # Output the body of the parfor as top-level statements in the new function body and convert any other parfors we may find.
-    flattenParfors(new_body, the_parfor.body)
+    flattenParfors(new_body, the_parfor.body, linfo)
     # Output to the new body that this is the end of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
     nothing

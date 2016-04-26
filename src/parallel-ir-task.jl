@@ -1166,10 +1166,10 @@ body.  This parfor is in the nested (parfor code is in the parfor node itself) t
 pre-statements and post-statements are already elevated by this point.  We replace this nested form with a non-nested
 form where we have a parfor_start and parfor_end to delineate the parfor code.
 """
-function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst)
+function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, linfo :: LambdaVarInfo)
     @dprintln(2,"Flattening ", the_parfor)
 
-    private_set = getPrivateSet(the_parfor.body)
+    private_set = getPrivateSet(the_parfor.body, linfo)
     private_array = collect(private_set)
 
     # Output to the new body that this is the start of a parfor.
@@ -1394,7 +1394,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
         #push!(task_body.args, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), "in task func"))
         recreateLoops(task_body.args, the_parfor, state, newLambdaVarInfo)
     else
-        flattenParfor(task_body.args, the_parfor)
+        flattenParfor(task_body.args, the_parfor, newLambdaVarInfo)
     end
 
     # Add the return statement to the end of the task function.

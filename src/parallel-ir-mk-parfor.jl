@@ -265,7 +265,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     pop!(neutral_val_body) # remove last Expr, which is Expr(:tuple)
     neutral_val_flatten_body = Any[]
     neutral_val_body = top_level_expand_pre(neutral_val_body, state)
-    flattenParfors(neutral_val_flatten_body, neutral_val_body)
+    flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
     @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
     f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(init_var.name, var)))
     return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
@@ -285,7 +285,7 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     temp_body[end] = mk_assignment_expr(reduction_var, temp_body[end].args..., state)
     temp_body = top_level_expand_pre(temp_body, state)
     reduce_flatten_body = Any[]
-    flattenParfors(reduce_flatten_body, deepcopy(temp_body))
+    flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
     f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(snode.name, var), Pair(atm.name, val)))
     reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_var, delta_var])
@@ -388,8 +388,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 push!(pre_statements,mk_assignment_expr(SymbolNode(symbol(save_array_len), Int), 1, state))
                 generatePreOffsetStatement(this_dim, pre_statements)
                 input_array_rangeconds[i] = nothing
-                #continue;
-                #CompilerTools.LambdaHandling.addLocalVar(getSName(this_dim), Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
             else
                 error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
@@ -497,16 +495,9 @@ function createTempForRangeOffset(num_used, ranges :: Array{RangeData,1}, unique
     return range_array
 end
 
-function getSName(rd :: RangeData)
-    return getSName(rd.offset_temp_var)
-end
-function getSName(rd :: MaskSelector)
-    return getSName(rd.value)
-end
-function getSName(rd :: SingularSelector)
-    return getSName(rd.offset_temp_var)
-    #return rd.value
-end
+getSymbol(rd :: RangeData, linfo :: LambdaVarInfo)        = CompilerTools.LambdaHandling.getSymbol(rd.offset_temp_var, linfo)
+getSymbol(rd :: MaskSelector, linfo :: LambdaVarInfo)     = CompilerTools.LambdaHandling.getSymbol(rd.value, linfo)
+getSymbol(rd :: SingularSelector, linfo :: LambdaVarInfo) = CompilerTools.LambdaHandling.getSymbol(rd.offset_temp_var, linfo)
 
 """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
@@ -515,7 +506,7 @@ function createTempForRangedArray(array_sn :: RHSVar, range :: Array{DimensionSe
     key = toLHSVar(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     # Is it okay to just use range[1] here instead of all the ranges?
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSName(range[1]), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSymbol(range[1], state.LambdaVarInfo), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 function createTempForRangeInfo(array_sn :: RHSVar, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)

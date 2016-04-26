@@ -140,7 +140,7 @@ function getGlobalOrArrayParam(state, real_args)
         atyp = typeof(real_args[i])
         @dprintln(3,"getGlobalOrArrayParam arg ", i, " ", real_args[i], " type = ", atyp)
         if atyp == Symbol || atyp == SymbolNode
-            aname = ParallelAccelerator.ParallelIR.getSName(real_args[i])
+            aname = getSymbol(real_args[i], state.LambdaVarInfo)
             if isGlobal(aname, state)
                 # definitely a global so add
                 push!(possibleGlobalArgs, i)
@@ -162,7 +162,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
 
     @dprintln(3,"processFuncCall ", func_expr, " ", call_sig_arg_tuple, " ", fetyp, " ", possibleGlobals)
     if fetyp == Symbol || fetyp == SymbolNode
-        func = resolveFuncByName(state.cur_func_sig, ParallelIR.getSName(func_expr), call_sig_arg_tuple, state.local_lambdas)
+        func = resolveFuncByName(state.cur_func_sig, getSymbol(func_expr, state.LambdaVarInfo), call_sig_arg_tuple, state.local_lambdas)
     elseif fetyp == TopNode
         return nothing
     elseif fetyp == DataType
@@ -323,11 +323,11 @@ function extractStaticCallGraphWalk(node::Expr,
 #        elseif ParallelIR.isArrayset(func_expr) || func_expr == :setindex!
 #            @dprintln(3,"arrayset or setindex! found")
 #            array_name = call_args[1]
-#            if in(ParallelIR.getSName(array_name), state.params)
+#            if in(toLHSVar(array_name), state.params)
 #                @dprintln(3,"can't analyze due to write to array")
 #                # Writing to an array parameter which could be a global passed to this function makes parallelization analysis unsafe.
 #                #state.cant_analyze = true
-#                push!(state.array_params_set_or_aliased, indexin(ParallelIR.getSName(array_name), state.params))
+#                push!(state.array_params_set_or_aliased, indexin(toLHSVar(array_name), state.params))
 #            end
 #            return node
         end
@@ -342,10 +342,10 @@ function extractStaticCallGraphWalk(node::Expr,
             state.local_lambdas[lhs] = rhs
             return node
         elseif rhstyp == SymbolNode || rhstyp == Symbol
-            rhsname = ParallelIR.getSName(rhs)
+            rhsname = getSymbol(rhs, state.LambdaVarInfo)
             if CompilerTools.LambdaHandling.isInputParameter(rhsname, state.LambdaVarInfo)
                 rhsname_typ = state.types[rhsname][2]
-                if rhsname_typ.name == Array.name
+                if isArrayType(rhsname_typ)
                     # if an array parameter is the right-hand side of an assignment then we give up on tracking whether some parallelization requirement is violated for this parameter
                     # state.cant_analyze = true
                     push!(state.array_params_set_or_aliased, indexin(rhsname, state.params))
@@ -473,7 +473,7 @@ function propagate(mapNameFuncInfo)
                                 else
                                     for l = 1:length(this_fi.params)
                                         ptype = this_fi.types[this_fi.params[l]][2]
-                                        if ptype.name == Array.name
+                                        if isArrayType(ptype)
                                             push!(this_fi.array_params_set_or_aliased, l)
                                         end
                                     end

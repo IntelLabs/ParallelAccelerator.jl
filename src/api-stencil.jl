@@ -122,7 +122,7 @@ function runStencil(inputs...)
   borderStyle = nothing
   for i = 2:length(inputs)
     typ = typeof(inputs[i])
-    if isa(typ, DataType) && is(typ.name, Array.name)
+    if isArrayType(typ)
       push!(arrs, inputs[i])
     elseif is(typ, Int)
       iterations = inputs[i]

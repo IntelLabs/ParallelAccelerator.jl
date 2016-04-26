@@ -380,7 +380,7 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                 @dprintln(4,rhs)
 
                 if typeof(lhs) == SymbolNode || typeof(lhs) == Symbol
-                    lhs_sym = getSName(lhs)
+                    lhs_sym = toLHSVar(lhs)
                     @dprintln(3,"remove_dead found assignment with lhs symbol ", lhs, " ", rhs, " typeof(rhs) = ", typeof(rhs))
                     # Remove a dead store
                     if !in(lhs_sym, live_info.live_out)
@@ -693,7 +693,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             assert(isa(array_param, SymbolNode) || isa(array_param, GenSym)) # should be a SymbolNode or GenSym
             array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.LambdaVarInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
-                dim_symbols = [getSName(lhs)]
+                dim_symbols = [toLHSVar(lhs)]
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(isa(array_param, SymbolNode) ? array_param.name : array_param, state, dim_symbols)
             end

@@ -1143,7 +1143,7 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
                 error("DomainIR: cannot handle broadcast! with function ", fun)
             end
         elseif isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], DataType) &&
-            is(dst.args[1].name, BitArray.name) 
+            isBitArrayType(dst.args[1])
             # destination array is a new bitarray
             fun   = args[1]
             args  = args[3:end]
