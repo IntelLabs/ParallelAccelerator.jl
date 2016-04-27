@@ -61,14 +61,14 @@ supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wrapar
  Note that the input kernel is modified in-place.
  NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
 """
-function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, borderSty::Symbol)
+function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, borderSty::Symbol)
   #assert(krn.head == symbol("->"))
-  @dprintln(3, "typeof krn = ", typeof(krn), " ", krn.head, " :: ", typeof(krn.head), " ", object_id(krn.head), " ", object_id(:lambda)) 
-  assert(isa(krn, Expr))
-  assert(is(krn.head, :lambda))
+  @dprintln(3, "typeof krnBody = ", typeof(krnBody), " ", krnBody.head)
+  assert(isa(krnBody, Expr))
+  #assert(is(krn.head, :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
-  local arrSyms::Array{Symbol,1} = Symbol[parameterToSymbol(x, state.linfo) for x in krn.args[1]] # parameter of the kernel lambda
+  local arrSyms::Array{Symbol,1} = Symbol[parameterToSymbol(x, state.linfo) for x in getParamsNoSelf(state.linfo)]
   if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
     arrSyms = arrSyms[2:end]
   end
@@ -85,7 +85,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krn::Expr, bord
     arrSymDict[arrSyms[i]] = bufSyms[i]
   end
 
-  local expr::Expr = krn.args[3]
+  local expr::Expr = krnBody
   assert(expr.head == :body)
   # warn(string("got arrSymDict = ", arrSymDict))
   
@@ -225,8 +225,7 @@ end
  It expects krn to be of Expr(:lambda, ...) type.
  Border specification in runStencil can only be Symbols.
 """
-function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
-  linfo = lambdaToLambdaVarInfo(kernelExp)
+function mkStencilLambda(state_, bufs, kernelBody, linfo, borderExp::QuoteNode)
   typs = Type[ typeOfOpr(state_, a) for a in bufs ]
   state = newState(linfo, Dict(), state_)
   #if !(isa(borderExp, QuoteNode))
@@ -237,8 +236,8 @@ function mkStencilLambda(state_, bufs, kernelExp, borderExp::QuoteNode)
     error("Expect stencil border style to be one of ", supportedBorderStyle, ", but got ", borderSty)
   end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
-  stat, krnBody = analyze_kernel(state, typs, kernelExp, borderSty)
-  return stat, DomainLambda(LambdaVarInfoToLambda(linfo, krnBody.args))
+  stat, krnBody = analyze_kernel(state, typs, kernelBody, borderSty)
+  return stat, DomainLambda(krnBody, linfo)
 end
 
 function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)
@@ -249,7 +248,7 @@ function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes,
     strideDict = Dict{LHSVar, Any}(zip(stat.strideSym, strideSymNodes))
     bufDict = Dict{LHSVar, Any}(zip(stat.bufSym, bufSymNodes))
     ldict = merge(dict, bufDict, idxDict, strideDict)
-    krnExpr = kernelF.lambda.args[3].args # body Expr array
+    krnExpr = kernelF.body.args # body Expr array
     @dprintln(3,"idxDict = ", idxDict)
     @dprintln(3,"strideDict = ", strideDict)
     @dprintln(3,"bufDict = ", bufDict)

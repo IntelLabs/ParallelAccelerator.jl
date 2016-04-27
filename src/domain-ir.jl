@@ -181,20 +181,22 @@ We could have used Expr(:lambda,...) directly, but it is convenient to keep the 
 information around.
 """
 type DomainLambda
-    lambda  :: Expr
+    body    :: Expr
     inputs  :: Array{Type, 1}
     outputs :: Array{Type, 1}
     linfo   :: LambdaVarInfo
 
-    function DomainLambda(lam::Expr)
-        @assert (lam.head == :lambda) "Expects Expr(:lambda, ...) but got " * string(lam)
-        @dprintln(3, "create DomainLambda with ", lam)
-        lambda = lam
-        li = lambdaToLambdaVarInfo(lambda)
+    function DomainLambda(body::Expr, li::LambdaVarInfo)
+        @assert (body.head == :body) "Expects Expr(:body, ...) but got " * string(body)
+        @dprintln(3, "create DomainLambda with body = ", body, " and linfo = ", li)
         inps = Type[getType(x, li) for x in getParamsNoSelf(li)]
         rtyp = getReturnType(li)
-        outs = isTupleType(rtyp) ? Type[t for t in rtyp.parameters] : Type[rtyp]
-        new(lam, inps, outs, li)
+        outs = (rtyp == nothing) ? [] : (isTupleType(rtyp) ? Type[t for t in rtyp.parameters] : Type[rtyp])
+        new(body, inps, outs, li)
+    end
+
+    function DomainLambda(body)
+        DomainLambda(getBody(body), lambdaToLambdaVarInfo(body))
     end
 
     """
@@ -213,7 +215,7 @@ type DomainLambda
         end
         body = f(paramS)
         nouts = length(outs)
-        li.return_type = nouts > 1 ? Tuple{outs...} : outs[1]
+        setReturnType(nouts > 1 ? Tuple{outs...} : outs[1], li)
         for v in Traversal.getSymbols(body)
             if !in(v, params)
                 addEscapingVariable(v, getType(v, linfo), getDesc(v, linfo), li)
@@ -234,8 +236,10 @@ type DomainLambda
         #ast_body.args = body
         #ast_body.typ = li.return_type
         dprintln(3, "li = ", li)
-        expr = LambdaVarInfoToLambda(li, body)
-        DomainLambda(expr)
+        bodyExpr = Expr(:body)
+        bodyExpr.args = body
+        bodyExpr.typ = li.return_type
+        DomainLambda(bodyExpr, li)
     end
 
 end
@@ -243,13 +247,15 @@ end
 import Base.show
 
 function show(io::IO, f::DomainLambda)
-    show(io, f.lambda)
+    show(io, getParamsNoSelf(f.linfo))
+    show(io, " -> ")
+    show(io, f.body)
 end
 
 import CompilerTools.Traversal.fmap
 # Functor instance of DomainLambda
 function fmap(f, dl::DomainLambda)
-    DomainLambda(fmap(f, dl.lambda))
+    DomainLambda(fmap(f, dl.body), dl.linfo)
 end
 
 """
@@ -257,7 +263,7 @@ Pass arguments (TypedVar) to DomainLambda, and return its body (an array)
 """
 function genBody(dl::DomainLambda, args)
     params = getParamsNoSelf(dl.linfo)
-    body = dl.lambda.args[3]
+    body = dl.body
     @assert (length(params) == length(args)) "Expect args to be same length of params, but got args = " * string(args) * ", params = " * string(params)
     dict = Dict{Symbol,Symbol}()
     for i = 1:length(params)
@@ -282,9 +288,10 @@ end
 
 # swap the i-th and j-th argument to domain lambda
 function lambdaSwapArg(f::DomainLambda, i, j)
-    params = arraySwap(f.lambda.args[1], i, j)
-    f.lambda.args[1] = params
-    DomainLambda(f.lambda)
+    linfo = LambdaVarInfo(f.linfo)
+    params = arraySwap(getParamsNoSelf(linfo), i, j)
+    setParamsNoSelf(params, linfo)
+    return DomainLambda(f.body, linfo)
 end
 
 type IRState
@@ -710,7 +717,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     end
     #dprintln(2, "pre_body = ", pre_body)
     #body = vcat(pre_body, f.lambda.args[3].args)
-    body = f.lambda.args[3].args
+    body = f.body
     if !isempty(repl_dict)
         body = replaceExprWithDict!(body, repl_dict)
     end
@@ -719,7 +726,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     #body_expr.typ = getReturnType(f.linfo)
     setParamsNoSelf(new_params, f.linfo)
     f.inputs = new_inps
-    f.lambda = LambdaVarInfoToLambda(f.linfo, body)
+    f.body = body
     return (nonarrays, args_[1:j], f.inputs, f)
 end
 
@@ -837,14 +844,10 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
  :lambda expression
  (:lambda, {param, meta@{localvars, types, freevars}, body})
 """
-function from_lambda(state, env, expr::Expr, closure = nothing)
+function from_lambda(state, env, expr, closure = nothing)
     local env_ = nextEnv(env)
-    local head = expr.head
-    local ast  = expr.args
-    local typ  = expr.typ
-    assert(length(ast) == 3)
     linfo = lambdaToLambdaVarInfo(expr) 
-    local body  = ast[3]
+    local body  = getBody(expr)
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
     if !is(closure, nothing)
@@ -889,7 +892,7 @@ function from_lambda(state, env, expr::Expr, closure = nothing)
     #for (k, t) in state_.boxtyps
     #    updateType(linfo, k, t)
     #end
-    return LambdaVarInfoToLambda(linfo, body.args)
+    return (linfo, body)
 end
 
 """
@@ -978,11 +981,10 @@ function mmapRemoveDupArg!(state, expr::Expr)
     if (!hasDup) return expr end
     dprintln(3, "MMRD: expr was ", expr)
     dprintln(3, "MMRD:  ", new_arr, new_inps, new_params)
-    body = f.lambda.args[3]
+    body = f.body
     body.args = vcat(pre_body, body.args)
     f.inputs = new_inps
     setParamsNoSelf(new_params, f.linfo)
-    f.lambda = LambdaVarInfoToLambda(f.linfo, body.args)
     expr.args[1] = new_arr
     expr.args[2] = f
     dprintln(3, "MMRD: expr becomes ", expr)
@@ -1614,10 +1616,9 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Ex
     dprintln(env, "type inferred AST = ", ast)
     dprintln(env, "aty = ", aty)
     # recursively process through domain IR with new state and env
-    ast = from_lambda(state, env, ast, func)
-    body::Expr = ast.args[3]
+    (linfo, body) = from_lambda(state, env, ast, func)
     # modify parameters if necessary
-    params = ast.args[1]
+    params = getParamsNoSelf(linfo)
     for i = 1:length(params)
         dprintln(env, "params[$i] has type ", typeof(params[i]))
         if isa(params[i], RHSVar)
@@ -1629,7 +1630,6 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Ex
             end
         end
     end
-    linfo = lambdaToLambdaVarInfo(ast)
     lastExp::Expr = body.args[end]
     assert(is(lastExp.head, :return))
     args1_typ::DataType = Void
@@ -1670,7 +1670,6 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Ex
                 push!(body.args, retExprs[i])
             end
             push!(body.args, mk_expr(typs, :tuple, retNodes...))
-            ast = LambdaVarInfoToLambda(linfo, body.args)
         end
     else
         lastExp.head = :tuple
@@ -1681,7 +1680,8 @@ function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Ex
     dprintln(env, "aty becomes ", aty)
     lastExp.typ = aty
     body.typ = aty
-    return ast, aty
+    setReturnType(aty, linfo)
+    return body, linfo
 end
 
 """
@@ -1716,13 +1716,14 @@ function translate_call_map(state, env, typ, args::Array{Any,1})
     argtyps = DataType[ typeOfOpr(state, arg) for arg in args[2:end] ]
     dprintln(env, "argtyps =", argtyps)
     inptyps = DataType[ isArrayType(t) ? elmTypOf(t) : t for t in argtyps ]
-    (ast, ety) = get_lambda_for_arg(state, env, args[1], inptyps) 
+    (body, linfo) = get_lambda_for_arg(state, env, args[1], inptyps) 
+    ety = getReturnType(linfo)
     etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     # assume return dimension is the same as the first array argument
     rdim = ndims(argtyps[1])
     rtys = DataType[ Array{t, rdim} for t in etys ]
-    domF = DomainLambda(ast)
+    domF = DomainLambda(body, linfo)
     expr::Expr = mk_mmap(args[2:end], domF)
     expr.typ = length(rtys) == 1 ? rtys[1] : to_tuple_type(tuple(rtys...))
     return expr
@@ -1743,7 +1744,8 @@ function translate_call_map!(state, env, typ, args::Array{Any,1})
     argtyps = DataType[ typeOfOpr(state, arg) for arg in args[2:end] ]
     dprintln(env, "argtyps =", argtyps)
     inptyps = DataType[ isArrayType(t) ? elmTypOf(t) : t for t in argtyps ]
-    (ast, ety) = get_lambda_for_arg(state, env, args[1], nargs == 2 ? inptyps : inptyps[2:end]) 
+    (body, linfo) = get_lambda_for_arg(state, env, args[1], nargs == 2 ? inptyps : inptyps[2:end]) 
+    ety = getReturnType(linfo)
     etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     # assume return dimension is the same as the first array argument
@@ -1752,10 +1754,10 @@ function translate_call_map!(state, env, typ, args::Array{Any,1})
     if nargs > 2 # more than just destiniation array in arguments
         # insert dummy argument to hold values from destination since DomainLambda for mmap! needs it
         v = gensym("dest")
-        ast.args[1] = vcat(v, ast.args[1])
-        push!(ast.args[2][1], Any[v, ety, 0])
+        setParamsNoSelf(vcat(v, getParamsNoSelf(linfo)), linfo)
+        addLocalVariable(v, ety, 0, linfo)
     end
-    domF = DomainLambda(ast)
+    domF = DomainLambda(body, linfo)
     expr::Expr = mk_mmap!(args[2:end], domF) 
     expr.typ = length(rtys) == 1 ? rtys[1] : to_tuple_type(tuple(rtys...))
     return expr
@@ -1836,10 +1838,11 @@ function translate_call_runstencil(state, env, args::Array{Any,1})
         borderExp = lookupConstDefForArg(state, borderExp)
     end
     dprintln(env, "stencil bufstyp = ", to_tuple_type(tuple(bufstyp...)))
-    (kernelExp, ety) = get_lambda_for_arg(state, env, kernelExp_var, tuple(bufstyp...))
-    dprintln(env, "bufs = ", bufs, " kernelExp = ", kernelExp, " borderExp=", borderExp, " :: ", typeof(borderExp))
+    (body, linfo) = get_lambda_for_arg(state, env, kernelExp_var, tuple(bufstyp...))
+    ety = getReturnType(linfo)
+    dprintln(env, "bufs = ", bufs, " body = ", body, " borderExp=", borderExp, " :: ", typeof(borderExp))
     local stat, kernelF
-    stat, kernelF = mkStencilLambda(state, bufs, kernelExp, borderExp)
+    stat, kernelF = mkStencilLambda(state, bufs, body, linfo, borderExp)
     dprintln(env, "stat = ", stat, " kernelF = ", kernelF)
     expr = mk_stencil!(stat, iterations, bufs, kernelF)
     #typ = length(bufs) > 2 ? tuple(kernelF.outputs...) : kernelF.outputs[1] 
@@ -1866,7 +1869,8 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
     
-    (ast, ety) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
+    (body, linfo) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
+    ety = getReturnType(linfo)
     #etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "ety = ", ety)
     #@assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
@@ -1883,7 +1887,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     #    tmpNodes[i] = tmparr
     #end
     # produce a DomainLambda
-    domF = DomainLambda(ast)
+    domF = DomainLambda(body, linfo)
     params = Symbol[parameterToSymbol(x, state.linfo) for x in getParamsNoSelf(domF.linfo)]
     expr::Expr = mk_parallel_for(params, dimExp, domF)
     for i=3:nargs # we have reduction here!
@@ -1901,25 +1905,18 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         nval = translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)])
         redparam = gensym(string(redvar))
         addInputParameter(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
-        neutral_ast = LambdaVarInfoToLambda(nlinfo, Any[Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, state.linfo))])
-        neutral = DomainLambda(neutral_ast)
-        (redast, redty) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
+        neutral = DomainLambda(Expr(:body, Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, state.linfo))), nlinfo)
+        (body, linfo) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
+        redty = getReturnType(linfo)
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
         # @assert (redty == rvtyp) "Expect reduction function to return type " * string(rvtyp) * " but got " * string(redty)
         # redast only expects one parameter, so we must add redvar to the input parameter of redast, 
         # and remove it from escaping variable
-        redast.args[1] = vcat(redvar, redast.args[1])
-        escs = redast.args[2][2]
-        new_escs = Any[]
-        for i = 1:length(escs)
-            if is(escs[i][1], redvar)
-                push!(redast.args[2][1], escs[i])
-            else
-                push!(new_escs, escs[i])
-            end
-        end
-        redast.args[2][2] = new_escs
-        reduceF = DomainLambda(redast)
+        dprintln(env, "translate_call_cartesianmapreduce linfo = ", linfo)
+        setParamsNoSelf(vcat(redvar, getParamsNoSelf(linfo)), linfo)
+        addLocalVariable(redvar, getType(redvar, linfo), getDesc(redvar, linfo), linfo)
+        deleteEscapingVariable(redvar, linfo)
+        reduceF = DomainLambda(body, linfo)
         push!(expr.args, (redvar, neutral, reduceF)) 
     end
     #expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
@@ -1944,7 +1941,8 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
     
-    (ast, ety) = get_lambda_for_arg(state, env, args[1], argstyp)     # first argument is the lambda
+    (body, linfo) = get_lambda_for_arg(state, env, args[1], argstyp)     # first argument is the lambda
+    ety = getReturnType(linfo)
     etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "etys = ", etys)
     @assert all([ isa(t, DataType) for t in etys ]) "cartesianarray expects static type parameters, but got "*dump(etys) 
@@ -1961,8 +1959,6 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         tmpNodes[i] = tmparr
     end
     # produce a DomainLambda
-    body::Expr = ast.args[3]
-    linfo = lambdaToLambdaVarInfo(ast)
     params = getParamsNoSelf(linfo)
     dprintln(env, "params = ", params)
     dummy_params = Array(Symbol, length(etys))
@@ -1971,7 +1967,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
         addLocalVariable(dummy_params[i], etys[i], 0, linfo)
     end
     setParamsNoSelf(vcat(dummy_params, params), linfo)
-    domF = DomainLambda(LambdaVarInfoToLambda(linfo, body.args))
+    domF = DomainLambda(body, linfo)
     expr::Expr = mk_mmap!(tmpNodes, domF, true)
     expr.typ = length(arrtyps) == 1 ? arrtyps[1] : to_tuple_type(tuple(arrtyps...))
     dprintln(env, "cartesianarray return type = ", expr.typ)
@@ -1994,12 +1990,13 @@ function translate_call_reduce(state, env, typ, args::Array{Any,1})
     @assert (ntyp == etyp) "expect neutral value " * neutralelt * " to be " * elt * " type but got " * ntyp
     # infer the type of the given lambda
     inptyps = DataType[etyp, etyp]
-    (ast, ety) = get_lambda_for_arg(state, env, fun, inptyps)
+    (body, linfo) = get_lambda_for_arg(state, env, fun, inptyps)
+    ety = getReturnType(linfo)
     @assert (ety == etyp) "expect return type of reduce function to be " * etyp * " but got " * ety
     red_dim = []
     neutral = neutralelt
     outtyp = etyp
-    domF = DomainLambda(ast)
+    domF = DomainLambda(body, linfo)
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
     expr = mk_reduce(neutral, arr, domF)
@@ -2037,10 +2034,11 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         redparam = gensym("redvar")
         rednode = toRHSVar(redparam, arrtyp, state.linfo)
         addInputParameter(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
-        neutral_ast = Any[ Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
+        neutral_body = Expr(:body, 
+                           Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
                            mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], linfo)),
-                           Expr(:tuple, rednode)]
-        neutral = DomainLambda(LambdaVarInfoToLambda(linfo, neutral_ast))
+                           Expr(:tuple, rednode))
+        neutral = DomainLambda(neutral_body, linfo)
         outtyp = arrtyp
         opr, reorder, cast = specializeOp(fun, [etyp])
         # ignore reorder and cast since they are always id function
@@ -2050,11 +2048,11 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
             addInputParameter(params[i], outtyp, 0, linfo) 
             params[i] = toRHSVar(params[i], outtyp, linfo)
         end
-        linfo.return_type = outtyp
+        setReturnType(outtyp, linfo)
         inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], LambdaVarInfo())
         inner_expr = mk_mmap!(params, inner_dl)
         inner_expr.typ = outtyp 
-        f = DomainLambda(LambdaVarInfoToLambda(linfo, Any[mk_expr(outtyp, :tuple, inner_expr)]))
+        f = DomainLambda(Expr(:body, mk_expr(outtyp, :tuple, inner_expr)), linfo)
     else
         red_dim = []
         neutral = neutralelt
@@ -2089,8 +2087,8 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
 end
 
 function translate_call_parallel_for(state, env, args::Array{Any,1})
-    (ast, ety) = lambdaTypeinf(args[1], (Int, ))
-    ast = from_expr("anonymous", env.cur_module, ast)
+    (lambda, ety) = lambdaTypeinf(args[1], (Int, ))
+    ast = from_expr("anonymous", env.cur_module, lambda)
     loopvars = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
     etys = [Int for _ in length(loopvars)]
     body = ast.args[3]
@@ -2108,7 +2106,7 @@ end
 function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
     local env_ = nextEnv(env)
     expr = nothing
-    dprintln(env, "translate_call fun ", fun, "::", typeof(fun), " args=", args, " typ=", typ)
+    dprintln(env, "translate_call globalref ", fun, "::", typeof(fun), " args=", args, " typ=", typ)
     # new mainline Julia puts functions in Main module but PSE expects the symbol only
     #if isa(fun, GlobalRef) && fun.mod == Main
     #   fun = fun.name
@@ -2275,7 +2273,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     local typ  = ast.typ
     @dprintln(2, " :", head)
     if is(head, :lambda)
-        return from_lambda(state, env, ast)
+        (linfo, body) = from_lambda(state, env, ast)
+        return LambdaVarInfoToLambda(linfo, body.args)
     elseif is(head, :body)
         return from_body(state, env, ast)
     elseif is(head, :(=))
@@ -2472,7 +2471,7 @@ function AstWalk(ast :: ANY, callback, cbdata :: ANY)
 end
 
 function dir_live_cb(ast :: Expr, cbdata :: ANY)
-    @dprintln(4,"dir_live_cb ")
+    @dprintln(4,"dir_live_cb ", ast)
 
     head = ast.head
     args = ast.args
