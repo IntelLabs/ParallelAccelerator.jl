@@ -197,7 +197,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
     if ftyp == DataType
         return nothing
     end
-    assert(ftyp == Function || ftyp == IntrinsicFunction || ftyp == LambdaStaticData)
+    assert(ftyp == Function || ftyp == IntrinsicFunction || ftyp == LambdaInfo)
 
     if ftyp == Function
         if !isgeneric(func)
@@ -222,7 +222,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
             @dprintln(3,state.functionsToProcess)
         end
         push!(state.calls, CallInfo(fs, possibleGlobals, possibleArrayParams))
-    elseif ftyp == LambdaStaticData
+    elseif ftyp == LambdaInfo
         fgr = GlobalRef(Base.function_module(func, call_sig_arg_tuple), Base.function_name(func))
         fs  = (fgr, call_sig_arg_tuple)
 
@@ -527,7 +527,7 @@ function extractStaticCallGraph(func :: GlobalRef, ast :: Expr, sig :: Tuple)
 #            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
 #        elseif ftyp == LambdaStaticData
 #            @dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
-#            ast = ParallelIR.uncompressed_ast(the_func)
+#            ast = Base.uncompressed_ast(the_func)
 #            @dprintln(4,ast)
 #            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
 #            AstWalker.AstWalk(ast, extractStaticCallGraphWalk, state)

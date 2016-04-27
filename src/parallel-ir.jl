@@ -1120,12 +1120,6 @@ end
 
 # ===============================================================================================================================
 
-"""
-Convert a compressed LambdaStaticData format into the uncompressed AST format.
-"""
-uncompressed_ast(l::LambdaStaticData) =
-isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
-
 type CountAssignmentsState
     symbol_assigns :: Dict{Symbol, Int}
     linfo          :: LambdaVarInfo
@@ -2359,7 +2353,7 @@ function hasNoSideEffects(node :: Union{Symbol, TypedVar, GenSym, GlobalRef})
     return true
 end
 
-function hasNoSideEffects(node :: Union{LambdaStaticData, Number, Function})
+function hasNoSideEffects(node :: Union{LambdaInfo, Number, Function})
     return true
 end
 
@@ -3519,8 +3513,8 @@ function rm_allocs_live_cb(ast :: ANY, cbdata :: ANY)
 end
 
 
-function from_expr(ast ::LambdaStaticData, depth, state :: expr_state, top_level)
-    ast = uncompressed_ast(ast)
+function from_expr(ast :: LambdaInfo, depth, state :: expr_state, top_level)
+    ast = Base.uncompressed_ast(ast)
     return from_expr(ast, depth, state, top_level)
 end
 
