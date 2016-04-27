@@ -76,7 +76,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   local bufSyms = Array(GenSym, narrs)
   local arrSymDict = Dict{Symbol,GenSym}()
   for i in 1:length(arrSyms)
-    # this case is not possible since krn is a type inferred AST and not LambdaStaticData
+    # this case is not possible since krn is a type inferred AST and not LambdaInfo
     # if isa(arrSyms[i], Expr) && arrSyms[i].head == :(::) # Expr in the form (x :: t).
     #  arrSyms[i] = arrSyms[i].args[1]
     #end

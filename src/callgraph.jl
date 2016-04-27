@@ -71,10 +71,10 @@ type extractStaticCallGraphState
     array_params_set_or_aliased :: Set   # the indices of the parameters that are set or aliased
     cant_analyze :: Bool
 
-    local_lambdas :: Dict{Symbol,LambdaStaticData}
+    local_lambdas :: Dict{Symbol,LambdaInfo}
 
     function extractStaticCallGraphState(fs, mnfi, ftp)
-        new(fs, mnfi, ftp, CallInfo[], Set(), nothing, Set(), false, Dict{Symbol,LambdaStaticData}())
+        new(fs, mnfi, ftp, CallInfo[], Set(), nothing, Set(), false, Dict{Symbol,LambdaInfo}())
     end
 
     function extractStaticCallGraphState(fs, mnfi, ftp, calls, gw, ll)
@@ -96,7 +96,7 @@ function resolveFuncByName(cur_func_sig , func :: Symbol, call_sig_arg_tuple, lo
     ftyp = typeof(cur_func_sig[1])
     if ftyp == Function
         cur_module = Base.function_module(cur_func_sig[1])
-    elseif ftyp == LambdaStaticData
+    elseif ftyp == LambdaInfo
         cur_module = cur_func_sig[1].module
     else
         throw(string("Unsupported current function type in resolveFuncByName."))
@@ -339,7 +339,7 @@ function extractStaticCallGraphWalk(node::Expr,
         rhs = args[2]
         rhstyp = typeof(rhs)
         @dprintln(3,"Found assignment: lhs = ", lhs, " rhs = ", rhs, " type = ", typeof(rhs))
-        if rhstyp == LambdaStaticData
+        if rhstyp == LambdaInfo
             state.local_lambdas[lhs] = rhs
             return node
         elseif rhstyp<:RHSVar
@@ -525,7 +525,7 @@ function extractStaticCallGraph(func :: GlobalRef, ast :: Expr, sig :: Tuple)
 #            AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
 #            @dprintln(4,state)
 #            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
-#        elseif ftyp == LambdaStaticData
+#        elseif ftyp == LambdaInfo
 #            @dprintln(3,"Processing lambda static data ", the_func, " ", the_sig)
 #            ast = Base.uncompressed_ast(the_func)
 #            @dprintln(4,ast)

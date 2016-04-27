@@ -1075,7 +1075,7 @@ function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
             # do not produce new assignment for Void values
             @dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
             emitStmt(state, arg)
-        elseif isa(arg, Expr) || isa(arg, LambdaStaticData)
+        elseif isa(arg, Expr) || isa(arg, LambdaInfo)
             typ = isa(arg, Expr) ? arg.typ : Any
             dprintln(env, "addGenSym with typ ", typ)
             newVar = addGenSym(typ, state.linfo)
@@ -1601,7 +1601,7 @@ Run type inference and domain process over the income function object.
 Return the result AST with a modified return statement, namely, return
 is changed to Expr(:tuple, retvals...)
 """
-function get_ast_for_lambda(state, env, func::Union{LambdaStaticData,TypedVar,Expr}, argstyp)
+function get_ast_for_lambda(state, env, func::Union{LambdaInfo,TypedVar,Expr}, argstyp)
     if isa(func, TypedVar) && func.typ <: Function
         # function/closure support is changed in julia 0.5
         lambda = func.typ #.name.primary
@@ -2222,8 +2222,8 @@ function from_expr(function_name::AbstractString, cur_module :: Module, ast :: E
     return res
 end
 
-function from_expr(state::IRState, env::IREnv, ast::LambdaStaticData)
-    dprintln(env, "from_expr: LambdaStaticData inferred = ", ast.inferred)
+function from_expr(state::IRState, env::IREnv, ast::LambdaInfo)
+    dprintln(env, "from_expr: LambdaInfo inferred = ", ast.inferred)
     if !ast.inferred
         # we return this unmodified since we want the caller to
         # type check it before conversion.

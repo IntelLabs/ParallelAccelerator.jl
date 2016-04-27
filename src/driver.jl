@@ -421,9 +421,8 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
     error("Method for ", func, " with signature ", signature, " is not found")
   end
 
-  def::LambdaStaticData = m[1].func.code
-  cur_module = def.module
-  func_ref = GlobalRef(cur_module, symbol(string(func)))
+  cur_module = Base.function_module(func, signature)
+  func_ref = GlobalRef(cur_module, Base.function_name(func))
 
   local out::Expr
   ast = code_typed(func, signature)[1]
