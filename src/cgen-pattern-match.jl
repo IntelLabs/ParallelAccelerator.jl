@@ -53,8 +53,8 @@ function pattern_match_call_math(fun::TopNode, input::GenSym, linfo)
 end
 
 
-function pattern_match_call_math(fun::TopNode, input::SymbolNode, linfo)
-  pattern_match_call_math(fun, from_expr(input,linfo), input.typ, linfo)
+function pattern_match_call_math(fun::TopNode, input::TypedVar, linfo)
+  pattern_match_call_math(fun, from_expr(input, linfo), getType(input, linfo), linfo)
 end
 
 function pattern_match_call_math(fun::GlobalRef, input, linfo)
@@ -121,10 +121,10 @@ function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::Union{SymbolNode,Symbol,GenSym}, linfo)
+function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::RHSVar, linfo)
     res = ""
     if(fun.mod == Base && fun.name==:reshape)
-        typ = getSymType(shape)
+        typ = getSymType(shape, linfo)
         if istupletyp(typ)
             dim = length(typ.parameters)
             sh = from_expr(shape,linfo)
@@ -141,12 +141,8 @@ function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY,linfo)
     return ""
 end
 
-function getSymType(a::Union{Symbol,GenSym})
-    return lstate.symboltable[a]
-end
-
-function getSymType(a::SymbolNode)
-    return lstate.symboltable[a.name]
+function getSymType(a::RHSVar, linfo)
+    return lstate.symboltable[getSymbol(a, linfo)]
 end
 
 function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar,linfo)
@@ -154,8 +150,8 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
         return ""
     end
     cblas_fun = ""
-    typ = getSymType(A)
-    if getSymType(B)!=typ || getSymType(C)!=typ
+    typ = getSymType(A, linfo)
+    if getSymType(B, linfo) != typ || getSymType(C, linfo) != typ
         return ""
     end
     if typ==Array{Float32,2}

@@ -1051,7 +1051,7 @@ function get_alloc_shape(args, dims, linfo)
     shp = AbstractString[]
     arg = args[6]
     if (isa(arg, Expr) && isa(arg.typ, Tuple)) || 
-       (isa(arg, RHSVar) && istupletyp(getSymType(arg))) # in case where the argument is a tuple
+       (isa(arg, RHSVar) && istupletyp(getSymType(arg, linfo))) # in case where the argument is a tuple
         arg_str = from_expr(arg, linfo)
         for i in 0:dims-1
             push!(shp, arg_str * ".f" * string(i))
@@ -1460,7 +1460,7 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
             M = args[1]
         elseif (fname == :im || fname == :re) &&
                (isa(args[1], RHSVar) && 
-                (getSymType(args[1]) == Complex64 || getSymType(args[1]) == Complex128))
+                (getSymType(args[1], linfo) == Complex64 || getSymType(args[1], linfo) == Complex128))
             func = fname == :re ? "real" : "imag";
             t = func * "(" * from_expr(args[1],linfo) * ")"
         else
@@ -1736,7 +1736,7 @@ function from_parforend(args,linfo)
         rdscleanup = ""
         for rd in rds
             rdv = rd.reductionVar
-            rdvt = getSymType(rdv)
+            rdvt = getSymType(rdv, linfo)
             rdvtyp = toCtype(rdvt)
             rdvar = from_expr(rdv,linfo)
             # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
@@ -1902,7 +1902,7 @@ function from_parforstart(args, linfo)
     parallel_reduction = USE_OMP==1 && lstate.ompdepth == 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     for rd in rds
         rdv = rd.reductionVar
-        rdvt = getSymType(rdv)
+        rdvt = getSymType(rdv, linfo)
         rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv, linfo)
         rdv_tmp = gensym(rdvar)
