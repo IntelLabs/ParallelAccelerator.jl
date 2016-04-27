@@ -253,9 +253,10 @@ function show(io::IO, f::DomainLambda)
 end
 
 import CompilerTools.Traversal.fmap
+
 # Functor instance of DomainLambda
 function fmap(f, dl::DomainLambda)
-    DomainLambda(fmap(f, dl.body), dl.linfo)
+    DomainLambda(fmap(f, LambdaVarInfoToLambda(dl.linfo, dl.body.args)))
 end
 
 """
