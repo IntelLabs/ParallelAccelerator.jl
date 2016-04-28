@@ -44,6 +44,7 @@ using Core: Box, IntrinsicFunction
 import ..H5SizeArr_t
 import ..SizeArr_t
 import .._accelerate
+import ..show_backtrace
 
 # uncomment this line when using Debug.jl
 #using Debug
@@ -272,7 +273,7 @@ function genBody(dl::DomainLambda, args)
         p = isa(p, TypedVar) ? getSymbol(p, dl.linfo) : p
         @assert (isa(p, Symbol)) "Expect all params to be Symbol or TypedVar, but got " * string(params)
         @assert (isa(args[i], TypedVar)) "Expect all arguments to be TypedVar, but got " * string(args)
-        dict[p] = args[i].name
+        dict[p] = getVariableName(args[i], dl.linfo)
     end
     @dprintln(2, "genBody dict = ", dict)
     Traversal.substSymbols(body.args, dict)
@@ -309,12 +310,12 @@ newState(linfo, defs, state::IRState) = IRState(linfo, defs, Dict{LHSVar,Any}(),
 """
 Update the type of a variable.
 """
-function updateTyp(state::IRState, s::RHSVar, typ)
+function updateTyp(state::IRState, s, typ)
     updateType(state.linfo, s, typ)
 end
 
 function updateBoxType(state::IRState, s::RHSVar, typ)
-    state.boxtyps[toLHSVar(y)] = typ
+    state.boxtyps[toLHSVar(s)] = typ
 end
 
 function getBoxType(state::IRState, s::RHSVar)
@@ -324,14 +325,23 @@ end
 """
 Update the definition of a variable.
 """
+function updateDefInternal(state::IRState, s::LHSVar, rhs)
+    #@dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
+    # This assert is Julia version dependent.
+#    @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
+#    (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
+#    (isa(s, Symbol) && isInputParameter(s, state.linfo)) ||
+#    (isa(s, Symbol) && isEscapingVariable(s, state.linfo))) state.linfo
+    state.defs[s] = rhs
+end
+
 function updateDef(state::IRState, s::RHSVar, rhs)
     s = toLHSVar(s)
-    #@dprintln(3, "updateDef: s = ", s, " rhs = ", rhs, " typeof s = ", typeof(s))
-    @assert ((isa(s, GenSym) && isLocalGenSym(s, state.linfo)) ||
-    (isa(s, Symbol) && isLocalVariable(s, state.linfo)) ||
-    (isa(s, Symbol) && isInputParameter(s, state.linfo)) ||
-    (isa(s, Symbol) && isEscapingVariable(s, state.linfo))) state.linfo
-    state.defs[s] = rhs
+    updateDefInternal(state, s, rhs)
+end
+
+function updateDef(state::IRState, s::LHSVar, rhs)
+    updateDefInternal(state, s, rhs)
 end
 
 """
@@ -705,7 +715,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
             if isa(args[i], GenSym) # cannot put GenSym into lambda! Add a temp variable to do it
                 typ = getType(args[i], state.linfo)
                 tmpv = addFreshLocalVariable(string(args[i]), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-                emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, args[i]))
+                emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, args[i]))
                 args[i] = tmpv
             end
             if isa(args[i], TypedVar)
@@ -848,7 +858,10 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
 function from_lambda(state, env, expr, closure = nothing)
     local env_ = nextEnv(env)
     linfo = lambdaToLambdaVarInfo(expr) 
-    local body  = getBody(expr)
+    local body = getBody(expr)
+    @dprintln(2,"from_lambda typeof(body) = ", typeof(body))
+    @dprintln(3,"expr = ", expr)
+    @dprintln(3,"body = ", body)
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
     if !is(closure, nothing)
@@ -1446,7 +1459,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             updateTyp(state, oldargs[1], typ)
             updateBoxType(state, oldargs[1], typ)
             # change setfield! to direct assignment
-            expr = mk_expr(typ, :(=), oldargs[1].name, oldargs[3])
+            expr = mk_expr(typ, :(=), oldargs[1], oldargs[3])
         elseif is(fun, :getfield) && length(oldargs) == 2 
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
@@ -1545,7 +1558,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                 else # set to scalar value
                     if isa(var, GenSym)
                        tmpv = addFreshLocalVariable(string(args[i]), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-                       emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, args[i]))
+                       emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, args[i]))
                        var = tmpv
                     elseif isa(var, RHSVar)
                        var = toLHSVar(var)
@@ -1900,6 +1913,9 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         redvar = toLHSVar(redvar)
         rvtyp = typeOfOpr(state, redvar)
         dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
+        if (isa(redvar, GenSym))
+          show_backtrace()
+        end
         @assert (!isa(redvar, GenSym)) "Unexpected GenSym  at the position of the reduction variable, " * string(redvar)
         nlinfo = LambdaVarInfo()
         addEscapingVariable(redvar, rvtyp, 0, nlinfo)
@@ -2029,8 +2045,8 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
             dimExp = mk_expr(arrtyp, :call, TopNode(:select_value), 
                          mk_expr(Bool, :call, TopNode(:eq_int), red_dim[1], i), 
                          1, mk_arraysize(arr, i)) 
-            emitStmt(state, mk_expr(Int, :(=), sizeVars[i].name, dimExp))
-            addEscapingVariable(sizeVars[i].name, Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
+            emitStmt(state, mk_expr(Int, :(=), sizeVars[i], dimExp))
+            addEscapingVariable(getVariableName(sizeVars[i], linfo), Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
         end
         redparam = gensym("redvar")
         rednode = toRHSVar(redparam, arrtyp, state.linfo)
@@ -2078,7 +2094,7 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     typs = Type[typeOfOpr(state, arr)]
     if isa(ival, GenSym)
         tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv.name, ival))
+        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, ival))
         ival = tmpv
     end
     domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
@@ -2207,13 +2223,20 @@ function from_return(state, env, expr)
     return mk_expr(typ, head, args...)
 end
 
-function from_expr_tiebreak(state::IRState, env::IREnv, ast :: Expr)
+function from_root(state::IRState, env::IREnv, ast)
+    assert(isfunctionhead(ast))
+    (linfo, body) = from_lambda(state, env, ast)
+    return LambdaVarInfoToLambda(linfo, body.args)
+end
+
+function from_expr_tiebreak(state::IRState, env::IREnv, ast)
     asts::Array{Any,1} = [ast]
-    res::Array{Any,1} = [from_expr(state, env, ast) for ast in asts ]
+    res::Array{Any,1} = [from_root(state, env, ast) for ast in asts ]
     return res[1]
 end
 
-function from_expr(function_name::AbstractString, cur_module :: Module, ast :: Expr)
+function from_expr(function_name::AbstractString, cur_module :: Module, ast)
+    assert(isfunctionhead(ast))
     @dprintln(2,"DomainIR translation function = ", function_name, " on:")
     @dprintln(2,ast)
     res = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast) 
@@ -2259,7 +2282,7 @@ function from_expr(state::IRState, env::IREnv, ast::Union{Symbol,TypedVar})
     typ = typeOfOpr(state, ast)
     if isa(ast, TypedVar) && ast.typ != typ
         @dprintln(2, " Variable ", ast, " gets updated type ", typ)
-        return toRHSVar(ast.name, typ, state.linfo)
+        return toRHSVar(getVariableName(ast, state.linfo), typ, state.linfo)
     elseif isa(ast, Symbol)
         @dprintln(2, " Symbol ", ast, " gets a type ", typ)
         return toRHSVar(ast, typ, state.linfo)
@@ -2326,6 +2349,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :inbounds)
         # skip
     elseif is(head, :meta)
+        # skip
+    elseif is(head, :static_parameter)
         # skip
     elseif is(head, :static_typeof)
         typ = getType(args[1], state.linfo)
