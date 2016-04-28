@@ -245,6 +245,12 @@ end
 type SizeArr_t
 end
 
+function show_backtrace()
+    bt = backtrace()
+    s = sprint(io->Base.show_backtrace(io, bt))
+    println(s)
+end
+
 include("api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
