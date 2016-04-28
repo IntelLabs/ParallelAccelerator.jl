@@ -156,7 +156,7 @@ function expandParMacro(func, ast, sig)
   return ast
 end
 
-function extractCallGraph(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+function extractCallGraph(func :: GlobalRef, ast, signature :: Tuple)
     if use_extract_static_call_graph != 0
       callgraph = extractStaticCallGraph(func, ast, signature)
       @dprintln(3,"Callgraph:")
@@ -166,7 +166,7 @@ function extractCallGraph(func :: GlobalRef, ast :: Expr, signature :: Tuple)
     return ast
 end
 
-function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+function toDomainIR(func :: GlobalRef, ast, signature :: Tuple)
   # See the comment on the global varibale seenByMacroPass for a description of this code.
   if !in(func, seenByMacroPass)
     #throw(string("ParallelAccelerator no longer supports @acc at callsites.  Please add @acc to the declarations of functions that you want to optimize.  Function tried to optimize = ", func, " with signature = ", signature))
@@ -182,7 +182,7 @@ function toDomainIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   return code
 end
 
-function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
   pir_start = time_ns()
 # uncomment these 2 lines for ParallelIR profiling
 #  code = @profile ParallelIR.from_root(string(func.name), ast)
@@ -194,14 +194,14 @@ function toParallelIR(func :: GlobalRef, ast :: Expr, signature :: Tuple)
   return code
 end
 
-function toFlatParfors(func :: GlobalRef, ast :: Expr, signature :: Tuple)
+function toFlatParfors(func :: GlobalRef, ast, signature :: Tuple)
   code = ParallelIR.flattenParfors(string(func.name), ast)
   @dprintln(3, "flattened code = ", code)
   return code
 end
 
 
-function toCGen(func :: GlobalRef, code :: Expr, signature :: Tuple)
+function toCGen(func :: GlobalRef, code, signature :: Tuple)
   # In threads mode, we have already converted back to standard Julia AST so we skip this phase.
   if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
     return code
