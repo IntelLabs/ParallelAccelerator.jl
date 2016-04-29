@@ -217,7 +217,7 @@ type DomainLambda
         body = f(paramS)
         nouts = length(outs)
         setReturnType(nouts > 1 ? Tuple{outs...} : outs[1], li)
-        for v in Traversal.getSymbols(body)
+        for v in Traversal.getSymbols(body, linfo)
             if !in(v, params)
                 addEscapingVariable(v, getType(v, linfo), getDesc(v, linfo), li)
             end
@@ -276,7 +276,7 @@ function genBody(dl::DomainLambda, args)
         dict[p] = getVariableName(args[i], dl.linfo)
     end
     @dprintln(2, "genBody dict = ", dict)
-    Traversal.substSymbols(body.args, dict)
+    Traversal.substSymbols(body.args, dict, dl.linfo)
 end
 
 function arraySwap(arr, i, j)
@@ -1454,7 +1454,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             #typeOfOpr(state, oldargs[1]) == Box
             # special handling for setting Box variables
             dprintln(env, "got setfield! with Box argument: ", oldargs)
-            assert(isa(oldargs[1], TypedVar))
+            #assert(isa(oldargs[1], TypedVar))
             typ = typeOfOpr(state, oldargs[3])
             updateTyp(state, oldargs[1], typ)
             updateBoxType(state, oldargs[1], typ)
