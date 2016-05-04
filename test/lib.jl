@@ -28,8 +28,12 @@ module APILibTest
 using ParallelAccelerator
 importall ParallelAccelerator.API.Lib
 
+#using CompilerTools
+#CompilerTools.AstWalker.set_debug_level(3)
+#CompilerTools.OptFramework.set_debug_level(3)
 #ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
 
 @acc minMax(A) = (indmin(A), indmax(A))
