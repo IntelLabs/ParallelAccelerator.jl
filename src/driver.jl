@@ -433,8 +433,8 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
       push!(seenByMacroPass, func_ref)
       # place holder to prevent recursive accelerate
       alreadyOptimized[(func, signature)] = ast 
-      dir_ast::Expr = toDomainIR(func_ref, ast, signature)
-      pir_ast::Expr = toParallelIR(func_ref, dir_ast, signature)
+      dir_ast = toDomainIR(func_ref, ast, signature)
+      pir_ast = toParallelIR(func_ref, dir_ast, signature)
       pir_ast = toFlatParfors(func_ref, pir_ast, signature)
       alreadyOptimized[(func, signature)] = pir_ast
       out = pir_ast
