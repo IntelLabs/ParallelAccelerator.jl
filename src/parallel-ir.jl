@@ -3135,8 +3135,8 @@ a) Lower domain IR to parallel IR AST nodes.
 b) Fuse parallel IR nodes where possible.
 c) Convert to task IR nodes if task mode enabled.
 """
-function from_root(function_name, ast :: Expr)
-    assert(ast.head == :lambda)
+function from_root(function_name, ast)
+    # assert(ast.head == :lambda)
     @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
 
     start_time = time_ns()

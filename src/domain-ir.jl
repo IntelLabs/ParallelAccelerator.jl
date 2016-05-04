@@ -442,7 +442,7 @@ funcIgnoreList = []
 
 const mapSym = vcat(Symbol[:negate], API.unary_map_operators, API.binary_map_operators)
 
-const mapVal = Symbol[ begin s = string(x); startswith(s, '.') ? symbol(s[2:end]) : x end for x in mapSym]
+const mapVal = Symbol[ begin s = string(x); startswith(s, '.') ? Symbol(s[2:end]) : x end for x in mapSym]
 
 # * / are not point wise. it becomes point wise only when one argument is scalar.
 const pointWiseOps = setdiff(Set{Symbol}(mapSym), Set{Symbol}([:*, :/]))
@@ -471,7 +471,11 @@ const ignoreSet = Set{Symbol}(ignoreSym)
 
 const allocCalls = Set{Symbol}([:jl_alloc_array_1d, :jl_alloc_array_2d, :jl_alloc_array_3d, :jl_new_array])
 
-const afoldTyps = Type[Base.AddFun, Base.MulFun, Base.AndFun, Base.OrFun]
+if VERSION >= v"0.5.0-dev+3875"
+const afoldTyps = Type[getfield(Base, Symbol(string("#",s))) for s in ["+","*","&","|"]]
+else
+const afoldTyps = Type[getfield(Base, s) for s in [:AddFun, :MulFun, :AndFun, :OrFun]]
+end
 const afoldOprs = Symbol[:+, :*, :&, :|]
 const afoldlDict = Dict{Type,Symbol}(zip(afoldTyps, afoldOprs))
 
@@ -483,7 +487,7 @@ function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaVar
     unique = false
     while (!unique)
         unique_id = unique_id + 1
-        name = symbol(string(s, "##", unique_id))
+        name = Symbol(string(s, "##", unique_id))
         unique = !isLocalVariable(name, linfo)
     end
     addLocalVariable(name, t, desc, linfo)
@@ -609,7 +613,7 @@ end
 function rangeToMask(state, r::GlobalRef, arraysize)
     # FIXME: why doesn't this assert work?
     #@assert (r.mod!=Main || r.name!=symbol(":")) "unhandled GlobalRef range"
-    if r.name==symbol(":")
+    if r.name==:(:)
         return mk_range(state, 1, 1, arraysize)
     else
         error("unhandled GlobalRef range object: ", r)
@@ -1464,7 +1468,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
                 return oldargs[1]
-            elseif isa(oldargs[1], TypedVar) && getSymbol(oldargs[1], state.linfo) == symbol("#self#")
+            elseif isa(oldargs[1], TypedVar) && getSymbol(oldargs[1], state.linfo) == Symbol("#self#")
                 fname = oldargs[2]
                 assert(isa(fname, QuoteNode))
                 dprintln(env, "lookup #self# closure field ", fname, " :: ", typeof(fname))
@@ -2528,7 +2532,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             if i <= length(dl.outputs)
                 # We need both a read followed by a write.
                 push!(expr_to_process, input_arrays[i])
-                push!(expr_to_process, Expr(symbol('='), input_arrays[i], 1))
+                push!(expr_to_process, Expr(:(=), input_arrays[i], 1))
             else
                 # Need to make input_arrays[1] written?
                 push!(expr_to_process, input_arrays[i])
@@ -2569,7 +2573,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         for i = 1:length(sbufs)
             # sbufs both read and possibly written
             push!(expr_to_process, sbufs[i])
-            push!(expr_to_process, Expr(symbol('='), sbufs[i], 1))
+            push!(expr_to_process, Expr(:(=), sbufs[i], 1))
         end
 
         dl = args[4]
