@@ -1151,19 +1151,7 @@ function pir_live_cb_def(x)
     pir_live_cb(x, nothing)
 end
 
-"""
-Process a :lambda Expr.
-"""
-function from_lambda(lambda :: Expr, depth, state)
-    # :lambda expression
-    assert(lambda.head == :lambda)
-    @dprintln(4,"from_lambda starting")
-
-    # Save the current LambdaVarInfo away so we can restore it later.
-    save_LambdaVarInfo  = state.LambdaVarInfo
-    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
-    body = CompilerTools.LambdaHandling.getBody(lambda)
-
+function from_lambda_body(body :: Expr, depth, state)
     # Process the lambda's body.
     @dprintln(3,"state.LambdaVarInfo.var_defs = ", state.LambdaVarInfo.var_defs)
     body = get_one(from_expr(body, depth, state, false))
@@ -1182,8 +1170,46 @@ function from_lambda(lambda :: Expr, depth, state)
 
     body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
+    return body
+end
+
+"""
+Process a :lambda Expr.
+"""
+function from_lambda(lambda :: Expr, depth, state)
+    # :lambda expression
+    assert(lambda.head == :lambda)
+    @dprintln(4,"from_lambda starting")
+
+    # Save the current LambdaVarInfo away so we can restore it later.
+    save_LambdaVarInfo  = state.LambdaVarInfo
+    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
+    body = CompilerTools.LambdaHandling.getBody(lambda)
+
+    body = from_lambda_body(body, depth, state)
+
+if false
+    # Process the lambda's body.
+    @dprintln(3,"state.LambdaVarInfo.var_defs = ", state.LambdaVarInfo.var_defs)
+    body = get_one(from_expr(body, depth, state, false))
+    @dprintln(4,"from_lambda after from_expr")
+    @dprintln(3,"After processing lambda body = ", state.LambdaVarInfo)
+    @dprintln(3,"from_lambda: after body = ")
+    printBody(3, body)
+
+    # Count the number of static assignments per var.
+    cas = CountAssignmentsState(Dict{Symbol, Int}(), state.LambdaVarInfo)
+    AstWalk(body, count_assignments, cas)
+
+    # After counting static assignments, update the LambdaVarInfo for those vars
+    # to say whether the var is assigned once or multiple times.
+    CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, cas.symbol_assigns)
+
+    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+end
+
     # Write the LambdaVarInfo back to the lambda AST node.
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body.args)
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
     @dprintln(3,"new lambda = ", lambda)
 
     state.LambdaVarInfo = save_LambdaVarInfo
@@ -2137,17 +2163,12 @@ end
 """
 Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 """
-function printLambda(dlvl, node :: Expr)
-    assert(node.head == :lambda)
+function printLambda(dlvl, node)
+    assert(isfunctionhead(node))
+    linfo = lambdaToLambdaVarInfo(node)
     dprintln(dlvl, "Lambda:")
-    dprintln(dlvl, "Input parameters: ", node.args[1])
-    dprintln(dlvl, "Metadata: ", node.args[2])
-    body = node.args[3]
-    if typeof(body) != Expr
-        @dprintln(0, "printLambda got ", typeof(body), " for a body, len = ", length(node.args))
-        @dprintln(0, node)
-    end
-    assert(body.head == :body)
+    dprintln(dlvl, linfo)
+    body = getBody(linfo)
     dprintln(dlvl, "typeof(body): ", body.typ)
     printBody(dlvl, body.args)
     if body.typ == Any
@@ -2608,9 +2629,14 @@ end
 """
 Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.
 """
-function processAndUpdateBody(lambda :: Expr, f :: Function, state)
-    assert(lambda.head == :lambda) 
-    lambda.args[3].args = f(lambda.args[3].args, state)
+function processAndUpdateBody(lambda, f :: Function, state)
+    assert(isfunctionhead(lambda))
+
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
+    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
+    body.args = f(body.args, state)
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
+
     return lambda
 end
 
@@ -2829,7 +2855,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     @dprintln(1,"ast after dead blocks removed, ast = ", ast)
 
     @dprintln(1,"Starting liveness analysis.")
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.")
 
     @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
@@ -2895,7 +2921,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
         @dprintln(3,"ast after no dep stmts re-inserted = ", ast)
 
         @dprintln(1,"Re-starting liveness analysis.")
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
         @dprintln(1,"Finished liveness analysis.")
 
         changed = rnd_state.change
@@ -2905,7 +2931,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     processAndUpdateBody(ast, removeNothingStmts, nothing)
     @dprintln(1,"Re-starting liveness analysis.")
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.")
 
     @dprintln(1,"Doing conversion to parallel IR.")
@@ -2966,13 +2992,20 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     nothing
 end
 
-function addStatementsToBeginning(lambda :: Expr, stmts :: Array{Any,1})
-    assert(lambda.head == :lambda)
-    assert(typeof(lambda.args[3]) == Expr)
-    assert(lambda.args[3].head == :body)
-    lambda.args[3].args = [stmts; lambda.args[3].args]
-    return lambda
+# This could be re-written using processAndUpdateBody, which is more generic.
+function addStatementsToBeginning(node, stmts :: Array{Any,1})
+    assert(isfunctionhead(node))
+
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
+    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
+    @dprintln(2,"typeof(body) = ", typeof(body))
+    body = CompilerTools.LambdaHandling.prependStatements(body, stmts)
+    @dprintln(2,"typeof(body) = ", typeof(body))
+    node = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
+
+    return node
 end
+
 
 doRemoveAssertEqShape = true
 generalSimplification = true
@@ -3047,9 +3080,9 @@ function __init__()
   push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(*)),  force = true))
   push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(+)),  force = true))
   push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(-)),  force = true))
-  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(<=)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(<=)), force = true))
   push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(<)),  force = true))
-  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(>=)),  force = true))
+  push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(>=)), force = true))
   push!(wellknown_all_unmodified, Base.resolve(GlobalRef(ParallelAccelerator.API,:(>)),  force = true))
 end
 
@@ -3064,6 +3097,7 @@ function no_mod_impl(func :: GlobalRef, arg_type_tuple :: Array{DataType,1})
 end
 
 function computeLiveness(ast, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    @dprintln(2, "computeLiveness typeof(ast) = ", typeof(ast))
     return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
@@ -3105,6 +3139,10 @@ function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.Pa
 end
 
 function genEquivalenceClasses(ast, new_vars)
+    assert(isfunctionhead(ast))
+
+    new_vars.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    
     # no need to empty them since equivalence class will be overwritten if it needs to be negative
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
@@ -3136,8 +3174,8 @@ b) Fuse parallel IR nodes where possible.
 c) Convert to task IR nodes if task mode enabled.
 """
 function from_root(function_name, ast)
-    # assert(ast.head == :lambda)
-    @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast)
+    assert(isfunctionhead(ast))
+    @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
 
     start_time = time_ns()
 
@@ -3150,19 +3188,20 @@ function from_root(function_name, ast)
     body = CompilerTools.CFGs.createFunctionBody(cfg)
     # Re-create the lambda minus any dead basic blocks.
     ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
-    @dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast)
+    @dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
 
     #CompilerTools.LivenessAnalysis.set_debug_level(3)
 
     @dprintln(1,"Starting liveness analysis. function = ", function_name)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
     
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
     ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    @dprintln(1,"ast after copy_propagate = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
+    lives = computeLiveness(ast, LambdaVarInfo)
     ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
     
     #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     @dprintln(3,"lives = ", lives)
@@ -3187,17 +3226,18 @@ function from_root(function_name, ast)
     # We pass only the non-array params to the rearrangement code because if we pass array params then
     # the code will detect statements that depend only on array params and move them to the top which
     # leaves other non-array operations after that and so prevents fusion.
-    @dprintln(3,"All params = ", ast.args[1])
+    input_parameters = CompilerTools.LambdaHandling.getParamsNoSelf(LambdaVarInfo)
+    @dprintln(3,"All params = ", input_parameters)
     non_array_params = Set{LHSVar}()
-    for param in ast.args[1]
+    for param in input_parameters
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
-            push!(non_array_params, param)
+            push!(non_array_params, symbolToLHSVar(param, LambdaVarInfo))
         end
     end
     @dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
     # Find out max_label
-    body = ast.args[3]
+    body = getBody(LambdaVarInfo)
     assert(isa(body, Expr) && is(body.head, :body))
     max_label = getMaxLabel(0, body.args)
     @dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
@@ -3206,7 +3246,7 @@ function from_root(function_name, ast)
 
     changed = true
     while changed
-        @dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1], " function = ", function_name)
+        @dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", input_parameters, " function = ", function_name)
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         ast = AstWalk(ast, remove_no_deps, rnd_state)
         @dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
@@ -3220,7 +3260,7 @@ function from_root(function_name, ast)
         printLambda(3, ast)
 
         @dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
         @dprintln(1,"Finished liveness analysis.", " function = ", function_name)
         @dprintln(3,"lives = ", lives)
 
@@ -3232,7 +3272,7 @@ function from_root(function_name, ast)
     processAndUpdateBody(ast, removeNothingStmts, nothing)
     @dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
     printLambda(3, ast)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
 
     #multipleArrayAssigns = findMultipleArrayAssigns(lives, LambdaVarInfo)
     #@dprintln(3,"Arrays that are assigned multiple times = ", multipleArrayAssigns)
@@ -3244,7 +3284,7 @@ function from_root(function_name, ast)
         # main copy propagation round after arraysize() replacement
         # main size analysis after all size variables are propagated
         ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
 
         new_vars = expr_state(lives, max_label, input_arrays)
         @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
@@ -3252,15 +3292,15 @@ function from_root(function_name, ast)
         @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
         print_correlations(3, new_vars)
 
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
         ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
         @dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
         printLambda(3, ast)
     end
 
     ast   = AstWalk(ast, remove_dead, RemoveDeadState(lives))
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+    lives = computeLiveness(ast, LambdaVarInfo)
     @dprintln(3,"ast after remove_dead = ", " function = ", function_name)
     printLambda(3, ast)
 
@@ -3278,16 +3318,16 @@ function from_root(function_name, ast)
         processAndUpdateBody(ast, removeAssertEqShape, new_vars)
         @dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
         printLambda(3, ast)
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
     end
 
     if bb_reorder != 0
         maxFusion(lives)
         # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
-        ast.args[3].args = CompilerTools.CFGs.createFunctionBody(lives.cfg)
+        ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, CompilerTools.CFGs.createFunctionBody(lives.cfg))
         @dprintln(3,"ast after maxFusion = ", " function = ", function_name)
         printLambda(3, ast)
-        lives = CompilerTools.LivenessAnalysis.from_expr(ast, DomainIR.dir_live_cb, nothing)
+        lives = computeLiveness(ast, LambdaVarInfo)
     end
 
     @dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
@@ -3514,8 +3554,18 @@ end
 
 
 function from_expr(ast :: LambdaInfo, depth, state :: expr_state, top_level)
-    ast = Base.uncompressed_ast(ast)
-    return from_expr(ast, depth, state, top_level)
+    @dprintln(3,"from_expr for LambdaInfo starting")
+    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    body = CompilerTools.LambdaHandling.getBody(lambda)
+
+    body = from_lambda_body(body, 0, state)
+    @dprintln(3,"new lambda = ", ast)
+
+    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
+    return ast
+
+#    ast = Base.uncompressed_ast(ast)
+#    return from_expr(ast, depth, state, top_level)
 end
 
 function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
