@@ -3375,8 +3375,12 @@ end
 Calculates statistics (number of allocations and parfors)
 of the accelerated AST.
 """
-function set_pir_stats(ast::Expr)
-    body = CompilerTools.LambdaHandling.getBody(ast)
+function set_pir_stats(ast)
+    assert(isfunctionhead(ast))
+
+    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
+
     allocs = 0
     parfors = 0
     # count number of high-level allocations and assignment
@@ -3556,13 +3560,12 @@ end
 function from_expr(ast :: LambdaInfo, depth, state :: expr_state, top_level)
     @dprintln(3,"from_expr for LambdaInfo starting")
     state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(lambda)
-
+    body = CompilerTools.LambdaHandling.getBody(state.LambdaVarInfo)
     body = from_lambda_body(body, 0, state)
     @dprintln(3,"new lambda = ", ast)
 
     ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
-    return ast
+    return [ast]
 
 #    ast = Base.uncompressed_ast(ast)
 #    return from_expr(ast, depth, state, top_level)
