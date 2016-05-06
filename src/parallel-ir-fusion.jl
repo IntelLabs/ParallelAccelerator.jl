@@ -484,9 +484,9 @@ If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
 function mmapToMmap!(ast, lives, uniqSet)
+    assert(isfunctionhead(ast))
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = ast.args[3]
-    assert(isa(body, Expr) && is(body.head, :body))
+    body = CompilerTools.LambdaHandling.getBody(ast)
     # For each statement in the body.
     for i =1:length(body.args)
         expr = body.args[i]
