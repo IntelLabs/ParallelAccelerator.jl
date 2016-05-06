@@ -23,10 +23,10 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =# 
  
-function flattenParfors(function_name, ast::Expr)
+function flattenParfors(function_name, ast)
+    assert(isfunctionhead(ast))
     flatten_start = time_ns()
 
-    assert(ast.head == :lambda)
     @dprintln(1,"Starting flattenParfors.  function = ", function_name, " ast = ", ast)
 
     #bt = backtrace() ;
@@ -37,7 +37,7 @@ function flattenParfors(function_name, ast::Expr)
     start_time = time_ns()
 
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(ast)
+    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
 
     expanded_args = Any[]
     flattenParfors(expanded_args, body.args, LambdaVarInfo)
