@@ -478,9 +478,17 @@ function isCompositeType(t::Type)
     b
 end
 
-function from_lambda(ast::Expr, args::Array{Any,1})
-    s = ""
+function from_lambda(ast::Expr)
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    from_lambda(linfo)
+end
+
+function from_lambda(ast::LambdaInfo)
+    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    from_lambda(linfo)
+end
+
+function from_lambda(linfo :: LambdaVarInfo)
     params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x, linfo) 
                      for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
     vars = CompilerTools.LambdaHandling.getLocalNoParams(linfo)
@@ -502,7 +510,7 @@ function from_lambda(ast::Expr, args::Array{Any,1})
         end
     end
 
-    bod = from_expr(args[3], linfo)
+    bod = from_expr(getBody(linfo), linfo)
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
@@ -1355,10 +1363,6 @@ function from_symbol(ast, linfo)
     hasfield(ast, :name) ? canonicalize(string(ast.name)) : canonicalize(ast)
 end
 
-function from_typedvar(ast, linfo)
-    canonicalize(string(getSymbol(ast, linfo)))
-end
-
 function from_linenumbernode(ast, linfo)
     ""
 end
@@ -2100,7 +2104,7 @@ function from_expr(ast::Expr, linfo)
 
     elseif head == :lambda
         @dprintln(3,"Compiling lambda")
-        s *= from_lambda(ast, args)
+        s *= from_lambda(ast)
 
     elseif head == :(=)
         @dprintln(3,"Compiling assignment ", ast)
@@ -2183,12 +2187,17 @@ function from_expr(ast::Expr, linfo)
 end
 
 
-function from_expr(ast::Symbol, linfo)
+function fromRHSVar(ast::Symbol, linfo)
     s = from_symbol(ast, linfo)
 end
 
-function from_expr(ast::TypedVar, linfo)
-    s = from_typedvar(ast, linfo)
+function fromRHSVar(ast::GenSym, linfo)
+    s = "GenSym" * string(ast.id)
+end
+
+function from_expr(ast::Union{Symbol,RHSVar}, linfo)
+    sym = getSymbol(ast, linfo)
+    fromRHSVar(sym, linfo)
 end
 
 function from_expr(ast::LineNumberNode, linfo)
@@ -2219,10 +2228,6 @@ end
 
 function from_expr(ast::GlobalRef, linfo)
     s = from_globalref(ast, linfo)
-end
-
-function from_expr(ast::GenSym, linfo)
-    s = "GenSym" * string(ast.id)
 end
 
 function from_expr(ast::Type, linfo)
@@ -2597,7 +2602,8 @@ end
 
 
 # This is the entry point to CGen from the PSE driver
-function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+    assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = true
     global lstate
@@ -2616,7 +2622,8 @@ function from_root_entry(ast::Expr, functionName::ASCIIString, array_types_in_si
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
-    bod = from_expr(ast, linfo)
+    #bod = from_expr(ast, linfo)
+    bod = from_lambda(linfo)
 
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
