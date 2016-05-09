@@ -2846,7 +2846,7 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
     cfg = CompilerTools.CFGs.from_ast(ast)
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    input_arrays = get_input_arrays(LambdaVarInfo)
+    input_arrays = getArrayParams(LambdaVarInfo)
     # body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
     body = CompilerTools.CFGs.createFunctionBody(cfg)
@@ -3010,23 +3010,6 @@ end
 doRemoveAssertEqShape = true
 generalSimplification = true
 
-function get_input_arrays(linfo::LambdaVarInfo)
-    ret = Symbol[]
-    input_vars = linfo.input_params
-    @dprintln(3,"input_vars = ", input_vars)
-
-    for iv in input_vars
-        it = getType(iv, linfo)
-        @dprintln(3,"iv = ", iv, " type = ", it)
-        if isArrayType(it)
-            @dprintln(3,"Parameter is an Array.")
-            push!(ret, iv)
-        end
-    end
-
-    ret
-end
-
 """
 Returns a set of RHSVar's that are arrays for which there are multiple statements that could define that
 array and by implication change its size.
@@ -3182,7 +3165,8 @@ function from_root(function_name, ast)
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
     cfg = CompilerTools.CFGs.from_ast(ast)
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    input_arrays = get_input_arrays(LambdaVarInfo)
+    input_arrays = getArrayParams(LambdaVarInfo)
+    @dprintln(3,"input_arrays = ", input_arrays, " type = ", typeof(input_arrays))
     #body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
     body = CompilerTools.CFGs.createFunctionBody(cfg)
