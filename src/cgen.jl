@@ -54,7 +54,7 @@ type LambdaGlobalData
     #adp::ASTDispatcher
     ompprivatelist::Array{Any, 1}
     globalUDTs::Dict{Any, Any}
-    symboltable::Dict{Any, Any}
+    symboltable::Dict{Any, Any}         # mapping from some kind of variable to a type
     tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
     compiledfunctions::Array{Any, 1}
     worklist::Array{Any, 1}
@@ -332,8 +332,8 @@ end
 include("cgen-pattern-match.jl")
 
 # Emit declarations and "include" directives
-function from_header(isEntryPoint::Bool)
-    s = from_UDTs()
+function from_header(isEntryPoint::Bool, linfo)
+    s = from_UDTs(linfo)
     isEntryPoint ? from_includes() * s : s
 end
 
@@ -395,13 +395,13 @@ end
 
 # Iterate over all the user defined types (UDTs) in a function
 # and emit a C++ type declaration for each
-function from_UDTs()
+function from_UDTs(linfo)
     global lstate
-    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a) : ""), *, keys(lstate.globalUDTs))
+    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a, linfo) : ""), *, keys(lstate.globalUDTs))
 end
 
 # Tuples are represented as structs
-function from_decl(k::Tuple)
+function from_decl(k::Tuple, linfo)
     s = "typedef struct {\n"
     for i in 1:length(k)
         s *= toCtype(k[i]) * " " * "f" * string(i-1) * ";\n"
@@ -415,7 +415,7 @@ function from_decl(k::Tuple)
 end
 
 # Generic declaration emitter for non-primitive Julia DataTypes
-function from_decl(k::DataType)
+function from_decl(k::DataType, linfo)
     if is(k, UnitRange{Int64})
         if haskey(lstate.globalUDTs, k)
             lstate.globalUDTs[k] = 0
@@ -468,7 +468,7 @@ function from_decl(k::DataType)
     return ""
 end
 
-function from_decl(k)
+function from_decl(k, linfo)
     return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
 end
 
@@ -1401,7 +1401,7 @@ function resolveCallTarget(ast::Array{Any, 1},linfo)
     #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
     #   M = args[1].value; s = args[1].name; t = ""
 
-    @dprintln(3,"Trying to resolve target with args: ", ast)
+    @dprintln(3,"Trying to resolve target from ast::Array{Any,1} with args: ", ast)
     return resolveCallTarget(ast[1], ast[2:end],linfo)
 end
 
@@ -1452,7 +1452,7 @@ end
     
     
 function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
-    @dprintln(3,"Trying to resolve target with args: ", args)
+    @dprintln(3,"Trying to resolve target from f::TopNode with args: ", args)
     M = ""
     t = ""
     s = ""
@@ -1474,8 +1474,8 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
         end
         @dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
+        @dprintln(3,"Case 2: calling")
         return resolveCallTarget(f,linfo)
-
     # case 3:
     elseif isInlineable(f.name, args)
         t = from_inlineable(f.name, args,linfo)
@@ -1489,7 +1489,21 @@ function resolveCallTarget(f::ANY, args::Array{Any, 1},linfo)
     return "","",""
 end
 
+function inSymbolTable(x, linfo)
+    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    haskey(lstate.symboltable, x)
+end
 
+function lookupSymbolType(x, linfo)
+    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    lstate.symboltable[x]
+end
+
+function setSymbolType(x, typ, linfo)
+    @dprintln(3, "setSymbolType ", x, " typ = ", typ)
+    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    lstate.symboltable[x] = typ
+end
 
 function from_call(ast::Array{Any, 1},linfo)
 
@@ -1566,6 +1580,7 @@ function from_call(ast::Array{Any, 1},linfo)
     s *= funStr * "("
     argTyps = []
     for a in 1:length(args)
+        @dprintln(4, "a = ", a, " args[a] = ", args[a])
         s *= from_expr(args[a],linfo) * (a < length(args) ? "," : "")
         if !skipCompilation
             # Attempt to find type
@@ -2192,7 +2207,7 @@ function fromRHSVar(ast::Symbol, linfo)
 end
 
 function fromRHSVar(ast::GenSym, linfo)
-    s = "GenSym" * string(ast.id)
+    s = string(typeof(ast)) * string(ast.id)
 end
 
 function from_expr(ast::Union{Symbol,RHSVar}, linfo)
@@ -2663,7 +2678,7 @@ function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: D
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
     push!(lstate.compiledfunctions, functionName)
     forwards, funcs = from_worklist()
-    hdr = from_header(true)
+    hdr = from_header(true, linfo)
     c = hdr * forwards * funcs * s * wrapper
     resetLambdaState(lstate)
 
@@ -2679,7 +2694,8 @@ function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: D
 end
 
 # This is the entry point to CGen from the PSE driver
-function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_nonentry(ast, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+    assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = false
     global lstate
@@ -2691,7 +2707,8 @@ function from_root_nonentry(ast::Expr, functionName::ASCIIString, array_types_in
     params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
-    bod = from_expr(ast, linfo)
+    #bod = from_expr(ast, linfo)
+    bod = from_lambda(linfo)
 
     vararg_bod, args, argsunal, alias_check = check_params(false, params, linfo)
     bod = vararg_bod * bod
@@ -2759,7 +2776,7 @@ function from_worklist()
     global lstate
     while !isempty(lstate.worklist)
         a, fname, typs = splice!(lstate.worklist, 1)
-        @dprintln(3,"Checking if we compiled ", fname, " before")
+        @dprintln(3,"Checking if we compiled ", fname, " before ", typeof(a), " ", typs)
         @dprintln(3,lstate.compiledfunctions)
         if has(lstate.compiledfunctions, fname)
             @dprintln(3,"Yes, skipping compilation...")
