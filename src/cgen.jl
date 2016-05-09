@@ -1003,11 +1003,11 @@ function from_getfield(args, linfo)
     =#
 end
 
-function from_nfields(arg::Union{Symbol,GenSym}, linfo)
+function from_nfields(arg::LHSVar, linfo)
     @dprintln(3,"Arg is: ", arg)
     @dprintln(3,"Arg type = ", typeof(arg))
     #string(nfields(args[1].typ))
-    string(nfields(lstate.symboltable[arg]))
+    string(nfields(lookupSymbolType(arg, linfo)))
 end
 
 function from_nfields(arg::TypedVar, linfo)
