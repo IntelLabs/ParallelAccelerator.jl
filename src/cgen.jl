@@ -469,7 +469,7 @@ function from_decl(k::DataType, linfo)
 end
 
 function from_decl(k, linfo)
-    return toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
+    return toCtype(lookupSymbolType(k, linfo)) * " " * canonicalize(k) * ";\n"
 end
 
 function isCompositeType(t::Type)
@@ -516,7 +516,8 @@ function from_lambda(linfo :: LambdaVarInfo)
     dumpSymbolTable(lstate.symboltable)
 
     for k in vars
-        decls *= toCtype(lstate.symboltable[k]) * " " * canonicalize(k) * ";\n"
+        @dprintln(3, "from_lambda creating decl for ", k)
+        decls *= toCtype(lookupSymbolType(k, linfo)) * " " * canonicalize(k) * ";\n"
     end
     decls * bod
 end
@@ -624,7 +625,7 @@ function from_assignment(args::Array{Any,1}, linfo)
         return ""
     end
 
-    if !typeAvailable(lhs) && !haskey(lstate.symboltable,lhs)
+    if !typeAvailable(lhs) && !inSymbolTable(lhs, linfo)
         if typeAvailable(rhs)
             lstate.symboltable[lhs] = rhs.typ
         elseif haskey(lstate.symboltable, rhs)
@@ -647,7 +648,7 @@ function from_assignment(args::Array{Any,1}, linfo)
                 @dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
                 lstate.symboltable[lhs] = eval(rhs.args[2])
                 @dprintln(3,"Emitting :", rhs.args[2])
-                @dprintln(3,"Set type to : ", lstate.symboltable[lhs])
+                @dprintln(3,"Set type to : ", lookupSymbolType(lhs, linfo))
             end
         end
     end
