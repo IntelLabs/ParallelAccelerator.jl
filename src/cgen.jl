@@ -498,7 +498,7 @@ function from_lambda(linfo :: LambdaVarInfo)
     # Populate the symbol table
     for k in vcat(params, vars)
         t = CompilerTools.LambdaHandling.getType(k, linfo) # v is a VarDef
-        lstate.symboltable[k] = t
+        setSymbolType(k, t, linfo)
         @assert t!=Any "CGen: variable " * string(k) * " cannot have Any (unresolved) type"
         if !in(k, params) && (CompilerTools.LambdaHandling.getDesc(k, linfo) & 32 != 0)
             push!(lstate.ompprivatelist, k)
@@ -627,13 +627,13 @@ function from_assignment(args::Array{Any,1}, linfo)
 
     if !typeAvailable(lhs) && !inSymbolTable(lhs, linfo)
         if typeAvailable(rhs)
-            lstate.symboltable[lhs] = rhs.typ
-        elseif haskey(lstate.symboltable, rhs)
-            lstate.symboltable[lhs] = lstate.symboltable[rhs]
+            setSymbolType(lhs, rhs.typ, linfo)
+        elseif inSymbolTable(rhs, linfo)
+            setSymbolType(lhs, lookupSymbolType(rhs, linfo), linfo)
         elseif isPrimitiveJuliaType(typeof(rhs))
-            lstate.symboltable[lhs] = typeof(rhs)
+            setSymbolType(lhs, typeof(rhs), linfo)
         elseif isPrimitiveJuliaType(typeof(rhsO))
-            lstate.symboltable[lhs] = typeof(rhs0)
+            setSymbolType(lhs, typeof(rhs0), linfo)
         else
             @dprintln(3,"Unknown type in assignment: ", args)
             throw("FATAL error....exiting")
@@ -646,7 +646,7 @@ function from_assignment(args::Array{Any,1}, linfo)
             f = string(f)
             if f == "fpext"
                 @dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
-                lstate.symboltable[lhs] = eval(rhs.args[2])
+                setSymbolType(lhs, eval(rhs.args[2]), linfo)
                 @dprintln(3,"Emitting :", rhs.args[2])
                 @dprintln(3,"Set type to : ", lookupSymbolType(lhs, linfo))
             end
