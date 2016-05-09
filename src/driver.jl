@@ -268,12 +268,9 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   (modified_sig, sig_dims) = convert_sig(signature)
   @dprintln(2, "modified_sig = ", modified_sig)
   @dprintln(2, "sig_dims = ", sig_dims)
-  @dprintln(3, "len? ", length(code.args[1]), length(sig_dims))
+  original_args = CompilerTools.LambdaHandling.getParamsNoSelf(LambdaVarInfo)
+  @dprintln(3, "len? ", length(original_args), length(sig_dims))
  
-  original_args = code.args[1]
-  if length(original_args) > 0 && original_args[1] == symbol("#self#")
-    original_args = original_args[2:end]
-  end
   map!(s -> gensym(string(s)), original_args)
   assert(length(original_args) == length(sig_dims))
   modified_args = Array(Any, length(sig_dims))
@@ -329,7 +326,8 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
       for i = 1:num_rets
           (typ, is_array) = ret_typs[i]
           push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
-          push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), getTypedVar(:ret_args, Array{Any,1}, LambdaVarInfo), i)))
+          push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), :ret_args, i)))
+          #push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), getTypedVar(:ret_args, Array{Any,1}, LambdaVarInfo), i)))
       end
   end
   
