@@ -967,8 +967,8 @@ function from_getfield(args, linfo)
     if isa(args[1], TypedVar)
       args1typ = args[1].typ
       @dprintln(4,"from_getfield args[1] is ", args[1], " args1typ: ", args1typ)
-    elseif isa(args[1], GenSym) || isa(args[1], Symbol)
-      args1typ = lstate.symboltable[args[1]]
+    elseif inSymbolTable(args[1], linfo)
+      args1typ = lookupSymbolType(args[1], linfo)
       @dprintln(4,"from_getfield args[1] is GenSym or Symbol, args1typ: ", args1typ)
     else
       throw("Unhandled argument 1 type to getfield")
@@ -1591,8 +1591,10 @@ function from_call(ast::Array{Any, 1},linfo)
                 push!(argTyps, typeof(args[a]))
             elseif isa(args[a], AbstractString)
                 push!(argTyps, typeof(args[a]))
-            elseif haskey(lstate.symboltable, args[a])
-                push!(argTyps, lstate.symboltable[args[a]])
+            elseif inSymbolTable(args[a], linfo)
+                push!(argTyps, lookupSymbolType(args[a], linfo))
+            else
+                throw(string("Could determine type for arg ", a, " to call ", mod, ".", fun, " with name ", args[a]))
             end
         end
     end
