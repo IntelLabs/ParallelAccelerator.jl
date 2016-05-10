@@ -2463,9 +2463,9 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
         # parameter related processing, we treat j2c-arrays differently
         nparams = length(params)
         for i = 1:nparams
-            if haskey(lstate.symboltable, params[i])
+            if inSymbolTable(params[i], linfo)
                 sep = i < nparams ? ", " : ""
-                typ = lstate.symboltable[params[i]]
+                typ = lookupSymbolType(params[i], linfo)
                 pname = canonicalize(params[i])
                 tname = toCtype(typ)
                 if isArrayType(typ)
