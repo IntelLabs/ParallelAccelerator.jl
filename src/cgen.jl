@@ -2010,8 +2010,8 @@ end
 function from_loophead(args,linfo)
     iv = from_expr(args[1],linfo)
     decl = "uint64_t"
-    if haskey(lstate.symboltable, args[1])
-        decl = toCtype(lstate.symboltable[args[1]])
+    if inSymbolTable(args[1], linfo)
+        decl = toCtype(lookupSymbolType(args[1], linfo))
     end
     start = from_expr(args[2],linfo)
     stop = from_expr(args[3],linfo)
