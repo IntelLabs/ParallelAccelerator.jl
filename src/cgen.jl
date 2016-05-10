@@ -1638,7 +1638,7 @@ function from_return(args,linfo)
         if typeAvailable(arg1)
             arg1_typ = arg1.typ
         elseif isa(arg1, GenSym)
-            arg1_typ = lstate.symboltable[arg1]
+            arg1_typ = lookupSymbolType(arg1, linfo)
         end
         if istupletyp(arg1_typ)
             retTyps = arg1_typ.parameters
