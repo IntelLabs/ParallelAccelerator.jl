@@ -589,7 +589,6 @@ end
 function from_assignment_fix_tuple(lhs, rhs::ANY, linfo)
 end
 
-
 function from_assignment(args::Array{Any,1}, linfo)
     global lstate
     lhs = args[1]
@@ -2353,19 +2352,11 @@ function from_formalargs(params, vararglist, unaliased, linfo)
     for p in 1:length(params)
         @dprintln(3,"Doing param $p: ", params[p])
         @dprintln(3,"Type is: ", typeof(params[p]))
-        if haskey(lstate.symboltable, params[p])
-            typ = lstate.symboltable[params[p]]
-            ptyp = toCtype(typ)
-            is_array = isArrayType(typ) || isStringType(typ)
-            s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
-                * (is_array ? " $ql " : " ")
-                * canonicalize(params[p])
-                * (p < length(params) ? ", " : ""))
-        # We may have a varags expression
-        elseif isa(params[p], Expr)
+        if isa(params[p], Expr)
+            # We may have a varags expression
             assert(isa(params[p].args[1], Symbol))
-            @dprintln(3,"varargs type: ", params[p], lstate.symboltable[params[p].args[1]])
-            varargtyp = lstate.symboltable[params[p].args[1]]
+            @dprintln(3,"varargs type: ", params[p], lookupSymbolType(params[p].args[1], linfo))
+            varargtyp = lookupSymbolType(params[p].args[1], linfo)
             for i in 1:length(varargtyp.types)
                 vtyp = varargtyp.types[i]
                 cvtyp = toCtype(vtyp)
@@ -2379,6 +2370,14 @@ function from_formalargs(params, vararglist, unaliased, linfo)
                     lstate.globalUDTs[varargtyp] = 1
                 end
             end
+        elseif inSymbolTable(params[p], linfo)
+            typ = lookupSymbolType(params[p], linfo)
+            ptyp = toCtype(typ)
+            is_array = isArrayType(typ) || isStringType(typ)
+            s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
+                * (is_array ? " $ql " : " ")
+                * canonicalize(params[p])
+                * (p < length(params) ? ", " : ""))
         else
             throw("Could not translate formal argument: " * string(params[p]))
         end
