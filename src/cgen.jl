@@ -2579,14 +2579,14 @@ function check_params(emitunaliasedroots, params, linfo)
         if isa(k, Expr) # If k is a vararg expression
             canAliasCheck = false
             @dprintln(3,"vararg expr: ", k, k.args[1], k.head)
-            if isa(k.args[1], Symbol) && haskey(lstate.symboltable, k.args[1])
-                push!(vararglist, (k.args[1], lstate.symboltable[k.args[1]]))
-                @dprintln(3,lstate.symboltable[k.args[1]])
+            if isa(k.args[1], Symbol) && inSymbolTable(k.args[1], linfo)
+                push!(vararglist, (k.args[1], lookupSymbolType(k.args[1], linfo)))
+                @dprintln(3,lookupSymbolType(k.args[1], linfo))
                 @dprintln(3,vararglist)
             end
         else
             assert(typeof(k) == Symbol)
-            ptyp = lstate.symboltable[k]
+            ptyp = lookupSymbolType(k, linfo)
             if isArrayType(ptyp)
 #                if !isArrayOfPrimitiveJuliaType(ptyp)
 #                    canAliasCheck = false
