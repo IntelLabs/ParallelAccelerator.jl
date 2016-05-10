@@ -2214,7 +2214,7 @@ function fromRHSVar(ast::GenSym, linfo)
 end
 
 function from_expr(ast::Union{Symbol,RHSVar}, linfo)
-    sym = getSymbol(ast, linfo)
+    sym = CompilerTools.LambdaHandling.getSymbol(ast, linfo)
     fromRHSVar(sym, linfo)
 end
 
