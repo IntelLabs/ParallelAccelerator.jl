@@ -64,7 +64,7 @@ function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1
     if xtyp == Int64 || xtyp == TypedVar || xtyp == Expr
         base = index_vars[dim]
     elseif xtyp == Symbol
-        base = getTypedVar(index_vars[dim],Int64,linfo)
+        base = toRHSVar(index_vars[dim],Int64,linfo)
     end
 
     @dprintln(3,"pre-base = ", base)
@@ -255,7 +255,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     assert(length(neutral_val.inputs) == 1)
     #assert(length(neutral_val.outputs) == 0)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    init_var = getTypedVar(symbol("temp_neutral_val"), neutral_val.inputs[1], state.LambdaVarInfo)
+    init_var = CompilerTools.LambdaHandling.addLocalVariable(gensym(symbol("temp_neutral_val")), neutral_val.inputs[1], 0, state.LambdaVarInfo)
     neutral_val_inputs = [init_var]
     (max_label, nested_lambda) = nested_function_exprs(state.max_label, neutral_val, neutral_val_inputs, state)
     neutral_val_body = mergeLambdaIntoOuterState(state, nested_lambda)
@@ -267,7 +267,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     neutral_val_body = top_level_expand_pre(neutral_val_body, state)
     flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
     @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
-    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(init_var.name, var)))
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(init_var.name, var)), AstWalk)
     return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
 end
 
@@ -287,7 +287,7 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     reduce_flatten_body = Any[]
     flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict(body, Dict{LHSVar,Any}(Pair(snode.name, var), Pair(atm.name, val)))
+    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode.name, var), Pair(atm.name, val)), AstWalk)
     reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_var, delta_var])
     return temp_body, reduce_func 
 end
@@ -365,36 +365,36 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     nest_idx = num_dim_inputs
     #for i = 1:inp_dim #num_dim_inputs
     for i = 1:num_dim_inputs
-        save_array_len   = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+        save_array_len   = symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
+        CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         if isWholeArray(inputInfo)
-            push!(pre_statements,mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
+            push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
             input_array_rangeconds[i] = nothing
         elseif isRange(inputInfo)
             this_dim = inputInfo.range[i]
             if isa(this_dim, RangeData)
-                push!(pre_statements,mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
+                push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
                 input_array_rangeconds[i] = nothing
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
                 @dprintln(3, "mask_array = ", mask_array)
                 assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
-                    mask_array = getTypedVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
+                    mask_array = toRHSVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
                 end
                 # TODO: generate dimension check on mask_array
-                push!(pre_statements,mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
-                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, getTypedVar(parfor_index_syms[i], Int, state.LambdaVarInfo))
+                push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
+                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, toRHSVar(parfor_index_syms[i], Int, state.LambdaVarInfo))
             elseif isa(this_dim, SingularSelector)
-                push!(pre_statements,mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), 1, state))
+                push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), 1, state))
                 generatePreOffsetStatement(this_dim, pre_statements)
                 input_array_rangeconds[i] = nothing
             else
                 error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
         end 
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        push!(save_array_lens, symbol(save_array_len))
-        loop_nest = PIRLoopNest(getTypedVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, getTypedVar(symbol(save_array_len),Int, state.LambdaVarInfo), 1)
+        push!(save_array_lens, save_array_len)
+        loop_nest = PIRLoopNest(toRHSVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
         if red_dim > 0
             if red_dim == i
                loopNests[1] = loop_nest
@@ -411,10 +411,10 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     assert(length(dl.outputs) == 1)
     out_type = dl.outputs[1]
     @dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
-    reduction_output_name  = string("parallel_ir_reduction_output_",unique_node_id)
-    reduction_output_snode = getTypedVar(symbol(reduction_output_name), out_type, state.LambdaVarInfo)
+    reduction_output_name  = symbol(string("parallel_ir_reduction_output_",unique_node_id))
+    reduction_output_snode = toRHSVar(reduction_output_name, out_type, state.LambdaVarInfo)
     @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-    CompilerTools.LambdaHandling.addLocalVar(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
     push!(post_statements, reduction_output_snode)
 
     # special handling when zero_val is a DomainLambda
@@ -495,9 +495,9 @@ function createTempForRangeOffset(num_used, ranges :: Array{RangeData,1}, unique
     return range_array
 end
 
-getSymbol(rd :: RangeData, linfo :: LambdaVarInfo)        = CompilerTools.LambdaHandling.getSymbol(rd.offset_temp_var, linfo)
-getSymbol(rd :: MaskSelector, linfo :: LambdaVarInfo)     = CompilerTools.LambdaHandling.getSymbol(rd.value, linfo)
-getSymbol(rd :: SingularSelector, linfo :: LambdaVarInfo) = CompilerTools.LambdaHandling.getSymbol(rd.offset_temp_var, linfo)
+getSymbol(rd :: RangeData, linfo :: LambdaVarInfo)        = CompilerTools.LambdaHandling.lookupVariableName(rd.offset_temp_var, linfo)
+getSymbol(rd :: MaskSelector, linfo :: LambdaVarInfo)     = CompilerTools.LambdaHandling.lookupVariableName(rd.value, linfo)
+getSymbol(rd :: SingularSelector, linfo :: LambdaVarInfo) = CompilerTools.LambdaHandling.lookupVariableName(rd.offset_temp_var, linfo)
 
 """
 Create a temporary variable that is parfor private to hold the value of an element of an array.
@@ -521,9 +521,9 @@ Convert a :range Expr introduced by Domain IR into a Parallel IR data structure 
 function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
     @dprintln(3,"rangeToRangeData for Expr")
     if range.head == :range
-        start = createTempForRangeInfo(arr, 1, range_num, "start", state);
-        step  = createTempForRangeInfo(arr, 1, range_num, "step", state);
-        last  = createTempForRangeInfo(arr, 1, range_num, "last", state);
+        start = createTempForRangeInfo(arr, get_unique_num(), range_num, "start", state);
+        step  = createTempForRangeInfo(arr, get_unique_num(), range_num, "step", state);
+        last  = createTempForRangeInfo(arr, get_unique_num(), range_num, "last", state);
         range_temp_var = createStateVar(state, string("parallel_ir_range_", start, "_", skip, "_", last, "_", range_num, "_1"), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
         return RangeData(start, step, last, range.args[1], range.args[2], range.args[3], range_temp_var)
     elseif range.head == :tomask
@@ -534,7 +534,7 @@ function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
 end
 function rangeToRangeData(other :: Union{RHSVar,Number}, arr, range_num :: Int, state)
     @dprintln(3,"rangeToRangeData for non-Expr")
-    singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other, "_", get_unique_num()), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
     return SingularSelector(other, singular_temp_var)
 end
 
@@ -678,7 +678,7 @@ function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_sym
         # additional rangeconds.  1D masks will always get a rangeconds of course.
         if i == 1 || ( (i > 1) && is_1d_mask)
             if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
-                mask_array = getTypedVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
+                mask_array = toRHSVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
             end
 
             # A 1D mask will only use one of the parfor index variables, based on the current dimension "i".
@@ -714,19 +714,19 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     end
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
-        save_array_len = string("parallel_ir_save_array_len_", i, "_", unique_node_id)
+        save_array_len = symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
         @dprintln(3, "Creating expr for ", save_array_len)
+        CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         if length(const_sizes)!=0
-            array1_len = mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), const_sizes[i], state)
+            array1_len = mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), const_sizes[i], state)
             push!(save_array_lens, const_sizes[i])
         else
-            push!(save_array_lens, symbol(save_array_len))
-            array1_len = mk_assignment_expr(getTypedVar(symbol(save_array_len), Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo[1],i), state)
+            push!(save_array_lens, save_array_len)
+            array1_len = mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo[1],i), state)
         end
-        CompilerTools.LambdaHandling.addLocalVar(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_len)
-        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(getTypedVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, getTypedVar(symbol(save_array_len),Int, state.LambdaVarInfo),1)
+        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(toRHSVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo),1)
     end
     return loopNests
 end
@@ -779,11 +779,11 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     # add local vars to state
     #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.LambdaVarInfo)
+    #  CompilerTools.LambdaHandling.addLocalVariable(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
 
     @dprintln(3,"indexed_arrays = ", indexed_arrays)
-    dl_inputs = with_indices ? vcat(indexed_arrays, [getTypedVar(s, Int, state.LambdaVarInfo) for s in parfor_index_syms ]) : indexed_arrays
+    dl_inputs = with_indices ? vcat(indexed_arrays, [toRHSVar(s, Int, state.LambdaVarInfo) for s in parfor_index_syms ]) : indexed_arrays
     @dprintln(3,"dl_inputs = ", dl_inputs)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     (max_label, nested_lambda, body_lives) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
@@ -894,7 +894,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     post_statements = Any[]
     unique_node_id = get_unique_num()
     n_loops = length(args[1])
-    loopvars = args[1]
+    loopvars = [ CompilerTools.LambdaHandling.addLocalVariable(gensym(string(x)), Int, ISASSIGNED, state.LambdaVarInfo) for x in args[1] ]
     ranges = args[2]
     dl = args[3]
     # the remaining arguments are about reductions
@@ -905,18 +905,18 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         (redvar, neutral, redfunc) = args[i+3]
         redtyp = CompilerTools.LambdaHandling.getType(redvar, state.LambdaVarInfo)
         out_name = string("parallel_ir_reduction_output_",unique_node_id,"_",i)
-        #out_var = getTypedVar(symbol(out_name), redtyp, state.LambdaVarInfo)
-        out_var = getTypedVar(symbol(redvar), redtyp, state.LambdaVarInfo)
-        #CompilerTools.LambdaHandling.addLocalVar(out_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
-        inp_name = string("parallel_ir_reduction_input_",unique_node_id,"_",i)
-        inp_var = getTypedVar(symbol(inp_name), redtyp, state.LambdaVarInfo)
-        CompilerTools.LambdaHandling.addLocalVar(inp_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
+        #out_var = toRHSVar(symbol(out_name), redtyp, state.LambdaVarInfo)
+        out_var = toRHSVar(symbol(redvar), redtyp, state.LambdaVarInfo)
+        #CompilerTools.LambdaHandling.addLocalVariable(out_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
+        inp_name = symbol(string("parallel_ir_reduction_input_",unique_node_id,"_",i))
+        CompilerTools.LambdaHandling.addLocalVariable(inp_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
+        inp_var = toRHSVar(inp_name, redtyp, state.LambdaVarInfo)
         neutral = translate_reduction_neutral_value(neutral, state)
         temp_body, reduce_func = translate_reduction_function(out_var, inp_var, redfunc, state)
         push!(reductions, PIRReduction(out_var, neutral, reduce_func))
         #redvar_map[redvar] = out_var.name
     end
-    dl_inputs = [getTypedVar(s, Int, state.LambdaVarInfo) for s in loopvars]
+    dl_inputs = [toRHSVar(s, Int, state.LambdaVarInfo) for s in loopvars]
     (max_label, nested_lambda) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
     nested_body = mergeLambdaIntoOuterState(state, nested_lambda)
     state.max_label = max_label
@@ -935,18 +935,18 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         # FIXME: We should infer the range type
         range_type = UnitRange{Int64}
         if CompilerTools.LambdaHandling.getType(range, state.LambdaVarInfo) <: Number
-            loopNests[n_loops - i + 1] = PIRLoopNest(getTypedVar(loopvar,Int, state.LambdaVarInfo),1,range,1)
+            loopNests[n_loops - i + 1] = PIRLoopNest(toRHSVar(loopvar,Int, state.LambdaVarInfo),1,range,1)
             push!(rearray, RangeExprs(1,1,range))
         else 
-            range_expr = mk_assignment_expr(getTypedVar(range_name, range_type, state.LambdaVarInfo), range)
-            CompilerTools.LambdaHandling.addLocalVar(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+            range_expr = mk_assignment_expr(toRHSVar(range_name, range_type, state.LambdaVarInfo), range)
+            CompilerTools.LambdaHandling.addLocalVariable(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
             push!(pre_statements, range_expr)
             save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
-            loop_len = mk_assignment_expr(getTypedVar(symbol(save_loop_len), Int, state.LambdaVarInfo), :(length($range_name)), state)
+            loop_len = mk_assignment_expr(toRHSVar(symbol(save_loop_len), Int, state.LambdaVarInfo), :(length($range_name)), state)
             # add that assignment to the set of statements to execute before the parfor
             push!(pre_statements,loop_len)
-            CompilerTools.LambdaHandling.addLocalVar(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-            loopNests[n_loops - i + 1] = PIRLoopNest(getTypedVar(loopvar,Int, state.LambdaVarInfo), 1, getTypedVar(symbol(save_loop_len),Int, state.LambdaVarInfo),1)
+            CompilerTools.LambdaHandling.addLocalVariable(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+            loopNests[n_loops - i + 1] = PIRLoopNest(toRHSVar(loopvar,Int, state.LambdaVarInfo), 1, toRHSVar(symbol(save_loop_len),Int, state.LambdaVarInfo),1)
             push!(rearray, RangeExprs(1,1,:(length($range_name))))
         end
     end
@@ -1016,7 +1016,7 @@ function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
     for i = 1:num_dim_inputs
         parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
         parfor_index_sym = symbol(parfor_index_var)
-        CompilerTools.LambdaHandling.addLocalVar(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
         parfor_index_syms[i] = parfor_index_sym
     end
     return parfor_index_syms
@@ -1142,7 +1142,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     # add local vars to state
     #for (v, d) in dl.locals
-    #  CompilerTools.LambdaHandling.addLocalVar(v, d.typ, d.flag, state.LambdaVarInfo)
+    #  CompilerTools.LambdaHandling.addLocalVariable(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     (max_label, nested_lambda) = nested_function_exprs(state.max_label, dl, indexed_arrays, state)
@@ -1174,25 +1174,25 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Create each output array
     number_output_arrays = length(dl.outputs)
     for i = 1:number_output_arrays
-        new_array_name = string("parallel_ir_new_array_name_", unique_node_id, "_", i)
+        new_array_name = symbol(string("parallel_ir_new_array_name_", unique_node_id, "_", i))
+        CompilerTools.LambdaHandling.addLocalVariable(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
         if num_dim_inputs == 1
-            new_ass_expr = mk_assignment_expr(getTypedVar(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
         elseif num_dim_inputs == 2
-            new_ass_expr = mk_assignment_expr(getTypedVar(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2]), state)
         elseif num_dim_inputs == 3
-            new_ass_expr = mk_assignment_expr(getTypedVar(symbol(new_array_name), Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2], save_array_lens[3]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2], save_array_lens[3]), state)
         else
             throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
         end
         # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
-        CompilerTools.LambdaHandling.addLocalVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         # add the statement to create the new output array to the set of statements to execute before the parfor
         push!(pre_statements,new_ass_expr)
         nans = symbol(new_array_name)
         push!(new_array_symbols,nans)
-        nans_sn = getTypedVar(nans, Array{dl.outputs[i], num_dim_inputs}, state.LambdaVarInfo)
+        nans_sn = toRHSVar(nans, Array{dl.outputs[i], num_dim_inputs}, state.LambdaVarInfo)
 
         tfa = createTempForArray(nans_sn, 1, state)
         push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
@@ -1246,7 +1246,7 @@ function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs, stat
     # Is there a universal output representation that is generic and doesn't depend on the kind of domain IR input?
     if(length(dl.outputs)==1)
         # If there is only one output then put that output in the post_statements
-        push!(post_statements,getTypedVar(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}, state.LambdaVarInfo))
+        push!(post_statements,toRHSVar(new_array_symbols[1],Array{dl.outputs[1],num_dim_inputs}, state.LambdaVarInfo))
     else
         all_sn = Any[]
         all_ty = DataType[]
@@ -1254,7 +1254,7 @@ function create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs, stat
         for i = 1:length(dl.outputs)
             s = new_array_symbols[i]
             t = Array{dl.outputs[i], num_dim_inputs}
-            push!(all_sn, getTypedVar(s, t, state.LambdaVarInfo))
+            push!(all_sn, toRHSVar(s, t, state.LambdaVarInfo))
             push!(all_ty, t)
         end
         push!(post_statements, mk_tuple_expr(all_sn, Tuple{all_ty...}))

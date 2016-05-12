@@ -37,7 +37,7 @@ function flattenParfors(function_name, ast)
     start_time = time_ns()
 
     LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
+    body = CompilerTools.LambdaHandling.getBody(ast)
 
     expanded_args = Any[]
     flattenParfors(expanded_args, body.args, LambdaVarInfo)

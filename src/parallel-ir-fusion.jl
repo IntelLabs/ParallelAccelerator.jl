@@ -271,7 +271,7 @@ function fuse(body, body_index, cur::Expr, state)
         not_used_after_cur_with_aliases = setdiff(live_out_prev_aliases, live_out_cur_aliases)
         @dprintln(2,"not_used_after_cur_with_aliases = ", not_used_after_cur_with_aliases)
 
-        unique_id = prev_parfor.unique_id
+        unique_id = get_unique_num() # prev_parfor.unique_id
 
         # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
         # that don't die during the current parfor.

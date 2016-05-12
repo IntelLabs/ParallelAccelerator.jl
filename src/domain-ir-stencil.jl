@@ -68,7 +68,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   #assert(is(krn.head, :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
-  local arrSyms::Array{Symbol,1} = Symbol[parameterToSymbol(x, state.linfo) for x in getParamsNoSelf(state.linfo)]
+  local arrSyms::Array{Symbol,1} = getInputParameters(state.linfo)
   if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
     arrSyms = arrSyms[2:end]
   end
@@ -81,7 +81,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
     #  arrSyms[i] = arrSyms[i].args[1]
     #end
     # assert(isa(arrSyms[i], Symbol))
-    bufSyms[i] = addGenSym(bufTyps[i], state.linfo)
+    bufSyms[i] = addTempVariable(bufTyps[i], state.linfo)
     arrSymDict[arrSyms[i]] = bufSyms[i]
   end
 
@@ -167,8 +167,8 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     local dim = length(expr.args) - idxOffset
     assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
     if !stat.initialized         # create stat if not already exists
-      local idxSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
-      local strideSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
+      local idxSym = GenSym[ addTempVariable(Int, state.linfo) for i in 1:dim ]
+      local strideSym = GenSym[ addTempVariable(Int, state.linfo) for i in 1:dim ]
       set_kernel_stat(stat, dim, zeros(Int,dim), zeros(Int,dim), bufSyms, idxSym, strideSym, borderSty, 0, Int[])
     else                    # if stat already exists, check if the dimension matches
       assert(dim == stat.dimension)
@@ -255,5 +255,5 @@ function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes,
     @dprintln(3,"ldict = ", ldict)
     @dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, ldict)
+    CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(krnExpr), ldict)
 end

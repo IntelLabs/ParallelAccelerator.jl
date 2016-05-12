@@ -635,34 +635,34 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     gensym3_sym = symbol(gensym3_var)
     gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
     gensym4_sym = symbol(gensym4_var)
-    CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", getTypedVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
+    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-    push!(new_body, mk_assignment_expr(getTypedVar(gensym2_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
-    push!(new_body, mk_assignment_expr(getTypedVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, getTypedVar(gensym2_sym,Int64, state.LambdaVarInfo)), state))
-    push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo), Expr(:call, TopNode(:getfield), getTypedVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), QuoteNode(:start)), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_second_unless))
+    push!(new_body, mk_assignment_expr(toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo)), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), Expr(:call, TopNode(:getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), QuoteNode(:start)), state))
+    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_second_unless))
     push!(new_body, LabelNode(label_after_first_unless))
 
 #       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-    push!(new_body, mk_assignment_expr(getTypedVar(gensym3_sym,Int64, state.LambdaVarInfo), getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo), state))
-    push!(new_body, mk_assignment_expr(getTypedVar(gensym4_sym,Int64, state.LambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), getTypedVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo)), state))
-#    push!(new_body, mk_assignment_expr(this_nest.indexVariable, getTypedVar(gensym3_sym,Int64, state.LambdaVarInfo), state))
-    push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo), getTypedVar(gensym4_sym,Int64, state.LambdaVarInfo), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(gensym3_sym,Int64, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(gensym4_sym,Int64, state.LambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), state))
+#    push!(new_body, mk_assignment_expr(this_nest.indexVariable, toRHSVar(gensym3_sym,Int64, state.LambdaVarInfo), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), toRHSVar(gensym4_sym,Int64, state.LambdaVarInfo), state))
 
     for_loop_end = Any[]
 
     push!(for_loop_end, LabelNode(label_before_second_unless))
-    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), getTypedVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_first_unless))
+    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_first_unless))
     push!(for_loop_end, LabelNode(label_after_second_unless))
     push!(for_loop_end, LabelNode(label_last))
 
@@ -701,11 +701,11 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         end
         @dprintln(3, "cstr_params = ", cstr_params)
         cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-        whole_range_expr = mk_assignment_expr(getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
+        whole_range_expr = mk_assignment_expr(toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
         @dprintln(3,"whole_range_expr = ", whole_range_expr)
         push!(new_body, whole_range_expr)
 
-        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo)))
+        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo)))
 
         real_args_build = Any[]
         args_type = Expr(:tuple)
@@ -738,20 +738,20 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         if false
             real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
             call_tup = (Function,pir_range_actual,Any)
-            push!(new_body, mk_assignment_expr(getTypedVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_tuple_expr), state))
+            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_tuple_expr), state))
         else
             call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
             call_tup = eval(call_tup_expr)
             @dprintln(3, "call_tup = ", call_tup)
-            #push!(new_body, mk_assignment_expr(getTypedVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
-            push!(new_body, mk_assignment_expr(getTypedVar(tup_sym, SimpleVector, state.LambdaVarInfo), mk_svec_expr(cur_task.task_func, getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
+            #push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
+            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, SimpleVector, state.LambdaVarInfo), mk_svec_expr(cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
         end
 
         if false
             insert_task_expr = TypedExpr(Any,
                                          :call,
                                          cur_task.task_func,
-                                         getTypedVar(range_sym, pir_range_actual, state.LambdaVarInfo),
+                                         toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo),
                                          real_args_build...)
         else
             # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any),

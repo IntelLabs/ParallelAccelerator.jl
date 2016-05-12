@@ -70,11 +70,11 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
   main_length_correlation = getOrAddArrayCorrelation(toLHSVar(bufs[1]), irState)
   local n = stat.dimension
-  local sizeNodes = [ addGenSym(Int, linfo) for i = 1:n ]
+  local sizeNodes = [ addTempVariable(Int, linfo) for i = 1:n ]
   local sizeInitExpr = [ TypedExpr(Int, :(=), sizeNodes[i],
                                    TypedExpr(Int, :call, TopNode(:arraysize), buf, i))
                          for i in 1:n ]
-  local strideNodes = [ addGenSym(Int, linfo) for s in stat.strideSym ]
+  local strideNodes = [ addTempVariable(Int, linfo) for s in stat.strideSym ]
   local strideInitExpr = Array(Any, n)
   strideInitExpr[1] = TypedExpr(Int, :(=), strideNodes[1], 1)
   # the following assumes contiguous column major layout for multi-dimensional arrays
@@ -115,12 +115,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     @dprintln(3,"bodyExpr[end].args = ", rets)
     assert(length(rets) == nbufs)
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toLHSVar(tmpBufs[i]), rets[i]))
-      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], kernelF.linfo), :(=), toLHSVar(tmpBufs[i]), bufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], linfo), :(=), toLHSVar(tmpBufs[i]), rets[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(rets[i], linfo), :(=), toLHSVar(tmpBufs[i]), bufs[i]))
     end
     for i = 1:nbufs
-      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toLHSVar(bufs[i]), tmpBufs[i]))
-      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], kernelF.linfo), :(=), toLHSVar(rets[i]), tmpBufs[i]))
+      push!(rotateExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], linfo), :(=), toLHSVar(bufs[i]), tmpBufs[i]))
+      push!(revertExpr, TypedExpr(CompilerTools.LambdaHandling.getType(tmpBufs[i], linfo), :(=), toLHSVar(rets[i]), tmpBufs[i]))
     end
   end
   bodyExpr = bodyExpr[1:end-1]

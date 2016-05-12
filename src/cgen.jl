@@ -479,19 +479,17 @@ function isCompositeType(t::Type)
 end
 
 function from_lambda(ast::Expr)
-    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    from_lambda(linfo)
+    from_lambda(CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast), CompilerTools.LambdaHandling.getBody(ast))
 end
 
 function from_lambda(ast::LambdaInfo)
-    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    from_lambda(linfo)
+    from_lambda(CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast), CompilerTools.LambdaHandling.getBody(ast))
 end
 
-function from_lambda(linfo :: LambdaVarInfo)
-    params = Symbol[ CompilerTools.LambdaHandling.parameterToSymbol(x, linfo) 
-                     for x in CompilerTools.LambdaHandling.getParamsNoSelf(linfo)]
-    vars = CompilerTools.LambdaHandling.getLocalNoParams(linfo)
+function from_lambda(linfo :: LambdaVarInfo, body)
+    params = Symbol[ CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
+                     for x in CompilerTools.LambdaHandling.getInputParameters(linfo)]
+    vars = CompilerTools.LambdaHandling.getLocalVariablesNoParam(linfo)
 
     decls = ""
     global lstate
@@ -510,7 +508,7 @@ function from_lambda(linfo :: LambdaVarInfo)
         end
     end
 
-    bod = from_expr(getBody(linfo), linfo)
+    bod = from_expr(body, linfo)
     @dprintln(3,"lambda params = ", params)
     @dprintln(3,"lambda vars = ", vars)
     dumpSymbolTable(lstate.symboltable)
@@ -955,7 +953,7 @@ function from_setfield!(args, linfo)
     @assert (length(args)==3) "Expect 3 arguments to setfield!, but got " * string(args)
     tgt = from_expr(args[1], linfo)
     @assert (isa(args[2], QuoteNode)) "CGen only handles setfield! with a fixed field name, but not " * string(args[2])
-    fld = from_expr(args[2].value, linfo)
+    fld = from_symbol(args[2].value, linfo)
     tgt * "." * fld * " = " * from_expr(args[3], linfo)
 end
 
@@ -1490,18 +1488,18 @@ function resolveCallTarget(f::ANY, args::Array{Any, 1},linfo)
 end
 
 function inSymbolTable(x, linfo)
-    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
     haskey(lstate.symboltable, x)
 end
 
 function lookupSymbolType(x, linfo)
-    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
     lstate.symboltable[x]
 end
 
 function setSymbolType(x, typ, linfo)
     @dprintln(3, "setSymbolType ", x, " typ = ", typ)
-    x = CompilerTools.LambdaHandling.getSymbol(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
     lstate.symboltable[x] = typ
 end
 
@@ -1725,7 +1723,7 @@ function from_globalref(ast,linfo)
         end
     end
  
-    canonicalize(mod) * "_" * from_expr(name,linfo)
+    canonicalize(mod) * "_" * from_symbol(name,linfo)
 end
 
 function from_topnode(ast,linfo)
@@ -1762,8 +1760,9 @@ function from_parforend(args,linfo)
             rdvar = from_expr(rdv,linfo)
             # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
             #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv,linfo)
-            rdsepilog *= "$rdvtyp &$(rdvar)_i = $(rdvar)_vec[i];\n"
-            rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, symbol(string(rdvar) * "_i"),linfo) * ";\n"
+            rdvar_i = addLocalVariable(gensym(string(rdvar, "_i")), rdvt, 0, linfo)
+            rdsepilog *= "$rdvtyp &" * from_expr(rdvar_i, linfo) * " = $(rdvar)_vec[i];\n"
+            rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, rdvar_i,linfo) * ";\n"
             if isPrimitiveJuliaType(rdvt) 
                 rdscleanup *= "free($(rdvar)_vec);\n";
             end
@@ -1927,7 +1926,8 @@ function from_parforstart(args, linfo)
         rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv, linfo)
         rdv_tmp = gensym(rdvar)
-        rdvar_tmp = from_expr(rdv_tmp, linfo)
+        addLocalVariable(rdv_tmp, rdvt, 0, linfo)
+        rdvar_tmp = from_symbol(rdv_tmp, linfo)
         if parallel_reduction 
             if isPrimitiveJuliaType(rdvt) 
                 rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
@@ -2213,7 +2213,7 @@ function fromRHSVar(ast::GenSym, linfo)
 end
 
 function from_expr(ast::Union{Symbol,RHSVar}, linfo)
-    sym = CompilerTools.LambdaHandling.getSymbol(ast, linfo)
+    sym = lookupVariableName(ast, linfo)
     fromRHSVar(sym, linfo)
 end
 
@@ -2394,7 +2394,7 @@ function from_callee(ast::Expr, functionName::ASCIIString, linfo)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
     bod = from_expr(ast, linfo)
@@ -2636,11 +2636,12 @@ function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: D
 
     set_includes(ast)
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    body  = CompilerTools.LambdaHandling.getBody(ast)
+    params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     #bod = from_expr(ast, linfo)
-    bod = from_lambda(linfo)
+    bod = from_lambda(linfo, body)
 
     if DEBUG_LVL>=3
         dumpSymbolTable(lstate.symboltable)
@@ -2706,11 +2707,11 @@ function from_root_nonentry(ast, functionName::ASCIIString, array_types_in_sig :
 
     set_includes(ast)
     linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    params = CompilerTools.LambdaHandling.getParamsNoSelf(linfo)
+    params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     #bod = from_expr(ast, linfo)
-    bod = from_lambda(linfo)
+    bod = from_lambda(linfo, getBody(ast))
 
     vararg_bod, args, argsunal, alias_check = check_params(false, params, linfo)
     bod = vararg_bod * bod

@@ -607,7 +607,7 @@ function copy_propagate_helper(node::TypedVar,
     if haskey(data.copies, lhsVar)
         @dprintln(3,"Replacing ", lhsVar, " with ", data.copies[lhsVar])
         tmp_node = data.copies[lhsVar]
-        return isa(tmp_node, Symbol) ? getTypedVar(tmp_node, getType(node, data.linfo), data.linfo) : tmp_node
+        return isa(tmp_node, Symbol) ? toRHSVar(tmp_node, getType(node, data.linfo), data.linfo) : tmp_node
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -624,7 +624,7 @@ function copy_propagate_helper(node::DomainLambda,
     
     # all copies of escaping_defs should be deleted, since there is no guarantee that their values
     # remain the same at when DomainLambda is actually called.
-    for (v, d) in node.linfo.escaping_defs
+    for v in CompilerTools.LambdaHandling.getEscapingVariables(node.linfo)
         if haskey(data.copies, v) && !haskey(data.safe_copies, v)
             @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
             delete!(data.copies, v)
@@ -809,7 +809,7 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
             # Here the node is an assignment.
             @dprintln(3,"Is an assignment node.")
             # return value here since this function can replace arraysize() calls
-            return create_equivalence_classes_assignment(node.args[1], node.args[2], state)
+            return create_equivalence_classes_assignment(toLHSVar(node.args[1]), node.args[2], state)
         else
             if node.head == :mmap! || node.head == :mmap || node.head == :map! || node.head == :map
                 extractArrayEquivalencies(node, state)
