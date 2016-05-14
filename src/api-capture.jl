@@ -197,7 +197,7 @@ end
 function process_par_macro(node::Expr, state, top_level_number, is_top_level, read)
     if is(node.head, :macrocall) 
         #println("got par macro, args = ", node.args)
-        if node.args[1] == symbol("@par")
+        if node.args[1] == Symbol("@par")
             ast = translate_par(node.args[2:end])
             node.head = ast.head
             node.args = ast.args

@@ -62,14 +62,14 @@ supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wrapar
  NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
 """
 function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, borderSty::Symbol)
-  #assert(krn.head == symbol("->"))
+  #assert(krn.head == Symbol("->"))
   @dprintln(3, "typeof krnBody = ", typeof(krnBody), " ", krnBody.head)
   assert(isa(krnBody, Expr))
   #assert(is(krn.head, :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms::Array{Symbol,1} = getInputParameters(state.linfo)
-  if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
+  if length(arrSyms) > 0  && arrSyms[1] == Symbol("#self#")
     arrSyms = arrSyms[2:end]
   end
   local narrs = length(arrSyms)
@@ -185,7 +185,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     # fix numerical coercion when converting setindex! into unsafe_arrayset
     if is(expr.args[1].name, :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
-          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, symbol(string(elmTyp))), expr.args[3])
+          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, Symbol(string(elmTyp))), expr.args[3])
         end
     end
 
@@ -237,7 +237,7 @@ function mkStencilLambda(state_, bufs, kernelBody, linfo, borderExp::QuoteNode)
   end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, krnBody = analyze_kernel(state, typs, kernelBody, borderSty)
-  return stat, DomainLambda(krnBody, linfo)
+  return stat, DomainLambda(linfo, krnBody)
 end
 
 function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)

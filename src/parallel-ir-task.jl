@@ -480,7 +480,8 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
         dprintln(debug_level,head, " ", args)
     end
     if head == :lambda
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+        state.LambdaVarInfo = linfo
     elseif head == :body || head == :block || head == :(::) || head == :line || head == :& || head == :(.) || head == :copyast
         # skip
     elseif head == :(=)
@@ -1101,15 +1102,15 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         num_vars = 5
 
         gensym2_var = string("#recreate_gensym2_", (loop_nest_level-1) * num_vars + 0)
-        gensym2_sym = symbol(gensym2_var)
+        gensym2_sym = Symbol(gensym2_var)
         gensym0_var = string("#recreate_gensym0_", (loop_nest_level-1) * num_vars + 1)
-        gensym0_sym = symbol(gensym0_var)
+        gensym0_sym = Symbol(gensym0_var)
         pound_s1_var = string("#recreate_pound_s1_", (loop_nest_level-1) * num_vars + 2)
-        pound_s1_sym = symbol(pound_s1_var)
+        pound_s1_sym = Symbol(pound_s1_var)
         gensym3_var = string("#recreate_gensym3_", (loop_nest_level-1) * num_vars + 3)
-        gensym3_sym = symbol(gensym3_var)
+        gensym3_sym = Symbol(gensym3_var)
         gensym4_var = string("#recreate_gensym4_", (loop_nest_level-1) * num_vars + 4)
-        gensym4_sym = symbol(gensym4_var)
+        gensym4_sym = Symbol(gensym4_var)
         CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
         CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
         CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
@@ -1185,7 +1186,7 @@ function toTaskArgName(x :: TypedVar, gsmap :: Dict{GenSym,CompilerTools.LambdaH
 end
 function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     newstr = string("parforToTask_gensym_", x.id)
-    ret    = symbol(newstr)
+    ret    = Symbol(newstr)
     gsmap[x] = CompilerTools.LambdaHandling.VarDef(ret, CompilerTools.LambdaHandling.getType(x, LambdaVarInfo), 0)
     return ret
 end
@@ -1333,7 +1334,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     # The name of the new task function.
     task_func_name = string("task_func_",unique_node_id)
-    task_func_sym  = symbol(task_func_name)
+    task_func_sym  = Symbol(task_func_name)
 
     # Just stub out the new task function...the body and lambda will be replaced below.
     task_func = @eval function ($task_func_sym)($(all_arg_names...))

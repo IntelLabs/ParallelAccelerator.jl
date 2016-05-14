@@ -508,7 +508,7 @@ The left-hand side has to be a symbol node from which we extract the type so as 
 function mk_assignment_expr(lhs::RHSVar, rhs, state :: expr_state)
     expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)    
     @dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
-    TypedExpr(expr_typ, symbol('='), toLHSVar(lhs), rhs)
+    TypedExpr(expr_typ, :(=), toLHSVar(lhs), rhs)
 end
 
 function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
@@ -517,14 +517,14 @@ end
 
 
 function mk_assignment_expr(lhs :: TypedVar, rhs)
-    TypedExpr(lhs.typ, symbol('='), toLHSVar(lhs), rhs)
+    TypedExpr(lhs.typ, :(=), toLHSVar(lhs), rhs)
 end
 
 """
 Only used to create fake expression to force lhs to be seen as written rather than read.
 """
 function mk_untyped_assignment(lhs, rhs)
-    Expr(symbol('='), lhs, rhs)
+    Expr(:(=), lhs, rhs)
 end
 
 function isWholeArray(inputInfo :: InputInfo) 
@@ -711,7 +711,7 @@ Add a local variable to the current function's LambdaVarInfo.
 Returns a symbol node of the new variable.
 """
 function createStateVar(state :: expr_state, name, typ, access)
-    new_temp_sym = symbol(name)
+    new_temp_sym = Symbol(name)
     CompilerTools.LambdaHandling.addLocalVariable(new_temp_sym, typ, access, state.LambdaVarInfo)
     return toRHSVar(new_temp_sym, typ, state.LambdaVarInfo)
 end
@@ -1094,7 +1094,7 @@ function getPrivateSetInner(x::Expr, state :: PrivateSetData, top_level_number :
                     return CompilerTools.AstWalker.ASTWALK_RECURSE
                 end
             end
-            push!(state.privates, sname)
+            push!(state.privates, lhs)
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -1183,9 +1183,7 @@ function from_lambda(lambda :: Expr, depth, state)
 
     # Save the current LambdaVarInfo away so we can restore it later.
     save_LambdaVarInfo  = state.LambdaVarInfo
-    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
-    body = CompilerTools.LambdaHandling.getBody(lambda)
-
+    state.LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
     body = from_lambda_body(body, depth, state)
 
 if false
@@ -1384,21 +1382,6 @@ function mk_tuple_expr(tuple_fields, typ)
     TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
 end
 
-"""
-Forms a TypedVar given a symbol in "name" and get the type of that symbol from the incoming dictionary "sym_to_type".
-"""
-function nameToRHSVar(name :: Symbol, sym_to_type, linfo :: LambdaVarInfo)
-    return toRHSVar(name, sym_to_type[name], linfo)
-end
-
-function nameToRHSVar(name :: GenSym, sym_to_type, linfo :: LambdaVarInfo)
-    return name
-end
-
-function nameToRHSVar(name, sym_to_type, linfo :: LambdaVarInfo)
-    throw(string("Unknown name type ", typeof(name), " passed to nameToRHSVar."))
-end
-
 function getAliasMap(loweredAliasMap, sym)
     if haskey(loweredAliasMap, sym)
         return loweredAliasMap[sym]
@@ -1417,8 +1400,8 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     # If there is only one output then all we need is the symbol to return.
     if length(output_map) == 1
         for i in output_map
-            new_lhs = nameToRHSVar(i[1], sym_to_type, state.LambdaVarInfo)
-            new_rhs = nameToRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo)
+            new_lhs = toRHSVar(i[1], sym_to_type, state.LambdaVarInfo)
+            new_rhs = toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo)
             return (new_lhs, [new_lhs], true, [new_rhs])
         end
     end
@@ -1426,8 +1409,8 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     lhs_order = RHSVar[]
     rhs_order = RHSVar[]
     for i in output_map
-        push!(lhs_order, nameToRHSVar(i[1], sym_to_type, state.LambdaVarInfo))
-        push!(rhs_order, nameToRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo))
+        push!(lhs_order, toRHSVar(i[1], sym_to_type, state.LambdaVarInfo))
+        push!(rhs_order, toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo))
     end
     num_map = length(lhs_order)
 
@@ -1444,16 +1427,25 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
 end
 
 """
-Pull the information from the inner lambda into the outer lambda.
+Pull the information from the inner domain lambda into the outer lambda after applying it to a set of arguments.
 Return the body (as an array) after application.
 """
-function mergeLambdaIntoOuterState(state, inner_lambda :: Expr)
-    inner_LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(inner_lambda)
+function mergeLambdaIntoOuterState(state, dl :: DomainLambda, args :: Array{Any, 1})
     @dprintln(3,"mergeLambdaIntoOuterState")
     @dprintln(3,"state.LambdaVarInfo = ", state.LambdaVarInfo)
-    @dprintln(3,"inner_LambdaVarInfo = ", inner_LambdaVarInfo)
-    gensym_map = CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, inner_LambdaVarInfo)
-    CompilerTools.LambdaHandling.replaceExprWithDict!(inner_lambda.args[3].args, gensym_map, AstWalk)
+    @dprintln(3,"DomainLambda = ", dl)
+    @dprintln(3,"arguments = ", args)
+    params = getInputParameters(dl.linfo)
+    @dprintln(3,"parameters = ", params)
+    @assert (length(params) == length(args)) "Parameters and arguments do not match: params = " * string(params)
+    repl_dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, dl.linfo)
+    for i = 1:length(params)
+        repl_dict[lookupLHSVarByName(params[i], dl.linfo)] = args[i]
+    end
+    @dprintln(3, "repl_dict = ", repl_dict)
+    body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, AstWalk)
+    @dprintln(3, "after replacement, body = ", body)
+    return body
 end
 
 # Create a variable for a left-hand side of an assignment to hold the multi-output tuple of a parfor.
@@ -1462,7 +1454,7 @@ function createRetTupleType(rets :: Array{RHSVar,1}, unique_id :: Int64, state :
     tt_args = [ CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo) for x in rets]
     temp_type = Tuple{tt_args...}
 
-    new_temp_name  = symbol(string("parallel_ir_ret_holder_",unique_id))
+    new_temp_name  = Symbol(string("parallel_ir_ret_holder_",unique_id))
     CompilerTools.LambdaHandling.addLocalVariable(new_temp_name, temp_type, ISASSIGNEDONCE | ISCONST | ISASSIGNED, state.LambdaVarInfo)
     new_temp_snode = toRHSVar(new_temp_name, temp_type, state.LambdaVarInfo)
     @dprintln(3, "Creating variable for multiple return from parfor = ", new_temp_snode)
@@ -1532,7 +1524,7 @@ end
 function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
-    if x.head == symbol('=')
+    if x.head == :(=)
         lhs = toLHSVar(x.args[1])
         rhs = x.args[2]
         if isAllocation(rhs)
@@ -1673,7 +1665,7 @@ function getFirstArrayLens(parfor, num_dims, state)
     # If it is an assignment from arraysize.
     for i = 1:length(prestatements)
         x = prestatements[i]
-        if (typeof(x) == Expr) && (x.head == symbol('='))
+        if (typeof(x) == Expr) && (x.head == :(=))
             lhs = x.args[1]
             rhs = x.args[2]
             if isa(rhs, Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
@@ -1837,7 +1829,7 @@ function is_eliminated_arraylen(x::Expr)
     @dprintln(3,"is_eliminated_arraylen ", x)
 
     @dprintln(3,"is_eliminated_arraylen is Expr")
-    if x.head == symbol('=')
+    if x.head == :(=)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             @dprintln(3,"is_eliminated_arraylen is :call")
@@ -1864,7 +1856,7 @@ If we see a call to create an array, replace the length params with those in the
 function sub_arraylen_walk(x::Expr, replacement, top_level_number, is_top_level, read)
     @dprintln(4,"sub_arraylen_walk ", x)
 
-    if x.head == symbol('=')
+    if x.head == :(=)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             if rhs.args[1] == TopNode(:ccall)
@@ -1942,7 +1934,7 @@ Check if an assignement is a fusion assignment.
     In fusion assignments, we introduce a third arg that is marked by an object of FusionSentinel type.
 """
 function isFusionAssignment(x :: Expr)
-    if x.head != symbol('=')
+    if x.head != :(=)
         return false
     elseif length(x.args) <= 2
         return false
@@ -2164,12 +2156,9 @@ end
 """
 Pretty print a :lambda Expr in "node" at a given debug level in "dlvl".
 """
-function printLambda(dlvl, node)
-    assert(isfunctionhead(node))
-    linfo = lambdaToLambdaVarInfo(node)
+function printLambda(dlvl, linfo, body)
     dprintln(dlvl, "Lambda:")
     dprintln(dlvl, linfo)
-    body = getBody(node)
     dprintln(dlvl, "typeof(body): ", body.typ)
     printBody(dlvl, body.args)
     if body.typ == Any
@@ -2199,13 +2188,10 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, this_parfor.loopNests[i].step)
         end
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(cbdata, this_parfor.body)
-        @dprintln(3,"fake_body = ", fake_body)
-
-        body_rws = CompilerTools.ReadWriteSet.from_expr(fake_body, pir_rws_cb, cbdata)
+        body = CompilerTools.LambdaHandling.getBody(this_parfor.body, CompilerTools.LambdaHandling.getReturnType(cbdata))
+        body_rws = CompilerTools.ReadWriteSet.from_expr(body, pir_rws_cb, cbdata)
         push!(expr_to_process, body_rws)
         append!(expr_to_process, this_parfor.postParFor)
-
         return expr_to_process
     end
 
@@ -2251,10 +2237,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         #fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(emptyLambdaVarInfo, TypedExpr(nothing, :body, this_parfor.body...))
         @dprintln(3,"typeof(cbdata) = ", typeof(cbdata))
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(cbdata, this_parfor.body)
-        @dprintln(3,"fake_body = ", fake_body)
-
-        body_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, cbdata)
+        body_lives = CompilerTools.LivenessAnalysis.from_lambda(cbdata, this_parfor.body, pir_live_cb, cbdata)
         @dprintln(3, "body_lives = ", body_lives)
         live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
         all_defs = Set()
@@ -2630,15 +2613,8 @@ end
 """
 Apply a function "f" that takes the :body from the :lambda and returns a new :body that is stored back into the :lambda.
 """
-function processAndUpdateBody(lambda, f :: Function, state)
-    assert(isfunctionhead(lambda))
-
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(lambda)
-    body = CompilerTools.LambdaHandling.getBody(lambda)
+function processAndUpdateBody(body, f :: Function, state)
     body.args = f(body.args, state)
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
-
-    return lambda
 end
 
 include("parallel-ir-simplify.jl")
@@ -2776,44 +2752,12 @@ function getMaxLabel(max_label, stmts :: Array{Any, 1})
 end
 
 """
-Form a Julia :lambda Expr from a DomainLambda after applying the lambda to real
-input arguments (in dl_inputs). The returned lambda AST will have the real arguments
-in its parameters instead.
-"""
-function lambdaFromDomainLambda(domain_lambda, dl_inputs)
-    #  @dprintln(3,"inputs = ", inputs_as_symbols)
-    @dprintln(3,"DomainLambda is:")
-    pirPrintDl(3, domain_lambda)
-    stmts = DomainIR.genBody(domain_lambda, dl_inputs)
-    linfo = CompilerTools.LambdaHandling.LambdaVarInfo(domain_lambda.linfo)
-    @dprintln(3,"lambdaFromDomainLambda dl_inputs = ", dl_inputs)
-    #  inputs_as_symbols = map(x -> CompilerTools.LambdaHandling.VarDef(x.name, x.typ, 0), dl_inputs)
-    input_params = Symbol[]
-    input_arrays = Symbol[]
-    for di in dl_inputs
-        if !isLocalVariable(di.name, linfo) 
-            CompilerTools.LambdaHandling.addLocalVariable(di.name, di.typ, 0, linfo)
-        end
-        push!(input_params, di.name)
-        if isArrayType(di.typ)
-            push!(input_arrays, di.name)
-        end
-    end
-    CompilerTools.LambdaHandling.setInputParameters(input_params, linfo)
-    @dprintln(3, "stmts = ", stmts)
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(linfo, stmts)
-    # copy escaping defs from domain lambda since mergeDomainLambda doesn't do it (for good reasons)
-    @dprintln(3, "ast = ", ast)
-    return (ast, input_arrays) 
-end
-
-"""
 A nested lambda may contain labels that conflict with labels in the top-level statements of the function being processed.
 We take the maxLabel or those top-level statements and re-number labels in the nested lambda and update maxLabel.
 """
-function integrateLabels(ast, maxLabel) 
+function integrateLabels(body, maxLabel) 
   state = CompilerTools.OptFramework.lmstate()
-  AstWalk(ast, CompilerTools.OptFramework.create_label_map, state)
+  AstWalk(body, CompilerTools.OptFramework.create_label_map, state)
   @dprintln(3,"integrateLabels label mapping = ", state.label_map, " incoming maxLabel = ", maxLabel)
   state.last_was_label = false
 
@@ -2828,37 +2772,31 @@ function integrateLabels(ast, maxLabel)
   end
   @dprintln(3,"integrateLabels updated label mapping = ", state.label_map, " new maxLabel = ", maxLabel)
 
-  ast = AstWalk(ast, CompilerTools.OptFramework.update_labels, state)
-  return (ast, maxLabel)
+  body = AstWalk(body, CompilerTools.OptFramework.update_labels, state)
+  return (body, maxLabel)
 end
 
 """
-A routine similar to the main parallel IR entry put but designed to process the lambda part of
-domain IR AST nodes.
+A routine similar to the main parallel IR entry put but designed to process DomainLambda.
 """
-function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
-    @dprintln(2,"nested_function_exprs max_label = ", max_label)
-    @dprintln(2,"domain_lambda = ", domain_lambda, " dl_inputs = ", dl_inputs)
-    (ast, input_arrays) = lambdaFromDomainLambda(domain_lambda, dl_inputs)
-    @dprintln(1,"Starting nested_function_exprs. ast = ", ast, " input_arrays = ", input_arrays)
+function nested_function_exprs(domain_lambda, out_state)
+    @dprintln(2,"domain_lambda = ", domain_lambda)
+    LambdaVarInfo = domain_lambda.linfo
+    body = domain_lambda.body
+    @dprintln(1,"Starting nested_function_exprs. body = ", body)
 
     start_time = time_ns()
 
-    (ast, max_label) = integrateLabels(ast, max_label) 
+    (body, max_label) = integrateLabels(body, out_state.max_label) 
+    @dprintln(2,"nested_function_exprs max_label = ", max_label)
 
-    # Create CFG from AST.  This will automatically filter out dead basic blocks.
-    cfg = CompilerTools.CFGs.from_ast(ast)
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    input_arrays = getArrayParams(LambdaVarInfo)
-    # body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
-    body = CompilerTools.CFGs.createFunctionBody(cfg)
-    # Re-create the lambda minus any dead basic blocks.
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
-    @dprintln(1,"ast after dead blocks removed, ast = ", ast)
+    cfg = CompilerTools.CFGs.from_lambda(body)
+    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
+    @dprintln(1,"AST after dead blocks removed, body = ", body)
 
     @dprintln(1,"Starting liveness analysis.")
-    lives = computeLiveness(ast, LambdaVarInfo)
+    lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.")
 
     @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
@@ -2867,11 +2805,11 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     if mmap_to_mmap! != 0
         @dprintln(1, "starting mmap to mmap! transformation.")
-        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        uniqSet = AliasAnalysis.from_lambda(LambdaVarInfo, body, lives, pir_alias_cb, nothing)
         @dprintln(3, "uniqSet = ", uniqSet)
-        mmapToMmap!(ast, lives, uniqSet)
+        mmapToMmap!(LambdaVarInfo, body, lives, uniqSet)
         @dprintln(1, "Finished mmap to mmap! transformation.")
-        @dprintln(3, "AST = ", ast)
+        @dprintln(3, "body = ", body)
     end
 
     @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
@@ -2879,31 +2817,28 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
     # We pass only the non-array params to the rearrangement code because if we pass array params then
     # the code will detect statements that depend only on array params and move them to the top which
     # leaves other non-array operations after that and so prevents fusion.
-    @dprintln(3,"All params = ", ast.args[1])
+    input_arrays = getArrayParams(LambdaVarInfo)
     non_array_params = Set{LHSVar}()
-    for param in ast.args[1]
+    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
-            push!(non_array_params, param)
+            push!(non_array_params, lookupLHSVarByName(param, LambdaVarInfo))
         end
     end
     @dprintln(3,"Non-array params = ", non_array_params)
 
     # Find out max_label.
-    body = ast.args[3]
     assert(isa(body, Expr) && is(body.head, :body))
     max_label = getMaxLabel(max_label, body.args)
 
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
-    ast_linfo = lambdaToLambdaVarInfo(ast)
     # import correlations of escaping variables to enable optimizations
-    setEscCorrelations!(new_vars, ast_linfo, out_state, length(input_arrays))
+    setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
-    ast.args[2] = LambdaHandling.createMeta(ast_linfo)
     @dprintln(3,"Creating nested equivalence classes. Imported correlations:")
     print_correlations(3, new_vars)
-    genEquivalenceClasses(ast, new_vars)
+    genEquivalenceClasses(LambdaVarInfo, body, new_vars)
     @dprintln(3,"Done creating nested equivalence classes.")
     print_correlations(3, new_vars)
     @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
@@ -2912,19 +2847,19 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     changed = true
     while changed
-        @dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", ast.args[1])
+        @dprintln(1,"Removing statement with no dependencies from the AST with parameters") 
         rnd_state = RemoveNoDepsState(lives, non_array_params)
-        ast = AstWalk(ast, remove_no_deps, rnd_state)
-        @dprintln(3,"ast after no dep stmts removed = ", ast)
+        body = AstWalk(body, remove_no_deps, rnd_state)
+        @dprintln(3,"body after no dep stmts removed = ", body)
 
         @dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
         @dprintln(1,"Adding statements with no dependencies to the start of the AST.")
-        ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
-        @dprintln(3,"ast after no dep stmts re-inserted = ", ast)
+        body = CompilerTools.LambdaHandling.prependStatements(body, rnd_state.top_level_no_deps)
+        @dprintln(3,"body after no dep stmts re-inserted = ", body)
 
         @dprintln(1,"Re-starting liveness analysis.")
-        lives = computeLiveness(ast, LambdaVarInfo)
+        lives = computeLiveness(body, LambdaVarInfo)
         @dprintln(1,"Finished liveness analysis.")
 
         changed = rnd_state.change
@@ -2932,26 +2867,26 @@ function nested_function_exprs(max_label, domain_lambda, dl_inputs, out_state)
 
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
-    processAndUpdateBody(ast, removeNothingStmts, nothing)
+    processAndUpdateBody(body, removeNothingStmts, nothing)
     @dprintln(1,"Re-starting liveness analysis.")
-    lives = computeLiveness(ast, LambdaVarInfo)
+    lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.")
 
     @dprintln(1,"Doing conversion to parallel IR.")
-    @dprintln(3,"ast = ", ast)
+    @dprintln(3,"body = ", body)
 
     new_vars.block_lives = lives
 
     # Do the main work of Parallel IR.
-    ast = from_expr(ast, 1, new_vars, false)
-    assert(isa(ast,Array))
-    assert(length(ast) == 1)
-    ast = ast[1]
+    body = get_one(from_expr(LambdaVarInfo, body, 1, new_vars, false))
 
-    @dprintln(3,"Final ParallelIR = ", ast)
+    @dprintln(3,"Final ParallelIR = ", body)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
-    (new_vars.max_label, ast, new_vars.block_lives)
+    out_state.max_label = new_vars.max_label
+    domain_lambda.body = body
+    #return new_vars.block_lives
+    return
 end
 
 """
@@ -2997,19 +2932,6 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     nothing
 end
 
-# This could be re-written using processAndUpdateBody, which is more generic.
-function addStatementsToBeginning(node, stmts :: Array{Any,1})
-    assert(isfunctionhead(node))
-
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
-    body = CompilerTools.LambdaHandling.getBody(node)
-    @dprintln(2,"typeof(body) = ", typeof(body))
-    body = CompilerTools.LambdaHandling.prependStatements(body, stmts)
-    @dprintln(2,"typeof(body) = ", typeof(body))
-    node = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
-
-    return node
-end
 
 
 doRemoveAssertEqShape = true
@@ -3084,9 +3006,9 @@ function no_mod_impl(func :: GlobalRef, arg_type_tuple :: Array{DataType,1})
     return nothing
 end
 
-function computeLiveness(ast, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
-    @dprintln(2, "computeLiveness typeof(ast) = ", typeof(ast))
-    return CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
+function computeLiveness(body, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    @dprintln(2, "computeLiveness typeof(body) = ", typeof(body))
+    return CompilerTools.LivenessAnalysis.from_lambda(linfo, body, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
 type markMultState
@@ -3098,7 +3020,8 @@ function mark_multiple_assign_equiv(node :: Expr, state :: ParallelAccelerator.P
     if node.head == :lambda
         # TODD: I'm not sure about this.  Should arrays in a nested lambda be considered multiply assigned?
         save_LambdaVarInfo  = state.LambdaVarInfo
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
+        state.LambdaVarInfo = linfo
         body = CompilerTools.LambdaHandling.getBody(node)
         AstWalk(body, mark_multiple_assign_equiv, state)
         state.LambdaVarInfo = save_LambdaVarInfo
@@ -3126,17 +3049,15 @@ function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.Pa
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function genEquivalenceClasses(ast, new_vars)
-    assert(isfunctionhead(ast))
-
-    new_vars.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+function genEquivalenceClasses(linfo, body, new_vars)
+    new_vars.LambdaVarInfo = linfo
     
     # no need to empty them since equivalence class will be overwritten if it needs to be negative
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
     #empty!(new_vars.range_correlation)
     mms = markMultState(new_vars.LambdaVarInfo, Dict{LHSVar,Int64}())
-    AstWalk(ast, mark_multiple_assign_equiv, mms)
+    AstWalk(body, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
     multi_correlation = -1
     for array_assign in mms.assign_dict
@@ -3146,7 +3067,7 @@ function genEquivalenceClasses(ast, new_vars)
             multi_correlation -= 1
         end
     end
-    AstWalk(ast, create_equivalence_classes, new_vars)
+    AstWalk(body, create_equivalence_classes, new_vars)
 end
 
 """
@@ -3168,29 +3089,25 @@ function from_root(function_name, ast)
     start_time = time_ns()
 
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
-    cfg = CompilerTools.CFGs.from_ast(ast)
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    input_arrays = getArrayParams(LambdaVarInfo)
-    @dprintln(3,"input_arrays = ", input_arrays, " type = ", typeof(input_arrays))
+    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    cfg = CompilerTools.CFGs.from_lambda(body)
     #body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
-    body = CompilerTools.CFGs.createFunctionBody(cfg)
-    # Re-create the lambda minus any dead basic blocks.
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body)
-    @dprintln(1,"ast after dead blocks removed function = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
+    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
+    @dprintln(1,"body after dead blocks removed function = ", function_name, " body = ", body)
 
     #CompilerTools.LivenessAnalysis.set_debug_level(3)
 
     @dprintln(1,"Starting liveness analysis. function = ", function_name)
-    lives = computeLiveness(ast, LambdaVarInfo)
+    lives = computeLiveness(body, LambdaVarInfo)
     
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
-    ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-    @dprintln(1,"ast after copy_propagate = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
-    lives = computeLiveness(ast, LambdaVarInfo)
-    ast   = AstWalk(ast, transpose_propagate, TransposePropagateState(lives))
-    lives = computeLiveness(ast, LambdaVarInfo)
+    body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+    @dprintln(1,"body after copy_propagate = ", function_name, " body = ", body)
+    lives = computeLiveness(body, LambdaVarInfo)
+    body  = AstWalk(body, transpose_propagate, TransposePropagateState(lives))
+    lives = computeLiveness(body, LambdaVarInfo)
     
     #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     @dprintln(3,"lives = ", lives)
@@ -3203,11 +3120,11 @@ function from_root(function_name, ast)
 
     if mmap_to_mmap! != 0
         @dprintln(1, "starting mmap to mmap! transformation.")
-        uniqSet = AliasAnalysis.analyze_lambda(ast, lives, pir_alias_cb, nothing)
+        uniqSet = AliasAnalysis.from_lambda(LambdaVarInfo, body, lives, pir_alias_cb, nothing)
         @dprintln(3, "uniqSet = ", uniqSet)
-        mmapToMmap!(ast, lives, uniqSet)
+        mmapToMmap!(LambdaVarInfo, body, lives, uniqSet)
         @dprintln(1, "Finished mmap to mmap! transformation. function = ", function_name)
-        printLambda(3, ast)
+        printLambda(3, LambdaVarInfo, body)
     end
 
     @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
@@ -3217,6 +3134,8 @@ function from_root(function_name, ast)
     # leaves other non-array operations after that and so prevents fusion.
     input_parameters = CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
     @dprintln(3,"All params = ", input_parameters)
+    input_arrays = getArrayParams(LambdaVarInfo)
+    @dprintln(3,"input_arrays = ", input_arrays, " type = ", typeof(input_arrays))
     non_array_params = Set{LHSVar}()
     for param in input_parameters
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
@@ -3226,7 +3145,6 @@ function from_root(function_name, ast)
     @dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
     # Find out max_label
-    body = getBody(ast)
     assert(isa(body, Expr) && is(body.head, :body))
     max_label = getMaxLabel(0, body.args)
     @dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
@@ -3237,19 +3155,18 @@ function from_root(function_name, ast)
     while changed
         @dprintln(1,"Removing statement with no dependencies from the AST with parameters = ", input_parameters, " function = ", function_name)
         rnd_state = RemoveNoDepsState(lives, non_array_params)
-        ast = AstWalk(ast, remove_no_deps, rnd_state)
-        @dprintln(3,"ast after no dep stmts removed = ", " function = ", function_name)
-        printLambda(3, ast)
+        body = AstWalk(body, remove_no_deps, rnd_state)
+        @dprintln(3,"AST after no dep stmts removed = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
 
         @dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
 
         @dprintln(1,"Adding statements with no dependencies to the start of the AST.", " function = ", function_name)
-        ast = addStatementsToBeginning(ast, rnd_state.top_level_no_deps)
-        @dprintln(3,"ast after no dep stmts re-inserted = ", " function = ", function_name)
-        printLambda(3, ast)
+        body = CompilerTools.LambdaHandling.prependStatements(body, rnd_state.top_level_no_deps)
+        @dprintln(3,"body after no dep stmts re-inserted = ", body, " function = ", function_name)
 
         @dprintln(1,"Re-starting liveness analysis.", " function = ", function_name)
-        lives = computeLiveness(ast, LambdaVarInfo)
+        lives = computeLiveness(body, LambdaVarInfo)
         @dprintln(1,"Finished liveness analysis.", " function = ", function_name)
         @dprintln(3,"lives = ", lives)
 
@@ -3258,10 +3175,10 @@ function from_root(function_name, ast)
 
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
 
-    processAndUpdateBody(ast, removeNothingStmts, nothing)
-    @dprintln(3,"ast after removing nothing stmts = ", " function = ", function_name)
-    printLambda(3, ast)
-    lives = computeLiveness(ast, LambdaVarInfo)
+    processAndUpdateBody(body, removeNothingStmts, nothing)
+    @dprintln(3,"AST after removing nothing stmts = ", " function = ", function_name)
+    printLambda(3, LambdaVarInfo, body)
+    lives = computeLiveness(body, LambdaVarInfo)
 
     #multipleArrayAssigns = findMultipleArrayAssigns(lives, LambdaVarInfo)
     #@dprintln(3,"Arrays that are assigned multiple times = ", multipleArrayAssigns)
@@ -3272,55 +3189,55 @@ function from_root(function_name, ast)
         # initial round of size analysis (create_equivalence_classes) so arraysize() calls are replaced
         # main copy propagation round after arraysize() replacement
         # main size analysis after all size variables are propagated
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-        lives = computeLiveness(ast, LambdaVarInfo)
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        lives = computeLiveness(body, LambdaVarInfo)
 
         new_vars = expr_state(lives, max_label, input_arrays)
         @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
-        genEquivalenceClasses(ast, new_vars)
+        genEquivalenceClasses(LambdaVarInfo, body, new_vars)
         @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
         print_correlations(3, new_vars)
 
-        lives = computeLiveness(ast, LambdaVarInfo)
-        ast   = AstWalk(ast, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-        lives = computeLiveness(ast, LambdaVarInfo)
-        @dprintln(3,"ast after copy_propagate = ", " function = ", function_name)
-        printLambda(3, ast)
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        lives = computeLiveness(body, LambdaVarInfo)
+        @dprintln(3,"AST after copy_propagate = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
     end
 
-    ast   = AstWalk(ast, remove_dead, RemoveDeadState(lives))
-    lives = computeLiveness(ast, LambdaVarInfo)
-    @dprintln(3,"ast after remove_dead = ", " function = ", function_name)
-    printLambda(3, ast)
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    lives = computeLiveness(body, LambdaVarInfo)
+    @dprintln(3,"AST after remove_dead = ", " function = ", function_name)
+    printLambda(3, LambdaVarInfo, body)
 
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
     @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
-    genEquivalenceClasses(ast, new_vars)
+    genEquivalenceClasses(LambdaVarInfo, body, new_vars)
     @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
     print_correlations(3, new_vars)
 
     @dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
 
     if doRemoveAssertEqShape
-        processAndUpdateBody(ast, removeAssertEqShape, new_vars)
-        @dprintln(3,"ast after removing assertEqShape = ", " function = ", function_name)
-        printLambda(3, ast)
-        lives = computeLiveness(ast, LambdaVarInfo)
+        processAndUpdateBody(body, removeAssertEqShape, new_vars)
+        @dprintln(3,"AST after removing assertEqShape = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
+        lives = computeLiveness(body, LambdaVarInfo)
     end
 
     if bb_reorder != 0
         maxFusion(lives)
         # Set the array of statements in the Lambda body to a new array constructed from the updated basic blocks.
-        ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, CompilerTools.CFGs.createFunctionBody(lives.cfg))
-        @dprintln(3,"ast after maxFusion = ", " function = ", function_name)
-        printLambda(3, ast)
-        lives = computeLiveness(ast, LambdaVarInfo)
+        body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(lives.cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
+        @dprintln(3,"AST after maxFusion = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
+        lives = computeLiveness(body, LambdaVarInfo)
     end
 
     @dprintln(1,"Doing conversion to parallel IR.", " function = ", function_name)
-    printLambda(3, ast)
+    printLambda(3, LambdaVarInfo, body)
 
     new_vars.block_lives = lives
     @dprintln(3,"max_label before main Parallel IR = ", new_vars.max_label)
@@ -3328,22 +3245,22 @@ function from_root(function_name, ast)
     @dprintln(3,lives)
 
     # Do the main work of Parallel IR.
-    ast = from_expr(ast, 1, new_vars, false)
-    assert(isa(ast,Array))
-    assert(length(ast) == 1)
-    ast = ast[1]
+    body = get_one(from_expr(LambdaVarInfo, body, 1, new_vars, false))
+    #assert(isa(ast,Array))
+    #assert(length(ast) == 1)
+    #body = body[1]
 
-    @dprintln(1,"Final ParallelIR function = ", function_name, " ast = ")
-    printLambda(1, ast)
+    @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
+    printLambda(1, LambdaVarInfo, body)
 
-    ast = remove_extra_allocs(ast)
+    body = remove_extra_allocs(LambdaVarInfo, body)
 
-    set_pir_stats(ast)
+    set_pir_stats(body)
 
     #if pir_stop != 0
     #    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     #end
-    ast
+    return LambdaVarInfo, body
 end
 
 """
@@ -3364,12 +3281,7 @@ end
 Calculates statistics (number of allocations and parfors)
 of the accelerated AST.
 """
-function set_pir_stats(ast)
-    assert(isfunctionhead(ast))
-
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(ast)
-
+function set_pir_stats(body)
     allocs = 0
     parfors = 0
     # count number of high-level allocations and assignment
@@ -3396,12 +3308,9 @@ end
 """
 removes extra allocations
 """
-function remove_extra_allocs(ast)
+function remove_extra_allocs(LambdaVarInfo, body)
     @dprintln(3,"starting remove extra allocs")
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(ast)
-    lives = CompilerTools.LivenessAnalysis.from_expr(ast, rm_allocs_live_cb, LambdaVarInfo)
-    #lives = CompilerTools.LivenessAnalysis.from_expr(ast, pir_live_cb, LambdaVarInfo)
+    lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, body, rm_allocs_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{LHSVar}()
     for i in values(lives.basic_blocks)
@@ -3410,8 +3319,7 @@ function remove_extra_allocs(ast)
     @dprintln(3, "remove extra allocations defs ",defs)
     rm_state = rm_allocs_state(defs, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(body, rm_allocs_cb, rm_state)
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body) 
-    return ast
+    return body
 end
 
 function toSynGemOrInt(a::TypedVar)
@@ -3536,18 +3444,16 @@ end
 
 
 function from_expr(ast :: LambdaInfo, depth, state :: expr_state, top_level)
-    @dprintln(3,"from_expr for LambdaInfo starting")
-    state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(ast)
-    body = from_lambda_body(body, 0, state)
-    @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
-    @dprintln(3,"new lambda = ", body)
-
-    ast = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
+    @dprintln(3,"from_expr for LambdaInfo does nothing! Any LambdaInfo should have been turned into AST prior to ParallelIR")
     return [ast]
+end
 
-#    ast = Base.uncompressed_ast(ast)
-#    return from_expr(ast, depth, state, top_level)
+function from_expr(LambdaVarInfo, body :: Expr, depth, state :: expr_state, top_level)
+    assert(body.head == :body)
+    @dprintln(3,"from_expr for LambdaVarInfo body starting")
+    state.LambdaVarInfo = LambdaVarInfo
+    body = from_lambda_body(body, 0, state)
+    return [body]
 end
 
 function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
@@ -3729,7 +3635,7 @@ function from_alloc(args::Array{Any,1})
     sizes = args[2]
     n = length(sizes)
     assert(n >= 1 && n <= 3)
-    name = symbol(string("jl_alloc_array_", n, "d"))
+    name = Symbol(string("jl_alloc_array_", n, "d"))
     appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
     #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
     #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
@@ -3805,7 +3711,7 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is
         for i = 1:length(cur_parfor.body)
             x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
         end
-        for i = 1:length(cur_parfor.postParFor)-1
+        for i = 1:length(cur_parfor.postParFor)
             x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
         end
         # update read write set in case of symbol replacement like unused variable elimination

@@ -255,11 +255,10 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     assert(length(neutral_val.inputs) == 1)
     #assert(length(neutral_val.outputs) == 0)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    init_var = CompilerTools.LambdaHandling.addLocalVariable(gensym(symbol("temp_neutral_val")), neutral_val.inputs[1], 0, state.LambdaVarInfo)
-    neutral_val_inputs = [init_var]
-    (max_label, nested_lambda) = nested_function_exprs(state.max_label, neutral_val, neutral_val_inputs, state)
-    neutral_val_body = mergeLambdaIntoOuterState(state, nested_lambda)
-    state.max_label = max_label
+    init_var = CompilerTools.LambdaHandling.addLocalVariable(gensym(Symbol("temp_neutral_val")), neutral_val.inputs[1], 0, state.LambdaVarInfo)
+    neutral_val_inputs = Any[init_var]
+    nested_function_exprs(neutral_val, state)
+    neutral_val_body = mergeLambdaIntoOuterState(state, neutral_val, neutral_val_inputs)
     assert(isa(neutral_val_body,Array))
     @dprintln(3, "neutral_val_body = ", neutral_val_body)
     pop!(neutral_val_body) # remove last Expr, which is Expr(:tuple)
@@ -273,10 +272,9 @@ end
 
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
     # call domain ir to generate most of the body of the function (except for saving the output)
-    reduction_func_inputs = [reduction_var, delta_var]
-    (max_label, nested_lambda) = nested_function_exprs(state.max_label, reduction_func, reduction_func_inputs, state)
-    temp_body = mergeLambdaIntoOuterState(state, nested_lambda)
-    state.max_label = max_label
+    reduction_func_inputs = Any[reduction_var, delta_var]
+    nested_function_exprs(reduction_func, state)
+    temp_body = mergeLambdaIntoOuterState(state, reduction_func, reduction_func_inputs)
     assert(isa(temp_body,Array))
     assert(length(temp_body) > 0)
     assert(typeof(temp_body[end]) == Expr)
@@ -333,7 +331,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     @dprintln(3, "length(loopNests) = ", length(loopNests))
 
     # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+    parfor_index_syms::Array{Any,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
@@ -365,7 +363,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     nest_idx = num_dim_inputs
     #for i = 1:inp_dim #num_dim_inputs
     for i = 1:num_dim_inputs
-        save_array_len   = symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
+        save_array_len   = Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
         CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         if isWholeArray(inputInfo)
             push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
@@ -384,7 +382,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 end
                 # TODO: generate dimension check on mask_array
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
-                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, toRHSVar(parfor_index_syms[i], Int, state.LambdaVarInfo))
+                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, parfor_index_syms[i])
             elseif isa(this_dim, SingularSelector)
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), 1, state))
                 generatePreOffsetStatement(this_dim, pre_statements)
@@ -394,7 +392,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             end
         end 
         push!(save_array_lens, save_array_len)
-        loop_nest = PIRLoopNest(toRHSVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
+        loop_nest = PIRLoopNest(parfor_index_syms[i], 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
         if red_dim > 0
             if red_dim == i
                loopNests[1] = loop_nest
@@ -411,7 +409,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     assert(length(dl.outputs) == 1)
     out_type = dl.outputs[1]
     @dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
-    reduction_output_name  = symbol(string("parallel_ir_reduction_output_",unique_node_id))
+    reduction_output_name  = Symbol(string("parallel_ir_reduction_output_",unique_node_id))
     reduction_output_snode = toRHSVar(reduction_output_name, out_type, state.LambdaVarInfo)
     @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
     CompilerTools.LambdaHandling.addLocalVariable(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
@@ -662,7 +660,7 @@ function get_mmap_input_info(input_array :: RHSVar, state)
     return thisInfo
 end
 
-function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_syms::Array{Symbol,1}, state)
+function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_syms::Array{Any,1}, state)
     # We only support bitarray selection for 1D arrays
     for i = 1:length(thisInfo.range)
         if !isa(thisInfo.range[i], MaskSelector)
@@ -714,19 +712,19 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     end
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
-        save_array_len = symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
+        save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         @dprintln(3, "Creating expr for ", save_array_len)
-        CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+        
         if length(const_sizes)!=0
-            array1_len = mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), const_sizes[i], state)
+            array1_len = mk_assignment_expr(save_array_len, const_sizes[i], state)
             push!(save_array_lens, const_sizes[i])
         else
             push!(save_array_lens, save_array_len)
-            array1_len = mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo[1],i), state)
+            array1_len = mk_assignment_expr(save_array_len, mk_arraylen_expr(inputInfo[1],i), state)
         end
         # add that assignment to the set of statements to execute before the parfor
         push!(pre_statements,array1_len)
-        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(toRHSVar(parfor_index_syms[i],Int, state.LambdaVarInfo), 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo),1)
+        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(parfor_index_syms[i], 1, save_array_len, 1)
     end
     return loopNests
 end
@@ -749,7 +747,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     end
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
+    indexed_arrays = Any[ inputInfo[i].elementTemp for i = 1:length(inputInfo) ]
 
     # Get a unique number to embed in generated code for new variables to prevent name conflicts.
     unique_node_id = get_unique_num()
@@ -759,7 +757,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     assert(length(dl.inputs) == len_input_arrays || (with_indices && length(dl.inputs) == num_dim_inputs + len_input_arrays))
 
     # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+    parfor_index_syms::Array{Any,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
     map(i->(gen_bitarray_mask(num_dim_inputs, inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
 
@@ -783,12 +781,12 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     #end
 
     @dprintln(3,"indexed_arrays = ", indexed_arrays)
-    dl_inputs = with_indices ? vcat(indexed_arrays, [toRHSVar(s, Int, state.LambdaVarInfo) for s in parfor_index_syms ]) : indexed_arrays
+    dl_inputs = with_indices ? vcat(indexed_arrays, parfor_index_syms) : indexed_arrays
     @dprintln(3,"dl_inputs = ", dl_inputs)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda, body_lives) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
-    nested_body = mergeLambdaIntoOuterState(state, nested_lambda)
-
+    nested_function_exprs(dl, state)
+    nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
+    body_lives = computeLiveness(nested_body, state.LambdaVarInfo)
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
     for i = 1:length(inputInfo)
@@ -798,7 +796,6 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         end
     end
 
-    state.max_label = max_label
     out_body = [out_body; nested_body...]
     @dprintln(2,"typeof(out_body) = ",typeof(out_body))
     assert(isa(out_body,Array))
@@ -905,10 +902,10 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         (redvar, neutral, redfunc) = args[i+3]
         redtyp = CompilerTools.LambdaHandling.getType(redvar, state.LambdaVarInfo)
         out_name = string("parallel_ir_reduction_output_",unique_node_id,"_",i)
-        #out_var = toRHSVar(symbol(out_name), redtyp, state.LambdaVarInfo)
-        out_var = toRHSVar(symbol(redvar), redtyp, state.LambdaVarInfo)
+        #out_var = toRHSVar(Symbol(out_name), redtyp, state.LambdaVarInfo)
+        out_var = toRHSVar(Symbol(redvar), redtyp, state.LambdaVarInfo)
         #CompilerTools.LambdaHandling.addLocalVariable(out_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
-        inp_name = symbol(string("parallel_ir_reduction_input_",unique_node_id,"_",i))
+        inp_name = Symbol(string("parallel_ir_reduction_input_",unique_node_id,"_",i))
         CompilerTools.LambdaHandling.addLocalVariable(inp_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
         inp_var = toRHSVar(inp_name, redtyp, state.LambdaVarInfo)
         neutral = translate_reduction_neutral_value(neutral, state)
@@ -916,10 +913,9 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         push!(reductions, PIRReduction(out_var, neutral, reduce_func))
         #redvar_map[redvar] = out_var.name
     end
-    dl_inputs = [toRHSVar(s, Int, state.LambdaVarInfo) for s in loopvars]
-    (max_label, nested_lambda) = nested_function_exprs(state.max_label, dl, dl_inputs, state)
-    nested_body = mergeLambdaIntoOuterState(state, nested_lambda)
-    state.max_label = max_label
+    dl_inputs = Any[toRHSVar(s, Int, state.LambdaVarInfo) for s in loopvars]
+    nested_function_exprs(dl, state)
+    nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
     out_body = nested_body
     # pop the last expr which is (:tuple, ....) since we don't need it
     if isa(out_body[end], Expr) && (out_body[end].head == :tuple)
@@ -931,7 +927,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     for i = 1:n_loops
         loopvar = loopvars[i]
         range = ranges[i]
-        range_name = symbol("parallel_ir_range_len_$(loopvar)_$(unique_node_id)_range")
+        range_name = Symbol("parallel_ir_range_len_$(loopvar)_$(unique_node_id)_range")
         # FIXME: We should infer the range type
         range_type = UnitRange{Int64}
         if CompilerTools.LambdaHandling.getType(range, state.LambdaVarInfo) <: Number
@@ -942,11 +938,11 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
             CompilerTools.LambdaHandling.addLocalVariable(string(range_name), range_type, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
             push!(pre_statements, range_expr)
             save_loop_len = string("parallel_ir_save_loop_len_", loopvar, "_", unique_node_id)
-            loop_len = mk_assignment_expr(toRHSVar(symbol(save_loop_len), Int, state.LambdaVarInfo), :(length($range_name)), state)
+            loop_len = mk_assignment_expr(toRHSVar(Symbol(save_loop_len), Int, state.LambdaVarInfo), :(length($range_name)), state)
             # add that assignment to the set of statements to execute before the parfor
             push!(pre_statements,loop_len)
             CompilerTools.LambdaHandling.addLocalVariable(save_loop_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-            loopNests[n_loops - i + 1] = PIRLoopNest(toRHSVar(loopvar,Int, state.LambdaVarInfo), 1, toRHSVar(symbol(save_loop_len),Int, state.LambdaVarInfo),1)
+            loopNests[n_loops - i + 1] = PIRLoopNest(toRHSVar(loopvar,Int, state.LambdaVarInfo), 1, toRHSVar(Symbol(save_loop_len),Int, state.LambdaVarInfo),1)
             push!(rearray, RangeExprs(1,1,:(length($range_name))))
         end
     end
@@ -1012,12 +1008,12 @@ end
 
 # Create variables to use for the parfor loop indices.
 function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-    parfor_index_syms = Array(Symbol,num_dim_inputs)
+    parfor_index_syms = Array(Any,num_dim_inputs)
     for i = 1:num_dim_inputs
         parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
-        parfor_index_sym = symbol(parfor_index_var)
-        CompilerTools.LambdaHandling.addLocalVariable(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
-        parfor_index_syms[i] = parfor_index_sym
+        parfor_index_sym = Symbol(parfor_index_var)
+       parfor_index_syms[i] = CompilerTools.LambdaHandling.addLocalVariable(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
+        
     end
     return parfor_index_syms
 end
@@ -1092,7 +1088,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     assert(length(dl.inputs) == length(inputInfo))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
-    indexed_arrays = map(i->inputInfo[i].elementTemp, 1:length(inputInfo))
+    indexed_arrays = Any[ inputInfo[i].elementTemp for i = 1:length(inputInfo) ]
     @dprintln(3, "indexed_arrays = ", indexed_arrays)
 
     # Get a unique number to embed in generated code for new variables to prevent name conflicts.
@@ -1103,7 +1099,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     loopNests = Array(PIRLoopNest, num_dim_inputs)
 
     # Create variables to use for the loop indices.
-    parfor_index_syms::Array{Symbol,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
+    parfor_index_syms::Array{Any,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
 
     map(i->(gen_bitarray_mask(num_dim_inputs, inputInfo[i], parfor_index_syms, state)), 1:length(inputInfo))
 
@@ -1145,9 +1141,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     #  CompilerTools.LambdaHandling.addLocalVariable(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
     # Call Domain IR to generate most of the body of the function (except for saving the output)
-    (max_label, nested_lambda) = nested_function_exprs(state.max_label, dl, indexed_arrays, state)
-    nested_body = mergeLambdaIntoOuterState(state, nested_lambda)
-    state.max_label = max_label
+    nested_function_exprs(dl, state)
+    nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
     out_body = [out_body; nested_body...]
     @dprintln(2,"typeof(out_body) = ",typeof(out_body))
     assert(isa(out_body,Array))
@@ -1174,7 +1169,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Create each output array
     number_output_arrays = length(dl.outputs)
     for i = 1:number_output_arrays
-        new_array_name = symbol(string("parallel_ir_new_array_name_", unique_node_id, "_", i))
+        new_array_name = Symbol(string("parallel_ir_new_array_name_", unique_node_id, "_", i))
         CompilerTools.LambdaHandling.addLocalVariable(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
         @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
@@ -1190,7 +1185,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         # remember the array variable as a new variable added to the function and that it is assigned once (the 18)
         # add the statement to create the new output array to the set of statements to execute before the parfor
         push!(pre_statements,new_ass_expr)
-        nans = symbol(new_array_name)
+        nans = Symbol(new_array_name)
         push!(new_array_symbols,nans)
         nans_sn = toRHSVar(nans, Array{dl.outputs[i], num_dim_inputs}, state.LambdaVarInfo)
 

@@ -794,8 +794,8 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
 
     if node.head == :lambda
         save_LambdaVarInfo  = state.LambdaVarInfo
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
-        body = CompilerTools.LambdaHandling.getBody(node)
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(node)
+        state.LambdaVarInfo = linfo
         AstWalk(body, create_equivalence_classes, state)
         state.LambdaVarInfo = save_LambdaVarInfo
         return node

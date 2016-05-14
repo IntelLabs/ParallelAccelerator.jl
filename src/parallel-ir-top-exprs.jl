@@ -626,15 +626,15 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     label_last                 = next_available_label + 3
 
     gensym2_var = string("#recreate_gensym2_", uniq, "_", 0)
-    gensym2_sym = symbol(gensym2_var)
+    gensym2_sym = Symbol(gensym2_var)
     gensym0_var = string("#recreate_gensym0_", uniq, "_", 1)
-    gensym0_sym = symbol(gensym0_var)
+    gensym0_sym = Symbol(gensym0_var)
     pound_s1_var = string("#recreate_pound_s1_", uniq, "_", 2)
-    pound_s1_sym = symbol(pound_s1_var)
+    pound_s1_sym = Symbol(pound_s1_var)
     gensym3_var = string("#recreate_gensym3_", uniq, "_", 3)
-    gensym3_sym = symbol(gensym3_var)
+    gensym3_sym = Symbol(gensym3_var)
     gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
-    gensym4_sym = symbol(gensym4_var)
+    gensym4_sym = Symbol(gensym4_var)
     CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
     CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
     CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
@@ -673,7 +673,7 @@ end
 
 function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_var = string(cur_task.task_func,"_range_var")
-    range_sym = symbol(range_var)
+    range_sym = Symbol(range_var)
 
     @dprintln(3,"Inserting call to jl_threading_run ", range_sym)
     @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
@@ -733,7 +733,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         @dprintln(3,"real_args_build = ", real_args_build)
 
         tup_var = string(cur_task.task_func,"_tup_var")
-        tup_sym = symbol(tup_var)
+        tup_sym = Symbol(tup_var)
 
         if false
             real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
@@ -810,17 +810,14 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     end
 
     @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
-    fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
-    @dprintln(3,"fake_body = ", fake_body)
-    new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
+    new_lives = CompilerTools.LivenessAnalysis.from_lambda(state.LambdaVarInfo, body, pir_live_cb, state.LambdaVarInfo)
     @dprintln(1,"Starting loop analysis.")
     loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
     @dprintln(1,"Finished loop analysis.")
 
     if hoist_allocation == 1
         body = hoistAllocation(body, new_lives, loop_info, state)
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, state.LambdaVarInfo)
+        new_lives = CompilerTools.LivenessAnalysis.from_lambda(state.LambdaVarInfo, body, pir_live_cb, state.LambdaVarInfo)
         @dprintln(1,"Starting loop analysis again.")
         loop_info = CompilerTools.Loops.compute_dom_loops(new_lives.cfg)
         @dprintln(1,"Finished loop analysis.")

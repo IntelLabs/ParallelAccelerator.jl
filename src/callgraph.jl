@@ -256,7 +256,8 @@ function extractStaticCallGraphWalk(node::Expr,
     args = node.args
     if head == :lambda
         if state.LambdaVarInfo == nothing
-            state.LambdaVarInfo = lambdaToLambdaVarInfo(node)
+            linfo, body = lambdaToLambdaVarInfo(node)
+            state.LambdaVarInfo = linfo
             @dprintln(3, "LambdaVarInfo = ", state.LambdaVarInfo)
         else
             new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
@@ -281,7 +282,7 @@ function extractStaticCallGraphWalk(node::Expr,
             return node
         end
 
-        pmap_name = symbol("__pmap#39__")
+        pmap_name = Symbol("__pmap#39__")
         if func_expr == TopNode(pmap_name)
             func_expr = call_args[3]
             assert(typeof(func_expr) == TypedVar)

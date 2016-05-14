@@ -478,12 +478,9 @@ function isCompositeType(t::Type)
     b
 end
 
-function from_lambda(ast::Expr)
-    from_lambda(CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast), CompilerTools.LambdaHandling.getBody(ast))
-end
-
-function from_lambda(ast::LambdaInfo)
-    from_lambda(CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast), CompilerTools.LambdaHandling.getBody(ast))
+function from_lambda(ast)
+    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    from_lambda(linfo, body)
 end
 
 function from_lambda(linfo :: LambdaVarInfo, body)
@@ -514,8 +511,9 @@ function from_lambda(linfo :: LambdaVarInfo, body)
     dumpSymbolTable(lstate.symboltable)
 
     for k in vars
-        @dprintln(3, "from_lambda creating decl for ", k)
-        decls *= toCtype(lookupSymbolType(k, linfo)) * " " * canonicalize(k) * ";\n"
+        s = lookupVariableName(k, linfo)
+        @dprintln(3, "from_lambda creating decl for variable ", k, " with name ", s)
+        decls *= toCtype(lookupSymbolType(k, linfo)) * " " * canonicalize(s) * ";\n"
     end
     decls * bod
 end
@@ -1957,7 +1955,7 @@ function from_parforstart(args, linfo)
         # Still need to prepend reduction variable initialization for non-openmp loops.
         return rdsprolog * loopheaders
     end
-
+    private_vars = [ lookupVariableName(x, linfo) for x in private_vars ]
     # Check if there are private vars and emit the |private| clause
     @dprintln(3,"Private Vars: ")
     @dprintln(3,"-----")
@@ -2049,7 +2047,7 @@ function from_parallel_loophead(args,linfo)
     if length(args[4]) > 0
         private = "private("
         for var in args[4]
-            private *= "$(canonicalize(var)),"
+            private *= "$(from_expr(var, linfo)),"
         end
         private = chop(private)
         private *= ")"
@@ -2061,7 +2059,7 @@ function from_parallel_loophead(args,linfo)
     schedule = args[6]
     inner_private = "private("
     for iv in args[1]
-        inner_private *= "$(canonicalize(iv)),"
+        inner_private *= "$(from_expr(iv, linfo)),"
     end
     inner_private = chop(inner_private)
     inner_private *= ")"
@@ -2338,7 +2336,7 @@ end
 
 function from_varargpack(vargs, linfo)
     args = vargs[1]
-    vsym = canonicalize(args[1])
+    vsym = from_expr(args[1], linfo)
     vtyps = args[2]
     toCtype(vtyps) * " " * vsym * " = " *
         "{" * mapfoldl((i) -> vsym * string(i), (a, b) -> "$a, $b", 1:length(vtyps.types)) * "};"
@@ -2393,11 +2391,11 @@ end
 function from_callee(ast::Expr, functionName::ASCIIString, linfo)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
-    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
-    bod = from_expr(ast, linfo)
+    bod = from_expr(body, linfo)
     args = from_formalargs(params, [], false, linfo)
     dumpSymbolTable(lstate.symboltable)
     s::ASCIIString = "$typ $functionName($args) { $bod } "
@@ -2635,8 +2633,9 @@ function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: D
     @dprintln(1,"Ast = ", ast)
 
     set_includes(ast)
-    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body  = CompilerTools.LambdaHandling.getBody(ast)
+    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    @dprintln(3, "LambdaVarInfo = ", linfo)
+    @dprintln(3, "body = ", body)
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
@@ -2706,12 +2705,12 @@ function from_root_nonentry(ast, functionName::ASCIIString, array_types_in_sig :
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    linfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
     #bod = from_expr(ast, linfo)
-    bod = from_lambda(linfo, getBody(ast))
+    bod = from_lambda(linfo, body)
 
     vararg_bod, args, argsunal, alias_check = check_params(false, params, linfo)
     bod = vararg_bod * bod
