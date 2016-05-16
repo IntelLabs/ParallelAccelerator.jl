@@ -30,6 +30,8 @@ using ParallelAccelerator
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
+#using CompilerTools
+#CompilerTools.OptFramework.set_debug_level(4)
 
 @acc function cat1(a::Array{Float64,1})
     d = 3.0 
