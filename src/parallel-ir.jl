@@ -2341,7 +2341,7 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node :: Union{Symbol, TypedVar, GenSym, GlobalRef})
+function hasNoSideEffects(node :: Union{Symbol, LHSVar, RHSVar, GlobalRef})
     return true
 end
 
@@ -2349,7 +2349,7 @@ function hasNoSideEffects(node :: Union{LambdaInfo, Number, Function})
     return true
 end
 
-function hasNoSideEffects(node :: ANY)
+function hasNoSideEffects(node :: Any)
     return false
 end
 
