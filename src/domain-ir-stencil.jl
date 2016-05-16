@@ -74,7 +74,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   end
   local narrs = length(arrSyms)
   local bufSyms = Array(GenSym, narrs)
-  local arrSymDict = Dict{Symbol,GenSym}()
+  local arrSymDict = Dict{LHSVar,GenSym}()
   for i in 1:length(arrSyms)
     # this case is not possible since krn is a type inferred AST and not LambdaInfo
     # if isa(arrSyms[i], Expr) && arrSyms[i].head == :(::) # Expr in the form (x :: t).
@@ -82,9 +82,9 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
     #end
     # assert(isa(arrSyms[i], Symbol))
     bufSyms[i] = addTempVariable(bufTyps[i], state.linfo)
-    arrSymDict[arrSyms[i]] = bufSyms[i]
+    arrSymDict[lookupLHSVarByName(arrSyms[i], state.linfo)] = bufSyms[i]
   end
-
+  @dprintln(3, "bufSyms = ", bufSyms, " arrSymDict = ", arrSymDict)
   local expr::Expr = krnBody
   assert(expr.head == :body)
   # warn(string("got arrSymDict = ", arrSymDict))
@@ -158,7 +158,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
   if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
      (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
       is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
-     isa(expr.args[2], GenSym) && in(expr.args[2], bufSyms)
+     isa(expr.args[2], RHSVar) && in(expr.args[2], bufSyms)
     local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
     #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
     bufSym = expr.args[2]

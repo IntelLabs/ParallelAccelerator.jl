@@ -1619,6 +1619,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaInfo,TypedVar,Expr}, a
     else
         lambda = func
     end
+    dprintln(env, "typeof(lambda) = ", typeof(lambda))
     (ast, aty) = lambdaTypeinf(lambda, tuple(argstyp...))
     dprintln(env, "type inferred AST = ", ast)
     dprintln(env, "aty = ", aty)
