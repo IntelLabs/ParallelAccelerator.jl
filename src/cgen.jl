@@ -537,7 +537,7 @@ function dumpSymbolTable(a::Dict{Any, Any})
     end
 end
 
-function dumpDecls(a::Array{Dict{Any, ASCIIString}})
+function dumpDecls(a::Array{Dict{Any, String}})
     for x in a
         for k in keys(x)
             @dprintln(3,x[k], " ", k)
@@ -556,14 +556,6 @@ function typeAvailable(a)
     return hasfield(a, :typ)
 end
 
-function checkTopNodeName(arg::TopNode, name::Symbol)
-    return arg.name==name
-end
-
-function checkTopNodeName(arg::ANY, name::Symbol)
-    return false
-end
-
 function checkGlobalRefName(arg::GlobalRef, name::Symbol)
     return arg.name==name
 end
@@ -576,7 +568,7 @@ end
 
 function from_assignment_fix_tuple(lhs, rhs::Expr, linfo)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
-  if rhs.head==:call && checkTopNodeName(rhs.args[1],:tuple)
+  if rhs.head==:call && isBaseFunc(rhs.args[1],:tuple)
     @dprintln(3,"Found tuple assignment: ", lhs," ", rhs)
     lstate.tupleTable[lhs] = rhs.args[2:end]
   end
@@ -1425,7 +1417,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
     t = ""
     s = ""
     if is(f.head,:call) || is(f.head,:call1) # :call1 is gone in v0.4
-        if length(f.args) == 3 && isa(f.args[1], TopNode) && is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
+        if length(f.args) == 3 && isBaseFunc(f.args[1], :getfield) && isa(f.args[3],QuoteNode)
             s = f.args[3].value
             if isa(f.args[2],Module)
                 M = f.args[2]
@@ -1447,13 +1439,13 @@ function resolveCallTarget(f::GlobalRef, args::Array{Any, 1},linfo)
 end
     
     
-function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
+function resolveCallTarget(f, args::Array{Any, 1},linfo)
     @dprintln(3,"Trying to resolve target from f::TopNode with args: ", args)
     M = ""
     t = ""
     s = ""
     #case 1:
-    if is(f.name, :getfield) && isa(args[2], QuoteNode)
+    if isBaseFunc(f, :getfield) && isa(args[2], QuoteNode)
         @dprintln(3,"Case 1: args[2] is ", args[2])
         fname = args[2].value
         if isa(args[1], Module)
@@ -1469,11 +1461,12 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
             #M, _s = resolveCallTarget([args[1]])
         end
         @dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
-    elseif is(f.name, :getfield) && hasfield(f, :head) && is(f.head, :call)
-        @dprintln(3,"Case 2: calling")
-        return resolveCallTarget(f,linfo)
+    # the following appears to be dead code
+    # elseif isBaseFunc(f, :getfield) && hasfield(f, :head) && is(f.head, :call)
+    #    @dprintln(3,"Case 2: calling")
+    #    return resolveCallTarget(f,linfo)
     # case 3:
-    elseif isInlineable(f.name, args)
+    elseif (isa(f, TopNode) || isa(f, GlobalRef)) && isInlineable(f.name, args)
         t = from_inlineable(f.name, args,linfo)
         @dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
@@ -1481,14 +1474,13 @@ function resolveCallTarget(f::TopNode, args::Array{Any, 1},linfo)
     return M, s, t
 end
 
-function resolveCallTarget(f::ANY, args::Array{Any, 1},linfo)
-    return "","",""
-end
-
-function inSymbolTable(x, linfo)
+function inSymbolTable(x::RHSVar, linfo)
     x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
     haskey(lstate.symboltable, x)
 end
+
+    
+inSymbolTable(x, linfo) = haskey(lstate.symboltable, x)
 
 function lookupSymbolType(x, linfo)
     x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
@@ -1987,7 +1979,7 @@ function from_new(args, linfo)
             s *= mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * "}"
         end
     elseif isa(typ, Expr)
-        if isa(typ.args[1], TopNode) && typ.args[1].name == :getfield
+        if isBaseFunc(typ.args[1], :getfield)
             typ = getfield(typ.args[2], typ.args[3].value)
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * (isempty(ptyps) ? "" : mapfoldl(canonicalize, (a, b) -> a * b, ptyps))
@@ -2388,7 +2380,7 @@ function from_newvarnode(args, linfo)
     ""
 end
 
-function from_callee(ast::Expr, functionName::ASCIIString, linfo)
+function from_callee(ast::Expr, functionName::String, linfo)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
     linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
@@ -2398,7 +2390,7 @@ function from_callee(ast::Expr, functionName::ASCIIString, linfo)
     bod = from_expr(body, linfo)
     args = from_formalargs(params, [], false, linfo)
     dumpSymbolTable(lstate.symboltable)
-    s::ASCIIString = "$typ $functionName($args) { $bod } "
+    s = "$typ $functionName($args) { $bod } "
     s
 end
 
@@ -2526,7 +2518,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
 
     # If we are forcing vectorization then we will not emit the alias check
     emitaliascheck = (vectorizationlevel == VECDEFAULT ? true : false)
-    s::ASCIIString = ""
+    s = ""
     if emitaliascheck && alias_check != nothing
         assert(isa(alias_check, AbstractString))
 
@@ -2617,7 +2609,7 @@ end
 
 
 # This is the entry point to CGen from the PSE driver
-function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_entry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = true
@@ -2696,7 +2688,7 @@ function from_root_entry(ast, functionName::ASCIIString, array_types_in_sig :: D
 end
 
 # This is the entry point to CGen from the PSE driver
-function from_root_nonentry(ast, functionName::ASCIIString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_nonentry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = false

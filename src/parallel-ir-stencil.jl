@@ -72,7 +72,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local n = stat.dimension
   local sizeNodes = [ addTempVariable(Int, linfo) for i = 1:n ]
   local sizeInitExpr = [ TypedExpr(Int, :(=), sizeNodes[i],
-                                   TypedExpr(Int, :call, TopNode(:arraysize), buf, i))
+                                   TypedExpr(Int, :call, GlobalRef(Base, :arraysize), buf, i))
                          for i in 1:n ]
   local strideNodes = [ addTempVariable(Int, linfo) for s in stat.strideSym ]
   local strideInitExpr = Array(Any, n)
@@ -80,12 +80,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # the following assumes contiguous column major layout for multi-dimensional arrays
   for i = 2:n
     strideInitExpr[i] = TypedExpr(Int, :(=), strideNodes[i],
-                                  TypedExpr(Int, :call, TopNode(:mul_int), strideNodes[i-1], sizeNodes[i-1]))
+                                  TypedExpr(Int, :call, GlobalRef(Base, :mul_int), strideNodes[i-1], sizeNodes[i-1]))
   end
   local idxNodes = Any[ DomainIR.addFreshLocalVariable(string("i",s.id), Int, ISASSIGNED | ISASSIGNEDONCE, linfo) for s in stat.idxSym ]
   local loopNest = [ PIRLoopNest(idxNodes[i],
                                  border_inloop ? 1 : 1-stat.shapeMin[i],
-                                 border_inloop ? sizeNodes[i] : TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[i], stat.shapeMax[i]),
+                                 border_inloop ? sizeNodes[i] : TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[i], stat.shapeMax[i]),
                                  1)
                      for i in n:-1:1 ]
   local nbufs = length(bufs)
@@ -127,15 +127,15 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # border handling
   borderLabel = next_label(irState)
   afterBorderLabel = next_label(irState)
-  lowerExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), 1-stat.shapeMin[i], idxNodes[i])
+  lowerExprs = [ TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), 1-stat.shapeMin[i], idxNodes[i])
                  for i in 1:n ]
-  upperExprs = [ TypedExpr(Bool, :call, TopNode(:sle_int), idxNodes[i],
-                      TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[i], stat.shapeMax[i]))
+  upperExprs = [ TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), idxNodes[i],
+                      TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[i], stat.shapeMax[i]))
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
   borderHead = Any[ TypedExpr(Int, :(=), toLHSVar(idxNodes[1]),
-                      TypedExpr(Int, :call, TopNode(:sub_int), sizeNodes[1], stat.shapeMax[1])),
+                      TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
                   ]
@@ -143,7 +143,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   if oob_dst_zero
     for expr in bodyExpr
       expr = deepcopy(expr)
-      if is(expr.head, :call) && isa(expr.args[1], TopNode) && is(expr.args[1].name, :unsafe_arrayset)
+      if is(expr.head, :call) && isBaseFunc(expr.args[1], :unsafe_arrayset)
         zero = Base.convert(DomainIR.elmTypOf(getType(expr.args[2], linfo)), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
@@ -154,10 +154,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
-        if isa(rhs, Expr) && is(rhs.head, :call) && isa(rhs.args[1], TopNode) && is(rhs.args[1].name, :unsafe_arrayref)
+        if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
           zero = Base.convert(rhs.typ, 0)
           expr = TypedExpr(expr.typ, :(=), lhs,
-                  TypedExpr(rhs.typ, :call, TopNode(:safe_arrayref),
+                  TypedExpr(rhs.typ, :call, GlobalRef(Base, :safe_arrayref),
                       rhs.args[2], zero, rhs.args[3:end]...))
         end
       end
@@ -169,17 +169,17 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
       if isa(expr, Expr) && is(expr.head, :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
-        if isa(rhs, Expr) && is(rhs.head, :call) && isa(rhs.args[1], TopNode) && is(rhs.args[1].name, :unsafe_arrayref)
-          indices = Expr[ TypedExpr(Int, :call, TopNode(:select_value), 
-                            TypedExpr(Bool, :call, TopNode(:sle_int), rhs.args[2+i], 0),
-                            TypedExpr(Int, :call, TopNode(:add_int), rhs.args[2+i], sizeNodes[i]),
-                            TypedExpr(Int, :call, TopNode(:select_value),
-                              TypedExpr(Bool, :call, TopNode(:sle_int), 
-                                TypedExpr(Int, :call, TopNode(:add_int), sizeNodes[i], 1), rhs.args[2+i]),
-                              TypedExpr(Int, :call, TopNode(:sub_int), rhs.args[2+i], sizeNodes[i]),
+        if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
+          indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value), 
+                            TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), rhs.args[2+i], 0),
+                            TypedExpr(Int, :call, GlobalRef(Base, :add_int), rhs.args[2+i], sizeNodes[i]),
+                            TypedExpr(Int, :call, GlobalRef(Base, :select_value),
+                              TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), 
+                                TypedExpr(Int, :call, GlobalRef(Base, :add_int), sizeNodes[i], 1), rhs.args[2+i]),
+                              TypedExpr(Int, :call, GlobalRef(Base, :sub_int), rhs.args[2+i], sizeNodes[i]),
                               rhs.args[2+i])) for i = 1:n ]
           expr = TypedExpr(expr.typ, :(=), lhs,
-                  TypedExpr(rhs.typ, :call, TopNode(:unsafe_arrayref),
+                  TypedExpr(rhs.typ, :call, GlobalRef(Base, :unsafe_arrayref),
                       rhs.args[2], indices...))
         end
       end

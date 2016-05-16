@@ -329,7 +329,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
       for i = 1:num_rets
           (typ, is_array) = ret_typs[i]
           push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
-          push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), :ret_args, i)))
+          push!(ret_arg_exps, Expr(:call, GlobalRef(Base, :pointer), Expr(:call, GlobalRef(Base, :arrayref), :ret_args, i)))
           #push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), toRHSVar(:ret_args, Array{Any,1}, LambdaVarInfo), i)))
       end
   end

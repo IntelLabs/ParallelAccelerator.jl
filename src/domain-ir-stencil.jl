@@ -177,11 +177,11 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
       local idx = Int(expr.args[idxOffset+i])
       stat.shapeMax[i] = max(idx, stat.shapeMax[i])
       stat.shapeMin[i] = min(idx, stat.shapeMin[i])
-      expr.args[idxOffset+i] = mk_expr(Int, :call, TopNode(:add_int), stat.idxSym[i], idx)
+      expr.args[idxOffset+i] = mk_expr(Int, :call, GlobalRef(Base, :add_int), stat.idxSym[i], idx)
     end
     # local idx1D = nDimTo1Dim(expr.args[(idxOffset+1):end], stat.strideSym)
-    expr.args = isGet ? [ TopNode(:unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
-                        [ TopNode(:unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
+    expr.args = isGet ? [ GlobalRef(Base, :unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
+                        [ GlobalRef(Base, :unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
     # fix numerical coercion when converting setindex! into unsafe_arrayset
     if is(expr.args[1].name, :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
@@ -202,10 +202,10 @@ end
 
 # Helper function to join Symbols into Expr
 function nDimTo1Dim(exprs, strides)
-  f(e, stride) = mk_expr(Int, :call, TopNode(:mul_int), stride, mk_expr(Int, :call, TopNode(:sub_int), e, 1))
-  g(r, e) = mk_expr(Int, :call, TopNode(:add_int), r, e)
+  f(e, stride) = mk_expr(Int, :call, GlobalRef(Base, :mul_int), stride, mk_expr(Int, :call, GlobalRef(Base, :sub_int), e, 1))
+  g(r, e) = mk_expr(Int, :call, GlobalRef(Base, :add_int), r, e)
   e = mapReduceWith(exprs, strides, f, g)
-  return mk_expr(Int, :call, TopNode(:add_int), e, 1)
+  return mk_expr(Int, :call, GlobalRef(Base, :add_int), e, 1)
 end
 
 function mapReduceWith(as, bs, mapf, redf)

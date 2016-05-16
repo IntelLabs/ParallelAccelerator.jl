@@ -126,7 +126,7 @@ function mk_arrayref1(num_dim_inputs,
     TypedExpr(
         elem_typ,
         :call,
-        TopNode(fname),
+        GlobalRef(Base, fname),
         :($array_name),
         indsyms...)
 end
@@ -157,7 +157,7 @@ function mk_arrayslice(num_dim_inputs,
     TypedExpr(
         elem_typ,
         :call,
-        TopNode(fname),
+        GlobalRef(Base, fname),
         :($array_name),
         indsyms...)
 end
@@ -195,7 +195,7 @@ function mk_mask_arrayref1(cur_dimension,
     TypedExpr(
         elem_typ,
         :call,
-        TopNode(fname),
+        GlobalRef(Base, fname),
         :($array_name),
         indsyms[cur_dimension])
 end
@@ -245,7 +245,7 @@ function mk_arrayset1(num_dim_inputs,
     TypedExpr(
        elem_typ,
        :call,
-       TopNode(fname),
+       GlobalRef(Base, fname),
        array_name,
        :($value),
        indsyms...)
@@ -382,7 +382,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 end
                 # TODO: generate dimension check on mask_array
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
-                input_array_rangeconds[i] = TypedExpr(Bool, :call, TopNode(:unsafe_arrayref), mask_array, parfor_index_syms[i])
+                input_array_rangeconds[i] = TypedExpr(Bool, :call, GlobalRef(Base, :unsafe_arrayref), mask_array, parfor_index_syms[i])
             elseif isa(this_dim, SingularSelector)
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), 1, state))
                 generatePreOffsetStatement(this_dim, pre_statements)
@@ -440,7 +440,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     if length(condExprs) > 0
         out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
     end
-    #out_body = TypedExpr(out_type, :call, TopNode(:parallel_ir_reduce), reduction_output_snode, indexed_array)
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor

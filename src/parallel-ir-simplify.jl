@@ -464,7 +464,7 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                     rhs.args[4] = 'T'
                 end
             # replace arraysize() calls to the transposed matrix with original
-            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1] == TopNode(:arraysize)
+            elseif isa(rhs,Expr) && rhs.head==:call && isBaseFunc(rhs.args[1], :arraysize)
                 if haskey(data.transpose_map, rhs.args[2])
                     rhs.args[2] = data.transpose_map[rhs.args[2]]
                     if rhs.args[3] ==1
@@ -665,7 +665,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         if length(rhs.args) > 1
             @dprintln(3, " arg2 = ", rhs.args[2])
         end
-        if rhs.args[1] == TopNode(:ccall)
+        if isBaseFunc(rhs.args[1], :ccall)
             # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
             if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
                 dim1 = rhs.args[7]
@@ -683,7 +683,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
-        elseif rhs.args[1] == TopNode(:arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
+        elseif rhs.args[1] == isBaseFunc(Base, :arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
             assert(isa(array_param, RHSVar))
@@ -693,7 +693,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
-        elseif rhs.args[1] == TopNode(:arraysize)
+        elseif rhs.args[1] == isBaseFunc(Base, :arraysize)
             # replace arraysize calls when size is known and constant
             arr = toLHSVar(rhs.args[2])
             if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
@@ -731,7 +731,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             if haskey(state.tuple_table, rhs.args[3])
                 checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[rhs.args[3]])
             end
-        elseif rhs.args[1]==TopNode(:tuple)
+        elseif rhs.args[1]==isBaseFunc(Base, :tuple)
             ok = true
             for s in rhs.args[2:end]
                 if !(isa(s,TypedVar) || isa(s,Int))
