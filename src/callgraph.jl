@@ -172,7 +172,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
         func = getfield(func_expr.mod, func_expr.name)
     elseif fetyp == Expr
         @dprintln(3,"head = ", func_expr.head)
-        if func_expr.head == :call && func_expr.args[1] == TopNode(:getfield)
+        if func_expr.head == :call && isBaseFunc(func_expr.args[1], :getfield)
             @dprintln(3,"args2 = ", func_expr.args[2], " type = ", typeof(func_expr.args[2]))
             @dprintln(3,"args3 = ", func_expr.args[3], " type = ", typeof(func_expr.args[3]))
             fsym = func_expr.args[3]
@@ -267,7 +267,7 @@ function extractStaticCallGraphWalk(node::Expr,
     elseif head == :call || head == :call1
         func_expr = args[1]
         @dprintln(4,"func_expr = ", func_expr)
-        if func_expr == TopNode(:ccall)
+        if isBaseFunc(func_expr, :ccall)
             state.cant_analyze = true
             return node
         end
@@ -283,7 +283,7 @@ function extractStaticCallGraphWalk(node::Expr,
         end
 
         pmap_name = Symbol("__pmap#39__")
-        if func_expr == TopNode(pmap_name)
+        if isBaseFunc(func_expr, pmap_name)
             func_expr = call_args[3]
             assert(typeof(func_expr) == TypedVar)
             func_expr = toLHSVar(func_expr)

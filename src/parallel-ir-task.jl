@@ -314,22 +314,22 @@ UNSAFE_ARRAYREF_COST = 2.0
 FLOAT_ARITH = 1.0
 
 call_costs = Dict{Any,Any}()
-call_costs[(TopNode(:mul_float),(Float64,Float64))] = 1.0
-call_costs[(TopNode(:div_float),(Float64,Float64))] = 1.0
-call_costs[(TopNode(:add_float),(Float64,Float64))] = 1.0
-call_costs[(TopNode(:sub_float),(Float64,Float64))] = 1.0
-call_costs[(TopNode(:neg_float),(Float64,))] = 1.0
-call_costs[(TopNode(:mul_float),(Float32,Float32))] = 1.0
-call_costs[(TopNode(:div_float),(Float32,Float32))] = 1.0
-call_costs[(TopNode(:add_float),(Float32,Float32))] = 1.0
-call_costs[(TopNode(:sub_float),(Float32,Float32))] = 1.0
-call_costs[(TopNode(:neg_float),(Float32,))] = 1.0
-call_costs[(TopNode(:mul_int),(Int64,Int64))] = 1.0
-call_costs[(TopNode(:div_int),(Int64,Int64))] = 1.0
-call_costs[(TopNode(:add_int),(Int64,Int64))] = 1.0
-call_costs[(TopNode(:sub_int),(Int64,Int64))] = 1.0
-call_costs[(TopNode(:sle_int),(Int64,Int64))] = 1.0
-call_costs[(TopNode(:sitofp),(DataType,Int64))] = 1.0
+call_costs[(:mul_float,(Float64,Float64))] = 1.0
+call_costs[(:div_float,(Float64,Float64))] = 1.0
+call_costs[(:add_float,(Float64,Float64))] = 1.0
+call_costs[(:sub_float,(Float64,Float64))] = 1.0
+call_costs[(:neg_float,(Float64,))] = 1.0
+call_costs[(:mul_float,(Float32,Float32))] = 1.0
+call_costs[(:div_float,(Float32,Float32))] = 1.0
+call_costs[(:add_float,(Float32,Float32))] = 1.0
+call_costs[(:sub_float,(Float32,Float32))] = 1.0
+call_costs[(:neg_float,(Float32,))] = 1.0
+call_costs[(:mul_int,(Int64,Int64))] = 1.0
+call_costs[(:div_int,(Int64,Int64))] = 1.0
+call_costs[(:add_int,(Int64,Int64))] = 1.0
+call_costs[(:sub_int,(Int64,Int64))] = 1.0
+call_costs[(:sle_int,(Int64,Int64))] = 1.0
+call_costs[(:sitofp,(DataType,Int64))] = 1.0
 call_costs[(:log10,(Float64,))] = 160.0
 call_costs[(:erf,(Float64,))] = 75.0
 
@@ -347,6 +347,8 @@ Generate an instruction count estimate for a call instruction.
 """
 function call_instruction_count(args, state :: eic_state, debug_level)
     func  = args[1]
+    func = isa(func, TopNode) ? func.name : func
+    func = isa(func, GlobalRef) ? func.name : func
     fargs = args[2:end]
 
     @dprintln(3,"call_instruction_count: func = ", func, " fargs = ", fargs)
@@ -393,21 +395,21 @@ Try to figure out the instruction count for a given call.
 """
 function generate_instr_count(function_name, signature)
     # Estimate instructions for some well-known functions.
-    if function_name == TopNode(:arrayset) || function_name == TopNode(:arrayref)
+    if function_name == :arrayset || function_name == :arrayref
         call_costs[(function_name, signature)] = 4.0
         return call_costs[(function_name, signature)]
-    elseif function_name == TopNode(:unsafe_arrayset) || function_name == TopNode(:unsafe_arrayref)
+    elseif function_name == :unsafe_arrayset || function_name == :unsafe_arrayref
         call_costs[(function_name, signature)] = 2.0
         return call_costs[(function_name, signature)]
-    elseif function_name == TopNode(:safe_arrayref)
+    elseif function_name == :safe_arrayref
         call_costs[(function_name, signature)] = 6.0
         return call_costs[(function_name, signature)]
-    elseif function_name == TopNode(:box)
+    elseif function_name == :box
         call_costs[(function_name, signature)] = 20.0
         return call_costs[(function_name, signature)]
-    elseif function_name == TopNode(:lt_float) || 
-        function_name == TopNode(:le_float) ||
-        function_name == TopNode(:not_int)
+    elseif function_name == :lt_float || 
+        function_name == :le_float ||
+        function_name == :not_int
         call_costs[(function_name, signature)] = 1.0
         return call_costs[(function_name, signature)]
     end
@@ -880,14 +882,14 @@ end
 Returns an expression to get the start of an iteration range from a :colon object.
 """
 function mk_start_expr(colon_sym)
-    TypedExpr(Any, :call, TopNode(:start), colon_sym)
+    TypedExpr(Any, :call, GlobalRef(Base, :start), colon_sym)
 end
 
 """
 Returns a :next call Expr that gets the next element of an iteration range from a :colon object.
 """
 function mk_next_expr(colon_sym, start_sym)
-    TypedExpr(Any, :call, TopNode(:next), colon_sym, start_sym)
+    TypedExpr(Any, :call, GlobalRef(Base, :next), colon_sym, start_sym)
 end
 
 """
@@ -919,12 +921,12 @@ function convertUnsafeWalk(x::Expr, state, top_level_number, is_top_level, read)
     dprintln(use_dbg_level,"convertUnsafeWalk is Expr")
     if x.head == :call
         dprintln(use_dbg_level,"convertUnsafeWalk is :call")
-        if x.args[1] == TopNode(:unsafe_arrayset)
-            x.args[1] = TopNode(:arrayset)
+        if isBaseFunc(x.args[1], :unsafe_arrayset)
+            x.args[1] = GlobalRef(Base, :arrayset)
             state.found = true
             return x
-        elseif x.args[1] == TopNode(:unsafe_arrayref)
-            x.args[1] = TopNode(:arrayref)
+        elseif isBaseFunc(x.args[1], :unsafe_arrayref)
+            x.args[1] = GlobalRef(Base, :arrayref)
             state.found = true
             return x
         end
@@ -1027,7 +1029,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
             if cu_res != nothing
                 push!(new_body, Expr(:boundscheck, false)) 
                 push!(new_body, cu_res)
-                push!(new_body, Expr(:boundscheck, Expr(:call, TopNode(:getfield), Base, QuoteNode(:pop))))
+                push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
             else
                 push!(new_body, the_parfor.body[i])
             end
@@ -1124,7 +1126,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
 
            push!(new_body, mk_assignment_expr(toRHSVar(gensym2_sym,Int64,newLambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
            push!(new_body, mk_assignment_expr(toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), toRHSVar(gensym2_sym,Int64,newLambdaVarInfo)), state))
-           push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo), Expr(:call, TopNode(:getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), QuoteNode(:start)), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo), Expr(:call, GlobalRef(Base, :getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), QuoteNode(:start)), state))
            push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_second_unless))
            push!(new_body, LabelNode(label_after_first_unless))
 
@@ -1368,19 +1370,19 @@ function parforToTask(parfor_index, bb_statements, body, state)
         for i = 1:length(the_parfor.loopNests)
             # Put outerloop first in the loopNest
             j = length(the_parfor.loopNests) - i + 1
-            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:add_int),
-            TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i),
+            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, GlobalRef(Base, :add_int),
+            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), :ranges, QuoteNode(:lower_bounds)), i),
             1)
-            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:add_int), 
-            TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i),
+            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, GlobalRef(Base, :add_int), 
+            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), :ranges, QuoteNode(:upper_bounds)), i),
             1)
         end
     elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
         for i = 1:length(the_parfor.loopNests)
             # Put outerloop first in the loopNest
             j = length(the_parfor.loopNests) - i + 1
-            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:lower_bounds)), i)
-            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, TopNode(:unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, TopNode(:getfield), :ranges, QuoteNode(:upper_bounds)), i)
+            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), :ranges, QuoteNode(:lower_bounds)), i)
+            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), :ranges, QuoteNode(:upper_bounds)), i)
         end
     end
 

@@ -59,7 +59,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
                     simple = false
                     for j = 1:length(new_exprs)
                         e = new_exprs[j]
-                        if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (e.args[2].args[1] == TopNode(:box))
+                        if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (isBaseFunc(e.args[2].args[1], :box))
                             @dprintln(3, "box operation detected")
                             simple = true
                         else
@@ -475,8 +475,8 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         itn.phi_grain_size.dim = dims
                         for l = 1:dims
                             # Note that loopNest is outer-dimension first
-                            push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
-                            push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, TopNode(:sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
+                            push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
+                            push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
                             push!(itn.host_grain_size.sizes, 2)
                             push!(itn.phi_grain_size.sizes, 2)
                         end
@@ -648,7 +648,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
 
     push!(new_body, mk_assignment_expr(toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
     push!(new_body, mk_assignment_expr(toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo)), state))
-    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), Expr(:call, TopNode(:getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), QuoteNode(:start)), state))
+    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(base, :getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), QuoteNode(:start)), state))
     push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_second_unless))
     push!(new_body, LabelNode(label_after_first_unless))
 
@@ -736,9 +736,9 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         tup_sym = Symbol(tup_var)
 
         if false
-            real_args_tuple_expr = TypedExpr(eval(args_type), :call, TopNode(:tuple), real_args_build...)
+            real_args_tuple_expr = TypedExpr(eval(args_type), :call, GlobalRef(Base, :tuple), real_args_build...)
             call_tup = (Function,pir_range_actual,Any)
-            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_tuple_expr), state))
+            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, GlobalRef(Base, :tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_tuple_expr), state))
         else
             call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
             call_tup = eval(call_tup_expr)
@@ -758,7 +758,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             svec_args = mk_svec_expr(Any, Any)
             insert_task_expr = TypedExpr(Any,
                                          :call,
-                                         TopNode(:ccall),
+                                         GlobalRef(Core, :ccall),
                                          QuoteNode(:jl_threading_run),
                                          GlobalRef(Main,:Void),
                                          svec_args,

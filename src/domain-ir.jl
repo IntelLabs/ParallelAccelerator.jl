@@ -120,7 +120,7 @@ mk_eltype(arr) = Expr(:eltype, arr)
 mk_ndim(arr) = Expr(:ndim, arr)
 mk_length(arr) = Expr(:length, arr)
 #mk_arraysize(arr, d) = Expr(:arraysize, arr, d)
-mk_arraysize(arr, dim) = TypedExpr(Int64, :call, TopNode(:arraysize), arr, dim)
+mk_arraysize(arr, dim) = TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), arr, dim)
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)
@@ -550,7 +550,7 @@ function from_range(rhs::Expr)
         ((isa(rhs.args[3].args[1], GlobalRef) && 
           rhs.args[3].args[1] == GlobalRef(Base, :select_value)) ||
          (isa(rhs.args[3].args[1], Expr) && is(rhs.args[3].args[1].head, :call) &&
-          is(rhs.args[3].args[1].args[1], TopNode(:getfield)) &&
+          isBaseFunc(rhs.args[3].args[1].args[1], :getfield) &&
           is(rhs.args[3].args[1].args[2], GlobalRef(Base, :Intrinsics)) &&
           is(rhs.args[3].args[1].args[3], QuoteNode(:select_value))))
         # only look at final value in select_value of UnitRange
@@ -655,20 +655,20 @@ function specializeOp(opr::Symbol, argstyp)
             # TODO: use subtype checking here?
             if is(typ, Int) || is(typ, Int32) || is(typ, Int64)
                 if opr == :/ # special case for division
-                    opr = TopNode(floatOps[opr])
-                    cast = (ty, x) -> Expr(:call, TopNode(:sitofp), ty, x)
+                    opr = GlobalRef(Base, floatOps[opr])
+                    cast = (ty, x) -> Expr(:call, GlobalRef(Base, :sitofp), ty, x)
                 else
-                    opr = TopNode(sintOps[opr])
+                    opr = GlobalRef(Base, sintOps[opr])
                 end
             elseif is(typ, Float32) || is(typ, Float64)
-                opr = TopNode(floatOps[opr])
+                opr = GlobalRef(Base, floatOps[opr])
             end
         catch err
             error(string("Cannot specialize operator ", opr, " to type ", typ))
         end
     end
     if isa(opr, Symbol)
-        opr = TopNode(opr)
+        opr = GlobalRef(Base, opr)
     end
     return opr, reorder, cast
 end
@@ -748,7 +748,7 @@ function elmTypOf(x::DataType)
 end
 
 function elmTypOf(x::Expr)
-    if x.head == :call && x.args[1] == TopNode(:apply_type) && x.args[2] == :Array
+    if x.head == :call && isBaseFunc(x.args[1], :apply_type) && x.args[2] == :Array
         return x.args[3] # element type
     else
         error("expect Array type, but got ", x)
@@ -800,12 +800,13 @@ function simplify(state, expr)
     return expr
 end
 
-isTopNodeOrGlobalRef(x,s) = is(x, TopNode(s)) || is(x, GlobalRef(Core.Intrinsics, s))
-add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:add_int), x, y)
-sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, TopNode(:sub_int), x, y)
-mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, TopNode(:mul_int), x, y))
-sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, TopNode(:sdiv_int), x, y)
-neg_expr(x)   = mk_expr(Int, :call, TopNode(:neg_int), x)
+isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = is(x, TopNode(s)) || is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
+isTopNodeOrGlobalRef(x,s) = false
+add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, GlobalRef(Base, :add_int), x, y)
+sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, GlobalRef(Base, :sub_int), x, y)
+mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, GlobalRef(Base, :mul_int), x, y))
+sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, GlobalRef(Base, :sdiv_int), x, y)
+neg_expr(x)   = mk_expr(Int, :call, GlobalRef(Base, :neg_int), x)
 isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
 isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
 isAddExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :add_int) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd_int))
@@ -1118,9 +1119,8 @@ end
 function normalize_callname(state::IRState, env, fun::Symbol, args)
     if is(fun, :broadcast!)
         dst = lookupConstDefForArg(state, args[2])
-        if isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], TopNode) &&
-            is(dst.args[1].name, :ccall) && isa(dst.args[2], QuoteNode) &&
-            is(dst.args[2].value, :jl_new_array)
+        if isa(dst, Expr) && is(dst.head, :call) && isBaseFunc(dst.args[1], :ccall) && 
+           isa(dst.args[2], QuoteNode) && is(dst.args[2].value, :jl_new_array)
             # now we are sure destination array is new
             fun   = args[1]
             args  = args[3:end]
@@ -1224,7 +1224,7 @@ function inline_select(env, state, arr::RHSVar)
                 if is(def.args[1], :getindex) || (isa(def.args[1], GlobalRef) && is(def.args[1].name, :getindex))
                     target_arr = def.args[2]
                     range_extra = def.args[3:end]
-                elseif def.args[1] == TopNode(:_getindex!) # getindex gets desugared!
+                elseif isBaseFunc(def.args[1], :_getindex!) # getindex gets desugared!
                     error("we cannot handle TopNode(_getindex!) because it is effectful and hence will persist until J2C time")
                 end
                 dprintln(env, "inline-select: target_arr = ", target_arr, " range = ", range_extra)
@@ -1641,7 +1641,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaInfo,TypedVar,Expr}, a
         # take a shortcut if the second last statement is the tuple creation
         exp = body.args[end-1]
         if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
-           exp.args[2].head == :call && exp.args[2].args[1] == TopNode(:tuple)
+           exp.args[2].head == :call && isBaseFunc(exp.args[2].args[1], :tuple)
             dprintln(env, "second last is tuple assignment, we'll take shortcut")
             pop!(body.args)
             exp.head = :tuple
@@ -1774,13 +1774,13 @@ function translate_call_checkbounds(state, env, args::Array{Any,1})
         end
     elseif isIntType(typ)
         if isIntType(typeOfOpr(state, args[2]))
-            expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), args[2]),
-            mk_expr(Bool, :call, TopNode(:sle_int), args[2], args[1]))
+            expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :sle_int), convert(typ, 1), args[2]),
+            mk_expr(Bool, :call, GlobalRef(Base, :sle_int), args[2], args[1]))
         elseif isa(args[2], TypedVar) && (isUnitRange(args[2].typ) || isStepRange(args[2].typ))
             def = lookupConstDefForArg(state, args[2])
             (start, step, final) = from_range(def)
-            expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, TopNode(:sle_int), convert(typ, 1), start),
-            mk_expr(Bool, :call, TopNode(:sle_int), final, args[1]))
+            expr = mk_expr(Bool, :assert, mk_expr(Bool, :call, GlobalRef(Base, :sle_int), convert(typ, 1), start),
+            mk_expr(Bool, :call, GlobalRef(Base, :sle_int), final, args[1]))
         else
             error("Unhandled bound in checkbounds: ", args[2])
         end
@@ -1859,7 +1859,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
-    assert(is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
+    assert(is(dimExp_e.head, :call) && isBaseFunc(dimExp_e.args[1], :tuple))
     dimExp = dimExp_e.args[2:end]
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
@@ -1888,7 +1888,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     for i=3:nargs # we have reduction here!
         tup = lookupConstDefForArg(state, args[i])
         @assert (isa(tup, Expr) && is(tup.head, :call) &&
-                 is(tup.args[1], TopNode(:tuple))) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(tup)
+                 isBaseFunc(tup.args[1], :tuple)) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(tup)
         redfunc = lookupConstDefForArg(state, tup.args[2])
         redvar = tup.args[3] # lookupConstDefForArg(state, tup.args[3])
         redvar = toLHSVar(redvar)
@@ -1899,12 +1899,14 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         end
         @assert (!isa(redvar, GenSym)) "Unexpected GenSym  at the position of the reduction variable, " * string(redvar)
         nlinfo = LambdaVarInfo()
-        addEscapingVariable(redvar, rvtyp, 0, nlinfo)
+        redvarname = lookupVariableName(redvar, state.linfo)
+        dprintln(env, "redvarname = ", redvarname)
+        addEscapingVariable(redvarname, rvtyp, 0, nlinfo)
         nval = translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)])
-        redparam = gensym(string(redvar))
+        redparam = gensym(redvarname)
         addLocalVariable(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
         setInputParameters(Symbol[redparam], nlinfo)
-        neutral = DomainLambda(nlinfo, Expr(:body, Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, state.linfo))))
+        neutral = DomainLambda(nlinfo, Expr(:body, Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, nlinfo))))
         (body, linfo) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         redty = getReturnType(linfo)
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
@@ -1912,8 +1914,10 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         # redast only expects one parameter, so we must add redvar to the input parameter of redast, 
         # and remove it from escaping variable
         dprintln(env, "translate_call_cartesianmapreduce linfo = ", linfo)
-        unsetEscapingVariable(redvar, linfo)
-        setInputParameters(vcat(redvar, getInputParameters(linfo)), linfo)
+        if isEscapingVariable(redvar, linfo) 
+          unsetEscapingVariable(redvar, linfo)
+        end
+        setInputParameters(vcat(redvarname, getInputParameters(linfo)), linfo)
         #addLocalVariable(redvar, getType(redvar, linfo), getDesc(redvar, linfo), linfo)
         reduceF = DomainLambda(linfo, body)
         push!(expr.args, (redvar, neutral, reduceF)) 
@@ -1935,7 +1939,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
-    assert(is(dimExp_e.head, :call) && is(dimExp_e.args[1], TopNode(:tuple)))
+    assert(is(dimExp_e.head, :call) && isBaseFunc(dimExp_e.args[1], :tuple))
     dimExp = dimExp_e.args[2:end]
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
@@ -2024,8 +2028,8 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         linfo = LambdaVarInfo()
         for i = 1:num_dim
             sizeVars[i] = addFreshLocalVariable(string("red_dim_size"), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-            dimExp = mk_expr(arrtyp, :call, TopNode(:select_value), 
-                         mk_expr(Bool, :call, TopNode(:eq_int), red_dim[1], i), 
+            dimExp = mk_expr(arrtyp, :call, GlobalRef(Base, :select_value), 
+                         mk_expr(Bool, :call, GlobalRef(Base, :eq_int), red_dim[1], i), 
                          1, mk_arraysize(arr, i)) 
             emitStmt(state, mk_expr(Int, :(=), sizeVars[i], dimExp))
             addEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, 0, linfo)
@@ -2149,7 +2153,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         elseif is(fun.name, :fill!)
             return translate_call_fill!(state, env_, typ, args)
         elseif is(fun.name, :_getindex!) # see if we can turn getindex! back into getindex
-            if isa(args[1], Expr) && args[1].head == :call && args[1].args[1] == TopNode(:ccall) && 
+            if isa(args[1], Expr) && args[1].head == :call && isBaseFunc(args[1].args[1], :ccall) && 
                 (args[1].args[2] == :jl_new_array ||
                 (isa(args[1].args[2], QuoteNode) && args[1].args[2].value == :jl_new_array))
                 expr = mk_expr(typ, :call, :getindex, args[2:end]...)
@@ -2625,7 +2629,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         return expr_to_process
         # arrayref only add read access
     elseif head == :call
-        if args[1]==TopNode(:arrayref) || args[1]==TopNode(:arraysize)
+        if isBaseFunc(args[1], :arrayref) || isBaseFunc(args[1], :arraysize)
             expr_to_process = Any[]
             for i = 2:length(args)
                 push!(expr_to_process, args[i])

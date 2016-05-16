@@ -28,37 +28,38 @@ THE POSSIBILITY OF SUCH DAMAGE.
 libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :isnan])
 #using Debug
 
-function pattern_match_call_math(fun::TopNode, input::ASCIIString, typ::Type, linfo)
+function pattern_match_call_math(fun::Symbol, input::String, typ::Type, linfo)
     s = ""
     isDouble = typ == Float64 
     isFloat = typ == Float32
     isComplex = typ <: Complex
     isInt = typ <: Integer
-    if in(fun.name,libm_math_functions) && (isFloat || isDouble || isComplex)
-        @dprintln(3,"FOUND ", fun.name)
-        s = string(fun.name)*"("*input*");"
+    if in(fun,libm_math_functions) && (isFloat || isDouble || isComplex)
+        @dprintln(3,"FOUND ", fun)
+        s = string(fun)*"("*input*");"
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun.name,:abs) && (isFloat || isDouble || isComplex || isInt)
-      @dprintln(3,"FOUND ", fun.name)
+    if is(fun,:abs) && (isFloat || isDouble || isComplex || isInt)
+      @dprintln(3,"FOUND ", fun)
       fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"
     end
     return s
 end
 
-function pattern_match_call_math(fun::TopNode, input::GenSym, linfo)
-  pattern_match_call_math(fun, from_expr(input, linfo), lstate.symboltable[input],linfo)
-end
-
-
-function pattern_match_call_math(fun::TopNode, input::TypedVar, linfo)
+function pattern_match_call_math(fun::Symbol, input::RHSVar, linfo)
   pattern_match_call_math(fun, from_expr(input, linfo), getType(input, linfo), linfo)
 end
 
+
 function pattern_match_call_math(fun::GlobalRef, input, linfo)
-    return pattern_match_call_math(TopNode(fun.name), input,linfo)
+    fun = Base.resolve(fun)
+    if fun.mod == Base 
+        pattern_match_call_math(fun.name, input,linfo)
+    else
+        return ""
+    end
 end
 
 function pattern_match_call_math(fun::ANY, input::ANY, linfo)
@@ -77,9 +78,9 @@ function pattern_match_call_throw(fun::ANY, input::ANY, linfo)
     return ""
 end
 
-function pattern_match_call_powersq(fun::GlobalRef, x::Number, y::Integer, linfo)
+function pattern_match_call_powersq(fun, x::Number, y::Integer, linfo)
     s = ""
-    if fun.name==:power_by_squaring
+    if isBaseFunc(fun, :power_by_squaring)
         s = "cgen_pown("*from_expr(x,linfo)*","*from_expr(y,linfo)*")"
     end
     return s
@@ -89,9 +90,9 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_rand(linfo, fun::TopNode, RNG::Any, args...)
+function pattern_match_call_rand(linfo, fun, RNG::Any, args...)
     res = ""
-    if(fun.name==:rand!)
+    if isBaseFunc(fun, :rand!)
         if USE_OMP==1
             res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -101,13 +102,9 @@ function pattern_match_call_rand(linfo, fun::TopNode, RNG::Any, args...)
     return res 
 end
 
-function pattern_match_call_rand(linfo, fun::ANY, RNG::ANY, args...)
-    return ""
-end
-
-function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any,linfo)
+function pattern_match_call_randn(fun, RNG::Any, IN::Any,linfo)
     res = ""
-    if(fun.name==:randn!)
+    if isBaseFunc(fun, :randn!)
         if USE_OMP==1
             res = "cgen_n_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -117,13 +114,9 @@ function pattern_match_call_randn(fun::TopNode, RNG::Any, IN::Any,linfo)
     return res 
 end
 
-function pattern_match_call_randn(fun::ANY, RNG::ANY, IN::ANY,linfo)
-    return ""
-end
-
-function pattern_match_call_reshape(fun::GlobalRef, inp::Any, shape::RHSVar, linfo)
+function pattern_match_call_reshape(fun, inp::Any, shape::RHSVar, linfo)
     res = ""
-    if(fun.mod == Base && fun.name==:reshape)
+    if isBaseFunc(fun, :reshape)
         typ = getSymType(shape, linfo)
         if istupletyp(typ)
             dim = length(typ.parameters)
@@ -222,10 +215,10 @@ end
 function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
-    if rhs.head==:call && (checkTopNodeName(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
+    if rhs.head==:call && (isBaseFunc(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
         @dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
-        is_typed::Bool = checkTopNodeName(rhs.args[1],:typed_hvcat)
+        is_typed::Bool = isBaseFunc(rhs.args[1],:typed_hvcat)
         
         rows = Int64[]
         values = Any[]

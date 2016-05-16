@@ -547,7 +547,7 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: RHSVar, dim :: Int64)
-    TypedExpr(Int64, :call, TopNode(:arraysize), :($x), dim)
+    TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), :($x), dim)
 end
 
 """
@@ -578,28 +578,28 @@ In other words, returns an expression the equivalent of ParallelAccelerator.Para
 function mk_parallelir_ref(sym, ref_type=Function)
     #inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
     #TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
-    TypedExpr(ref_type, :call, TopNode(:getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
+    TypedExpr(ref_type, :call, GlobalRef(Base, :getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
 end
 
 """
 Returns an expression that convert "ex" into a another type "new_type".
 """
 function mk_convert(new_type, ex)
-    TypedExpr(new_type, :call, TopNode(:convert), new_type, ex)
+    TypedExpr(new_type, :call, GlobalRef(Base, :convert), new_type, ex)
 end
 
 """
 Create an expression which returns the index'th element of the tuple whose name is contained in tuple_var.
 """
 function mk_tupleref_expr(tuple_var, index, typ)
-    TypedExpr(typ, :call, TopNode(:tupleref), tuple_var, index)
+    TypedExpr(typ, :call, GlobalRef(Base, :tupleref), tuple_var, index)
 end
 
 """
 Make a svec expression.
 """
 function mk_svec_expr(parts...)
-    TypedExpr(SimpleVector, :call, TopNode(:svec), parts...)
+    TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), parts...)
 end
 
 """
@@ -608,8 +608,8 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 """
 function mk_alloc_array_1d_expr(elem_type, atype, length)
     @dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
-    ret_type = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 1)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
+    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 1)
+    new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
     #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
 
     length_expr = get_length_expr(length)
@@ -617,7 +617,7 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
     TypedExpr(
        atype,
        :call,
-       TopNode(:ccall),
+       GlobalRef(Core,:ccall),
        QuoteNode(:jl_alloc_array_1d),
        ret_type,
        new_svec,
@@ -643,14 +643,14 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
 
-    ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 2)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+    ret_type  = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
+    new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core,:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
 
     TypedExpr(
        atype,
        :call,
-       TopNode(:ccall),
+       GlobalRef(Core,:ccall),
        QuoteNode(:jl_alloc_array_2d),
        ret_type,
        new_svec,
@@ -669,13 +669,13 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 """
 function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
-    ret_type  = TypedExpr(Type{atype}, :call1, TopNode(:apply_type), :Array, elem_type, 3)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
+    ret_type  = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
+    new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     
     TypedExpr(
        atype,
        :call,
-       TopNode(:ccall),
+       GlobalRef(Core, :ccall),
        QuoteNode(:jl_alloc_array_3d),
        ret_type,
        new_svec,
@@ -1379,7 +1379,7 @@ Return an expression which creates a tuple.
 """
 function mk_tuple_expr(tuple_fields, typ)
     # Tuples are formed with a call to :tuple.
-    TypedExpr(typ, :call, TopNode(:tuple), tuple_fields...)
+    TypedExpr(typ, :call, GlobalRef(Base, :tuple), tuple_fields...)
 end
 
 function getAliasMap(loweredAliasMap, sym)
@@ -1511,7 +1511,7 @@ end
 
 function isAllocation(expr :: Expr)
     return expr.head == :call && 
-    expr.args[1] == TopNode(:ccall) && 
+    isBaseFunc(expr.args[1], :ccall) && 
     (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d) || expr.args[2] == QuoteNode(:jl_new_array))
 end
 
@@ -1567,20 +1567,14 @@ end
 Is a node an arrayset node?
 """
 function isArrayset(x)
-    if x == TopNode(:arrayset) || x == TopNode(:unsafe_arrayset)
-        return true
-    end
-    return false
+    isBaseFunc(x, :arrayset) || isBaseFunc(x, :unsafe_arrayset)
 end
 
 """
 Is a node an arrayref node?
 """
 function isArrayref(x)
-    if x == TopNode(:arrayref) || x == TopNode(:unsafe_arrayref)
-        return true
-    end
-    return false
+    isBaseFunc(x, :arrayref) || isBaseFunc(x, :unsafe_arrayref)
 end
 
 """
@@ -1615,7 +1609,7 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
     dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
     if x.head == :call
         dprintln(use_dbg_level,"sub_arrayset_walk is :call")
-        if x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+        if isArrayset(x.args[1])
             # Here we have a call to arrayset.
             dprintln(use_dbg_level,"sub_arrayset_walk is :arrayset")
             array_name = x.args[2]
@@ -1668,7 +1662,7 @@ function getFirstArrayLens(parfor, num_dims, state)
         if (typeof(x) == Expr) && (x.head == :(=))
             lhs = x.args[1]
             rhs = x.args[2]
-            if isa(rhs, Expr) && (rhs.head == :call) && (rhs.args[1] == TopNode(:arraysize))
+            if isa(rhs, Expr) && (rhs.head == :call) && isBaseFunc(rhs.args[1],:arraysize)
                 push!(ret, toRHSVar(lhs, state.LambdaVarInfo))
             end
         end
@@ -1716,8 +1710,7 @@ function sub_cur_body_walk(x::Expr,
     if x.head == :call
         dprintln(dbglvl,"sub_cur_body_walk xtype is call x.args[1] = ", x.args[1], " type = ", typeof(x.args[1]))
         # Found a call to arrayref.
-        if x.args[1] == TopNode(:arrayref) || 
-           x.args[1] == TopNode(:unsafe_arrayref) || 
+        if isArrayref(x.args[1]) ||
            x.args[1] == GlobalRef(ParallelAccelerator.API, :getindex)
             dprintln(dbglvl,"sub_cur_body_walk xtype is arrayref, unsafe_arrayref, or getindex")
             array_name = x.args[2]
@@ -1731,7 +1724,7 @@ function sub_cur_body_walk(x::Expr,
                 dprintln(dbglvl,"sub_cur_body_walk IS substituting ", cbd.temp_map[lowered_array_name])
                 return cbd.temp_map[lowered_array_name]
             end
-        elseif x.args[1] == TopNode(:arrayset) || x.args[1] == TopNode(:unsafe_arrayset)
+        elseif isArrayset(x.args[1])
             array_name = x.args[2]
             assert(isa(array_name, RHSVar))
             push!(cbd.arrays_set_in_cur_body, toLHSVar(array_name))
@@ -1833,7 +1826,7 @@ function is_eliminated_arraylen(x::Expr)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
             @dprintln(3,"is_eliminated_arraylen is :call")
-            if rhs.args[1] == TopNode(:arraysize)
+            if isBaseFunc(rhs.args[1], :arraysize)
                 @dprintln(3,"is_eliminated_arraylen is :arraysize")
                 return true
             end
@@ -1859,7 +1852,7 @@ function sub_arraylen_walk(x::Expr, replacement, top_level_number, is_top_level,
     if x.head == :(=)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
-            if rhs.args[1] == TopNode(:ccall)
+            if isBaseFunc(rhs.args[1], :ccall)
                 if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
                     rhs.args[7] = replacement[1]
                 elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
@@ -2308,22 +2301,16 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         assert(length(args) == 1)
         return Any[]
     elseif head == :call
-        if args[1] == TopNode(:unsafe_arrayref)
+        if isBaseFunc(args[1], :unsafe_arrayref) || isBaseFunc(args[1], :safe_arrayref)
             expr_to_process = Any[]
             new_expr = deepcopy(ast)
-            new_expr.args[1] = TopNode(:arrayref)
+            new_expr.args[1] = GlobalRef(Base, :arrayref)
             push!(expr_to_process, new_expr)
             return expr_to_process
-        elseif args[1] == TopNode(:safe_arrayref)
+        elseif isBaseFunc(args[1], :unsafe_arrayset)
             expr_to_process = Any[]
             new_expr = deepcopy(ast)
-            new_expr.args[1] = TopNode(:arrayref)
-            push!(expr_to_process, new_expr)
-            return expr_to_process
-        elseif args[1] == TopNode(:unsafe_arrayset)
-            expr_to_process = Any[]
-            new_expr = deepcopy(ast)
-            new_expr.args[1] = TopNode(:arrayset)
+            new_expr.args[1] = GlobalRef(Base, :arrayset)
             push!(expr_to_process, new_expr)
             return expr_to_process
         end
@@ -2379,8 +2366,8 @@ function hasNoSideEffects(node :: Expr)
         end
     elseif node.head == :call1
         func = node.args[1]
-        if func == TopNode(:apply_type) ||
-           func == TopNode(:tuple)
+        if isBaseFunc(func, :apply_type) ||
+           isBaseFunc(func, :tuple)
             return true
         end
     elseif node.head == :lambda
@@ -2393,19 +2380,18 @@ function hasNoSideEffects(node :: Expr)
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
     elseif node.head == :call
         func = node.args[1]
-        if func == GlobalRef(Base, :box) ||
-            func == TopNode(:box) ||
-            func == TopNode(:tuple) ||
-            func == TopNode(:getindex_bool_1d) ||
-            func == TopNode(:arraysize) ||
-            func == :getindex ||
-            func == GlobalRef(Core.Intrinsics, :box) ||
-            func == GlobalRef(Core.Intrinsics, :sub_int) ||
-            func == GlobalRef(Core.Intrinsics, :add_int) ||
-            func == GlobalRef(Core.Intrinsics, :mul_int) 
+        if isBaseFunc(func, :box) ||
+            isBaseFunc(func, :tuple) ||
+            isBaseFunc(func, :getindex_bool_1d) ||
+            isBaseFunc(func, :arraysize) ||
+            isBaseFunc(func, :getindex) ||
+            isBaseFunc(func, :box) ||
+            isBaseFunc(func, :sub_int) ||
+            isBaseFunc(func, :add_int) ||
+            isBaseFunc(func, :mul_int) 
             return true
-        elseif func == TopNode(:apply_type) ||
-               func == TopNode(:tuple)
+        elseif isBaseFunc(func, :apply_type) ||
+               isBaseFunc(func, :tuple)
             return true
         end
     end
@@ -2544,7 +2530,7 @@ function from_assignment(lhs, rhs, depth, state)
             if length(rhs.args) > 1
                 @dprintln(3, " arg2 = ", rhs.args[2])
             end
-            if rhs.args[1] == TopNode(:ccall)
+            if isBaseFunc(rhs.args[1], :ccall)
                 if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
                     dim1 = rhs.args[7]
                     @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
@@ -2906,7 +2892,7 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
             if c==corr_class
                 new_vars.symbol_array_correlation[s] = c+input_length+1
                 for v in s
-                    if !in(v, esc_vars) 
+                    if !in(v, esc_vars) && !isa(v, GenSym) 
                         if isa(v, RHSVar)
                             v = toLHSVar(v)
                             if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
@@ -3340,6 +3326,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
         alloc_args = args[2].args[2:end]
+        @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
         shape = map(toSynGemOrInt,sh)
         @dprintln(3,"rm alloc shape ", shape)
@@ -3359,18 +3346,13 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function rm_allocs_cb_call(state::rm_allocs_state, func::TopNode, arr::RHSVar, rest_args::Array{Any,1})
-    if func.name==:arraysize && in(arr, keys(state.removed_arrs))
+function rm_allocs_cb_call(state::rm_allocs_state, func, arr::RHSVar, rest_args::Array{Any,1})
+    if isBaseFunc(func, :arraysize) && in(arr, keys(state.removed_arrs))
         shape = state.removed_arrs[arr]
         return shape[rest_args[1]]
-    elseif func.name==:unsafe_arrayref  && in(arr, keys(state.removed_arrs))
+    elseif isBaseFunc(func, :unsafe_arrayref) && in(arr, keys(state.removed_arrs))
         return 0
-    end
-    return CompilerTools.AstWalker.ASTWALK_RECURSE
-end
-
-function rm_allocs_cb_call(state::rm_allocs_state, func::GlobalRef, arr::RHSVar, rest_args::Array{Any,1})
-    if (func==GlobalRef(Base,:arraylen) || func==GlobalRef(Core.Intrinsics, :arraylen)) && in(arr, keys(state.removed_arrs))
+    elseif isBaseFunc(func, :arraylen) && in(arr, keys(state.removed_arrs))
         shape = state.removed_arrs[arr]
         dim = length(shape)
         @dprintln(3, "arraylen found")
@@ -3457,7 +3439,7 @@ function from_expr(LambdaVarInfo, body :: Expr, depth, state :: expr_state, top_
 end
 
 function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
-    GotoNode,DataType,ASCIIString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
+    GotoNode,DataType,String,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]
 end
@@ -3585,7 +3567,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     elseif head == :arraysize
         # turn array size back to plain Julia call
         head = :call
-        args = vcat(TopNode(:arraysize), args)
+        args = vcat(GlobalRef(Base, :arraysize), args)
     elseif head == :alloc
         # turn array alloc back to plain Julia ccall
         head = :call
@@ -3636,17 +3618,17 @@ function from_alloc(args::Array{Any,1})
     n = length(sizes)
     assert(n >= 1 && n <= 3)
     name = Symbol(string("jl_alloc_array_", n, "d"))
-    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, TopNode(:apply_type), GlobalRef(Base,:Array), elemTyp, n)
+    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Base, :apply_type), GlobalRef(Base,:Array), elemTyp, n)
     #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
     #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
-    new_svec = TypedExpr(SimpleVector, :call, TopNode(:svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+    new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
     realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
     #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
     for i=1:n
         push!(realArgs, sizes[i])
         push!(realArgs, 0)
     end
-    return vcat(TopNode(:ccall), realArgs)
+    return vcat(GlobalRef(Core,:ccall), realArgs)
 end
 
 
@@ -3881,9 +3863,9 @@ function pir_alias_cb(ast::Expr, state, cbdata)
         return ret[end]
 
     elseif head == :call
-        if args[1] == TopNode(:unsafe_arrayref)
+        if isBaseFunc(args[1], :unsafe_arrayref)
             return AliasAnalysis.NotArray 
-        elseif args[1] == TopNode(:unsafe_arrayset)
+        elseif isBaseFunc(args[1], :unsafe_arrayset)
             return AliasAnalysis.NotArray 
         end
     end

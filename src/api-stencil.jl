@@ -349,8 +349,8 @@ function translateStencil(krn, args::Array, esc)
   # border region
   local innerIterExpr = [ :((1-$(stat.shapeMin[i])) : ($(sizeSym[i]) - $(stat.shapeMax[i]))) for i = 1:stat.dimension ]
   local borderIterExpr = [ :(1:$(sizeSym[i])) for i = 1:stat.dimension ]
-  local innerCheckF(idx) = Expr(:call, TopNode(:&), [ Expr(:call, TopNode(:in), idx[i], innerIterExpr[i]) for i = 1:stat.dimension ]...)
-  local borderCheckF(idx) = Expr(:call, TopNode(:&), [ Expr(:call, TopNode(:in), idx[i], borderIterExpr[i]) for i = 1:stat.dimension ]...)
+  local innerCheckF(idx) = Expr(:call, GlobalRef(Base,:&), [ Expr(:call, GlobaRef(Base,:in), idx[i], innerIterExpr[i]) for i = 1:stat.dimension ]...)
+  local borderCheckF(idx) = Expr(:call, GlobalRef(Base,:&), [ Expr(:call, GlobalRef(Base,:in), idx[i], borderIterExpr[i]) for i = 1:stat.dimension ]...)
   local modF(idx) = [ :((($(idx[i]) + $(sizeSym[i]) - 1) % $(sizeSym[i])) + 1) for i = 1:stat.dimension ]
   local borderKrnExpr = specializeBorder(borderSty, borderCheckF, modF, krnExpr)
   local borderExpr = borderSty == :oob_skip ? :() : 
