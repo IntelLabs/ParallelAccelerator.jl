@@ -271,7 +271,7 @@ function fuse(body, body_index, cur::Expr, state)
         not_used_after_cur_with_aliases = setdiff(live_out_prev_aliases, live_out_cur_aliases)
         @dprintln(2,"not_used_after_cur_with_aliases = ", not_used_after_cur_with_aliases)
 
-        unique_id = prev_parfor.unique_id
+        unique_id = get_unique_num() # prev_parfor.unique_id
 
         # Output of this parfor are the new things in the current parfor plus the new things in the previous parfor
         # that don't die during the current parfor.
@@ -314,7 +314,7 @@ function fuse(body, body_index, cur::Expr, state)
         index_map = Dict{LHSVar, LHSVar}()
         assert(length(prev_parfor.loopNests) == length(cur_parfor.loopNests))
         for i = 1:length(prev_parfor.loopNests)
-            index_map[cur_parfor.loopNests[i].indexVariable.name] = prev_parfor.loopNests[i].indexVariable.name
+            index_map[toLHSVar(cur_parfor.loopNests[i].indexVariable)] = toLHSVar(prev_parfor.loopNests[i].indexVariable)
         end
 
         @dprintln(3,"array_aliases before merge ", prev_parfor.array_aliases)
@@ -483,10 +483,8 @@ Performs the mmap to mmap! phase.
 If the arguments of a mmap dies aftewards, and is not aliased, then
 we can safely change the mmap to mmap!.
 """
-function mmapToMmap!(ast, lives, uniqSet)
-    assert(isfunctionhead(ast))
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(ast)
+function mmapToMmap!(LambdaVarInfo, body::Expr, lives, uniqSet)
+    assert(body.head == :body)
     # For each statement in the body.
     for i =1:length(body.args)
         expr = body.args[i]

@@ -62,14 +62,14 @@ supportedBorderStyle = Set([:oob_dst_zero, :oob_src_zero, :oob_skip, :oob_wrapar
  NOTE: currently only handle kernel specified as: a -> c * a[...] + ...
 """
 function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, borderSty::Symbol)
-  #assert(krn.head == symbol("->"))
+  #assert(krn.head == Symbol("->"))
   @dprintln(3, "typeof krnBody = ", typeof(krnBody), " ", krnBody.head)
   assert(isa(krnBody, Expr))
   #assert(is(krn.head, :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
-  local arrSyms::Array{Symbol,1} = Symbol[parameterToSymbol(x, state.linfo) for x in getParamsNoSelf(state.linfo)]
-  if length(arrSyms) > 0  && arrSyms[1] == symbol("#self#")
+  local arrSyms::Array{Symbol,1} = getInputParameters(state.linfo)
+  if length(arrSyms) > 0  && arrSyms[1] == Symbol("#self#")
     arrSyms = arrSyms[2:end]
   end
   local narrs = length(arrSyms)
@@ -81,7 +81,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
     #  arrSyms[i] = arrSyms[i].args[1]
     #end
     # assert(isa(arrSyms[i], Symbol))
-    bufSyms[i] = addGenSym(bufTyps[i], state.linfo)
+    bufSyms[i] = addTempVariable(bufTyps[i], state.linfo)
     arrSymDict[arrSyms[i]] = bufSyms[i]
   end
 
@@ -167,8 +167,8 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     local dim = length(expr.args) - idxOffset
     assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
     if !stat.initialized         # create stat if not already exists
-      local idxSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
-      local strideSym = [ addGenSym(Int, state.linfo) for i in 1:dim ]
+      local idxSym = GenSym[ addTempVariable(Int, state.linfo) for i in 1:dim ]
+      local strideSym = GenSym[ addTempVariable(Int, state.linfo) for i in 1:dim ]
       set_kernel_stat(stat, dim, zeros(Int,dim), zeros(Int,dim), bufSyms, idxSym, strideSym, borderSty, 0, Int[])
     else                    # if stat already exists, check if the dimension matches
       assert(dim == stat.dimension)
@@ -185,7 +185,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     # fix numerical coercion when converting setindex! into unsafe_arrayset
     if is(expr.args[1].name, :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
-          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, symbol(string(elmTyp))), expr.args[3])
+          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, Symbol(string(elmTyp))), expr.args[3])
         end
     end
 
@@ -237,7 +237,7 @@ function mkStencilLambda(state_, bufs, kernelBody, linfo, borderExp::QuoteNode)
   end
   # warn(string(typeof(state), " ", "typs = ", typs, " :: ", typeof(typs), " ", typeof(kernelExp), " ", typeof(borderSty)))
   stat, krnBody = analyze_kernel(state, typs, kernelBody, borderSty)
-  return stat, DomainLambda(krnBody, linfo)
+  return stat, DomainLambda(linfo, krnBody)
 end
 
 function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)
@@ -255,5 +255,5 @@ function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes,
     @dprintln(3,"ldict = ", ldict)
     @dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, ldict)
+    CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(krnExpr), ldict)
 end

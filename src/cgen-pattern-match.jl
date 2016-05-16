@@ -142,7 +142,7 @@ function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY,linfo)
 end
 
 function getSymType(a::RHSVar, linfo)
-    return lstate.symboltable[getSymbol(a, linfo)]
+    return lstate.symboltable[lookupVariableName(a, linfo)]
 end
 
 function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar,linfo)

@@ -480,7 +480,8 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
         dprintln(debug_level,head, " ", args)
     end
     if head == :lambda
-        state.LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+        state.LambdaVarInfo = linfo
     elseif head == :body || head == :block || head == :(::) || head == :line || head == :& || head == :(.) || head == :copyast
         # skip
     elseif head == :(=)
@@ -1101,43 +1102,43 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         num_vars = 5
 
         gensym2_var = string("#recreate_gensym2_", (loop_nest_level-1) * num_vars + 0)
-        gensym2_sym = symbol(gensym2_var)
+        gensym2_sym = Symbol(gensym2_var)
         gensym0_var = string("#recreate_gensym0_", (loop_nest_level-1) * num_vars + 1)
-        gensym0_sym = symbol(gensym0_var)
+        gensym0_sym = Symbol(gensym0_var)
         pound_s1_var = string("#recreate_pound_s1_", (loop_nest_level-1) * num_vars + 2)
-        pound_s1_sym = symbol(pound_s1_var)
+        pound_s1_sym = Symbol(pound_s1_var)
         gensym3_var = string("#recreate_gensym3_", (loop_nest_level-1) * num_vars + 3)
-        gensym3_sym = symbol(gensym3_var)
+        gensym3_sym = Symbol(gensym3_var)
         gensym4_var = string("#recreate_gensym4_", (loop_nest_level-1) * num_vars + 4)
-        gensym4_sym = symbol(gensym4_var)
-        CompilerTools.LambdaHandling.addLocalVar(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
-        CompilerTools.LambdaHandling.addLocalVar(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-        CompilerTools.LambdaHandling.addLocalVar(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym4_sym = Symbol(gensym4_var)
+        CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
-        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", getTypedVar(:ranges, pir_range_actual,newLambdaVarInfo)))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual,newLambdaVarInfo)))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-           push!(new_body, mk_assignment_expr(getTypedVar(gensym2_sym,Int64,newLambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
-           push!(new_body, mk_assignment_expr(getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), getTypedVar(gensym2_sym,Int64,newLambdaVarInfo)), state))
-           push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), Expr(:call, TopNode(:getfield), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), QuoteNode(:start)), state))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_second_unless))
+           push!(new_body, mk_assignment_expr(toRHSVar(gensym2_sym,Int64,newLambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), convertUnsafeOrElse(this_nest.upper)), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(this_nest.lower), convertUnsafeOrElse(this_nest.step), toRHSVar(gensym2_sym,Int64,newLambdaVarInfo)), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo), Expr(:call, TopNode(:getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), QuoteNode(:start)), state))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_second_unless))
            push!(new_body, LabelNode(label_after_first_unless))
 
 #           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-           push!(new_body, mk_assignment_expr(getTypedVar(gensym3_sym,Int64,newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), state))
-           push!(new_body, mk_assignment_expr(getTypedVar(gensym4_sym,Int64,newLambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), state))
-           push!(new_body, mk_assignment_expr(this_nest.indexVariable, getTypedVar(gensym3_sym,Int64,newLambdaVarInfo), state))
-           push!(new_body, mk_assignment_expr(getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo), getTypedVar(gensym4_sym,Int64,newLambdaVarInfo), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(gensym3_sym,Int64,newLambdaVarInfo), toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(gensym4_sym,Int64,newLambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo)), state))
+           push!(new_body, mk_assignment_expr(this_nest.indexVariable, toRHSVar(gensym3_sym,Int64,newLambdaVarInfo), state))
+           push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo), toRHSVar(gensym4_sym,Int64,newLambdaVarInfo), state))
 
            recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaVarInfo)
 
            push!(new_body, LabelNode(label_before_second_unless))
-           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), getTypedVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), getTypedVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_first_unless))
+           push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64},newLambdaVarInfo), toRHSVar(pound_s1_sym,Int64,newLambdaVarInfo)), label_after_first_unless))
            push!(new_body, LabelNode(label_after_second_unless))
            push!(new_body, LabelNode(label_last))
     end
@@ -1181,11 +1182,11 @@ function toTaskArgName(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaHan
     x
 end
 function toTaskArgName(x :: TypedVar, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
-    getSymbol(x, LambdaVarInfo)
+    CompilerTools.LambdaHandling.lookupVariableName(x, LambdaVarInfo)
 end
 function toTaskArgName(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     newstr = string("parforToTask_gensym_", x.id)
-    ret    = symbol(newstr)
+    ret    = Symbol(newstr)
     gsmap[x] = CompilerTools.LambdaHandling.VarDef(ret, CompilerTools.LambdaHandling.getType(x, LambdaVarInfo), 0)
     return ret
 end
@@ -1194,7 +1195,7 @@ function toTaskArgVarDef(x :: Symbol, gsmap :: Dict{GenSym,CompilerTools.LambdaH
     CompilerTools.LambdaHandling.getVarDef(x, LambdaVarInfo)
 end
 function toTaskArgVarDef(x :: TypedVar, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
-    CompilerTools.LambdaHandling.getVarDef(getSymbol(x, LambdaVarInfo), LambdaVarInfo)
+    CompilerTools.LambdaHandling.getVarDef(CompilerTools.LambdaHandling.lookupVariableName(x, LambdaVarInfo), LambdaVarInfo)
 end
 function toTaskArgVarDef(x :: GenSym, gsmap :: Dict{GenSym,CompilerTools.LambdaHandling.VarDef}, LambdaVarInfo)
     gsmap[x]
@@ -1333,7 +1334,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     # The name of the new task function.
     task_func_name = string("task_func_",unique_node_id)
-    task_func_sym  = symbol(task_func_name)
+    task_func_sym  = Symbol(task_func_name)
 
     # Just stub out the new task function...the body and lambda will be replaced below.
     task_func = @eval function ($task_func_sym)($(all_arg_names...))

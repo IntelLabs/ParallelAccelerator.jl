@@ -36,8 +36,7 @@ function flattenParfors(function_name, ast)
  
     start_time = time_ns()
 
-    LambdaVarInfo = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    body = CompilerTools.LambdaHandling.getBody(LambdaVarInfo)
+    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
 
     expanded_args = Any[]
     flattenParfors(expanded_args, body.args, LambdaVarInfo)
@@ -51,8 +50,7 @@ function flattenParfors(function_name, ast)
     end
 
     if shortcut_array_assignment != 0
-        fake_body = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, args)
-        new_lives = CompilerTools.LivenessAnalysis.from_expr(fake_body, pir_live_cb, LambdaVarInfo)
+        new_lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, args, pir_live_cb, LambdaVarInfo)
 
         for i = 1:length(args)
             node = args[i]
@@ -73,8 +71,7 @@ function flattenParfors(function_name, ast)
         end
     end
 
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, args)
-    return lambda
+    return LambdaVarInfo, CompilerTools.LambdaHandling.getBody(args, CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
 end
 
 function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1}, linfo :: LambdaVarInfo)

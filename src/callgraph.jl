@@ -141,7 +141,7 @@ function getGlobalOrArrayParam(state, real_args)
         atyp = typeof(real_args[i])
         @dprintln(3,"getGlobalOrArrayParam arg ", i, " ", real_args[i], " type = ", atyp)
         if atyp<:RHSvar
-            aname = getSymbol(real_args[i], state.LambdaVarInfo)
+            aname = lookupVariableName(real_args[i], state.LambdaVarInfo)
             if isGlobal(aname, state)
                 # definitely a global so add
                 push!(possibleGlobalArgs, i)
@@ -163,7 +163,7 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
 
     @dprintln(3,"processFuncCall ", func_expr, " ", call_sig_arg_tuple, " ", fetyp, " ", possibleGlobals)
     if fetyp<:RHSVar
-        func = resolveFuncByName(state.cur_func_sig, getSymbol(func_expr, state.LambdaVarInfo), call_sig_arg_tuple, state.local_lambdas)
+        func = resolveFuncByName(state.cur_func_sig, lookupVariableName(func_expr, state.LambdaVarInfo), call_sig_arg_tuple, state.local_lambdas)
     elseif fetyp == TopNode
         return nothing
     elseif fetyp == DataType
@@ -256,7 +256,8 @@ function extractStaticCallGraphWalk(node::Expr,
     args = node.args
     if head == :lambda
         if state.LambdaVarInfo == nothing
-            state.LambdaVarInfo = lambdaToLambdaVarInfo(node)
+            linfo, body = lambdaToLambdaVarInfo(node)
+            state.LambdaVarInfo = linfo
             @dprintln(3, "LambdaVarInfo = ", state.LambdaVarInfo)
         else
             new_lambda_state = extractStaticCallGraphState(state.cur_func_sig, state.mapNameFuncInfo, state.functionsToProcess, state.calls, state.globalWrites, state.local_lambdas)
@@ -281,7 +282,7 @@ function extractStaticCallGraphWalk(node::Expr,
             return node
         end
 
-        pmap_name = symbol("__pmap#39__")
+        pmap_name = Symbol("__pmap#39__")
         if func_expr == TopNode(pmap_name)
             func_expr = call_args[3]
             assert(typeof(func_expr) == TypedVar)
@@ -343,7 +344,7 @@ function extractStaticCallGraphWalk(node::Expr,
             state.local_lambdas[lhs] = rhs
             return node
         elseif rhstyp<:RHSVar
-            rhsname = getSymbol(rhs, state.LambdaVarInfo)
+            rhsname = lookupVariableName(rhs, state.LambdaVarInfo)
             if CompilerTools.LambdaHandling.isInputParameter(rhsname, state.LambdaVarInfo)
                 rhsname_typ = state.types[rhsname][2]
                 if isArrayType(rhsname_typ)
@@ -381,7 +382,7 @@ function extractStaticCallGraphWalk(node::TypedVar,
                                     is_top_level::Bool,
                                     read::Bool)
     @dprintln(4,"escgw: ", node, " type = TypedVar")
-    node_sym = getSymbol(node, state.LambdaVarInfo)
+    node_sym = lookupVariableName(node, state.LambdaVarInfo)
     @dprintln(4,"TypedVar ", node, " found in extractStaticCallGraphWalk.", read, " ", isGlobal(node_sym, state))
     if !read && isGlobal(node_sym, state)
         @dprintln(3,"Detected a global write to ", node_sym, " ", state.types)

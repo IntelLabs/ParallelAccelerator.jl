@@ -175,7 +175,8 @@ function toDomainIR(func :: GlobalRef, ast, signature :: Tuple)
   end
   dir_start = time_ns()
   fname = bytestring(convert(Cstring, func.name))
-  code = DomainIR.from_expr(fname, func.mod, ast)
+  linfo, body = DomainIR.from_expr(fname, func.mod, ast)
+  code = LambdaVarInfoToLambda(linfo, body, DomainIR.AstWalk)
   dir_time = time_ns() - dir_start
   @dprintln(3, "domain code = ", code)
   @dprintln(1, "accelerate: DomainIR conversion time = ", ns_to_sec(dir_time))
@@ -187,7 +188,8 @@ function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
 # uncomment these 2 lines for ParallelIR profiling
 #  code = @profile ParallelIR.from_root(string(func.name), ast)
 #  Profile.print()
-  code = ParallelIR.from_root(string(func.name), ast)
+  linfo, body = ParallelIR.from_root(string(func.name), ast)
+  code = LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
   pir_time = time_ns() - pir_start
   @dprintln(3, "parallel code = ", code)
   @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
@@ -195,7 +197,8 @@ function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
 end
 
 function toFlatParfors(func :: GlobalRef, ast, signature :: Tuple)
-  code = ParallelIR.flattenParfors(string(func.name), ast)
+  linfo, body = ParallelIR.flattenParfors(string(func.name), ast)
+  code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
   @dprintln(3, "flattened code = ", code)
   return code
 end
@@ -228,7 +231,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   end
   @dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
 
-  LambdaVarInfo = lambdaToLambdaVarInfo(code)
+  LambdaVarInfo, body = lambdaToLambdaVarInfo(code)
   ret_type = getReturnType(LambdaVarInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
   ret_typs = isTupleType(ret_type) ? [ (convert_to_Julia_typ(x), isArrayOrStringType(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isArrayOrStringType(ret_type)) ]
@@ -268,7 +271,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   (modified_sig, sig_dims) = convert_sig(signature)
   @dprintln(2, "modified_sig = ", modified_sig)
   @dprintln(2, "sig_dims = ", sig_dims)
-  original_args = CompilerTools.LambdaHandling.getParamsNoSelf(LambdaVarInfo)
+  original_args = CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
   @dprintln(3, "len? ", length(original_args), length(sig_dims))
  
   map!(s -> gensym(string(s)), original_args)
@@ -327,7 +330,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
           (typ, is_array) = ret_typs[i]
           push!(extra_sig, is_array ? Ptr{Ptr{Void}} : Ptr{typ})
           push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), :ret_args, i)))
-          #push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), getTypedVar(:ret_args, Array{Any,1}, LambdaVarInfo), i)))
+          #push!(ret_arg_exps, Expr(:call, TopNode(:pointer), Expr(:call, TopNode(:arrayref), toRHSVar(:ret_args, Array{Any,1}, LambdaVarInfo), i)))
       end
   end
   
