@@ -28,3 +28,4 @@ function main(m::Int, k::Int)
 end
 
 main(100, 100)
+println("Done testing test_update_w.")
