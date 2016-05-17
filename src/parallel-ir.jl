@@ -3312,14 +3312,6 @@ function remove_extra_allocs(LambdaVarInfo, body)
     return body
 end
 
-function toSynGemOrInt(a::TypedVar)
-    return toLHSVar(a)
-end
-
-function toSynGemOrInt(a::Union{Int,LHSVar})
-    return a
-end
-
 
 function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
     head = ast.head
@@ -3332,7 +3324,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         alloc_args = args[2].args[2:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
-        shape = map(toSynGemOrInt,sh)
+        shape = map(toLHSVarOrInt,sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         CompilerTools.LambdaHandling.setType(arr, Int, state.LambdaVarInfo)
