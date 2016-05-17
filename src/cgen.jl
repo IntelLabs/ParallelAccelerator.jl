@@ -702,6 +702,8 @@ function toCtype(typ::DataType)
         # implementations
         btyp, ptyps = parseParametricType(typ)
         return canonicalize(btyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+    elseif typ <: AbstractString
+        return "ASCIIString"
     elseif typ == Any
         return "void*"
     else
@@ -1435,17 +1437,8 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
     return M, s, t
 end
     
-function resolveCallTarget(f::GlobalRef, args::Array{Any, 1},linfo)
-    M = ""
-    t = ""
-    s = ""
-    M = f.mod; s = f.name; t = ""
-    return M, s, t
-end
-    
-    
 function resolveCallTarget(f, args::Array{Any, 1},linfo)
-    @dprintln(3,"Trying to resolve target from f::TopNode with args: ", args)
+    @dprintln(3,"Trying to resolve target from ", f, "::", typeof(f), " with args: ", args)
     M = ""
     t = ""
     s = ""
@@ -1553,7 +1546,7 @@ function from_call(ast::Array{Any, 1},linfo)
     skipCompilation = has(lstate.compiledfunctions, funStr) ||
         isPendingCompilation(lstate.worklist, funStr)
 
-    if fun==:println || fun==:print
+    if isBaseFunc(fun, :println) || isBaseFunc(fun, :print)
         s =  "std::cout << "
         for a in 2:length(args)
             s *= from_expr(args[a],linfo) * (a < length(args) ? "<<" : "")
@@ -2745,6 +2738,12 @@ end
 
 function insert(func::TopNode, name, typs)
     target = eval(func)
+    @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
+    insert(target, name, typs)
+end
+
+function insert(func::GlobalRef, name, typs)
+    target = resolveFunction(func.name, func.mod, typs)
     @dprintln(3,"Resolved function ", func, " : ", name, " : ", typs, " target ", target)
     insert(target, name, typs)
 end

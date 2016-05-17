@@ -401,9 +401,11 @@ function code_typed(func, signature)
   if haskey(alreadyOptimized, (func, signature))
     Any[ alreadyOptimized[(func, signature)] ]
   else
+    @dprintln(3, "func ", func, " is not already optimized")
     mod = Base.function_module(func, signature)
     name = Base.function_name(func)
     func = eval(CompilerTools.OptFramework.findTargetFunc(mod, name))
+    @dprintln(3, "target func is ", func)
     Base.code_typed(func, signature)
   end
 end
