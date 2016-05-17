@@ -1,5 +1,9 @@
 using ParallelAccelerator
 
+#using CompilerTools
+#CompilerTools.ReadWriteSet.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+
 @acc function normalizeW(W::DenseMatrix{Float64}, k::Int)
 # normalize each column
 #=
@@ -23,3 +27,4 @@ function main(m::Int, k::Int, n::Int)
 end
 
 main(100, 100, 200)
+println("Done testing test_norm_w.")
