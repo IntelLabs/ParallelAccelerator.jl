@@ -2750,11 +2750,10 @@ function integrateLabels(body, maxLabel)
   for entry in state.label_map
     key   = entry[1]
     value = entry[2]
-    if value <= maxLabel
-      delete!(state.label_map, key)
-      maxLabel = maxLabel + 1
-      state.label_map[key] = maxLabel
-    end
+    #if value <= maxLabel
+    #delete!(state.label_map, key)
+    maxLabel = maxLabel + 1
+    state.label_map[key] = maxLabel
   end
   @dprintln(3,"integrateLabels updated label mapping = ", state.label_map, " new maxLabel = ", maxLabel)
 
@@ -2773,6 +2772,7 @@ function nested_function_exprs(domain_lambda, out_state)
 
     start_time = time_ns()
 
+    @dprintln(2,"nested_function_exprs out_state.max_label = ", out_state.max_label)
     (body, max_label) = integrateLabels(body, out_state.max_label) 
     @dprintln(2,"nested_function_exprs max_label = ", max_label)
 
