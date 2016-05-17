@@ -27,7 +27,7 @@ using Base.Test
 importall ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 #using CompilerTools
@@ -44,3 +44,4 @@ end
 x = [1 2 3 4]
 @test x + 2 == example(x)
 @test x + 3 != example(x)
+println("Done testing aug_assign.")
