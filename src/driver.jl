@@ -105,7 +105,7 @@ function noPrecompile(x)
   global no_precompile = x;
 end
 
-alreadyOptimized = Dict{Tuple{Function,Tuple},Expr}()
+alreadyOptimized = Dict{Tuple{Function,Tuple},Any}()
 
 # ParallelAccelerator doesn't really function well on callsites anymore so we would like to give an
 # error if somebody tries to use it in that way.  This is a little difficult with @acc because where at callsite
@@ -175,8 +175,8 @@ function toDomainIR(func :: GlobalRef, ast, signature :: Tuple)
   end
   dir_start = time_ns()
   fname = bytestring(convert(Cstring, func.name))
-  linfo, body = DomainIR.from_expr(fname, func.mod, ast)
-  code = LambdaVarInfoToLambda(linfo, body, DomainIR.AstWalk)
+  code = DomainIR.from_expr(fname, func.mod, ast)
+  #code = LambdaVarInfoToLambda(linfo, body, DomainIR.AstWalk)
   dir_time = time_ns() - dir_start
   @dprintln(3, "domain code = ", code)
   @dprintln(1, "accelerate: DomainIR conversion time = ", ns_to_sec(dir_time))
@@ -188,8 +188,8 @@ function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
 # uncomment these 2 lines for ParallelIR profiling
 #  code = @profile ParallelIR.from_root(string(func.name), ast)
 #  Profile.print()
-  linfo, body = ParallelIR.from_root(string(func.name), ast)
-  code = LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
+  code = ParallelIR.from_root(string(func.name), ast)
+  #code = LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
   pir_time = time_ns() - pir_start
   @dprintln(3, "parallel code = ", code)
   @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
@@ -197,8 +197,8 @@ function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
 end
 
 function toFlatParfors(func :: GlobalRef, ast, signature :: Tuple)
-  linfo, body = ParallelIR.flattenParfors(string(func.name), ast)
-  code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
+  code = ParallelIR.flattenParfors(string(func.name), ast)
+  # code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(linfo, body, ParallelIR.AstWalk)
   @dprintln(3, "flattened code = ", code)
   return code
 end
@@ -231,7 +231,11 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   end
   @dprintln(3, "array_types_in_sig from signature = ", array_types_in_sig)
 
-  LambdaVarInfo, body = lambdaToLambdaVarInfo(code)
+  if isa(code, Tuple)
+    LambdaVarInfo, body = code
+  else
+    LambdaVarInfo, body = lambdaToLambdaVarInfo(code)
+  end
   ret_type = getReturnType(LambdaVarInfo)
   # TO-DO: Check ret_type if it is Any or a Union in which case we probably need to abort optimization in CGen mode.
   ret_typs = isTupleType(ret_type) ? [ (convert_to_Julia_typ(x), isArrayOrStringType(x)) for x in ret_type.parameters ] : [ (convert_to_Julia_typ(ret_type), isArrayOrStringType(ret_type)) ]
@@ -425,7 +429,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   cur_module = Base.function_module(func, signature)
   func_ref = GlobalRef(cur_module, Base.function_name(func))
 
-  local out::Expr
+  local out
   ast = code_typed(func, signature)[1]
   global alreadyOptimized 
 

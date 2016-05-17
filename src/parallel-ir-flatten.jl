@@ -24,7 +24,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =# 
  
 function flattenParfors(function_name, ast)
-    assert(isfunctionhead(ast))
+    #assert(isfunctionhead(ast))
     flatten_start = time_ns()
 
     @dprintln(1,"Starting flattenParfors.  function = ", function_name, " ast = ", ast)
@@ -36,7 +36,11 @@ function flattenParfors(function_name, ast)
  
     start_time = time_ns()
 
-    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    if isa(ast, Tuple)
+        (LambdaVarInfo, body) = ast
+    else
+        LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    end
 
     expanded_args = Any[]
     flattenParfors(expanded_args, body.args, LambdaVarInfo)

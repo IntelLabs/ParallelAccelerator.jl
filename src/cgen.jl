@@ -957,6 +957,8 @@ function from_getfield(args, linfo)
     elseif inSymbolTable(args[1], linfo)
       args1typ = lookupSymbolType(args[1], linfo)
       @dprintln(4,"from_getfield args[1] is GenSym or Symbol, args1typ: ", args1typ)
+    elseif isa(args[1], LHSVar)
+      args1typ = getType(args[1], linfo)
     else
       throw("Unhandled argument 1 type to getfield")
     end
@@ -977,6 +979,9 @@ function from_getfield(args, linfo)
             @dprintln(4,"from_getfield eltyp: ", eltyp)
             return "(($eltyp *)&$(tgt))[" * from_expr(args[2], linfo) * " - 1]"
         end
+    elseif isa(args1typ, DataType) && isa(args[2], QuoteNode)
+        @dprintln(3, "from_getfield access field ", args[2], " of a record type ", args1typ)
+        return string("(", from_expr(args[1],linfo), ").", args[2].value)
     end
     throw(string("Unhandled call to getfield ",args1typ, " ", eltype(args1typ)))
     #=
@@ -2610,7 +2615,7 @@ end
 
 # This is the entry point to CGen from the PSE driver
 function from_root_entry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
-    assert(isfunctionhead(ast))
+    #assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = true
     global lstate
@@ -2625,7 +2630,11 @@ function from_root_entry(ast, functionName::String, array_types_in_sig :: Dict{D
     @dprintln(1,"Ast = ", ast)
 
     set_includes(ast)
-    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    if isa(ast, Tuple)
+        (linfo, body) = ast
+    else
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    end
     @dprintln(3, "LambdaVarInfo = ", linfo)
     @dprintln(3, "body = ", body)
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
@@ -2689,7 +2698,6 @@ end
 
 # This is the entry point to CGen from the PSE driver
 function from_root_nonentry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
-    assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = false
     global lstate
@@ -2697,7 +2705,11 @@ function from_root_nonentry(ast, functionName::String, array_types_in_sig :: Dic
     @dprintln(3,"functionName = ", functionName)
 
     set_includes(ast)
-    linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    if isa(ast, Tuple)
+        linfo, body = ast
+    else
+        linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    end
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body

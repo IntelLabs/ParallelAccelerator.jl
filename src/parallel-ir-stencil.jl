@@ -201,9 +201,9 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   stepNode = DomainIR.addFreshLocalVariable("step", Int, ISASSIGNED | ISASSIGNEDONCE, linfo)
   # Sequential loop for multi-iterations
   iterPre  = (isa(iterations, Number) && iterations == 1) ?
-            Any[] : Any[ Expr(:loophead, stepNode.name, 1, iterations) ]
+            Any[] : Any[ Expr(:loophead, stepNode, 1, iterations) ]
   iterPost = (isa(iterations, Number) && iterations == 1) ?
-            Any[] : vcat(rotateExpr, Expr(:loopend, stepNode.name))
+            Any[] : vcat(rotateExpr, Expr(:loopend, stepNode))
   preExpr = vcat(sizeInitExpr, strideInitExpr, iterPre, borderCond)
   postExpr = vcat(iterPost)
   expr = PIRParForAst(

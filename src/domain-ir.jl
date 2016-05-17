@@ -255,6 +255,9 @@ import CompilerTools.LambdaHandling: lambdaToLambdaVarInfo, getBody
 function show(io::IO, f::DomainLambda)
     show(io, getInputParameters(f.linfo))
     show(io, " -> ")
+    show(io, "[")
+    show(io, [lookupVariableName(x, f.linfo) for x in getLocalVariables(f.linfo)])
+    show(io, "]")
     show(io, f.body)
 end
 
@@ -284,13 +287,14 @@ end
 type IRState
     linfo  :: LambdaVarInfo
     defs   :: Dict{LHSVar, Any}  # stores local definition of LHS = RHS
+    escDict :: Dict{Symbol, RHSVar} # mapping function closure fieldname to escaping variable
     boxtyps:: Dict{LHSVar, Any}  # finer types for those have Box type
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
 end
 
-emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{LHSVar,Any}(), Any[], nothing)
-newState(linfo, defs, state::IRState) = IRState(linfo, defs, Dict{LHSVar,Any}(), Any[], state)
+emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{Symbol,RHSVar}(), Dict{LHSVar,Any}(), Any[], nothing)
+newState(linfo, defs, escDict, state::IRState) = IRState(linfo, defs, escDict, Dict{LHSVar,Any}(), Any[], state)
 
 """
 Update the type of a variable.
@@ -858,6 +862,7 @@ function from_lambda(state, env, expr, closure = nothing)
     @dprintln(3,"body = ", body)
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
+    escDict = Dict{Symbol,RHSVar}()
     if !is(closure, nothing)
         # Julia 0.5 feature, closure refers to the #self# argument
         if isa(closure, Expr)
@@ -869,6 +874,7 @@ function from_lambda(state, env, expr, closure = nothing)
             def = nothing  # error(string("Unhandled closure: ", closure))
         end
         if isa(def, Expr) && def.head == :new
+            dprintln(env, "closure def = ", def)
             ctyp = def.args[1]
             if isa(ctyp, GlobalRef) 
                 ctyp = getfield(ctyp.mod, ctyp.name)
@@ -882,15 +888,23 @@ function from_lambda(state, env, expr, closure = nothing)
             #defs[symbol("#self#")] = Dict(zip(fnames, args))
             for (p, q) in zip(fnames, args)
                 qtyp = typeOfOpr(state, q)
-                # if q has a Box type, we lookup its definition (due to setfield!) instead
                 qtyp = is(qtyp, Box) ? getBoxType(state, q) : qtyp
                 dprintln(env, "field ", p, " has type ", qtyp)
-                addEscapingVariable(p, qtyp, 0, linfo)
+                if isa(q, GenSym)  # tempvariable must be renamed to a named variable
+                    newq = addLocalVariable(gensym(string(q)), qtyp, getDesc(q, state.linfo), state.linfo)
+                    emitStmt(state, TypedExpr(qtyp, :(=), toLHSVar(newq, state.linfo), q))
+                    q = newq
+                end
+                # if q has a Box type, we lookup its definition (due to setfield!) instead
+                qname = lookupVariableName(q, state.linfo)
+                dprintln(env, "closure variable in parent = ", qname)
+                escDict[p] = addEscapingVariable(qname, qtyp, 0, linfo)
             end
         end
     end
     dprintln(env,"from_lambda: linfo=", linfo)
-    local state_ = newState(linfo, defs, state)
+    dprintln(env,"from_lambda: escDict=", escDict)
+    local state_ = newState(linfo, defs, escDict, state)
     body = from_expr(state_, env_, body)
     # fix return type
     typ = body.typ
@@ -964,7 +978,7 @@ function mmapRemoveDupArg!(state, expr::Expr)
     n = 1
     old_inps = f.inputs
     new_inps = Array(Type, 0)
-    old_params = getInputParameters(f.linfo)
+    old_params = getInputParameters(linfo)
     new_params = Array(Symbol, 0)
     pre_body = Array(Any, 0)
     new_arr = Array(Any, 0)
@@ -975,7 +989,7 @@ function mmapRemoveDupArg!(state, expr::Expr)
             hasDup = true
             v = old_params[posMap[s]] 
             t = getType(v, linfo)
-            push!(pre_body, Expr(:(=), toLHSVar(old_params[i], f.linfo), toRHSVar(v,t,state.linfo)))
+            push!(pre_body, Expr(:(=), toLHSVar(old_params[i], linfo), toRHSVar(v,t,linfo)))
         else
             if isa(s,LHSVar) 
                 posMap[s] = n
@@ -992,7 +1006,7 @@ function mmapRemoveDupArg!(state, expr::Expr)
     body = f.body
     body.args = vcat(pre_body, body.args)
     f.inputs = new_inps
-    setInputParameters(new_params, f.linfo)
+    setInputParameters(new_params, linfo)
     expr.args[1] = new_arr
     expr.args[2] = f
     dprintln(3, "MMRD: expr becomes ", expr)
@@ -1457,14 +1471,15 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
                 return oldargs[1]
-            elseif isa(oldargs[1], TypedVar) && lookupVariableName(oldargs[1], state.linfo) == Symbol("#self#")
+            elseif isa(oldargs[1], RHSVar) && lookupVariableName(oldargs[1], state.linfo) == Symbol("#self#")
                 fname = oldargs[2]
                 assert(isa(fname, QuoteNode))
+                fname = fname.value
                 dprintln(env, "lookup #self# closure field ", fname, " :: ", typeof(fname))
-                esc = isEscapingVariable(fname.value, state.linfo) 
-                dprintln(env, "isEscapingVariable = ", esc)
-                ftyp = getType(fname.value, state.linfo)
-                return toRHSVar(fname.value, ftyp, state.linfo) 
+                @assert (haskey(state.escDict, fname)) "missing escaping variable mapping for field " * string(fname)
+                escVar = state.escDict[fname]    
+                dprintln(env, "matched escaping variable = ", escVar)
+                return escVar
             end
         end
     else
@@ -1619,6 +1634,7 @@ function get_ast_for_lambda(state, env, func::Union{LambdaInfo,TypedVar,Expr}, a
     else
         lambda = func
     end
+    dprintln(env, "typeof(lambda) = ", typeof(lambda))
     (ast, aty) = lambdaTypeinf(lambda, tuple(argstyp...))
     dprintln(env, "type inferred AST = ", ast)
     dprintln(env, "aty = ", aty)
@@ -1894,19 +1910,19 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         redvar = toLHSVar(redvar)
         rvtyp = typeOfOpr(state, redvar)
         dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
-        if (isa(redvar, GenSym))
-          show_backtrace()
-        end
+        #if (isa(redvar, GenSym))
+        #  show_backtrace()
+        #end
         @assert (!isa(redvar, GenSym)) "Unexpected GenSym  at the position of the reduction variable, " * string(redvar)
         nlinfo = LambdaVarInfo()
         redvarname = lookupVariableName(redvar, state.linfo)
         dprintln(env, "redvarname = ", redvarname)
-        addEscapingVariable(redvarname, rvtyp, 0, nlinfo)
-        nval = translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)])
+        nvar = addEscapingVariable(redvarname, rvtyp, 0, nlinfo)
+        nval = replaceExprWithDict!(translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)]), Dict{LHSVar,Any}(Pair(redvar, nvar)), AstWalk)
         redparam = gensym(redvarname)
-        addLocalVariable(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
+        redparamvar = addLocalVariable(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
         setInputParameters(Symbol[redparam], nlinfo)
-        neutral = DomainLambda(nlinfo, Expr(:body, Expr(:(=), redparam, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, nlinfo))))
+        neutral = DomainLambda(nlinfo, Expr(:body, Expr(:(=), redparamvar, nval), Expr(:tuple, toRHSVar(redparam, rvtyp, nlinfo))))
         (body, linfo) = get_ast_for_lambda(state, env, redfunc, DataType[rvtyp]) # this function expects only one argument
         redty = getReturnType(linfo)
         # Julia 0.4 gives Any type for expressions like s += x, so we skip the check below
@@ -2366,9 +2382,9 @@ type DirWalk
 end
 
 function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback ", x)
+    @dprintln(4,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(4,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -2456,20 +2472,20 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number, is_top_leve
 end
 
 function AstWalkCallback(x :: DomainLambda, dw :: DirWalk, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback DomainLambda ", x)
+    @dprintln(4,"DomainIR.AstWalkCallback DomainLambda ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(4,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
-    @dprintln(3,"DomainIR.AstWalkCallback for DomainLambda", x)
+    @dprintln(4,"DomainIR.AstWalkCallback for DomainLambda", x)
     return x
 end
 
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback ", x)
+    @dprintln(4,"DomainIR.AstWalkCallback ", x)
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(3,"DomainIR.AstWalkCallback ret = ", ret)
+    @dprintln(4,"DomainIR.AstWalkCallback ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -2478,7 +2494,7 @@ function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number, is_top_level
 end
 
 function AstWalk(ast :: ANY, callback, cbdata :: ANY)
-    @dprintln(3,"DomainIR.AstWalk ", ast)
+    @dprintln(4,"DomainIR.AstWalk ", ast)
     dw = DirWalk(callback, cbdata)
     AstWalker.AstWalk(ast, AstWalkCallback, dw)
 end
@@ -2502,7 +2518,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end 
 
-        @dprintln(3, ":mmap ", expr_to_process)
+        @dprintln(4, ":mmap ", expr_to_process)
         return expr_to_process
     elseif head == :mmap!
         expr_to_process = Any[]
@@ -2525,7 +2541,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end 
 
-        @dprintln(3, ":mmap! ", expr_to_process)
+        @dprintln(4, ":mmap! ", expr_to_process)
         return expr_to_process
     elseif head == :reduce
         expr_to_process = Any[]
@@ -2547,7 +2563,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end
 
-        @dprintln(3, ":reduce ", expr_to_process)
+        @dprintln(4, ":reduce ", expr_to_process)
         return expr_to_process
     elseif head == :stencil!
         expr_to_process = Any[]
@@ -2565,7 +2581,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
             push!(expr_to_process, v)
         end
 
-        @dprintln(3, ":stencil! ", expr_to_process)
+        @dprintln(4, ":stencil! ", expr_to_process)
         return expr_to_process
     elseif head == :parallel_for
         expr_to_process = Any[]
@@ -2600,7 +2616,7 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
                 end
             end
         end
-        @dprintln(3, ":parallel_for ", expr_to_process)
+        @dprintln(4, ":parallel_for ", expr_to_process)
         return expr_to_process
     elseif head == :assertEqShape
         assert(length(args) == 2)
@@ -2678,7 +2694,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         krnStat = args[1]
         iterations = args[2]
         bufs = args[3]
-        @dprintln(3, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
+        @dprintln(4, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
         if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
             # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
             for i = 1:min(krnStat.rotateNum, length(bufs))
