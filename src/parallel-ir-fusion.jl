@@ -490,7 +490,7 @@ function mmapToMmap!(LambdaVarInfo, body::Expr, lives, uniqSet)
         expr = body.args[i]
         # If the statement is an assignment.
         if isa(expr, Expr) && is(expr.head, :(=))
-            lhs = expr.args[1]
+            lhs = toLHSVar(expr.args[1], LambdaVarInfo)
             rhs = expr.args[2]
             # right now assume all
             assert(isa(lhs, RHSVar))

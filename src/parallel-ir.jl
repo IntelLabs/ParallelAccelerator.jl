@@ -73,7 +73,7 @@ Ad-hoc support to mimic closures when we want the arguments to be processed duri
 """
 type DelayedFunc
   func :: Function
-  args
+  args :: Array{Any, 1}
 end
 
 function callDelayedFuncWith(f::DelayedFunc, args...)
@@ -183,7 +183,7 @@ type RangeData
     skip
     last
     exprs :: RangeExprs
-    offset_temp_var :: RHSVar        # New temp variables to hold offset from iteration space for each dimension.
+    offset_temp_var :: Union{Symbol, RHSVar}        # New temp variables to hold offset from iteration space for each dimension.
 
     function RangeData(s, sk, l, sv, skv, lv, temp_var)
         new(s, sk, l, RangeExprs(sv, skv, lv), temp_var)
@@ -3069,13 +3069,17 @@ b) Fuse parallel IR nodes where possible.
 c) Convert to task IR nodes if task mode enabled.
 """
 function from_root(function_name, ast)
-    assert(isfunctionhead(ast))
+    #assert(isfunctionhead(ast))
     @dprintln(1,"Starting main ParallelIR.from_expr.  function = ", function_name, " ast = ", ast, " typeof(ast) = ", typeof(ast))
 
     start_time = time_ns()
 
     # Create CFG from AST.  This will automatically filter out dead basic blocks.
-    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    if isa(ast, Tuple)
+        (LambdaVarInfo, body) = ast
+    else
+        LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    end
     cfg = CompilerTools.CFGs.from_lambda(body)
     #body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.

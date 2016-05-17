@@ -266,7 +266,7 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     neutral_val_body = top_level_expand_pre(neutral_val_body, state)
     flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
     @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
-    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(init_var.name, var)), AstWalk)
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), AstWalk)
     return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
 end
 
@@ -285,8 +285,8 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     reduce_flatten_body = Any[]
     flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode.name, var), Pair(atm.name, val)), AstWalk)
-    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, reduction_var, delta_var])
+    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
+    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
     return temp_body, reduce_func 
 end
 
@@ -378,7 +378,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 @dprintln(3, "mask_array = ", mask_array)
                 assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
-                    mask_array = toRHSVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
+                    mask_array = toRHSVar(mask_array, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
                 end
                 # TODO: generate dimension check on mask_array
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
@@ -410,20 +410,19 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     out_type = dl.outputs[1]
     @dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
     reduction_output_name  = Symbol(string("parallel_ir_reduction_output_",unique_node_id))
-    reduction_output_snode = toRHSVar(reduction_output_name, out_type, state.LambdaVarInfo)
+    reduction_output_snode = CompilerTools.LambdaHandling.addLocalVariable(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
     @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
-    CompilerTools.LambdaHandling.addLocalVariable(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
     push!(post_statements, reduction_output_snode)
 
     # special handling when zero_val is a DomainLambda
     if isa(zero_val, DomainIR.DomainLambda) 
         zero_val = translate_reduction_neutral_value(zero_val, state)
-        init_body = callDelayedFuncWith(zero_val, reduction_output_snode.name)
+        init_body = callDelayedFuncWith(zero_val, reduction_output_snode)
         for exp in init_body 
             push!(pre_statements, exp)
         end
     else
-        push!(pre_statements, Expr(:(=), reduction_output_snode.name, zero_val))
+        push!(pre_statements, Expr(:(=), toLHSVar(reduction_output_snode, state.LambdaVarInfo), zero_val))
     end
 
     # call domain ir to generate most of the body of the function (except for saving the output)
@@ -675,7 +674,7 @@ function gen_bitarray_mask(num_dim_inputs, thisInfo::InputInfo, parfor_index_sym
         # additional rangeconds.  1D masks will always get a rangeconds of course.
         if i == 1 || ( (i > 1) && is_1d_mask)
             if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
-                mask_array = toRHSVar(mask_array.name, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
+                mask_array = toRHSVar(mask_array, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
             end
 
             # A 1D mask will only use one of the parfor index variables, based on the current dimension "i".
@@ -902,7 +901,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         redtyp = CompilerTools.LambdaHandling.getType(redvar, state.LambdaVarInfo)
         out_name = string("parallel_ir_reduction_output_",unique_node_id,"_",i)
         #out_var = toRHSVar(Symbol(out_name), redtyp, state.LambdaVarInfo)
-        out_var = toRHSVar(Symbol(redvar), redtyp, state.LambdaVarInfo)
+        out_var = toRHSVar(redvar, redtyp, state.LambdaVarInfo)
         #CompilerTools.LambdaHandling.addLocalVariable(out_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
         inp_name = Symbol(string("parallel_ir_reduction_input_",unique_node_id,"_",i))
         CompilerTools.LambdaHandling.addLocalVariable(inp_name, redtyp, ISASSIGNED, state.LambdaVarInfo)
@@ -946,7 +945,8 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         end
     end
     inputInfo = InputInfo()
-    inputInfo.range = [RangeData(i) for i in rearray]
+    @dprintln(3, "rearray = ", rearray)
+    inputInfo.range = DimensionSelector[RangeData(i) for i in rearray]
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)

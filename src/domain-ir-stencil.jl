@@ -227,7 +227,7 @@ end
 """
 function mkStencilLambda(state_, bufs, kernelBody, linfo, borderExp::QuoteNode)
   typs = Type[ typeOfOpr(state_, a) for a in bufs ]
-  state = newState(linfo, Dict(), state_)
+  state = newState(linfo, Dict(), Dict(), state_)
   #if !(isa(borderExp, QuoteNode))
   #  error("Border specification in runStencil can only be Symbols.")
   #end
