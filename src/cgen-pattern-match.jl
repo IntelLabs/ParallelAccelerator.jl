@@ -134,7 +134,7 @@ function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY,linfo)
     return ""
 end
 
-function getSymType(a::RHSVar, linfo)
+function getSymType(a, linfo)
     return lstate.symboltable[lookupVariableName(a, linfo)]
 end
 
@@ -237,8 +237,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
 
             rows = lstate.tupleTable[rhs.args[2]]
             values = rhs.args[3:end]
-            arr_var = toLHSVar(lhs)
-            atyp, arr_dims = parseArrayType(lstate.symboltable[arr_var])
+            atyp, arr_dims = parseArrayType(getSymType(lhs, linfo))
             typ = toCtype(atyp)
         end
 

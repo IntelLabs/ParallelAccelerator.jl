@@ -304,11 +304,14 @@ function updateTyp(state::IRState, s, typ)
 end
 
 function updateBoxType(state::IRState, s::RHSVar, typ)
-    state.boxtyps[toLHSVar(s)] = typ
+    state.boxtyps[toLHSVar(s, state.linfo)] = typ
 end
 
 function getBoxType(state::IRState, s::RHSVar)
-    state.boxtyps[toLHSVar(s)] 
+    v = toLHSVar(s, state.linfo)
+    t = getType(s, state.linfo)
+    @dprintln(3, "getBoxType accessing ", v, " of ", t, " in cached boxtyps = ", state.boxtyps)
+    get(state.boxtyps, v, Any)
 end
 
 """
@@ -379,6 +382,19 @@ function lookupConstDefForArg(state::IRState, s::Any)
         s = lookupConstDef(state, s1)
     end
     is(s, nothing) ? s1 : s
+end
+
+"""
+Look up a definition of a variable recursively until the RHS is no-longer just a variable.
+Return the last lhs (i.e. a variable) if found, or the input variable itself otherwise.
+"""
+function lookupConstVarForArg(state::IRState, s::Any)
+    s1 = s
+    while isa(s, RHSVar)
+        s1 = s
+        s = lookupConstDef(state, s1)
+    end
+    s1
 end
 
 function lookupConstDefForArg(state::Void, s::Any)
@@ -713,11 +729,11 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
                 emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, args[i]))
                 args[i] = tmpv
             end
-            if isa(args[i], TypedVar)
+            if isa(args[i], Union{LHSVar,RHSVar})
                 tmpv = lookupVariableName(args[i], state.linfo)
                 typ = getType(tmpv, state.linfo)
                 desc = getDesc(tmpv, state.linfo)
-                addEscapingVariable(tmpv, typ, desc, f.linfo)
+                args[i] = addEscapingVariable(tmpv, typ, desc, f.linfo)
             end
             #push!(pre_body, Expr(:(=), old_params[i], args[i]))
             repl_dict[toLHSVar(old_params[i], f.linfo)] = args[i]
@@ -1123,6 +1139,8 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
             # splice!(args,3)
         end
         return (fun.name, args)
+    elseif is(fun.mod, Base) && is(fun.name, :getindex) || is(fun.name, :setindex!) || is(fun.name, :_getindex!)
+        return (fun.name, args)
     else
         return (fun, args)
     end
@@ -1466,7 +1484,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             updateTyp(state, oldargs[1], typ)
             updateBoxType(state, oldargs[1], typ)
             # change setfield! to direct assignment
-            expr = mk_expr(typ, :(=), oldargs[1], oldargs[3])
+            expr = mk_expr(typ, :(=), toLHSVar(oldargs[1]), oldargs[3])
         elseif is(fun, :getfield) && length(oldargs) == 2 
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
@@ -1906,7 +1924,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         @assert (isa(tup, Expr) && is(tup.head, :call) &&
                  isBaseFunc(tup.args[1], :tuple)) "Expect reduction arguments to cartesianmapreduce to be tuples, but got " * string(tup)
         redfunc = lookupConstDefForArg(state, tup.args[2])
-        redvar = tup.args[3] # lookupConstDefForArg(state, tup.args[3])
+        redvar = lookupConstVarForArg(state, tup.args[3]) # tup.args[3] 
         redvar = toLHSVar(redvar)
         rvtyp = typeOfOpr(state, redvar)
         dprintln(env, "redvar = ", redvar, " type = ", rvtyp, " redfunc = ", redfunc)
@@ -2048,15 +2066,14 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
                          mk_expr(Bool, :call, GlobalRef(Base, :eq_int), red_dim[1], i), 
                          1, mk_arraysize(arr, i)) 
             emitStmt(state, mk_expr(Int, :(=), sizeVars[i], dimExp))
-            addEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, 0, linfo)
+            sizeVars[i] = addEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, 0, linfo)
         end
         redparam = gensym("redvar")
-        rednode = toRHSVar(redparam, arrtyp, state.linfo)
-        addLocalVariable(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
+        rednode = addLocalVariable(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
         setInputParameters(Symbol[redparam], linfo)
         neutral_body = Expr(:body, 
-                           Expr(:(=), redparam, mk_alloc(state, etyp, sizeVars)),
-                           mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], linfo)),
+                           Expr(:(=), rednode, mk_alloc(state, etyp, sizeVars)),
+                           mk_mmap!([rednode], DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, neutralelt)], LambdaVarInfo())),
                            Expr(:tuple, rednode))
         neutral = DomainLambda(linfo, neutral_body)
         outtyp = arrtyp
@@ -2133,7 +2150,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     #   fun = fun.name
     # end
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
-       (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield)))
+       (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield) || is(fun.name, :setfield!)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
