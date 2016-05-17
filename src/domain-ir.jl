@@ -1071,13 +1071,14 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     local ast = expr.args
     local typ = expr.typ
     @assert length(ast) >= 1 "call args cannot be empty"
-    local fun  = lookupConstDefForArg(state, ast[1])
-    local args = ast[2:end]
-    dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
+    local fun  = ast[1]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
         return expr
     end
+    fun = lookupConstDefForArg(state, fun)
+    local args = ast[2:end]
+    dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
     fun = from_expr(state, env_, fun)
     dprintln(env,"from_call: new fun=", fun)
     (fun_, args_) = normalize_callname(state, env, fun, args)
