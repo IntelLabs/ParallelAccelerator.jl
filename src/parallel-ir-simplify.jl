@@ -683,7 +683,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
-        elseif rhs.args[1] == isBaseFunc(Base, :arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
+        elseif  isBaseFunc(rhs.args[1], :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
             assert(isa(array_param, RHSVar))
@@ -693,7 +693,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
-        elseif rhs.args[1] == isBaseFunc(Base, :arraysize)
+        elseif isBaseFunc(rhs.args[1], :arraysize)
             # replace arraysize calls when size is known and constant
             arr = toLHSVar(rhs.args[2])
             if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
@@ -731,7 +731,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             if haskey(state.tuple_table, rhs.args[3])
                 checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[rhs.args[3]])
             end
-        elseif rhs.args[1]==isBaseFunc(Base, :tuple)
+        elseif isBaseFunc(rhs.args[1], :tuple)
             ok = true
             for s in rhs.args[2:end]
                 if !(isa(s,TypedVar) || isa(s,Int))
