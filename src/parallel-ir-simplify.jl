@@ -583,21 +583,7 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
 end
 
-function copy_propagate_helper(node::Union{Symbol,GenSym},
-                               data::CopyPropagateState,
-                               top_level_number,
-                               is_top_level,
-                               read)
-
-    if haskey(data.copies, node)
-        @dprintln(3,"Replacing ", node, " with ", data.copies[node])
-        return data.copies[node]
-    end
-
-    return CompilerTools.AstWalker.ASTWALK_RECURSE
-end
-
-function copy_propagate_helper(node::TypedVar,
+function copy_propagate_helper(node::Union{Symbol,RHSVar},
                                data::CopyPropagateState,
                                top_level_number,
                                is_top_level,
