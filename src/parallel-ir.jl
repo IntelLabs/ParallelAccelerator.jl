@@ -407,6 +407,7 @@ type expr_state
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     LambdaVarInfo            :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
+    multi_correlation::Int # correlation number for arrays with multiple assignment
 
     # Initialize the state for parallel IR translation.
     function expr_state(bl, max_label, input_arrays)
@@ -417,7 +418,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label,0)
     end
 end
 
@@ -2851,6 +2852,7 @@ function computeLiveness(body, linfo :: CompilerTools.LambdaHandling.LambdaVarIn
     return CompilerTools.LivenessAnalysis.from_lambda(linfo, body, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
+#=
 type markMultState
     LambdaVarInfo
     assign_dict
@@ -2888,7 +2890,7 @@ end
 function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.ParallelIR.markMultState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
-
+=#
 function genEquivalenceClasses(linfo, body, new_vars)
     new_vars.LambdaVarInfo = linfo
     
@@ -2896,6 +2898,8 @@ function genEquivalenceClasses(linfo, body, new_vars)
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
     #empty!(new_vars.range_correlation)
+    # multiple assignment detection moved to create_equivalence_class_assignment
+    #=
     mms = markMultState(new_vars.LambdaVarInfo, Dict{LHSVar,Int64}())
     AstWalk(body, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
@@ -2907,6 +2911,7 @@ function genEquivalenceClasses(linfo, body, new_vars)
             multi_correlation -= 1
         end
     end
+    =#
     AstWalk(body, create_equivalence_classes, new_vars)
 end
 

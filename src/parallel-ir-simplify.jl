@@ -642,6 +642,40 @@ function copy_propagate_helper(node::ANY,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+function create_equivalence_classes_assignment(lhs::RHSVar, rhs::RHSVar, state)
+    rhs = toLHSVar(rhs)
+    lhs = toLHSVar(lhs)
+
+    rhs_corr = getOrAddArrayCorrelation(rhs, state) 
+    @dprintln(3,"assignment correlation lhs = ", lhs, " type = ", typeof(lhs))
+    # if an array has correlation already, there might be a case of multiple assignments
+    # in this case, try to make sure sizes are the same or assign a new negative value otherwise
+    if haskey(state.array_length_correlation, lhs)
+        prev_corr = state.array_length_correlation[lhs]
+        prev_size = []
+        rhs_size = []
+        for (d, v) in state.symbol_array_correlation
+            if v==prev_corr
+                prev_size = d
+            end
+            if v==rhs_corr
+                rhs_size = d
+            end
+        end
+        if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+            # can't make sure sizes are always equal, assign negative correlation to lhs
+            state.array_length_correlation[lhs] = getNegativeCorrelation(state)
+            @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
+        end
+    else
+        lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
+        merge_correlations(state, lhs_corr, rhs_corr)
+        @dprintln(3,"Correlations after assignment merge into lhs")
+        print_correlations(3, state)
+    end
+
+    CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
     @dprintln(4,lhs)
@@ -747,10 +781,32 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         rhs_corr = extractArrayEquivalencies(rhs, state)
         @dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
         if rhs_corr != nothing && isa(lhs, RHSVar)
-            lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
-            merge_correlations(state, lhs_corr, rhs_corr)
-            @dprintln(3,"Correlations after map merge into lhs")
-            print_correlations(3, state)
+            lhs = toLHSVar(lhs)
+            # if an array has correlation already, there might be a case of multiple assignments
+            # in this case, try to make sure sizes are the same or assign a new negative value otherwise
+            if haskey(state.array_length_correlation, lhs)
+                prev_corr = state.array_length_correlation[lhs]
+                prev_size = []
+                rhs_size = []
+                for (d, v) in state.symbol_array_correlation
+                    if v==prev_corr
+                        prev_size = d
+                    end
+                    if v==rhs_corr
+                        rhs_size = d
+                    end
+                end
+                if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+                    # can't make sure sizes are always equal, assign negative correlation to lhs
+                    state.array_length_correlation[lhs] = getNegativeCorrelation(state)
+                    @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
+                end
+            else
+                lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
+                merge_correlations(state, lhs_corr, rhs_corr)
+                @dprintln(3,"Correlations after map merge into lhs")
+                print_correlations(3, state)
+            end
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -758,6 +814,11 @@ end
 
 function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function getNegativeCorrelation(state)
+    state.multi_correlation -= 1
+    return state.multi_correlation
 end
 
 function print_correlations(level, state)
