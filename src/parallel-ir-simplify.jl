@@ -566,14 +566,17 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             if isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
                 lhs = toLHSVar(lhs)
                 rhs = toLHSVarOrNum(rhs)
-                @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
-                # Record that the left-hand side is a copy of the right-hand side.
-                data.copies[lhs] = rhs
-                if (CompilerTools.LambdaHandling.getDesc(lhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
-                    (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
-                    @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
-                    #@bp
-                    data.safe_copies[lhs] = rhs
+                desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
+                if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION 
+                    @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
+                    # Record that the left-hand side is a copy of the right-hand side.
+                    data.copies[lhs] = rhs
+                    if (desc & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
+                        (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
+                        @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
+                        #@bp
+                        data.safe_copies[lhs] = rhs
+                    end
                 end
             end
             return node
