@@ -2153,6 +2153,13 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield) || is(fun.name, :setfield!)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
+    elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :typeassert)
+        # remove all typeassert
+        dprintln(env, "got typeassert args = ", args)
+        args = normalize_args(state, env_, args)
+        expr = args[1]
+        typ = typeOfOpr(state, expr)
+        @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
         args = normalize_args(state, env_, args)
