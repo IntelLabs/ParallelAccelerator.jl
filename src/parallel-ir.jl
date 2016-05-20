@@ -2913,6 +2913,9 @@ function genEquivalenceClasses(linfo, body, new_vars)
     end
     =#
     AstWalk(body, create_equivalence_classes, new_vars)
+    # Using equivalence class info, replace Base.arraysize() calls for constant size arrays
+    # A separate pass is better since this doesn't have to worry about statements being top level
+    AstWalk(body, replaceConstArraysizes, new_vars)
 end
 
 """

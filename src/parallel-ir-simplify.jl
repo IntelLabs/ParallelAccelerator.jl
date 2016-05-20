@@ -728,20 +728,6 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
         elseif isBaseFunc(rhs.args[1], :arraysize)
-            # replace arraysize calls when size is known and constant
-            arr = toLHSVar(rhs.args[2])
-            if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
-                arr_class = state.array_length_correlation[arr]
-                for (d, v) in state.symbol_array_correlation
-                    if v==arr_class
-                        #
-                        res = d[rhs.args[3]]
-                        node = TypedExpr(Int64,:(=),lhs, res)
-                        @dprintln(3, "arraysize() replaced: ", node)
-                        return node
-                    end
-                end
-            end
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             if length(rhs.args) == 2
                 array_param = rhs.args[2]                  # length takes one param, which is the array
@@ -1132,6 +1118,56 @@ function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims ::
     end
 end
 
+function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
+    @dprintln(4,"node.head: ", node.head)
+    print_correlations(3, state)
+
+# TODO: handle arraylen similarly
+
+    # if the correlation is established in reverse direction using this assignment, then the array size call cannot be replaced 
+    if node.head==:(=) && isCall(node.args[2]) && isBaseFunc(node.args[2].args[1], :arraysize)
+        lhs = toLHSVar(node.args[1])
+        rhs = node.args[2]
+        arr = toLHSVar(rhs.args[2])
+        if haskey(state.array_length_correlation, arr)
+            arr_class = state.array_length_correlation[arr]
+            for (d, v) in state.symbol_array_correlation
+                if v==arr_class
+                    if d[rhs.args[3]]==lhs
+                        @dprintln(3, "reverse correlation arraysize() found: ", node," ", d)
+                        return node
+                    end
+                end
+            end
+        end
+    end
+    if node.head == :call && isBaseFunc(node.args[1], :arraysize)
+        # replace arraysize calls when size is known and constant
+        arr = toLHSVar(node.args[2])
+        if isa(node.args[3],Int) && haskey(state.array_length_correlation, arr)
+            arr_class = state.array_length_correlation[arr]
+            for (d, v) in state.symbol_array_correlation
+                if v==arr_class
+                    #
+                    res = d[node.args[3]]
+                    @dprintln(3, "arraysize() replaced: ", node," res ",res)
+                    return res
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
+    @dprintln(4,"Not an expr node.")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 """
 Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.
