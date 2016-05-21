@@ -256,7 +256,7 @@ function show(io::IO, f::DomainLambda)
     show(io, getInputParameters(f.linfo))
     show(io, " -> ")
     show(io, "[")
-    for x getLocalVariables(f.linfo) in 
+    for x in getLocalVariables(f.linfo) 
         show(io, (lookupVariableName(x, f.linfo),toLHSVar(x),getType(x, f.linfo))) 
     end
     show(io, ";")
