@@ -1376,7 +1376,7 @@ end
 
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
-function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
+function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set, removed_allocs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
     if x.head == :(=)
@@ -1386,6 +1386,7 @@ function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
             @dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
             if !in(lhs, all_aliased_outputs)
                 @dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
+                push!(removed_allocs, lhs)
                 return true
             end
         end
@@ -1399,10 +1400,10 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
     return false
 end
 
-function is_dead_arrayset(x, all_aliased_outputs :: Set)
+function is_dead_arrayset(x, removed_allocs :: Set)
     if isArraysetCall(x)
         array_to_set = x.args[2]
-        if !in(toLHSVar(array_to_set), all_aliased_outputs)
+        if in(toLHSVar(array_to_set), removed_allocs)
             return true
         end
     end
@@ -1416,6 +1417,7 @@ Holds data for modifying arrayset calls.
 type sub_arrayset_data
     arrays_set_in_cur_body #remove_arrayset
     output_items_with_aliases
+    escaping_sets
 end
 
 """
@@ -1472,9 +1474,12 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
             index      = x.args[4]
             assert(isa(array_name, RHSVar))
             # If the array being assigned to is in temp_map.
-            if in(toLHSVar(array_name), cbd.arrays_set_in_cur_body)
+            lhs_var = toLHSVar(array_name)
+            dprintln(use_dbg_level,"lhs_var = ", lhs_var)
+            # do not eliminate those not in escaping_sets, because they could be used later locally in the parfor body
+            if in(lhs_var, cbd.arrays_set_in_cur_body) && in(lhs_var, cbd.escaping_sets)
                 return nothing
-            elseif !in(toLHSVar(array_name), cbd.output_items_with_aliases)
+            elseif !in(lhs_var, cbd.output_items_with_aliases) && in(lhs_var, cbd.escaping_sets)
                 return nothing
             else
                 dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
@@ -1498,10 +1503,10 @@ map_for_non_eliminated holds arrays for which we need to add a variable to save 
     map_drop_arrayset drops the arrayset without replacing with a variable.  This is because a variable was previously added here with a map_for_non_eliminated case.
     a[i] = b. becomes b
 """
-function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases)
-    @dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
+function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases, escaping_sets)
+    @dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases, " ", escaping_sets)
     # Walk the AST and call sub_arrayset_walk for each node.
-    return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
+    return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases, escaping_sets))
 end
 
 """
