@@ -28,7 +28,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p,:asinh,:atan,:cbrt,:cosh,:erf,:exp,:expm1,:sinh,:sqrt,:tanh, :isnan])
 #using Debug
 
-function pattern_match_call_math(fun::Symbol, input::String, typ::Type, linfo)
+function pattern_match_call_math(fun::Symbol, input::AbstractString, typ::Type, linfo)
     s = ""
     isDouble = typ == Float64 
     isFloat = typ == Float32

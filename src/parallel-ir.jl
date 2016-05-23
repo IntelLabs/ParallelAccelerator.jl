@@ -3307,7 +3307,7 @@ function from_expr(LambdaVarInfo, body :: Expr, depth, state :: expr_state, top_
 end
 
 function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
-    GotoNode,DataType,String,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
+    GotoNode,DataType,AbstractString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]
 end
