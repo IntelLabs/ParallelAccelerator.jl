@@ -3157,6 +3157,7 @@ end
 
 type rm_allocs_state
     defs::Set{LHSVar}
+    uniqsets::Set{LHSVar}
     removed_arrs::Dict{LHSVar,Array{Any,1}}
     LambdaVarInfo
 end
@@ -3167,14 +3168,17 @@ removes extra allocations
 """
 function remove_extra_allocs(LambdaVarInfo, body)
     @dprintln(3,"starting remove extra allocs")
+    old_lives = computeLiveness(body, LambdaVarInfo)
     lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, body, rm_allocs_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{LHSVar}()
     for i in values(lives.basic_blocks)
         defs = union(defs, i.def)
     end
+    # only consider those that are not aliased
+    uniqsets = CompilerTools.AliasAnalysis.from_lambda(LambdaVarInfo, body, old_lives, pir_alias_cb, nothing)
     @dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
+    rm_state = rm_allocs_state(defs, uniqsets, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(body, rm_allocs_cb, rm_state)
     return body
 end
@@ -3185,7 +3189,8 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
     args = ast.args
     if head == :(=) && isAllocation(args[2])
         arr = toLHSVar(args[1])
-        if in(arr, state.defs)
+        # do not remove those that are being re-defined, or potentially aliased
+        if in(arr, state.defs) || !in(arr, state.uniqsets)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
         alloc_args = args[2].args[2:end]
@@ -3731,6 +3736,9 @@ function pir_alias_cb(ast::Expr, state, cbdata)
         elseif isBaseFunc(args[1], :unsafe_arrayset)
             return AliasAnalysis.NotArray 
         end
+    # flattened parfor nodes are ignored
+    elseif head == :parfor_start || head == :parfor_end
+        return AliasAnalysis.NotArray
     end
 
     return DomainIR.dir_alias_cb(ast, state, cbdata)
