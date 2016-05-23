@@ -566,14 +566,17 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             if isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
                 lhs = toLHSVar(lhs)
                 rhs = toLHSVarOrNum(rhs)
-                @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
-                # Record that the left-hand side is a copy of the right-hand side.
-                data.copies[lhs] = rhs
-                if (CompilerTools.LambdaHandling.getDesc(lhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
-                    (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
-                    @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
-                    #@bp
-                    data.safe_copies[lhs] = rhs
+                desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
+                if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION 
+                    @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
+                    # Record that the left-hand side is a copy of the right-hand side.
+                    data.copies[lhs] = rhs
+                    if (desc & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
+                        (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
+                        @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
+                        #@bp
+                        data.safe_copies[lhs] = rhs
+                    end
                 end
             end
             return node
@@ -583,21 +586,7 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
 end
 
-function copy_propagate_helper(node::Union{Symbol,GenSym},
-                               data::CopyPropagateState,
-                               top_level_number,
-                               is_top_level,
-                               read)
-
-    if haskey(data.copies, node)
-        @dprintln(3,"Replacing ", node, " with ", data.copies[node])
-        return data.copies[node]
-    end
-
-    return CompilerTools.AstWalker.ASTWALK_RECURSE
-end
-
-function copy_propagate_helper(node::TypedVar,
+function copy_propagate_helper(node::Union{Symbol,RHSVar},
                                data::CopyPropagateState,
                                top_level_number,
                                is_top_level,
@@ -642,6 +631,40 @@ function copy_propagate_helper(node::ANY,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+function create_equivalence_classes_assignment(lhs::RHSVar, rhs::RHSVar, state)
+    rhs = toLHSVar(rhs)
+    lhs = toLHSVar(lhs)
+
+    rhs_corr = getOrAddArrayCorrelation(rhs, state) 
+    @dprintln(3,"assignment correlation lhs = ", lhs, " type = ", typeof(lhs))
+    # if an array has correlation already, there might be a case of multiple assignments
+    # in this case, try to make sure sizes are the same or assign a new negative value otherwise
+    if haskey(state.array_length_correlation, lhs)
+        prev_corr = state.array_length_correlation[lhs]
+        prev_size = []
+        rhs_size = []
+        for (d, v) in state.symbol_array_correlation
+            if v==prev_corr
+                prev_size = d
+            end
+            if v==rhs_corr
+                rhs_size = d
+            end
+        end
+        if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+            # can't make sure sizes are always equal, assign negative correlation to lhs
+            state.array_length_correlation[lhs] = getNegativeCorrelation(state)
+            @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
+        end
+    else
+        lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
+        merge_correlations(state, lhs_corr, rhs_corr)
+        @dprintln(3,"Correlations after assignment merge into lhs")
+        print_correlations(3, state)
+    end
+
+    CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
     @dprintln(4,lhs)
@@ -683,7 +706,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
-        elseif rhs.args[1] == isBaseFunc(Base, :arraylen) || rhs.args[1] == GlobalRef(Core.Intrinsics, :arraylen)
+        elseif  isBaseFunc(rhs.args[1], :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = rhs.args[2]                  # length takes one param, which is the array
             assert(isa(array_param, RHSVar))
@@ -693,21 +716,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
-        elseif rhs.args[1] == isBaseFunc(Base, :arraysize)
-            # replace arraysize calls when size is known and constant
-            arr = toLHSVar(rhs.args[2])
-            if isa(rhs.args[3],Int) && haskey(state.array_length_correlation, arr)
-                arr_class = state.array_length_correlation[arr]
-                for (d, v) in state.symbol_array_correlation
-                    if v==arr_class
-                        #
-                        res = d[rhs.args[3]]
-                        node = TypedExpr(Int64,:(=),lhs, res)
-                        @dprintln(3, "arraysize() replaced: ", node)
-                        return node
-                    end
-                end
-            end
+        elseif isBaseFunc(rhs.args[1], :arraysize)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             if length(rhs.args) == 2
                 array_param = rhs.args[2]                  # length takes one param, which is the array
@@ -731,7 +740,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             if haskey(state.tuple_table, rhs.args[3])
                 checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[rhs.args[3]])
             end
-        elseif rhs.args[1]==isBaseFunc(Base, :tuple)
+        elseif isBaseFunc(rhs.args[1], :tuple)
             ok = true
             for s in rhs.args[2:end]
                 if !(isa(s,TypedVar) || isa(s,Int))
@@ -747,10 +756,32 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         rhs_corr = extractArrayEquivalencies(rhs, state)
         @dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
         if rhs_corr != nothing && isa(lhs, RHSVar)
-            lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
-            merge_correlations(state, lhs_corr, rhs_corr)
-            @dprintln(3,"Correlations after map merge into lhs")
-            print_correlations(3, state)
+            lhs = toLHSVar(lhs)
+            # if an array has correlation already, there might be a case of multiple assignments
+            # in this case, try to make sure sizes are the same or assign a new negative value otherwise
+            if haskey(state.array_length_correlation, lhs)
+                prev_corr = state.array_length_correlation[lhs]
+                prev_size = []
+                rhs_size = []
+                for (d, v) in state.symbol_array_correlation
+                    if v==prev_corr
+                        prev_size = d
+                    end
+                    if v==rhs_corr
+                        rhs_size = d
+                    end
+                end
+                if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+                    # can't make sure sizes are always equal, assign negative correlation to lhs
+                    state.array_length_correlation[lhs] = getNegativeCorrelation(state)
+                    @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
+                end
+            else
+                lhs_corr = getOrAddArrayCorrelation(toLHSVar(lhs), state)
+                merge_correlations(state, lhs_corr, rhs_corr)
+                @dprintln(3,"Correlations after map merge into lhs")
+                print_correlations(3, state)
+            end
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -758,6 +789,11 @@ end
 
 function create_equivalence_classes_assignment(lhs, rhs::ANY, state)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function getNegativeCorrelation(state)
+    state.multi_correlation -= 1
+    return state.multi_correlation
 end
 
 function print_correlations(level, state)
@@ -827,6 +863,86 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+"""
+Given an array whose name is in "x", allocate a new equivalence class for this array.
+"""
+function addUnknownArray(x :: LHSVar, state :: expr_state)
+    @dprintln(3, "addUnknownArray x = ", x, " next = ", state.next_eq_class)
+    m = state.next_eq_class
+    state.next_eq_class += 1
+    state.array_length_correlation[x] = m + 1
+end
+
+"""
+Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
+"""
+function addUnknownRange(x :: Array{DimensionSelector,1}, state :: expr_state)
+    m = state.next_eq_class
+    state.next_eq_class += 1
+    state.range_correlation[x] = m + 1
+end
+
+"""
+If we somehow determine that two sets of correlations are actually the same length then merge one into the other.
+"""
+function merge_correlations(state, unchanging, eliminate)
+    if unchanging < 0 || eliminate < 0
+        @dprintln(3,"merge_correlations will not merge because ", unchanging, " and/or ", eliminate, " represents an array that is multiply defined within the function.")
+        return unchanging
+    end
+
+    # For each array in the dictionary.
+    for i in state.array_length_correlation
+        # If it is in the "eliminate" class...
+        if i[2] == eliminate
+            # ...move it to the "unchanging" class.
+            state.array_length_correlation[i[1]] = unchanging
+        end
+    end
+    # The symbol_array_correlation shares the equivalence class space so
+    # do the same re-numbering here.
+    for i in state.symbol_array_correlation
+        if i[2] == eliminate
+            state.symbol_array_correlation[i[1]] = unchanging
+        end
+    end
+    # The range_correlation shares the equivalence class space so
+    # do the same re-numbering here.
+    for i in state.range_correlation
+        if i[2] == eliminate
+            state.range_correlation[i[1]] = unchanging
+        end
+    end
+
+    return unchanging
+end
+
+"""
+If we somehow determine that two arrays must be the same length then 
+get the equivalence classes for the two arrays and merge those equivalence classes together.
+"""
+function add_merge_correlations(old_sym :: LHSVar, new_sym :: LHSVar, state :: expr_state)
+    @dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym)
+    print_correlations(3, state)
+    old_corr = getOrAddArrayCorrelation(old_sym, state)
+    new_corr = getOrAddArrayCorrelation(new_sym, state)
+    ret = merge_correlations(state, old_corr, new_corr)
+    @dprintln(3, "add_merge_correlations post")
+    print_correlations(3, state)
+
+    return ret 
+end
+
+"""
+Return a correlation set for an array.  If the array was not previously added then add it and return it.
+"""
+function getOrAddArrayCorrelation(x :: LHSVar, state :: expr_state)
+    if !haskey(state.array_length_correlation, x)
+        @dprintln(3,"Correlation for array not found = ", x)
+        addUnknownArray(x, state)
+    end
+    state.array_length_correlation[x]
+end
 
 """
 "node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
@@ -923,6 +1039,124 @@ function checkAndAddSymbolCorrelation(lhs :: LHSVar, state, dim_array)
     return true
 end
 
+"""
+Gets (or adds if absent) the range correlation for the given array of RangeExprs.
+"""
+function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, state :: expr_state)
+    @dprintln(3, "getOrAddRangeCorrelation for ", array, " with ranges = ", ranges, " and hash = ", hash(ranges))
+    print_correlations(3, state)
+
+    # We can't match on array of RangeExprs so we flatten to Array of Any
+    all_mask = true
+    for i = 1:length(ranges)
+        all_mask = all_mask & isa(ranges[i], MaskSelector)
+    end
+
+    if !haskey(state.range_correlation, ranges)
+        @dprintln(3,"Exact match for correlation for range not found = ", ranges)
+        # Look for an equivalent but non-exact range in the dictionary.
+        nonExactCorrelation = nonExactRangeSearch(ranges, state.range_correlation)
+        if nonExactCorrelation == nothing
+            @dprintln(3, "No non-exact match so adding new range")
+            range_corr = addUnknownRange(ranges, state)
+            # If all the dimensions are selected based on masks then the iteration space
+            # is that of the entire array and so we can establish a correlation between the
+            # DimensionSelector and the whole array.
+            if all_mask
+                masked_array_corr = getOrAddArrayCorrelation(toLHSVar(array), state)
+                @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
+                range_corr = merge_correlations(state, masked_array_corr, range_corr)
+
+                if length(ranges) == 1
+                    print_correlations(3, state)
+                    mask_correlation = getCorrelation(ranges[1].value, state)
+
+                    @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
+                    range_corr = merge_correlations(state, mask_correlation, range_corr) 
+                end
+            end
+        else
+            # Found an equivalent range.
+            @dprintln(3, "Adding non-exact range match to class ", nonExactCorrelation)
+            state.range_correlation[ranges] = nonExactCorrelation
+        end
+        @dprintln(3, "getOrAddRangeCorrelation final correlations")
+        print_correlations(3, state)
+    end
+    state.range_correlation[ranges]
+end
+
+"""
+A new array is being created with an explicit size specification in dims.
+"""
+function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims :: Array{Union{RHSVar,Int},1})
+    if !haskey(state.symbol_array_correlation, dims)
+        # We haven't yet seen this combination of dims used to create an array.
+        @dprintln(3,"Correlation for symbol set not found, dims = ", dims)
+        if haskey(state.array_length_correlation, array)
+            return state.symbol_array_correlation[dims] = state.array_length_correlation[array]
+        else
+            # Create a new array correlation number for this array and associate that number with the dim sizes.
+            return state.symbol_array_correlation[dims] = addUnknownArray(array, state)
+        end
+    else
+        @dprintln(3,"Correlation for symbol set found, dims = ", dims)
+        # We have previously seen this combination of dim sizes used to create an array so give the new
+        # array the same array length correlation number as the previous one.
+        return state.array_length_correlation[array] = state.symbol_array_correlation[dims]
+    end
+end
+
+function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
+    @dprintln(4,"node.head: ", node.head)
+    print_correlations(3, state)
+
+# TODO: handle arraylen similarly
+
+    # if the correlation is established in reverse direction using this assignment, then the array size call cannot be replaced 
+    if node.head==:(=) && isCall(node.args[2]) && isBaseFunc(node.args[2].args[1], :arraysize)
+        lhs = toLHSVar(node.args[1])
+        rhs = node.args[2]
+        arr = toLHSVar(rhs.args[2])
+        if haskey(state.array_length_correlation, arr)
+            arr_class = state.array_length_correlation[arr]
+            for (d, v) in state.symbol_array_correlation
+                if v==arr_class
+                    if d[rhs.args[3]]==lhs
+                        @dprintln(3, "reverse correlation arraysize() found: ", node," ", d)
+                        return node
+                    end
+                end
+            end
+        end
+    end
+    if node.head == :call && isBaseFunc(node.args[1], :arraysize)
+        # replace arraysize calls when size is known and constant
+        arr = toLHSVar(node.args[2])
+        if isa(node.args[3],Int) && haskey(state.array_length_correlation, arr)
+            arr_class = state.array_length_correlation[arr]
+            for (d, v) in state.symbol_array_correlation
+                if v==arr_class
+                    #
+                    res = d[node.args[3]]
+                    @dprintln(3, "arraysize() replaced: ", node," res ",res)
+                    return res
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
+    @dprintln(4,"Not an expr node.")
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 """
 Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.

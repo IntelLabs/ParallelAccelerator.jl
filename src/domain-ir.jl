@@ -223,7 +223,7 @@ type DomainLambda
             if !isLocalVariable(v, li) 
                 v = lookupVariableName(v, linfo)
                 if v != Symbol("#self#")
-                    addEscapingVariable(v, getType(v, linfo), getDesc(v, linfo), li)
+                    addToEscapingVariable(v, li, linfo)
                 end
             end
         end
@@ -256,7 +256,14 @@ function show(io::IO, f::DomainLambda)
     show(io, getInputParameters(f.linfo))
     show(io, " -> ")
     show(io, "[")
-    show(io, [lookupVariableName(x, f.linfo) for x in getLocalVariables(f.linfo)])
+    for x in getLocalVariables(f.linfo) 
+        show(io, (lookupVariableName(x, f.linfo),toLHSVar(x),getType(x, f.linfo))) 
+    end
+    show(io, ";")
+    for x in getEscapingVariables(f.linfo)
+        show(io, lookupVariableName(x, f.linfo))
+        show(io, ",")
+    end
     show(io, "]")
     show(io, f.body)
 end
@@ -282,6 +289,22 @@ function lambdaSwapArg(f::DomainLambda, i, j)
     params = arraySwap(getInputParameters(linfo), i, j)
     setInputParameters(params, linfo)
     return DomainLambda(linfo, f.body)
+end
+
+function addToEscapingVariable(v, typ, inner_linfo, outer_linfo)
+    desc = getDesc(v, outer_linfo)
+    rhs = addEscapingVariable(v, typ, desc & (~ (ISCAPTURED | ISASSIGNEDONCE)), inner_linfo)
+    if (desc & ISASSIGNED == ISASSIGNED) && (desc & ISASSIGNEDONCE != ISASSIGNEDONCE)
+        setDesc(v, desc | ISCAPTURED | ISASSIGNEDBYINNERFUNCTION, outer_linfo)
+    else
+        setDesc(v, desc | ISCAPTURED, outer_linfo)
+    end
+    return rhs
+end
+
+function addToEscapingVariable(v, inner_linfo, outer_linfo)
+    typ = getType(v, outer_linfo)
+    addToEscapingVariable(v, typ, inner_linfo, outer_linfo)
 end
 
 type IRState
@@ -731,9 +754,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
             end
             if isa(args[i], Union{LHSVar,RHSVar})
                 tmpv = lookupVariableName(args[i], state.linfo)
-                typ = getType(tmpv, state.linfo)
-                desc = getDesc(tmpv, state.linfo)
-                args[i] = addEscapingVariable(tmpv, typ, desc, f.linfo)
+                args[i] = addToEscapingVariable(tmpv, f.linfo, state.linfo)
             end
             #push!(pre_body, Expr(:(=), old_params[i], args[i]))
             repl_dict[toLHSVar(old_params[i], f.linfo)] = args[i]
@@ -914,7 +935,7 @@ function from_lambda(state, env, expr, closure = nothing)
                 # if q has a Box type, we lookup its definition (due to setfield!) instead
                 qname = lookupVariableName(q, state.linfo)
                 dprintln(env, "closure variable in parent = ", qname)
-                escDict[p] = addEscapingVariable(qname, qtyp, 0, linfo)
+                escDict[p] = addToEscapingVariable(qname, qtyp, linfo, state.linfo)
             end
         end
     end
@@ -1071,13 +1092,14 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     local ast = expr.args
     local typ = expr.typ
     @assert length(ast) >= 1 "call args cannot be empty"
-    local fun  = lookupConstDefForArg(state, ast[1])
-    local args = ast[2:end]
-    dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
+    local fun  = ast[1]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
         return expr
     end
+    fun = lookupConstDefForArg(state, fun)
+    local args = ast[2:end]
+    dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
     fun = from_expr(state, env_, fun)
     dprintln(env,"from_call: new fun=", fun)
     (fun_, args_) = normalize_callname(state, env, fun, args)
@@ -1935,7 +1957,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         nlinfo = LambdaVarInfo()
         redvarname = lookupVariableName(redvar, state.linfo)
         dprintln(env, "redvarname = ", redvarname)
-        nvar = addEscapingVariable(redvarname, rvtyp, 0, nlinfo)
+        nvar = addToEscapingVariable(redvarname, rvtyp, nlinfo, state.linfo)
         nval = replaceExprWithDict!(translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)]), Dict{LHSVar,Any}(Pair(redvar, nvar)), AstWalk)
         redparam = gensym(redvarname)
         redparamvar = addLocalVariable(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
@@ -2066,7 +2088,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
                          mk_expr(Bool, :call, GlobalRef(Base, :eq_int), red_dim[1], i), 
                          1, mk_arraysize(arr, i)) 
             emitStmt(state, mk_expr(Int, :(=), sizeVars[i], dimExp))
-            sizeVars[i] = addEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, 0, linfo)
+            sizeVars[i] = addToEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, linfo, state.linfo)
         end
         redparam = gensym("redvar")
         rednode = addLocalVariable(redparam, arrtyp, ISASSIGNED | ISASSIGNEDONCE, linfo)
@@ -2152,6 +2174,13 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield) || is(fun.name, :setfield!)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
+    elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :typeassert)
+        # remove all typeassert
+        dprintln(env, "got typeassert args = ", args)
+        args = normalize_args(state, env_, args)
+        expr = args[1]
+        typ = typeOfOpr(state, expr)
+        @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
         args = normalize_args(state, env_, args)

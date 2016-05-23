@@ -407,6 +407,7 @@ type expr_state
     range_correlation        :: Dict{Array{DimensionSelector,1},Int}
     LambdaVarInfo            :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
+    multi_correlation::Int # correlation number for arrays with multiple assignment
 
     # Initialize the state for parallel IR translation.
     function expr_state(bl, max_label, input_arrays)
@@ -417,7 +418,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label)
+        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label,0)
     end
 end
 
@@ -774,86 +775,7 @@ function next_label(state :: expr_state)
     return state.max_label
 end
 
-"""
-Given an array whose name is in "x", allocate a new equivalence class for this array.
-"""
-function addUnknownArray(x :: LHSVar, state :: expr_state)
-    @dprintln(3, "addUnknownArray x = ", x, " next = ", state.next_eq_class)
-    m = state.next_eq_class
-    state.next_eq_class += 1
-    state.array_length_correlation[x] = m + 1
-end
 
-"""
-Given an array of RangeExprs describing loop nest ranges, allocate a new equivalence class for this range.
-"""
-function addUnknownRange(x :: Array{DimensionSelector,1}, state :: expr_state)
-    m = state.next_eq_class
-    state.next_eq_class += 1
-    state.range_correlation[x] = m + 1
-end
-
-"""
-If we somehow determine that two sets of correlations are actually the same length then merge one into the other.
-"""
-function merge_correlations(state, unchanging, eliminate)
-    if unchanging < 0 || eliminate < 0
-        @dprintln(3,"merge_correlations will not merge because ", unchanging, " and/or ", eliminate, " represents an array that is multiply defined within the function.")
-        return unchanging
-    end
-
-    # For each array in the dictionary.
-    for i in state.array_length_correlation
-        # If it is in the "eliminate" class...
-        if i[2] == eliminate
-            # ...move it to the "unchanging" class.
-            state.array_length_correlation[i[1]] = unchanging
-        end
-    end
-    # The symbol_array_correlation shares the equivalence class space so
-    # do the same re-numbering here.
-    for i in state.symbol_array_correlation
-        if i[2] == eliminate
-            state.symbol_array_correlation[i[1]] = unchanging
-        end
-    end
-    # The range_correlation shares the equivalence class space so
-    # do the same re-numbering here.
-    for i in state.range_correlation
-        if i[2] == eliminate
-            state.range_correlation[i[1]] = unchanging
-        end
-    end
-
-    return unchanging
-end
-
-"""
-If we somehow determine that two arrays must be the same length then 
-get the equivalence classes for the two arrays and merge those equivalence classes together.
-"""
-function add_merge_correlations(old_sym :: LHSVar, new_sym :: LHSVar, state :: expr_state)
-    @dprintln(3, "add_merge_correlations ", old_sym, " ", new_sym)
-    print_correlations(3, state)
-    old_corr = getOrAddArrayCorrelation(old_sym, state)
-    new_corr = getOrAddArrayCorrelation(new_sym, state)
-    ret = merge_correlations(state, old_corr, new_corr)
-    @dprintln(3, "add_merge_correlations post")
-    print_correlations(3, state)
-
-    return ret 
-end
-
-"""
-Return a correlation set for an array.  If the array was not previously added then add it and return it.
-"""
-function getOrAddArrayCorrelation(x :: LHSVar, state :: expr_state)
-    if !haskey(state.array_length_correlation, x)
-        @dprintln(3,"Correlation for array not found = ", x)
-        addUnknownArray(x, state)
-    end
-    state.array_length_correlation[x]
-end
 
 function simplify_internal(x :: ANY, state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -986,73 +908,6 @@ function nonExactRangeSearch(ranges :: Array{DimensionSelector,1}, range_correla
     return nothing
 end
 
-"""
-Gets (or adds if absent) the range correlation for the given array of RangeExprs.
-"""
-function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, state :: expr_state)
-    @dprintln(3, "getOrAddRangeCorrelation for ", array, " with ranges = ", ranges, " and hash = ", hash(ranges))
-    print_correlations(3, state)
-
-    # We can't match on array of RangeExprs so we flatten to Array of Any
-    all_mask = true
-    for i = 1:length(ranges)
-        all_mask = all_mask & isa(ranges[i], MaskSelector)
-    end
-
-    if !haskey(state.range_correlation, ranges)
-        @dprintln(3,"Exact match for correlation for range not found = ", ranges)
-        # Look for an equivalent but non-exact range in the dictionary.
-        nonExactCorrelation = nonExactRangeSearch(ranges, state.range_correlation)
-        if nonExactCorrelation == nothing
-            @dprintln(3, "No non-exact match so adding new range")
-            range_corr = addUnknownRange(ranges, state)
-            # If all the dimensions are selected based on masks then the iteration space
-            # is that of the entire array and so we can establish a correlation between the
-            # DimensionSelector and the whole array.
-            if all_mask
-                masked_array_corr = getOrAddArrayCorrelation(toLHSVar(array), state)
-                @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
-                range_corr = merge_correlations(state, masked_array_corr, range_corr)
-
-                if length(ranges) == 1
-                    print_correlations(3, state)
-                    mask_correlation = getCorrelation(ranges[1].value, state)
-
-                    @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
-                    range_corr = merge_correlations(state, mask_correlation, range_corr) 
-                end
-            end
-        else
-            # Found an equivalent range.
-            @dprintln(3, "Adding non-exact range match to class ", nonExactCorrelation)
-            state.range_correlation[ranges] = nonExactCorrelation
-        end
-        @dprintln(3, "getOrAddRangeCorrelation final correlations")
-        print_correlations(3, state)
-    end
-    state.range_correlation[ranges]
-end
-
-"""
-A new array is being created with an explicit size specification in dims.
-"""
-function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims :: Array{Union{RHSVar,Int},1})
-    if !haskey(state.symbol_array_correlation, dims)
-        # We haven't yet seen this combination of dims used to create an array.
-        @dprintln(3,"Correlation for symbol set not found, dims = ", dims)
-        if haskey(state.array_length_correlation, array)
-            return state.symbol_array_correlation[dims] = state.array_length_correlation[array]
-        else
-            # Create a new array correlation number for this array and associate that number with the dim sizes.
-            return state.symbol_array_correlation[dims] = addUnknownArray(array, state)
-        end
-    else
-        @dprintln(3,"Correlation for symbol set found, dims = ", dims)
-        # We have previously seen this combination of dim sizes used to create an array so give the new
-        # array the same array length correlation number as the previous one.
-        return state.array_length_correlation[array] = state.symbol_array_correlation[dims]
-    end
-end
 
 """
 If we need to generate a name and make sure it is unique then include an monotonically increasing number.
@@ -2997,6 +2852,7 @@ function computeLiveness(body, linfo :: CompilerTools.LambdaHandling.LambdaVarIn
     return CompilerTools.LivenessAnalysis.from_lambda(linfo, body, pir_live_cb, linfo, no_mod_cb=no_mod_impl)
 end
 
+#=
 type markMultState
     LambdaVarInfo
     assign_dict
@@ -3034,7 +2890,7 @@ end
 function mark_multiple_assign_equiv(node :: ANY, state :: ParallelAccelerator.ParallelIR.markMultState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
-
+=#
 function genEquivalenceClasses(linfo, body, new_vars)
     new_vars.LambdaVarInfo = linfo
     
@@ -3042,6 +2898,8 @@ function genEquivalenceClasses(linfo, body, new_vars)
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
     #empty!(new_vars.range_correlation)
+    # multiple assignment detection moved to create_equivalence_class_assignment
+    #=
     mms = markMultState(new_vars.LambdaVarInfo, Dict{LHSVar,Int64}())
     AstWalk(body, mark_multiple_assign_equiv, mms)
     @dprintln(3, "Result of mark_multiple_assign_equiv = ", mms.assign_dict)
@@ -3053,7 +2911,11 @@ function genEquivalenceClasses(linfo, body, new_vars)
             multi_correlation -= 1
         end
     end
+    =#
     AstWalk(body, create_equivalence_classes, new_vars)
+    # Using equivalence class info, replace Base.arraysize() calls for constant size arrays
+    # A separate pass is better since this doesn't have to worry about statements being top level
+    AstWalk(body, replaceConstArraysizes, new_vars)
 end
 
 """
@@ -3312,14 +3174,6 @@ function remove_extra_allocs(LambdaVarInfo, body)
     return body
 end
 
-function toSynGemOrInt(a::TypedVar)
-    return toLHSVar(a)
-end
-
-function toSynGemOrInt(a::Union{Int,LHSVar})
-    return a
-end
-
 
 function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
     head = ast.head
@@ -3332,7 +3186,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         alloc_args = args[2].args[2:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
-        shape = map(toSynGemOrInt,sh)
+        shape = map(toLHSVarOrInt,sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         CompilerTools.LambdaHandling.setType(arr, Int, state.LambdaVarInfo)
