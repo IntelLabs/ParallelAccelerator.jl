@@ -88,14 +88,14 @@ end
 end
 
 @inline function diag(A::DenseMatrix)
-  d = min(size(A, 1), size(A, 2))
+  d::Int = min(size(A, 1), size(A, 2))
   cartesianarray(eltype(A), (d,)) do i
      A[i, i]
   end
 end
 
 @inline function diagm(A::DenseVector)
-  d = size(A, 1)
+  d::Int = size(A, 1)
   cartesianarray(eltype(A), (d, d)) do i, j
     # the assignment below is a hack to avoid mutiple return in body
     v = i == j ? A[i] : zero(eltype(A))
@@ -107,14 +107,14 @@ end
 end
 
 @inline function scale(A::DenseMatrix, b::DenseVector)
-  m, n = size(A)
+  m::Int, n::Int = size(A)
   cartesianarray(eltype(A), (m, n)) do i, j
     A[i,j] * b[j]
   end
 end
 
 @inline function scale(b::DenseVector, A::DenseMatrix)
-  m, n = size(A)
+  m::Int, n::Int = size(A)
   cartesianarray(eltype(A), (m, n)) do i, j
     b[i] * A[i,j] 
   end
@@ -136,14 +136,14 @@ end
 end
 
 @inline function repmat(A::DenseVector, m::Int, n::Int)
-  s = size(A, 1)
+  s::Int = size(A, 1)
   cartesianarray(eltype(A), (m * s, n)) do i, j
     A[1 + mod(i - 1, s)]
   end
 end
 
 @inline function repmat(A::DenseMatrix, m::Int, n::Int)
-  s, t = size(A)
+  s::Int, t::Int = size(A)
   cartesianarray(eltype(A), (m * s, n * t)) do i, j
     A[1 + mod(i - 1, s), 1 + mod(j - 1, t)]
   end
