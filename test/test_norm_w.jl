@@ -15,7 +15,7 @@ using ParallelAccelerator
     end
 =#
     s = [sqrt(sumabs2(W[:,j])) for j in 1:k]
-    scale!(W,s)
+    W = scale(W,s)
 end
 
 function main(m::Int, k::Int, n::Int)
