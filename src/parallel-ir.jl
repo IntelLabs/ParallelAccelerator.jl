@@ -506,20 +506,20 @@ end
 Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
-function mk_assignment_expr(lhs::RHSVar, rhs, state :: expr_state)
-    expr_typ = CompilerTools.LambdaHandling.getType(lhs, state.LambdaVarInfo)    
-    @dprintln(2,"mk_assignment_expr lhs type = ", typeof(lhs))
+function mk_assignment_expr(lhs::RHSVar, rhs, linfo :: LambdaVarInfo)
+    expr_typ = CompilerTools.LambdaHandling.getType(lhs, linfo)    
+    @dprintln(2,"mk_assignment_expr lhs = ", lhs, " type = ", typeof(lhs), " rhs = ", rhs)
     TypedExpr(expr_typ, :(=), toLHSVar(lhs), rhs)
 end
+ 
+mk_assignment_expr(lhs::RHSVar, rhs, state :: expr_state) = mk_assignment_expr(lhs, rhs, state.LambdaVarInfo)
 
 function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
     throw(string("mk_assignment_expr lhs is not of type RHSVar, is of this type instead: ", typeof(lhs)))
 end
 
-
-function mk_assignment_expr(lhs :: TypedVar, rhs)
-    TypedExpr(lhs.typ, :(=), toLHSVar(lhs), rhs)
-end
+mk_assignment_expr(lhs :: TypedVar, rhs) = TypedExpr(lhs.typ, :(=), toLHSVar(lhs), rhs)
+mk_assignment_expr(lhs :: LHSVar, rhs, typ :: DataType) = TypedExpr(typ, :(=), lhs, rhs)
 
 """
 Only used to create fake expression to force lhs to be seen as written rather than read.
@@ -633,6 +633,10 @@ function get_length_expr(length::Union{RHSVar,Int64})
     return length
 end
 
+function get_length_expr(length::Expr)
+    return length
+end
+
 function get_length_expr(length::Any)
     throw(string("Unhandled length type ", typeof(length), " in mk_alloc_array_1d_expr."))
 end
@@ -644,7 +648,7 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
 
-    ret_type  = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
+    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core,:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
 
@@ -661,7 +665,8 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        get_length_expr(length1),
        0,
        get_length_expr(length2), 
-       0)
+       0
+       )
 end
 
 """
@@ -670,7 +675,7 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 """
 function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
-    ret_type  = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
+    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     
     TypedExpr(
@@ -1983,7 +1988,7 @@ function intermediate_from_exprs(ast::Array{Any,1}, depth, state)
     return res 
 end
 
-#include("parallel-ir-task.jl")
+include("parallel-ir-task.jl")
 include("parallel-ir-top-exprs.jl")
 include("parallel-ir-flatten.jl")
 
@@ -2610,6 +2615,7 @@ function integrateLabels(body, maxLabel)
     maxLabel = maxLabel + 1
     state.label_map[key] = maxLabel
   end
+
   @dprintln(3,"integrateLabels updated label mapping = ", state.label_map, " new maxLabel = ", maxLabel)
 
   body = AstWalk(body, CompilerTools.OptFramework.update_labels, state)
@@ -2629,7 +2635,7 @@ function nested_function_exprs(domain_lambda, out_state)
 
     @dprintln(2,"nested_function_exprs out_state.max_label = ", out_state.max_label)
     (body, max_label) = integrateLabels(body, out_state.max_label) 
-    @dprintln(2,"nested_function_exprs max_label = ", max_label)
+    @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body)
 
     # Re-create the body minus any dead basic blocks.
     cfg = CompilerTools.CFGs.from_lambda(body)
@@ -3459,6 +3465,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :meta
         # skip
+    elseif head == :static_parameter
+        # skip
     elseif head == :type_goto
         # skip
     else
@@ -3516,72 +3524,83 @@ function asArray(x)
     return ret
 end
 
+function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    @dprintln(4,"PIR AstWalkCallback PIRParForAst starting")
+    ret = dw.callback(cur_parfor, dw.cbdata, top_level_number, is_top_level, read)
+    @dprintln(4,"PIR AstWalkCallback PIRParForAst ret = ", ret)
+    if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
+        return ret
+    end
+
+    for i = 1:length(cur_parfor.preParFor)
+        cur_parfor.preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
+    end
+    for i = 1:length(cur_parfor.loopNests)
+        cur_parfor.loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
+        # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
+        #AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1, Int64), dw.callback, dw.cbdata)
+        cur_parfor.loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
+        cur_parfor.loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
+        cur_parfor.loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
+    end
+    for i = 1:length(cur_parfor.reductions)
+        cur_parfor.reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
+        cur_parfor.reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
+        cur_parfor.reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
+    end
+    for i = 1:length(cur_parfor.body)
+        cur_parfor.body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
+    end
+    for i = 1:length(cur_parfor.postParFor)
+        cur_parfor.postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
+    end
+    # update read write set in case of symbol replacement like unused variable elimination
+    old_set = copy(cur_parfor.rws.readSet.scalars)
+    for sym in old_set
+        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+        delete!(cur_parfor.rws.readSet.scalars,sym)
+        push!(cur_parfor.rws.readSet.scalars,o_sym)
+    end
+    old_set = copy(cur_parfor.rws.writeSet.scalars)
+    for sym in old_set
+        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+        delete!(cur_parfor.rws.writeSet.scalars,sym)
+        push!(cur_parfor.rws.writeSet.scalars,o_sym)
+    end
+    old_set = [k for k in keys(cur_parfor.rws.readSet.arrays)]
+    for sym in old_set
+        val = cur_parfor.rws.readSet.arrays[sym]
+        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+        delete!(cur_parfor.rws.readSet.arrays,sym)
+        cur_parfor.rws.readSet.arrays[o_sym] = val
+    end
+    old_set = [k for k in keys(cur_parfor.rws.writeSet.arrays)]
+    for sym in old_set
+        val = cur_parfor.rws.writeSet.arrays[sym]
+        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
+        delete!(cur_parfor.rws.writeSet.arrays,sym)
+        cur_parfor.rws.writeSet.arrays[o_sym] = val
+    end
+
+    return cur_parfor
+end
+
 """
 AstWalk callback that handles ParallelIR AST node types.
 """
 function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    @dprintln(3,"PIR AstWalkCallback starting")
+    @dprintln(4,"PIR AstWalkCallback Expr starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(3,"PIR AstWalkCallback ret = ", ret)
+    @dprintln(4,"PIR AstWalkCallback Expr ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
 
     head = x.head
     args = x.args
-    #    typ  = x.typ
     if head == :parfor
         cur_parfor = args[1]
-        for i = 1:length(cur_parfor.preParFor)
-            x.args[1].preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
-        end
-        for i = 1:length(cur_parfor.loopNests)
-            x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-            # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
-            AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
-            x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
-            x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
-            x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
-        end
-        for i = 1:length(cur_parfor.reductions)
-            x.args[1].reductions[i].reductionVar     = AstWalk(cur_parfor.reductions[i].reductionVar, dw.callback, dw.cbdata)
-            x.args[1].reductions[i].reductionVarInit = AstWalk(cur_parfor.reductions[i].reductionVarInit, dw.callback, dw.cbdata)
-            x.args[1].reductions[i].reductionFunc    = AstWalk(cur_parfor.reductions[i].reductionFunc, dw.callback, dw.cbdata)
-        end
-        for i = 1:length(cur_parfor.body)
-            x.args[1].body[i] = AstWalk(cur_parfor.body[i], dw.callback, dw.cbdata)
-        end
-        for i = 1:length(cur_parfor.postParFor)
-            x.args[1].postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
-        end
-        # update read write set in case of symbol replacement like unused variable elimination
-        old_set = copy(x.args[1].rws.readSet.scalars)
-        for sym in old_set
-            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-            delete!(x.args[1].rws.readSet.scalars,sym)
-            push!(x.args[1].rws.readSet.scalars,o_sym)
-        end
-        old_set = copy(x.args[1].rws.writeSet.scalars)
-        for sym in old_set
-            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-            delete!(x.args[1].rws.writeSet.scalars,sym)
-            push!(x.args[1].rws.writeSet.scalars,o_sym)
-        end
-        old_set = [k for k in keys(x.args[1].rws.readSet.arrays)]
-        for sym in old_set
-            val = x.args[1].rws.readSet.arrays[sym]
-            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-            delete!(x.args[1].rws.readSet.arrays,sym)
-            x.args[1].rws.readSet.arrays[o_sym] = val
-        end
-        old_set = [k for k in keys(x.args[1].rws.writeSet.arrays)]
-        for sym in old_set
-            val = x.args[1].rws.writeSet.arrays[sym]
-            o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-            delete!(x.args[1].rws.writeSet.arrays,sym)
-            x.args[1].rws.writeSet.arrays[o_sym] = val
-        end
-
+        AstWalkCallback(cur_parfor, dw, top_level_number, is_top_level, read)
         return x
     elseif head == :parfor_start || head == :parfor_end
         @dprintln(3, "parfor_start or parfor_end walking, dw = ", dw)
@@ -3644,9 +3663,9 @@ end
 =#
 
 function AstWalkCallback(x :: DelayedFunc, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    @dprintln(4,"PIR AstWalkCallback starting")
+    @dprintln(4,"PIR AstWalkCallback DelayedFunc starting")
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(4,"PIR AstWalkCallback ret = ", ret)
+    @dprintln(4,"PIR AstWalkCallback DelayedFunc ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end
@@ -3667,9 +3686,9 @@ function AstWalkCallback(x :: DelayedFunc, dw :: DirWalk, top_level_number :: In
 end
 
 function AstWalkCallback(x :: ANY, dw :: DirWalk, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
-    @dprintln(4,"PIR AstWalkCallback starting")
+    @dprintln(4,"PIR AstWalkCallback ANY starting, x = ", x, " type = ", typeof(x))
     ret = dw.callback(x, dw.cbdata, top_level_number, is_top_level, read)
-    @dprintln(4,"PIR AstWalkCallback ret = ", ret)
+    @dprintln(4,"PIR AstWalkCallback ANY ret = ", ret)
     if ret != CompilerTools.AstWalker.ASTWALK_RECURSE
         return ret
     end

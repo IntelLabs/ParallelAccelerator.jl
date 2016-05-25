@@ -210,7 +210,8 @@ function mk_arrayset1(num_dim_inputs,
                       value, 
                       inbounds, 
                       state :: expr_state, 
-                      range :: Array{DimensionSelector,1} = DimensionSelector[])
+                      range :: Array{DimensionSelector,1} = DimensionSelector[]; 
+                      boxit = false)
     @dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
     @dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
@@ -242,12 +243,18 @@ function mk_arrayset1(num_dim_inputs,
 
     @dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
 
+    if boxit
+       te_value = Expr(:call, GlobalRef(Base, :box), elem_typ, :($value))
+    else
+       te_value = :($value)
+    end
+
     TypedExpr(
        elem_typ,
        :call,
        GlobalRef(Base, fname),
        array_name,
-       :($value),
+       te_value,
        indsyms...)
 end
 
@@ -727,6 +734,9 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     return loopNests
 end
 
+box_tfa = false
+box_aset = false
+
 """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
@@ -818,16 +828,21 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     for i = 1:length(dl.outputs)
         if length(inputInfo[i].range) != 0
             tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range, 2, state)
+            tfa_typ = getArrayElemType(inputInfo[i].array, state)
         else
             tfa = createTempForArray(inputInfo[i].array, 2, state)
+            tfa_typ = getArrayElemType(inputInfo[i].array, state)
         end
-        #tfa = createTempForArray(dl.outputs[i], 2, state)
-        #tfa = createTempForArray(input_arrays[i], 2, state, array_temp_map2)
-        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
+
+        if box_tfa
+            push!(out_body, mk_assignment_expr(tfa, Expr(:call, GlobalRef(Base, :box), tfa_typ, lbexpr.args[i]), state))
+        else
+            push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
+        end
+        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         if length(condExprs) > 0
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
+            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         end
     end
 
@@ -1189,12 +1204,17 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         nans_sn = toRHSVar(nans, Array{dl.outputs[i], num_dim_inputs}, state.LambdaVarInfo)
 
         tfa = createTempForArray(nans_sn, 1, state)
-        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state))
+        tfa_typ = getArrayElemType(nans_sn, state)
+        if box_tfa
+            push!(out_body, mk_assignment_expr(tfa, Expr(:call, GlobalRef(Base, :box), tfa_typ, lbexpr.args[i]), state))
+        else
+            push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
+        end
+        push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state; boxit = box_aset))
         if length(condExprs) > 0
             # FIXME: the following looks wrong, why writing back to input array? 
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
+            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         end
         # keep the sum of the sizes of the individual output array elements
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)

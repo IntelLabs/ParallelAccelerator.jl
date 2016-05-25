@@ -173,8 +173,6 @@ function top_level_expand_pre(body, state)
     return expanded_body
 end
 
-# task mode commented out
-#=
 function top_level_mk_task_graph(body, state, new_lives, loop_info)
     task_start = time_ns()
 
@@ -671,11 +669,17 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     return next_available_label + 3
 end
 
-function process_cur_task(cur_task::TaskInfo, new_body, state)
-    range_var = string(cur_task.task_func,"_range_var")
-    range_sym = Symbol(range_var)
+#function got_here_1(x)
+#println("got here! ", x)
+#end
 
-    @dprintln(3,"Inserting call to jl_threading_run ", range_sym)
+function process_cur_task(cur_task::TaskInfo, new_body, state)
+    range_var = string(Base.function_name(cur_task.task_func),"_range_var")
+    range_sym = Symbol(range_var)
+    range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+    range_lhsvar = toLHSVar(range_rhsvar)
+
+    @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
     @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
 
     in_len  = length(cur_task.input_symbols)
@@ -688,38 +692,37 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
     if dims > 0
         @dprintln(3,"dims > 0")
         assert(dims <= 3)
-        #whole_iteration_range = pir_range_actual()
-        #whole_iteration_range.dim = dims
         cstr_params = Any[]
         for l = 1:dims
             # Note that loopNest is outer-dimension first
             # Should this still be outer-dimension first?  FIX FIX FIX
             push!(cstr_params, cur_task.loopNests[dims - l + 1].lower)
             push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
-            #push!(whole_iteration_range.lower_bounds, cur_task.loopNests[dims - l + 1].lower)
-            #push!(whole_iteration_range.upper_bounds, cur_task.loopNests[dims - l + 1].upper)
         end
         @dprintln(3, "cstr_params = ", cstr_params)
         cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-        whole_range_expr = mk_assignment_expr(toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
+        whole_range_expr = mk_assignment_expr(range_lhsvar, TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
         @dprintln(3,"whole_range_expr = ", whole_range_expr)
         push!(new_body, whole_range_expr)
 
-        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo)))
+        #    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole_range = ", range_rhsvar))
 
         real_args_build = Any[]
         args_type = Expr(:tuple)
 
         # Fill in the arg metadata.
         for l = 1:in_len
+            @dprintln(3,cur_task.input_symbols[l].name, " ", typeof(cur_task.input_symbols[l].name))
             push!(real_args_build, cur_task.input_symbols[l].name)
             push!(args_type.args,  cur_task.input_symbols[l].typ)
         end
         for l = 1:mod_len
+            @dprintln(3,cur_task.modified_inputs[l].name, " ", typeof(cur_task.modified_inputs[l].name))
             push!(real_args_build, cur_task.modified_inputs[l].name)
             push!(args_type.args,  cur_task.modified_inputs[l].typ)
         end
         for l = 1:io_len
+            @dprintln(3,cur_task.io_symbols[l].name, " ", typeof(cur_task.io_symbols[l].name))
             push!(real_args_build, cur_task.io_symbols[l].name)
             push!(args_type.args,  cur_task.io_symbols[l].typ)
         end
@@ -732,49 +735,77 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         #@dprintln(3,"whole_iteration_range = ", whole_iteration_range)
         @dprintln(3,"real_args_build = ", real_args_build)
 
-        tup_var = string(cur_task.task_func,"_tup_var")
+        tup_var = string(Base.function_name(cur_task.task_func),"_tup_var")
         tup_sym = Symbol(tup_var)
+        tup_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(tup_sym, SimpleVector, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+        tup_lhsvar = toLHSVar(tup_rhsvar)
 
-        if false
-            real_args_tuple_expr = TypedExpr(eval(args_type), :call, GlobalRef(Base, :tuple), real_args_build...)
-            call_tup = (Function,pir_range_actual,Any)
-            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, GlobalRef(Base, :tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_tuple_expr), state))
-        else
-            call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
-            call_tup = eval(call_tup_expr)
-            @dprintln(3, "call_tup = ", call_tup)
-            #push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, call_tup, state.LambdaVarInfo), TypedExpr(call_tup, :call, TopNode(:tuple), cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
-            push!(new_body, mk_assignment_expr(toRHSVar(tup_sym, SimpleVector, state.LambdaVarInfo), mk_svec_expr(cur_task.task_func, toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo), real_args_build...), state))
+        if cur_task.ret_types != Void
+            red_array_var = string(Base.function_name(cur_task.task_func),"_red_array")
+            red_array_sym = Symbol(red_array_var)
+            red_array_typ = Array{Any,1}
+            red_array_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(red_array_sym, red_array_typ, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+            red_array_lhsvar = toLHSVar(red_array_rhsvar)
+            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, red_array_typ, Expr(:call, GlobalRef(Base.Threads, :nthreads))), state))
+
+            red_output_tuple_var = string(Base.function_name(cur_task.task_func),"_red_output_tuple")
+            red_output_tuple_sym = Symbol(red_output_tuple_var)
+            red_output_tuple_typ = Tuple{cur_task.ret_types...}
+            red_output_tuple_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(red_output_tuple_sym, red_output_tuple_typ, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+            red_output_tuple_lhsvar = toLHSVar(red_output_tuple_rhsvar)
         end
 
+        #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
+        call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
+        call_tup = eval(call_tup_expr)
+        @dprintln(3, "call_tup = ", call_tup)
+        if cur_task.ret_types != Void
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, range_lhsvar, real_args_build..., deepcopy(red_array_lhsvar)), state))
+        else
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, range_lhsvar, real_args_build...), state))
+        end
+        #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if false
             insert_task_expr = TypedExpr(Any,
                                          :call,
                                          cur_task.task_func,
-                                         toRHSVar(range_sym, pir_range_actual, state.LambdaVarInfo),
+                                         range_lhsvar,
                                          real_args_build...)
         else
-            # old_tuple_style = TypedExpr((Any,Any), :call1, TopNode(:tuple), Any, Any),
-            svec_args = mk_svec_expr(Any, Any)
+            svec_args = mk_svec_expr(Any)
             insert_task_expr = TypedExpr(Any,
                                          :call,
                                          GlobalRef(Core, :ccall),
                                          QuoteNode(:jl_threading_run),
-                                         GlobalRef(Main,:Void),
+                                         GlobalRef(Base.Threads,:Void),
                                          svec_args,
-                                         mk_parallelir_ref(:isf), 0,
-                                         tup_sym, 0)
+                                         tup_lhsvar, 0)
+
         end
         push!(new_body, insert_task_expr)
+        if cur_task.ret_types != Void
+            push!(new_body, mk_assignment_expr(deepcopy(red_output_tuple_lhsvar), Expr(:call, mk_parallelir_ref(:run_reduction_func), deepcopy(red_array_lhsvar), cur_task.join_func), state))
+            for l = 1:red_len
+                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base,:getfield), deepcopy(red_output_tuple_lhsvar), l), state))
+            end
+        end
     else
         throw(string("insert sequential task not implemented yet"))
+    end
+end
+
+function run_reduction_func(red_array :: Array{Any,1}, join_func)
+    @dprintln(3,"run_reduction_fun ", red_array, " ", length(red_array), " ", join_func, " type = ", typeof(join_func))
+    if length(red_array) == 1
+        return red_array[1]
+    else
+        return foldl((x,y) -> join_func(x,y), red_array)
     end
 end
 
 function process_cur_task(cur_task::Any, new_body, state)
     push!(new_body, cur_task)
 end
-=#
 
 # TOP_LEVEL
 # sequence of expressions
@@ -826,8 +857,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     @dprintln(3,"new_lives = ", new_lives)
     @dprintln(3,"loop_info = ", loop_info)
 
-    # task mode commented out
-    #=
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE || ParallelAccelerator.getTaskMode() > 0 || run_as_task()
         @dprintln(3, "Entering top_level_mk_task_graph.")
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
@@ -859,8 +888,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         end
     end
 
-    body = expanded_body
-    =#
-
+    body = expanded_body 
     return body
 end
