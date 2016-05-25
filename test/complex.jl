@@ -33,12 +33,12 @@ using ParallelAccelerator
 
 # test input, constant, and output
 @acc function complex_test1(x::Complex{Float64})
-    x + (1. + 2.im)
+    x + (1.0 + 2.0im)
 end
 
 # test array input, constant, and output
 @acc function complex_test2(x::Array{Complex{Float64}, 1})
-    x .+ (1. + 2.im)
+    x .+ (1.0 + 2.0im)
 end
 
 # test rand and reduction
@@ -48,13 +48,13 @@ end
 end
 
 function test1()
-    x = complex_test1(2. + 1.im) 
+    x = complex_test1(2.0 + 1.0im) 
     println(" test1 returns: ", x)
-    return x == (3. + 3.im)
+    return x == (3.0 + 3.0im)
 end
 
 function test2()
-    return complex_test2(Complex{Float64}[1. + 2.im, 2. + 1.im]) == (Complex{Float64}[2. + 4.im, 3. + 3.im])
+    return complex_test2(Complex{Float64}[1.0 + 2.0im, 2.0 + 1.0im]) == (Complex{Float64}[2.0 + 4.0im, 3.0 + 3.0im])
 end
 
 function test3()
