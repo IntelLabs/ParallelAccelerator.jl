@@ -58,8 +58,8 @@ end
 # Pre: size(oi)>=(nw,nh)
 function downSample(a::Array{Float32, 2}, nw::Int, nh::Int)
   (w, h) = size(a)
-  sx = Float32(w) / Float32(nw)
-  sy = Float32(h) / Float32(nh)
+  sx::Float32 = Float32(w) / Float32(nw)
+  sy::Float32 = Float32(h) / Float32(nh)
   Float32[ downsample_inner(x, y, sx, sy, a) for x = 1:nw, y = 1:nh ]
 end
 
@@ -70,24 +70,24 @@ function interpolate(a::Matrix{Float32}, x::Float32, y::Float32)
   xx = round(Int, floor(x))
   yy = round(Int, floor(y))
   #println("x,y=",x,",",y)
-  alpha = x-xx
-  beta  = y-yy
-  return beta*(alpha*a[xx+1,yy+1] + (1f0-alpha)*a[xx,yy+1]) +
-         (1f0-beta)*(alpha*a[xx+1,yy] + (1f0-alpha)*a[xx,yy])
+  alpha = x-Float32(xx)
+  beta  = y-Float32(yy)
+  return Float32(beta*(alpha*a[xx+1,yy+1] + (1f0-alpha)*a[xx,yy+1]) +
+         (1f0-beta)*(alpha*a[xx+1,yy] + (1f0-alpha)*a[xx,yy]))
 end
 
 # Given a flow at a coarser grain, interpolate it to a finer grain
 # Pre: size(ou)==size(ov)<=(nh,nw)
 function interpolateFlow(ou::Matrix{Float32}, ov::Matrix{Float32}, nw::Int, nh::Int)
 # Returns two Matrix{Float32} size=(nh,nw)
-  (ow, oh) = size(ou)
+  (ow::Int, oh::Int) = size(ou)
   if ow==nw && oh==nh
     return ou, ov
   end
-  sx = Float32(ow-1) / Float32(nw)
-  sy = Float32(oh-1) / Float32(nh)
-  nu = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
-  nv = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
+  sx::Float32 = Float32(ow-1) / Float32(nw)
+  sy::Float32 = Float32(oh-1) / Float32(nh)
+  nu::Array{Float32,2} = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
+  nv::Array{Float32,2} = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
   return nu, nv
 end
 
@@ -101,7 +101,7 @@ end
 # Pre: size(i)==size(u)==size(v)==size(ii)
 function warpMotion(i::Matrix{Float32}, u::Matrix{Float32}, v::Matrix{Float32}, ii::Matrix{Float32})
 # Returns Matrix{Float32} size=size(i)
-  (w, h) = size(i)
+  (w::Int, h::Int) = size(i)
   Float32[ warpMotion_inner(u,v,i,ii,w,h,x,y) for x = 1:w, y = 1:h ]
 end
 

@@ -339,6 +339,7 @@ function fuse(body, body_index, cur::Expr, state)
         @dprintln(3,"output_items_set = ", output_items_set)
         @dprintln(3,"output_items_with_aliases = ", output_items_with_aliases)
 
+        escaping_sets = Set{LHSVar}()
         # Create a dictionary of arrays to the last variable containing the array's value at the current index space.
         save_body = prev_parfor.body
         arrayset_dict = Dict{LHSVar, RHSVar}()
@@ -348,9 +349,14 @@ function fuse(body, body_index, cur::Expr, state)
                 # Here we have a call to arrayset.
                 array_name = x.args[2]
                 value      = x.args[3]
+                array_var  = toLHSVar(array_name)
                 assert(isa(array_name, RHSVar))
                 assert(isa(value, RHSVar))
-                arrayset_dict[toLHSVar(array_name)] = value
+                array_var = toLHSVar(array_name)
+                arrayset_dict[array_var] = value
+                if getDesc(array_var, state.LambdaVarInfo) & ISCAPTURED == ISCAPTURED
+                    push!(escaping_sets, array_var)
+                end
             elseif typeof(x) == Expr && x.head == :(=)
                 lhs = x.args[1]
                 rhs = x.args[2]
@@ -358,7 +364,11 @@ function fuse(body, body_index, cur::Expr, state)
                 if isArrayrefCall(rhs)
                     array_name = rhs.args[2]
                     assert(isa(array_name, RHSVar))
-                    arrayset_dict[toLHSVar(array_name)] = lhs
+                    array_var = toLHSVar(array_name)
+                    arrayset_dict[array_var] = lhs
+                    if getDesc(array_var, state.LambdaVarInfo) & ISCAPTURED == ISCAPTURED
+                        push!(escaping_sets, array_var)
+                    end
                 end
             end
         end
@@ -369,8 +379,19 @@ function fuse(body, body_index, cur::Expr, state)
             lhs_sym = i[1]
             rhs_sym = i[2]
             arrayset_dict[lhs_sym] = arrayset_dict[rhs_sym]
+            if getDesc(lhs_sym, state.LambdaVarInfo) & ISCAPTURED == ISCAPTURED
+                push!(escaping_sets, lhs_sym)
+            end
         end
         @dprintln(3,"arrayset_dict = ", arrayset_dict)
+        # make sure escaping sets include aliases and prev's output_items
+        escaping_sets = union(escaping_sets, not_used_after_cur_with_aliases)
+        for (k,v) in prev_parfor.array_aliases
+            if in(k, escaping_sets)
+                push!(escaping_sets, toLHSVar(v))
+            end
+        end
+        @dprintln(3,"escaping_sets = ", escaping_sets)
 
         # body - Append cur body to prev body but replace arrayset's in prev with a temp variable
         # and replace arrayref's in cur with the same temp.
@@ -385,7 +406,7 @@ function fuse(body, body_index, cur::Expr, state)
 
         prev_parfor.body = Any[]
         for i = 1:length(save_body)
-            new_body_line = substitute_arrayset(save_body[i], combined, output_items_with_aliases)
+            new_body_line = substitute_arrayset(save_body[i], combined, output_items_with_aliases, escaping_sets)
             @dprintln(3,"new_body_line = ", new_body_line)
             if new_body_line != nothing
                 push!(prev_parfor.body, new_body_line)
@@ -397,13 +418,14 @@ function fuse(body, body_index, cur::Expr, state)
 
         # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
         # prevParFor where the array is in allocs_to_eliminate.
-        prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases), prev_parfor.preParFor);
+        removed_allocs = Set{LHSVar}();
+        prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases, removed_allocs), prev_parfor.preParFor);
                                   parforArrayInput(prev_parfor) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor]
         @dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
         @dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)
-        filter!( x -> !is_dead_arrayset(x, output_items_with_aliases), prev_parfor.body)
+        filter!( x -> !is_dead_arrayset(x, removed_allocs), prev_parfor.body)
         @dprintln(4,"prev_parfor.body after_ removing dead arrayset: ", prev_parfor.body)
 
         # reductions - a simple append with the caveat that you can't fuse parfor where the first has a reduction that the second one uses

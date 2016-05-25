@@ -1381,7 +1381,7 @@ end
 
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
 # Returns true if this statement is an allocation of one such variable.
-function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
+function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set, removed_allocs :: Set)
     @dprintln(4,"is_eliminated_allocation_map: x = ", x, " typeof(x) = ", typeof(x), " all_aliased_outputs = ", all_aliased_outputs)
     @dprintln(4,"is_eliminated_allocation_map: head = ", x.head)
     if x.head == :(=)
@@ -1391,6 +1391,7 @@ function is_eliminated_allocation_map(x :: Expr, all_aliased_outputs :: Set)
             @dprintln(4,"is_eliminated_allocation_map: lhs = ", lhs)
             if !in(lhs, all_aliased_outputs)
                 @dprintln(4,"is_eliminated_allocation_map: this will be removed => ", x)
+                push!(removed_allocs, lhs)
                 return true
             end
         end
@@ -1404,10 +1405,10 @@ function is_eliminated_allocation_map(x, all_aliased_outputs :: Set)
     return false
 end
 
-function is_dead_arrayset(x, all_aliased_outputs :: Set)
+function is_dead_arrayset(x, removed_allocs :: Set)
     if isArraysetCall(x)
         array_to_set = x.args[2]
-        if !in(toLHSVar(array_to_set), all_aliased_outputs)
+        if in(toLHSVar(array_to_set), removed_allocs)
             return true
         end
     end
@@ -1421,6 +1422,7 @@ Holds data for modifying arrayset calls.
 type sub_arrayset_data
     arrays_set_in_cur_body #remove_arrayset
     output_items_with_aliases
+    escaping_sets
 end
 
 """
@@ -1477,9 +1479,12 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
             index      = x.args[4]
             assert(isa(array_name, RHSVar))
             # If the array being assigned to is in temp_map.
-            if in(toLHSVar(array_name), cbd.arrays_set_in_cur_body)
+            lhs_var = toLHSVar(array_name)
+            dprintln(use_dbg_level,"lhs_var = ", lhs_var)
+            # do not eliminate those not in escaping_sets, because they could be used later locally in the parfor body
+            if in(lhs_var, cbd.arrays_set_in_cur_body) && in(lhs_var, cbd.escaping_sets)
                 return nothing
-            elseif !in(toLHSVar(array_name), cbd.output_items_with_aliases)
+            elseif !in(lhs_var, cbd.output_items_with_aliases) && in(lhs_var, cbd.escaping_sets)
                 return nothing
             else
                 dprintln(use_dbg_level,"sub_arrayset_walk array_name will not substitute ", array_name)
@@ -1503,10 +1508,10 @@ map_for_non_eliminated holds arrays for which we need to add a variable to save 
     map_drop_arrayset drops the arrayset without replacing with a variable.  This is because a variable was previously added here with a map_for_non_eliminated case.
     a[i] = b. becomes b
 """
-function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases)
-    @dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases)
+function substitute_arrayset(x, arrays_set_in_cur_body, output_items_with_aliases, escaping_sets)
+    @dprintln(3,"substitute_arrayset ", x, " ", arrays_set_in_cur_body, " ", output_items_with_aliases, " ", escaping_sets)
     # Walk the AST and call sub_arrayset_walk for each node.
-    return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases))
+    return AstWalk(x, sub_arrayset_walk, sub_arrayset_data(arrays_set_in_cur_body, output_items_with_aliases, escaping_sets))
 end
 
 """
@@ -3158,35 +3163,45 @@ end
 
 type rm_allocs_state
     defs::Set{LHSVar}
+    uniqsets::Set{LHSVar}
     removed_arrs::Dict{LHSVar,Array{Any,1}}
     LambdaVarInfo
 end
 
 
 """
-removes extra allocations
+Removes extra allocations
+Find arrays that are only allocated and not written to, and remove them.
 """
 function remove_extra_allocs(LambdaVarInfo, body)
     @dprintln(3,"starting remove extra allocs")
+    old_lives = computeLiveness(body, LambdaVarInfo)
+    # rm_allocs_live_cb callback ignores allocation calls but finds other defs of arrays
     lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, body, rm_allocs_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{LHSVar}()
     for i in values(lives.basic_blocks)
         defs = union(defs, i.def)
     end
+    # only consider those that are not aliased
+    uniqsets = CompilerTools.AliasAnalysis.from_lambda(LambdaVarInfo, body, old_lives, pir_alias_cb, nothing)
     @dprintln(3, "remove extra allocations defs ",defs)
-    rm_state = rm_allocs_state(defs, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
+    rm_state = rm_allocs_state(defs, uniqsets, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(body, rm_allocs_cb, rm_state)
     return body
 end
 
-
+"""
+Remove arrays that are only allocated but not written to.
+Keep shape information and replace arraysize() and arraylen() calls accordingly.
+"""
 function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
     head = ast.head
     args = ast.args
     if head == :(=) && isAllocation(args[2])
         arr = toLHSVar(args[1])
-        if in(arr, state.defs)
+        # do not remove those that are being re-defined, or potentially aliased
+        if in(arr, state.defs) || !in(arr, state.uniqsets)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
         alloc_args = args[2].args[2:end]
@@ -3236,7 +3251,9 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::ANY, arr::ANY, rest_arg
 end
 
 
-
+"""
+Update parfor data structures for removed arrays.
+"""
 function rm_allocs_cb_parfor(state::rm_allocs_state, parfor::PIRParForAst)
     if in(parfor.first_input, keys(state.removed_arrs))
         #TODO parfor.first_input = NoArrayInput
@@ -3303,7 +3320,7 @@ function from_expr(LambdaVarInfo, body :: Expr, depth, state :: expr_state, top_
 end
 
 function from_expr(ast::Union{RHSVar,TopNode,LineNumberNode,LabelNode,Char,
-    GotoNode,DataType,String,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
+    GotoNode,DataType,AbstractString,NewvarNode,Void,Module}, depth, state :: expr_state, top_level)
     #skip
     return [ast]
 end
@@ -3745,6 +3762,9 @@ function pir_alias_cb(ast::Expr, state, cbdata)
         elseif isBaseFunc(args[1], :unsafe_arrayset)
             return AliasAnalysis.NotArray 
         end
+    # flattened parfor nodes are ignored
+    elseif head == :parfor_start || head == :parfor_end
+        return AliasAnalysis.NotArray
     end
 
     return DomainIR.dir_alias_cb(ast, state, cbdata)

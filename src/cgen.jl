@@ -537,13 +537,6 @@ function dumpSymbolTable(a::Dict{Any, Any})
     end
 end
 
-function dumpDecls(a::Array{Dict{Any, String}})
-    for x in a
-        for k in keys(x)
-            @dprintln(3,x[k], " ", k)
-        end
-    end
-end
 function has(a, b)
     return findfirst(a, b) != 0
 end
@@ -2378,7 +2371,7 @@ function from_newvarnode(args, linfo)
     ""
 end
 
-function from_callee(ast::Expr, functionName::String, linfo)
+function from_callee(ast::Expr, functionName::AbstractString, linfo)
     @dprintln(3,"Ast = ", ast)
     @dprintln(3,"Starting processing for $ast")
     linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
@@ -2607,7 +2600,7 @@ end
 
 
 # This is the entry point to CGen from the PSE driver
-function from_root_entry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_entry(ast, functionName::AbstractString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     #assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = true
@@ -2690,7 +2683,7 @@ function from_root_entry(ast, functionName::String, array_types_in_sig :: Dict{D
 end
 
 # This is the entry point to CGen from the PSE driver
-function from_root_nonentry(ast, functionName::String, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_nonentry(ast, functionName::AbstractString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     global inEntryPoint
     inEntryPoint = false
     global lstate

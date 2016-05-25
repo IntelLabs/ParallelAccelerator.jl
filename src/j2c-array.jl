@@ -109,7 +109,7 @@ function __init__()
     end
 
     # convert ASCIIString to J2C_Array and to C's ASCIIString 
-    function to_j2c_array(inp::String, ptr_array_dict, mapAtypeKey, j2c_array_new)
+    function to_j2c_array(inp::AbstractString, ptr_array_dict, mapAtypeKey, j2c_array_new)
       arr = to_j2c_array(inp.data, ptr_array_dict, mapAtypeKey, j2c_array_new)
       ccall((:new_ascii_string, $dyn_lib), Ptr{Void}, (Ptr{Void}, ), arr)
     end

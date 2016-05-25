@@ -111,18 +111,18 @@ end
 
 # Solve optical flow problem at all scales
 # Pre: size(i1)==size(i2)
-function multiScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::Float32, ni::Int, ns::Int)
+@fastmath function multiScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::Float32, ni::Int, ns::Int)
 # Returns two Matrix{Float32} size=size(i1)
   (w, h) = size(i1)
   if ns==1
     return singleScaleOpticalFlow(i1, i2, lam, ni)
   end
-  scale = Float32((Float64(w)/50.0)^(-1.0/ns))
+  scale = Float32((Float64(w)/50.0)^(-1.0/Float32(ns)))
   local u::Array{Float32,2}, v::Array{Float32,2} # initialised in the first iteration of the loop
   i = ns
   while i >= 0 
-    cw = round(Int, w*scale^Float32(i))
-    ch = round(Int, h*scale^Float32(i))
+    cw = round(Int, Float32(w)*scale^Float32(i))
+    ch = round(Int, Float32(h)*scale^Float32(i))
     # println("cw,ch=",cw,",",ch)
     # println("Doing scale: ", cw, "x", ch)
     # Downsample the images
