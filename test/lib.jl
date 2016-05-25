@@ -48,6 +48,21 @@ importall ParallelAccelerator.API.Lib
 
 @acc testRepMat(A) = sum(repmat(A, 2, 3), 1)
 
+@acc function normalizeW(W::Array{Float64,2}, k::Int)
+# normalize each column
+#=
+    for j = 1:k
+        w = view(W,:,j)
+        scale!(w, 1.0 / sqrt(sumabs2(w)))
+	#s = sqrt(sumabs2(W[:,j]))
+	#W[:,j] /= s
+    end
+=#
+    s::Array{Float64,1} = [sqrt(sumabs2(W[:,j])) for j in 1:k]
+    scale(W,s)
+end
+
+
 function test1()
   A = rand(5)
   minMax(A) == (@noacc minMax(A)) && minMax(A) == (Base.indmin(A), Base.indmax(A))
@@ -79,6 +94,17 @@ function test6()
   abs(sum(testRepMat(A) .- sum(repmat(A, 2, 3), 1))) < 1.0e-10
 end
 
+function test7()
+    m = 100
+    k = 100
+    W  = Array(Float64, m, k)   
+    fill!(W, 3)
+    W0 = normalizeW(W, k)
+    fill!(W, 3)
+    W1 = @noacc normalizeW(W, k)
+    abs(sum(W0) - sum(W1)) < 1.0e-10
+end
+
 end
 
 using Base.Test
@@ -89,5 +115,6 @@ println("Testing parallel library functions...")
 @test APILibTest.test4() 
 @test APILibTest.test5() 
 @test APILibTest.test6() 
+@test APILibTest.test7() 
 println("Done testing parallel library functions.") 
 
