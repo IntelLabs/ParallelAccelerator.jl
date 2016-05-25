@@ -1,6 +1,6 @@
 using ParallelAccelerator
 
-type newType
+immutable newType
     w::Vector{Float64}
     b::Float64
 end
