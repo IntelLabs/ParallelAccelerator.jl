@@ -193,6 +193,7 @@ function toParallelIR(func :: GlobalRef, ast, signature :: Tuple)
   pir_time = time_ns() - pir_start
   @dprintln(3, "parallel code = ", code)
   @dprintln(1, "accelerate: ParallelIR conversion time = ", ns_to_sec(pir_time))
+#throw(string("Done with ParallelIR"))
   return code
 end
 
