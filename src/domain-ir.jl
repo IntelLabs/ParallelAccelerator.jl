@@ -1645,7 +1645,8 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     (nonarrays, args, typs, f) = specialize(state, args, typs, f)
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
     for i = 1:length(args)
-        arg_ = inline_select(env, state, args[i])
+        # need to deepcopy because sharing Expr will cause renaming trouble
+        arg_ = deepcopy(inline_select(env, state, args[i]))
         #if arg_ != args[i] && i != 1 && length(args) > 1
         #    error("Selector array must be the only array argument to mmap: ", args)
         #end
@@ -2245,11 +2246,13 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         #   expr = mk_arraysize(args...)
         #    expr.typ = typ
     elseif isdefined(fun.mod, fun.name)
+        args = normalize_args(state, env_, args)
         args_typ = map(x -> typeOfOpr(state, x), args)
         gf = getfield(fun.mod, fun.name)
         if isa(gf, Function) && !is(fun.mod, Core) # fun != GlobalRef(Core, :(===))
             dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
             _accelerate(gf, tuple(args_typ...))
+            expr = mk_expr(typ, head, oldfun, args...)
         else
             dprintln(env,"function ", fun, " not offloaded.")
         end
