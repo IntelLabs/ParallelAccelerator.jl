@@ -3164,11 +3164,13 @@ end
 
 
 """
-removes extra allocations
+Removes extra allocations
+Find arrays that are only allocated and not written to, and remove them.
 """
 function remove_extra_allocs(LambdaVarInfo, body)
     @dprintln(3,"starting remove extra allocs")
     old_lives = computeLiveness(body, LambdaVarInfo)
+    # rm_allocs_live_cb callback ignores allocation calls but finds other defs of arrays
     lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, body, rm_allocs_live_cb, LambdaVarInfo)
     @dprintln(3,"remove extra allocations lives ", lives)
     defs = Set{LHSVar}()
@@ -3183,7 +3185,10 @@ function remove_extra_allocs(LambdaVarInfo, body)
     return body
 end
 
-
+"""
+Remove arrays that are only allocated but not written to.
+Keep shape information and replace arraysize() and arraylen() calls accordingly.
+"""
 function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_top_level, read)
     head = ast.head
     args = ast.args
@@ -3240,7 +3245,9 @@ function rm_allocs_cb_call(state::rm_allocs_state, func::ANY, arr::ANY, rest_arg
 end
 
 
-
+"""
+Update parfor data structures for removed arrays.
+"""
 function rm_allocs_cb_parfor(state::rm_allocs_state, parfor::PIRParForAst)
     if in(parfor.first_input, keys(state.removed_arrs))
         #TODO parfor.first_input = NoArrayInput
