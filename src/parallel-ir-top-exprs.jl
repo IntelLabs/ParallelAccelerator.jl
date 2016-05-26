@@ -613,7 +613,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         else
             throw(string("loophead information missing for loop ", loop_id))
         end
-        return nothing
+        return next_available_label 
     end
 
     assert(isa(loop_id, LHSVar))
