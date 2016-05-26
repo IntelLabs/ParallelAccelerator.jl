@@ -301,7 +301,10 @@ end
 The main routine that converts a reduce AST node to a parfor AST node.
 """
 function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
-    @dprintln(3,"mk_parfor_args_from_reduce = ", input_args)
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
+
+    @dprintln(3,"(mk_parfor_args_from_reduce = ", input_args, " ", unique_node_id)
 
     # Make sure we get what we expect from domain IR.
     # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
@@ -320,22 +323,19 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     red_dim = length(input_args) == 4 ? input_args[4] : 0 # check if the reduction is only along a given dimension
 
-    @dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val))
-    @dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array)
-    @dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl)
-    @dprintln(3,"mk_parfor_args_from_reduce. red_dim = ", red_dim)
+    @dprintln(3,"mk_parfor_args_from_reduce. zero_val = ", zero_val, " type = ", typeof(zero_val), " ", unique_node_id)
+    @dprintln(3,"mk_parfor_args_from_reduce. input array = ", input_array, " ", unique_node_id)
+    @dprintln(3,"mk_parfor_args_from_reduce. DomainLambda = ", dl, " ", unique_node_id)
+    @dprintln(3,"mk_parfor_args_from_reduce. red_dim = ", red_dim, " ", unique_node_id)
 
     # Verify the number of input arrays matches the number of input types in dl
     assert(length(dl.inputs) == 2)
 
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
-
     # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
     loopNests = Array(PIRLoopNest, red_dim > 0 ? 1 : num_dim_inputs) # only 1 loopNest if red_dim > 0
-    @dprintln(3, "num_dim_inputs = ", num_dim_inputs)
-    @dprintln(3, "length(loopNests) = ", length(loopNests))
+    @dprintln(3, "num_dim_inputs = ", num_dim_inputs, " ", unique_node_id)
+    @dprintln(3, "length(loopNests) = ", length(loopNests), " ", unique_node_id)
 
     # Create variables to use for the loop indices.
     parfor_index_syms::Array{Any,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
@@ -356,7 +356,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         push!(reduce_body, mk_assignment_expr(atm, mk_arrayslice(num_dim_inputs, input_array, parfor_index_syms, red_dim, true, state), state))
     end
 
-    @dprintln(3, "reduce_body = ", reduce_body)
+    @dprintln(3, "reduce_body = ", reduce_body, " ", unique_node_id)
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     indexed_array = atm
 
@@ -382,7 +382,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 input_array_rangeconds[i] = nothing
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
-                @dprintln(3, "mask_array = ", mask_array)
+                @dprintln(3, "mask_array = ", mask_array, " ", unique_node_id)
                 assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
                     mask_array = toRHSVar(mask_array, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
@@ -410,15 +410,15 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         end
     end
 
-    @dprintln(3,"mk_parfor_args_from_reduce loopNests = ", loopNests)
-    @dprintln(3,"mk_parfor_args_from_reduce input_array_rangeconds = ", input_array_rangeconds)
+    @dprintln(3,"mk_parfor_args_from_reduce loopNests = ", loopNests, " ", unique_node_id)
+    @dprintln(3,"mk_parfor_args_from_reduce input_array_rangeconds = ", input_array_rangeconds, " ", unique_node_id)
 
     assert(length(dl.outputs) == 1)
     out_type = dl.outputs[1]
-    @dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type)
+    @dprintln(3,"mk_parfor_args_from_reduce dl.outputs = ", out_type, " ", unique_node_id)
     reduction_output_name  = Symbol(string("parallel_ir_reduction_output_",unique_node_id))
     reduction_output_snode = CompilerTools.LambdaHandling.addLocalVariable(reduction_output_name, out_type, ISASSIGNED, state.LambdaVarInfo)
-    @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode)
+    @dprintln(3, "Creating variable to hold reduction output = ", reduction_output_snode, " ", unique_node_id)
     push!(post_statements, reduction_output_snode)
 
     # special handling when zero_val is a DomainLambda
@@ -434,6 +434,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     # call domain ir to generate most of the body of the function (except for saving the output)
     temp_body, reduce_func = translate_reduction_function(reduction_output_snode, atm, dl, state)
+    @dprintln(3, "mk_parfor_args_from_reduce translate_reduction_function output = ", temp_body, " reduce_func = ", reduce_func, " ", unique_node_id)
     out_body = [reduce_body; temp_body] 
 
     fallthroughLabel = next_label(state)
@@ -446,7 +447,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     if length(condExprs) > 0
         out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
     end
-    @dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body)
+    @dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body, " ", unique_node_id)
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
@@ -454,7 +455,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # Make sure that for reduce that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
-    @dprintln(2,rws)
+    @dprintln(2,rws, " ", unique_node_id)
 
     #  makeLhsPrivate(out_body, state)
 
@@ -473,7 +474,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         arrays_written_past_index,
         arrays_read_past_index)
 
-    @dprintln(3,"Lowered parallel IR = ", new_parfor)
+    @dprintln(3,"(Lowered parallel IR = ", new_parfor, ")) ", unique_node_id)
 
     [new_parfor]
 end
@@ -741,11 +742,14 @@ box_aset = false
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, with_indices, domain_oprs, state)
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
+
     # First arg is an array of input arrays to the mmap!
     len_input_arrays = length(input_arrays)
-    @dprintln(2,"mk_parfor_args_from_mmap!: # input arrays = ", len_input_arrays)
-    @dprintln(2,"input arrays: ", input_arrays)
-    @dprintln(2,"dl.inputs: ", dl.inputs)
+    @dprintln(2,"(mk_parfor_args_from_mmap!: # input arrays = ", len_input_arrays, " ", unique_node_id)
+    @dprintln(2,"input arrays: ", input_arrays, " " , unique_node_id)
+    @dprintln(2,"dl.inputs: ", dl.inputs, " " , unique_node_id)
     @assert len_input_arrays>0 "mmap! should have input arrays"
 
     # Handle range selector
@@ -756,9 +760,6 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     indexed_arrays = Any[ inputInfo[i].elementTemp for i = 1:length(inputInfo) ]
-
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
 
     num_dim_inputs = findSelectedDimensions(inputInfo, state)
     # Verify the number of input arrays matches the number of input types in dl
@@ -788,9 +789,9 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     #  CompilerTools.LambdaHandling.addLocalVariable(v, d.typ, d.flag, state.LambdaVarInfo)
     #end
 
-    @dprintln(3,"indexed_arrays = ", indexed_arrays)
+    @dprintln(3,"indexed_arrays = ", indexed_arrays, " " , unique_node_id)
     dl_inputs = with_indices ? vcat(indexed_arrays, parfor_index_syms) : indexed_arrays
-    @dprintln(3,"dl_inputs = ", dl_inputs)
+    @dprintln(3,"dl_inputs = ", dl_inputs, " " , unique_node_id)
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
@@ -805,7 +806,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     end
 
     out_body = [out_body; nested_body...]
-    @dprintln(2,"typeof(out_body) = ",typeof(out_body))
+    @dprintln(2,"typeof(out_body) = ",typeof(out_body), " " , unique_node_id)
     assert(isa(out_body,Array))
     oblen = length(out_body)
     # the last output of genBody is a tuple of the outputs of the mmap!
@@ -813,7 +814,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     assert(lbexpr.head == :tuple)
     assert(length(lbexpr.args) == length(dl.outputs))
 
-    @dprintln(2,"out_body is of length ",length(out_body))
+    @dprintln(2,"out_body is of length ",length(out_body), " " , unique_node_id)
     printBody(3,out_body)
 
     else_body = Any[]
@@ -852,14 +853,14 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         out_body = [ condExprs; out_body; GotoNode(fallthroughLabel); LabelNode(elseLabel); else_body; LabelNode(fallthroughLabel) ]
     end
 
-    @dprintln(3, "out_body = ", out_body)
+    @dprintln(3, "out_body = ", out_body, " " , unique_node_id)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
     rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
 
     # Make sure that for mmap! that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
-    @dprintln(2,rws)
+    @dprintln(2,rws, " " , unique_node_id)
 
     post_statements = create_mmap!_post_statements(input_arrays, dl, state)
 
@@ -877,7 +878,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         arrays_written_past_index,
         arrays_read_past_index)
 
-    @dprintln(3,"Lowered parallel IR = ", new_parfor)
+    @dprintln(3,"(Lowered parallel IR = ", new_parfor, ")) " , unique_node_id)
 
     [new_parfor]
 end
@@ -1085,10 +1086,13 @@ end
 The main routine that converts a mmap AST node to a parfor AST node.
 """
 function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, domain_oprs, state)
+    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
+    unique_node_id = get_unique_num()
+
     # First arg is an array of input arrays to the mmap
     len_input_arrays = length(input_arrays)
-    @dprintln(2,"mk_parfor_args_from_mmap: # input arrays = ", len_input_arrays)
-    @dprintln(2,"input arrays: ", input_arrays)
+    @dprintln(2,"(mk_parfor_args_from_mmap: # input arrays = ", len_input_arrays, " " , unique_node_id)
+    @dprintln(2,"input arrays: ", input_arrays, " " , unique_node_id)
     @assert len_input_arrays>0 "mmap should have input arrays"
 
     # Handle range selector
@@ -1096,20 +1100,17 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     for i = 1 : length(input_arrays)
         push!(inputInfo, get_mmap_input_info(input_arrays[i], state))
     end
-    @dprintln(3, "inputInfo = ", inputInfo)
+    @dprintln(3, "inputInfo = ", inputInfo, " " , unique_node_id)
 
     # Verify the number of input arrays matches the number of input types in dl
     assert(length(dl.inputs) == length(inputInfo))
 
     # Create an expression to access one element of this input array with index symbols parfor_index_syms
     indexed_arrays = Any[ inputInfo[i].elementTemp for i = 1:length(inputInfo) ]
-    @dprintln(3, "indexed_arrays = ", indexed_arrays)
-
-    # Get a unique number to embed in generated code for new variables to prevent name conflicts.
-    unique_node_id = get_unique_num()
+    @dprintln(3, "indexed_arrays = ", indexed_arrays, " " , unique_node_id)
 
     num_dim_inputs = findSelectedDimensions(inputInfo, state)
-    @dprintln(3, "num_dim_inputs = ", num_dim_inputs)
+    @dprintln(3, "num_dim_inputs = ", num_dim_inputs, " " , unique_node_id)
     loopNests = Array(PIRLoopNest, num_dim_inputs)
 
     # Create variables to use for the loop indices.
@@ -1158,7 +1159,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
     out_body = [out_body; nested_body...]
-    @dprintln(2,"typeof(out_body) = ",typeof(out_body))
+    @dprintln(2,"typeof(out_body) = ",typeof(out_body), " " , unique_node_id)
     assert(isa(out_body,Array))
     oblen = length(out_body)
     # the last output of genBody is a tuple of the outputs of the mmap
@@ -1166,7 +1167,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     assert(lbexpr.head == :tuple)
     assert(length(lbexpr.args) == length(dl.outputs))
 
-    @dprintln(2,"out_body is of length ",length(out_body), " ", out_body)
+    @dprintln(2,"out_body is of length ",length(out_body), " ", out_body, " " , unique_node_id)
 
     # To hold the sum of the sizes of the individual output array elements
     output_element_sizes = 0
@@ -1185,7 +1186,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     for i = 1:number_output_arrays
         new_array_name = Symbol(string("parallel_ir_new_array_name_", unique_node_id, "_", i))
         CompilerTools.LambdaHandling.addLocalVariable(new_array_name, Array{dl.outputs[i],num_dim_inputs}, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
-        @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i])
+        @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i], " " , unique_node_id)
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
         if num_dim_inputs == 1
             new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
@@ -1219,7 +1220,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         # keep the sum of the sizes of the individual output array elements
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)
     end
-    @dprintln(3,"out_body = ", out_body)
+    @dprintln(3,"out_body = ", out_body, " " , unique_node_id)
 
     # add conditional expressions to body if array elements are selected by bit arrays
     fallthroughLabel = next_label(state)
@@ -1233,7 +1234,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Make sure that for mmap that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
-    @dprintln(2,rws)
+    @dprintln(2,rws, " " , unique_node_id)
 
     post_statements = create_mmap_post_statements(new_array_symbols, dl, num_dim_inputs, state) 
 
@@ -1251,7 +1252,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         arrays_written_past_index,
         arrays_read_past_index)
 
-    @dprintln(3,"Lowered parallel IR = ", new_parfor)
+    @dprintln(3,"(Lowered parallel IR = ", new_parfor, ")) " , unique_node_id)
     [new_parfor]
 end
 
