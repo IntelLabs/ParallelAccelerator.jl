@@ -143,3 +143,56 @@ void cgen_cblas_sgemm(bool tA, bool tB, int m, int n, int k, float* A, int lda, 
 
 }
 
+
+
+void cgen_cblas_dgemv(bool tA, int m, int n, double* A, int lda, double* y, double* x)
+{
+    double tmp;
+    int i,j;
+#define Amat(I,J) A[(I) + (J)*(lda)]
+
+    if(!tA) {
+        for(i=0; i<m; i++) {
+            tmp = 0.0;
+            for(j=0; j<n; j++) {
+                tmp += Amat(i,j)*x[j];
+            }
+            y[i] = tmp;
+        }
+    } else{
+        for(i=0; i<n; i++) {
+            tmp = 0.0;
+            for(j=0; j<m; j++) {
+                tmp += Amat(j,i)*x[j];
+            }
+            y[i] = tmp;
+        }
+    }
+}
+
+
+void cgen_cblas_sgemv(bool tA, int m, int n, float* A, int lda, float* y, float* x)
+{
+    float tmp;
+    int i,j;
+#define Amat(I,J) A[(I) + (J)*(lda)]
+
+    if(!tA) {
+        for(i=0; i<m; i++) {
+            tmp = 0.0;
+            for(j=0; j<n; j++) {
+                tmp += Amat(i,j)*x[j];
+            }
+            y[i] = tmp;
+        }
+    } else{
+        for(i=0; i<n; i++) {
+            tmp = 0.0;
+            for(j=0; j<m; j++) {
+                tmp += Amat(j,i)*x[j];
+            }
+            y[i] = tmp;
+        }
+    }
+}
+

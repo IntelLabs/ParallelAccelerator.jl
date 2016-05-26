@@ -222,7 +222,7 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
-        #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $(from_expr(tB!='N',linfo)), $m,$n,$k, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, $(from_expr(C,linfo)).data, $ldc)"
+        s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
     end
 
     return s
