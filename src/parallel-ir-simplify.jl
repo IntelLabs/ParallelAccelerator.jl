@@ -455,13 +455,22 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                 data.transpose_map[transpose_var2] = original_matrix
             elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemm_wrapper!)
             #@bp
-                if haskey(data.transpose_map, rhs.args[5])
-                    rhs.args[5] = data.transpose_map[rhs.args[5]]
+                A = toLHSVar(rhs.args[5])
+                if haskey(data.transpose_map, A)
+                    rhs.args[5] = data.transpose_map[A]
                     rhs.args[3] = 'T'
                 end
-                if haskey(data.transpose_map, rhs.args[6])
-                    rhs.args[6] = data.transpose_map[rhs.args[6]]
+                B = toLHSVar(rhs.args[6])
+                if haskey(data.transpose_map, B)
+                    rhs.args[6] = data.transpose_map[B]
                     rhs.args[4] = 'T'
+                end
+            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemv!)
+            #@bp
+                A = toLHSVar(rhs.args[4])
+                if haskey(data.transpose_map, A)
+                    rhs.args[4] = data.transpose_map[A]
+                    rhs.args[3] = 'T'
                 end
             # replace arraysize() calls to the transposed matrix with original
             elseif isa(rhs,Expr) && rhs.head==:call && isBaseFunc(rhs.args[1], :arraysize)
