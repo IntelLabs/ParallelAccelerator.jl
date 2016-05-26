@@ -1045,6 +1045,8 @@ precompile(first_unless, (StepRange{Int64,Int64}, Int64))
 precompile(assign_gs4, (StepRange{Int64,Int64}, Int64))
 precompile(second_unless, (StepRange{Int64,Int64}, Int64))
 
+DEBUG_TASK_FUNCTIONS = false
+
 """
 This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
 One call of this routine handles one level of the loop nest.
@@ -1065,15 +1067,18 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
             if cu_res == nothing
                 @dprintln(3, "unmodified stmt = ", the_parfor.body[i])
             end
-#            if i <= 2
             if cu_res != nothing
                 push!(new_body, Expr(:boundscheck, false)) 
                 push!(new_body, deepcopy(cu_res))
                 push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
             else
-                push!(new_body, deepcopy(the_parfor.body[i]))
+                if isBareParfor(the_parfor.body[i])
+                    @dprintln(3,"Detected nested parfor.  Converting it to a loop.")
+                    recreateLoops(new_body, the_parfor.body[i], state, newLambdaVarInfo)
+                else
+                    push!(new_body, deepcopy(the_parfor.body[i]))
+                end
             end
-#            end
         end
     else
         # See the following example from the REPL for how Julia structures loop nests into labels and gotos.
@@ -1165,10 +1170,12 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         @dprintln(3, "gensym3_lhsvar  = ", gensym3_lhsvar)
         @dprintln(3, "gensym4_lhsvar  = ", gensym4_lhsvar)
 
-#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
-#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))))
-#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))))
-#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))))
+        if DEBUG_TASK_FUNCTIONS
+            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
+            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))))
+            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))))
+            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))))
+        end
 
         push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_lhsvar)), newLambdaVarInfo))
@@ -1176,14 +1183,18 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
         push!(new_body, LabelNode(label_after_first_unless))
 
-#        push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+        if DEBUG_TASK_FUNCTIONS
+           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+        end
 
         push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
         @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
         push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_lhsvar), newLambdaVarInfo))
 
-#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)))
+        if DEBUG_TASK_FUNCTIONS
+           push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)))
+        end
 
         push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), newLambdaVarInfo))
 
@@ -1194,7 +1205,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         push!(new_body, LabelNode(label_after_second_unless))
         push!(new_body, LabelNode(label_last))
     end
-#    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level))
+    if DEBUG_TASK_FUNCTIONS
+       push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level))
+    end
 end
 
 """
@@ -1360,25 +1373,42 @@ function parforToTask(parfor_index, bb_statements, body, state)
         push!(arg_types, ARG_OPT_ACCUMULATOR)
     end
 
+    # This is the LambdaVarInfo for the new task function.
     newLambdaVarInfo = CompilerTools.LambdaHandling.LambdaVarInfo()
 
+    # For each LHSVar used in the incoming code, which is relative to the original function,
+    # keep a mapping to its name (as a symbol), its type, and its slot number in the new function.
     oldToTaskMap = Dict{LHSVar,TaskFuncVariableInfo}()
+    # Same as above but only maps the LHSVar in the original function to the slot number in the new task function.
     oldToNewMap  = Dict{LHSVar,Any}()
 
+    # Add all the variables needs for the task function, both parameters and locals.
+    # These functions update the oldToTaskMap.
     addToTaskFunc!(in_array_names, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(modified_symbols, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(io_symbols, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(reduction_vars, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(locals, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
 
+    # Create the oldToNewMap as described above.
     for old in oldToTaskMap
         oldToNewMap[old[1]] = old[2].value
     end
 
+    # If this parfor has any reductions.
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE && length(the_parfor.reductions) > 0
+        # Create a tuple containing the types of the reduction variables.  This will go in the TaskInfo as ret_types.
         ret_tt = Expr(:tuple)
         ret_tt.args = map(x -> CompilerTools.LambdaHandling.getType(x.reductionVar, state.LambdaVarInfo), the_parfor.reductions)
         ret_types = eval(ret_tt)
+        # Here is how reductions overall work.
+        # Before calling a task function, the original function allocates a reduction array whose length is the number of threads.
+        # This array is passed to the task function.
+        # At the end of the loop, the task function writes its computed reduction value for just this thread into the reduction array
+        # index equal to this thread's threadid.
+        # After the task function completes, 
+
+        # Allocate the variable for the reduction_array parameter.
         red_array_LHSVar = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(:reduction_array, Array{Any,1}, CompilerTools.LambdaHandling.ISASSIGNED, newLambdaVarInfo))
     else
         ret_types = Void
@@ -1554,6 +1584,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
     reduction_func_name = string("")
     if length(the_parfor.reductions) > 0
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+            reduction_func_name = the_parfor.reductions
+if false
             reduction_func_name = string("reduction_func_",unique_node_id)
             fstring = string("function ", reduction_func_name, "(in1, in2)\n")
             temp_array = Any[]
@@ -1561,8 +1593,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
                 if isa(the_parfor.reductions[i].reductionFunc, DelayedFunc)
                     temp_red_value = Symbol(string(reduction_func_name,"_",i))
                     fstring = string(fstring, "$(temp_red_value) = in1[$(i)]\n")
-                    temp1 = callDelayedFuncWith(the_parfor.reductions[i].reductionFunc, temp_red_value, :(in2[$i]))
-                    for stmt in temp1
+                    for stmt in callDelayedFuncWith(the_parfor.reductions[i].reductionFunc, temp_red_value, :(in2[$i]))
                        fstring = string(fstring, "$(stmt)\n")
                     end
                     push!(temp_array, temp_red_value)
@@ -1593,6 +1624,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
             fparse  = parse(fstring)
             reduction_func_name = eval(fparse)
             @dprintln(3, "Reduction function for threads done.")
+end
         else
             # The name of the new reduction function.
             reduction_func_name = string("reduction_func_",unique_node_id)
