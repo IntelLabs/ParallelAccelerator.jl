@@ -596,14 +596,15 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 end
 
 
-function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol,Array{Any,1}}, state, newLambdaVarInfo, next_available_label)
+function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar,Array{Any,1}}, state, newLambdaVarInfo, next_available_label)
     # Only handle 1D loophead right now.
 
     if stmt.head == :loophead
         assert(length(stmt.args) == 3)
-        loop_id = stmt.args[1]
+        loop_id    = stmt.args[1]
         loop_start = stmt.args[2]
         loop_end   = stmt.args[3]
+        @dprintln(3, "recreateFromLoophead ", loop_id, " ", loop_start, " ", loop_end)
     else
         assert(length(stmt.args) == 1)
         loop_id = stmt.args[1]
@@ -615,7 +616,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
         return nothing
     end
 
-    assert(typeof(loop_id) == Symbol)
+    assert(isa(loop_id, LHSVar))
     uniq = get_unique_num()
 
     label_after_first_unless   = next_available_label
@@ -633,34 +634,34 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{Symbol
     gensym3_sym = Symbol(gensym3_var)
     gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
     gensym4_sym = Symbol(gensym4_var)
-    CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    gensym2_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo))
+    gensym0_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo))
+    pound_s1_lhsvar = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo))
+    gensym3_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo))
+    gensym4_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo))
 
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-    push!(new_body, mk_assignment_expr(toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
-    push!(new_body, mk_assignment_expr(toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, toRHSVar(gensym2_sym,Int64, state.LambdaVarInfo)), state))
-    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), Expr(:call, GlobalRef(base, :getfield), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), QuoteNode(:start)), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_second_unless))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_lhsvar)), state))
+    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), state))
+    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
     push!(new_body, LabelNode(label_after_first_unless))
 
 #       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-    push!(new_body, mk_assignment_expr(toRHSVar(gensym3_sym,Int64, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), state))
-    push!(new_body, mk_assignment_expr(toRHSVar(gensym4_sym,Int64, state.LambdaVarInfo), Expr(:call, mk_parallelir_ref(:assign_gs4), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), state))
-#    push!(new_body, mk_assignment_expr(this_nest.indexVariable, toRHSVar(gensym3_sym,Int64, state.LambdaVarInfo), state))
-    push!(new_body, mk_assignment_expr(toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo), toRHSVar(gensym4_sym,Int64, state.LambdaVarInfo), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), state))
+    push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_lhsvar), state))
+    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), state))
 
     for_loop_end = Any[]
 
     push!(for_loop_end, LabelNode(label_before_second_unless))
-    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), toRHSVar(gensym0_sym,StepRange{Int64,Int64}, state.LambdaVarInfo), toRHSVar(pound_s1_sym,Int64, state.LambdaVarInfo)), label_after_first_unless))
+    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
     push!(for_loop_end, LabelNode(label_after_second_unless))
     push!(for_loop_end, LabelNode(label_last))
 
@@ -741,18 +742,11 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         tup_lhsvar = toLHSVar(tup_rhsvar)
 
         if cur_task.ret_types != Void
-            red_array_var = string(Base.function_name(cur_task.task_func),"_red_array")
-            red_array_sym = Symbol(red_array_var)
-            red_array_typ = Array{Any,1}
-            red_array_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(red_array_sym, red_array_typ, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
-            red_array_lhsvar = toLHSVar(red_array_rhsvar)
-            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, red_array_typ, Expr(:call, GlobalRef(Base.Threads, :nthreads))), state))
+            red_array_lhsvar = createVarForTask(cur_task, "_red_array", Array{Any,1}, state)
+            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, Expr(:call, GlobalRef(Base.Threads, :nthreads))), state))
 
-            red_output_tuple_var = string(Base.function_name(cur_task.task_func),"_red_output_tuple")
-            red_output_tuple_sym = Symbol(red_output_tuple_var)
             red_output_tuple_typ = Tuple{cur_task.ret_types...}
-            red_output_tuple_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(red_output_tuple_sym, red_output_tuple_typ, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
-            red_output_tuple_lhsvar = toLHSVar(red_output_tuple_rhsvar)
+            red_output_tuple_lhsvar = createVarForTask(cur_task, "_red_output_tuple", red_output_tuple_typ, state)
         end
 
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
@@ -784,14 +778,40 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         end
         push!(new_body, insert_task_expr)
         if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(red_output_tuple_lhsvar), Expr(:call, mk_parallelir_ref(:run_reduction_func), deepcopy(red_array_lhsvar), cur_task.join_func), state))
+            red_loop_index_lhsvar = createVarForTask(cur_task, "_reduction_loop_index", Int, state)
+            unique_node_id = get_unique_num()
+
+            # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
             for l = 1:red_len
-                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base,:getfield), deepcopy(red_output_tuple_lhsvar), l), state))
+                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), state))
             end
+
+            push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, Expr(:call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
+            for l = 1:red_len
+                for stmt in callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
+                                                deepcopy(cur_task.reduction_vars[l].name), 
+                                                Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
+                    push!(new_body, stmt)
+                end
+            end
+
+            push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
+
+#            push!(new_body, mk_assignment_expr(deepcopy(red_output_tuple_lhsvar), Expr(:call, mk_parallelir_ref(:run_reduction_func), deepcopy(red_array_lhsvar), cur_task.join_func), state))
+#            for l = 1:red_len
+#                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base,:getfield), deepcopy(red_output_tuple_lhsvar), l), state))
+#            end
         end
     else
         throw(string("insert sequential task not implemented yet"))
     end
+end
+
+function createVarForTask(cur_task, suffix, typ, state)
+    new_var_name = string(Base.function_name(cur_task.task_func),suffix)
+    new_var_sym = Symbol(new_var_name)
+    new_var_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(new_var_sym, typ, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+    return toLHSVar(new_var_rhsvar)
 end
 
 function run_reduction_func(red_array :: Array{Any,1}, join_func)
@@ -836,9 +856,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
 
     @dprintln(3,"expanded_body = ")
-    for j = 1:length(body)
-        @dprintln(3, body[j])
-    end
+    printBody(3, body)
 
     @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
     new_lives = CompilerTools.LivenessAnalysis.from_lambda(state.LambdaVarInfo, body, pir_live_cb, state.LambdaVarInfo)
@@ -862,12 +880,13 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         body = top_level_mk_task_graph(body, state, new_lives, loop_info)
     end  # end of task graph formation section
 
+    @dprintln(3,"body after mk_task_graph = ")
+    printBody(3, body)
     
     expanded_body = Any[]
-
     
     max_label   = getMaxLabel(0, body)
-    LoopEndDict = Dict{Symbol,Array{Any,1}}()
+    LoopEndDict = Dict{LHSVar,Array{Any,1}}()
 
     for i = 1:length(body)
         @dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
