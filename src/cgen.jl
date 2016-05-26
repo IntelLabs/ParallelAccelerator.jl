@@ -2534,7 +2534,7 @@ end
 
 function set_includes(ast)
     s = string(ast)
-    if contains(s,"gemm_wrapper!")
+    if contains(s,"gemm_wrapper!") || contains(s,"gemv!") 
         set_include_blas(true)
     end
     if contains(s,"rand!") || contains(s,"randn!")
