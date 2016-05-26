@@ -2631,40 +2631,42 @@ end
 A routine similar to the main parallel IR entry put but designed to process DomainLambda.
 """
 function nested_function_exprs(domain_lambda, out_state)
-    @dprintln(2,"domain_lambda = ", domain_lambda)
+    unique_node_id = get_unique_num()
+
+    @dprintln(2,"domain_lambda = ", domain_lambda, " " , unique_node_id)
     LambdaVarInfo = domain_lambda.linfo
     body = domain_lambda.body
-    @dprintln(1,"Starting nested_function_exprs. body = ", body)
+    @dprintln(1,"Starting nested_function_exprs. body = ", body, " " , unique_node_id)
 
     start_time = time_ns()
 
-    @dprintln(2,"nested_function_exprs out_state.max_label = ", out_state.max_label)
+    @dprintln(2,"nested_function_exprs out_state.max_label = ", out_state.max_label, " " , unique_node_id)
     (body, max_label) = integrateLabels(body, out_state.max_label) 
-    @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body)
+    @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body, " " , unique_node_id)
 
     # Re-create the body minus any dead basic blocks.
     cfg = CompilerTools.CFGs.from_lambda(body)
     body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
-    @dprintln(1,"AST after dead blocks removed, body = ", body)
+    @dprintln(1,"AST after dead blocks removed, body = ", body, " " , unique_node_id)
 
-    @dprintln(1,"Starting liveness analysis.")
+    @dprintln(1,"Starting liveness analysis.", " " , unique_node_id)
     lives = computeLiveness(body, LambdaVarInfo)
-    @dprintln(1,"Finished liveness analysis.")
+    @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
 
-    @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
+    @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time), " " , unique_node_id)
 
     mtm_start = time_ns()
 
     if mmap_to_mmap! != 0
-        @dprintln(1, "starting mmap to mmap! transformation.")
+        @dprintln(1, "starting mmap to mmap! transformation.", " " , unique_node_id)
         uniqSet = AliasAnalysis.from_lambda(LambdaVarInfo, body, lives, pir_alias_cb, nothing)
-        @dprintln(3, "uniqSet = ", uniqSet)
+        @dprintln(3, "uniqSet = ", uniqSet, " " , unique_node_id)
         mmapToMmap!(LambdaVarInfo, body, lives, uniqSet)
-        @dprintln(1, "Finished mmap to mmap! transformation.")
-        @dprintln(3, "body = ", body)
+        @dprintln(1, "Finished mmap to mmap! transformation.", " " , unique_node_id)
+        @dprintln(3, "body = ", body, " " , unique_node_id)
     end
 
-    @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
+    @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start), " " , unique_node_id)
 
     # We pass only the non-array params to the rearrangement code because if we pass array params then
     # the code will detect statements that depend only on array params and move them to the top which
@@ -2676,7 +2678,7 @@ function nested_function_exprs(domain_lambda, out_state)
             push!(non_array_params, lookupLHSVarByName(param, LambdaVarInfo))
         end
     end
-    @dprintln(3,"Non-array params = ", non_array_params)
+    @dprintln(3,"Non-array params = ", non_array_params, " " , unique_node_id)
 
     # Find out max_label.
     assert(isa(body, Expr) && is(body.head, :body))
@@ -2688,51 +2690,51 @@ function nested_function_exprs(domain_lambda, out_state)
     # import correlations of escaping variables to enable optimizations
     setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
-    @dprintln(3,"Creating nested equivalence classes. Imported correlations:")
+    @dprintln(3,"Creating nested equivalence classes. Imported correlations:", " " , unique_node_id)
     print_correlations(3, new_vars)
     genEquivalenceClasses(LambdaVarInfo, body, new_vars)
-    @dprintln(3,"Done creating nested equivalence classes.")
+    @dprintln(3,"Done creating nested equivalence classes.", " " , unique_node_id)
     print_correlations(3, new_vars)
-    @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+    @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start), " " , unique_node_id)
 
     rep_start = time_ns()
 
     changed = true
     while changed
-        @dprintln(1,"Removing statement with no dependencies from the AST with parameters") 
+        @dprintln(1,"Removing statement with no dependencies from the AST with parameters"), " " , unique_node_id 
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         body = AstWalk(body, remove_no_deps, rnd_state)
-        @dprintln(3,"body after no dep stmts removed = ", body)
+        @dprintln(3,"body after no dep stmts removed = ", body, " " , unique_node_id)
 
-        @dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
+        @dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps, " " , unique_node_id)
 
-        @dprintln(1,"Adding statements with no dependencies to the start of the AST.")
+        @dprintln(1,"Adding statements with no dependencies to the start of the AST.", " " , unique_node_id)
         body = CompilerTools.LambdaHandling.prependStatements(body, rnd_state.top_level_no_deps)
-        @dprintln(3,"body after no dep stmts re-inserted = ", body)
+        @dprintln(3,"body after no dep stmts re-inserted = ", body, " " , unique_node_id)
 
-        @dprintln(1,"Re-starting liveness analysis.")
+        @dprintln(1,"Re-starting liveness analysis.", " " , unique_node_id)
         lives = computeLiveness(body, LambdaVarInfo)
-        @dprintln(1,"Finished liveness analysis.")
+        @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
 
         changed = rnd_state.change
     end
 
-    @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+    @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start), " " , unique_node_id)
 
     processAndUpdateBody(body, removeNothingStmts, nothing)
-    @dprintln(1,"Re-starting liveness analysis.")
+    @dprintln(1,"Re-starting liveness analysis.", " " , unique_node_id)
     lives = computeLiveness(body, LambdaVarInfo)
-    @dprintln(1,"Finished liveness analysis.")
+    @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
 
-    @dprintln(1,"Doing conversion to parallel IR.")
-    @dprintln(3,"body = ", body)
+    @dprintln(1,"Doing conversion to parallel IR.", " " , unique_node_id)
+    @dprintln(3,"body = ", body, " " , unique_node_id)
 
     new_vars.block_lives = lives
 
     # Do the main work of Parallel IR.
     body = get_one(from_expr(LambdaVarInfo, body, 1, new_vars, false))
 
-    @dprintln(3,"Final ParallelIR = ", body)
+    @dprintln(3,"Final ParallelIR = ", body, " " , unique_node_id)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     out_state.max_label = new_vars.max_label
@@ -3625,7 +3627,7 @@ function AstWalkCallback(x :: Expr, dw :: DirWalk, top_level_number :: Int64, is
         cur_parfor = args[1]
         for i = 1:length(cur_parfor.loopNests)
             x.args[1].loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
-            AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1), dw.callback, dw.cbdata)
+            #AstWalk(mk_assignment_expr(cur_parfor.loopNests[i].indexVariable, 1, Int), dw.callback, dw.cbdata)
             x.args[1].loopNests[i].lower = AstWalk(cur_parfor.loopNests[i].lower, dw.callback, dw.cbdata)
             x.args[1].loopNests[i].upper = AstWalk(cur_parfor.loopNests[i].upper, dw.callback, dw.cbdata)
             x.args[1].loopNests[i].step  = AstWalk(cur_parfor.loopNests[i].step, dw.callback, dw.cbdata)
