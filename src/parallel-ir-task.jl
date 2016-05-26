@@ -992,6 +992,7 @@ end
 function boxArraysetValueWalk(x::Expr, state, top_level_number, is_top_level, read)
     if x.head == :call
         if isBaseFunc(x.args[1], :unsafe_arrayset) || isBaseFunc(x.args[1], :arrayset)
+            @dprintln(3, "boxArraysetValueWalk x = ", x)
             vtyp = CompilerTools.LambdaHandling.getType(x.args[3], state)
             x.args[3] = Expr(:call, GlobalRef(Base, :box), vtyp, x.args[3])
             return x
