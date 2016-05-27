@@ -2290,7 +2290,7 @@ end
 """
 Entry point of DomainIR optimization pass.
 """
-function from_expr(function_name::AbstractString, cur_module :: Module, ast)
+function from_expr(cur_module :: Module, ast)
     assert(isfunctionhead(ast))
     linfo, body = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast) 
     return linfo, body

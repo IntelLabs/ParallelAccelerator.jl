@@ -174,8 +174,7 @@ function toDomainIR(func :: GlobalRef, ast, signature :: Tuple)
     exit(-1)
   end
   dir_start = time_ns()
-  fname = bytestring(convert(Cstring, func.name))
-  code = DomainIR.from_expr(fname, func.mod, ast)
+  code = DomainIR.from_expr(func.mod, ast)
   #code = LambdaVarInfoToLambda(linfo, body, DomainIR.AstWalk)
   dir_time = time_ns() - dir_start
   @dprintln(3, "domain code = ", code)
