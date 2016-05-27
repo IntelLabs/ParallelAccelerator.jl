@@ -68,8 +68,16 @@ end
 
 function pattern_match_call_throw(fun::GlobalRef, input, linfo)
     s = ""
-    if fun.name==:throw
-        s = "throw(\"Julia throw() called.\")"
+    if fun.name==:throw || fun.name==:error
+        s = "throw(\"Julia throw() or error() called.\")"
+    end
+    return s
+end
+
+function pattern_match_call_throw(fun::Symbol, input, linfo)
+    s = ""
+    if fun==:throw || fun==:error
+        s = "throw(\"Julia throw() or error() called.\")"
     end
     return s
 end
