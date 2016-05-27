@@ -420,10 +420,10 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   end
 
   @dprintln(2, "Starting accelerate for ", func, " with signature ", signature)
-  if !isgeneric(func)
-    @dprintln(1, "method ", func, " is not generic.")
-    return nothing
-  end
+  #if !isgeneric(func)
+  #  @dprintln(1, "method ", func, " is not generic.")
+  #  return nothing
+  #end
   m = methods(func, signature)
   if length(m) < 1
     error("Method for ", func, " with signature ", signature, " is not found")

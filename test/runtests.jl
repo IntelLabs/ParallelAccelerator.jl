@@ -43,21 +43,36 @@ include("complex.jl")
 include("print.jl")
 include("strings.jl")
 include("test_lr.jl")
+include("gemv_test.jl")
+include("transpose_test.jl")
 
 # Examples.  We're not including them all here, because it would take
 # too long, but just including black-scholes and opt-flow seems like a
 # good compromise that exercises much of ParallelAccelerator.
 
+module TestBlackScholes
+using Base.Test
 include("../examples/black-scholes/black-scholes.jl")
 # black-scholes should have only 1 allocation and 1 parfor after optimization
 @test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
+end
 
+module TestPi
+using Base.Test
 include("../examples/pi/pi.jl")
 # pi should have no allocation and 1 parfor after optimization
 @test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
+end
 
+module TestOptFlow
+using Base.Test
 include("../examples/opt-flow/opt-flow.jl")
+end
+
+module TestKMeans
+using Base.Test
 include("../examples/k-means/k-means.jl")
+end
 
 # Delete file left behind by opt-flow.
 dir = pwd()

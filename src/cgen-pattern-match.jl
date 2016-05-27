@@ -155,6 +155,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
         return ""
     end
     s = "$(from_expr(C,linfo)); "
+    # GEMM wants dimensions after possible transpose
     m = (tA == 'N') ? from_arraysize(A,1,linfo) : from_arraysize(A,2,linfo) 
     k = (tA == 'N') ? from_arraysize(A,2,linfo) : from_arraysize(A,1,linfo) 
     n = (tB == 'N') ? from_arraysize(B,2,linfo) : from_arraysize(B,1,linfo)
@@ -186,6 +187,166 @@ function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::
     return ""
 end
 
+function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar, x::RHSVar,linfo)
+    if fun.mod!=Base.LinAlg || fun.name!=:gemv!
+        return ""
+    end
+    cblas_fun = ""
+    typ = eltype(getSymType(A, linfo))
+    
+    if typ==Float32
+        cblas_fun = "cblas_sgemv"
+    elseif typ==Float64
+        cblas_fun = "cblas_dgemv"
+    else
+        return ""
+    end
+    
+    s = "$(from_expr(y,linfo)); "
+
+    m = from_arraysize(A,1,linfo) 
+    n = from_arraysize(A,2,linfo)
+
+
+    lda = from_arraysize(A,1,linfo)
+    
+    CblasNoTrans = 111 
+    CblasTrans = 112 
+    _tA = tA == 'N' ? CblasNoTrans : CblasTrans
+    CblasColMajor = 102
+
+
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),$m,$n, 1.0,
+        $(from_expr(A,linfo)).data, $lda, $(from_expr(x,linfo)).data, 1, 0.0, $(from_expr(y,linfo)).data, 1)"
+    else
+        println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
+    end
+
+    return s
+end
+
+function pattern_match_call_gemv(fun::ANY, C::ANY, tA::ANY, A::ANY, B::ANY,linfo)
+    return ""
+end
+
+function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
+    if fun.mod!=Base.LinAlg || fun.name!=:chol!
+        return ""
+    end
+
+    cblas_fun = ""
+    typ = eltype(getSymType(A, linfo))
+    
+    if typ==Float32
+        lapack_fun = "LAPACKE_spotrf"
+    elseif typ==Float64
+        lapack_fun = "LAPACKE_dpotrf"
+    else
+        return ""
+    end
+    
+    s = ".data=$(from_expr(A,linfo)); "
+ 
+    n = from_arraysize(A,1,linfo)
+
+
+    lda = from_arraysize(A,1,linfo)
+    
+
+    LAPACK_COL_MAJOR = 102
+    uplo = vUL==Val{:U} ? 'U' : 'L'
+
+
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', $n, $(from_expr(A,linfo)).data, $lda)"
+    else
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
+    end
+
+    return s
+end
+
+function pattern_match_call_chol(fun::ANY, C::ANY, tA::ANY, linfo)
+    return ""
+end
+
+function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
+    call = ""
+    if rhs.head==:call && length(rhs.args)==3
+        call *= pattern_match_call_chol(rhs.args[1],rhs.args[2],rhs.args[3],linfo)
+    end
+    if call!=""
+        return from_expr(lhs,linfo)*call
+    end
+    return ""
+end
+
+function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
+    return ""
+end
+
+function pattern_match_call_transpose(fun::GlobalRef, B::RHSVar, A::RHSVar, linfo)
+    if fun.mod!=Base || fun.name!=:transpose!
+        return ""
+    end
+    blas_fun = ""
+    typ = eltype(getSymType(A, linfo))
+    
+    if typ==Float32
+        blas_fun = "somatcopy"
+    elseif typ==Float64
+        blas_fun = "domatcopy"
+    else
+        return ""
+    end
+    
+    s = "$(from_expr(B,linfo)); "
+
+    m = from_arraysize(A,1,linfo) 
+    n = from_arraysize(A,2,linfo)
+
+    lda = from_arraysize(A,1,linfo)
+    ldb = from_arraysize(A,2,linfo)
+
+
+    if mkl_lib!=""
+        s *= "mkl_$(blas_fun)('C','T',$m,$n, 1.0,
+        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+    else
+        #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.""")
+        
+        s *= """
+                for(int i=0; i<$m; i++) {
+                    for(int j=0; j<$n; j++) {
+                       $(from_expr(B,linfo)).data[j+$ldb*i] = $(from_expr(A,linfo)).data[i+$lda*j];
+                    }
+                }
+             """
+    end
+
+    return s
+end
+
+function pattern_match_call_transpose(fun::ANY, C::ANY, A::ANY,linfo)
+    return ""
+end
+
+function pattern_match_call_linalgtypeof(fun::GlobalRef, C::ANY,linfo)
+    if fun.mod==Base.LinAlg && fun.name==:typeof
+        return " "
+    end
+    return ""
+end
+
+function pattern_match_call_linalgtypeof(fun::ANY, C::ANY,linfo)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
@@ -194,15 +355,21 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     if(length(ast)==2)
         s = pattern_match_call_throw(ast[1],ast[2],linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
+        s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
     end
     
     if(length(ast)==3) # randn! call has 3 args
         s *= pattern_match_call_randn(ast[1],ast[2],ast[3],linfo)
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
+        s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
+    end
+    # gemv calls have 5 args
+    if(length(ast)==5)
+        s *= pattern_match_call_gemv(ast[1],ast[2],ast[3],ast[4],ast[5],linfo)
     end
     # gemm calls have 6 args
     if(length(ast)==6)

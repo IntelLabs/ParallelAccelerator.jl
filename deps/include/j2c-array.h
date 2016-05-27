@@ -1067,6 +1067,11 @@ class ASCIIString {
          
     ASCIIString() { }
 
+    ASCIIString(const char* s, int64_t string_len) {
+        data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
+        strncpy((char *)data.data, s, string_len);
+    }
+
     ASCIIString(const char* s) {
         uint64_t string_len = strlen(s);
         data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
@@ -1126,5 +1131,26 @@ void delete_ascii_string(ASCIIString *s)
 {
     delete(s);
 }
+
+/* compatibility fix for Julia 0.5 function to handle string append! */
+static void jl_array_grow_end(j2c_array<uint8_t> &a, int64_t size_inc) 
+{
+    assert(a.num_dim == 1);
+    uint8_t *old_data = a.data;
+    int old_len = a.ARRAYLEN(); 
+    int len = a.ARRAYLEN() + size_inc;
+    uint8_t *new_data = j2c_array_copy<uint8_t>::alloc_elements(len);
+    memcpy((void*)new_data, (void*)old_data, old_len * sizeof(uint8_t));
+    a.decrement();
+    a.data = new_data;
+    a.refcount = new unsigned;
+    *(a.refcount) = 1;
+    a.dims[0] = len;
+}
  
+static ASCIIString jl_pchar_to_string(uint8_t *ptr, int64_t len)
+{
+    return ASCIIString((char*)ptr, len);
+}
+
 #endif /* PSE_ARRAY_H_ */

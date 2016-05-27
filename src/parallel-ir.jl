@@ -956,7 +956,12 @@ function getPrivateSetInner(x::Expr, state :: PrivateSetData, top_level_number :
             end
             push!(state.privates, lhs)
         end
+    elseif isBareParfor(x)
+        for ln = x.args[1].loopNests
+            push!(state.privates, ln.indexVariable)
+        end
     end
+
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 

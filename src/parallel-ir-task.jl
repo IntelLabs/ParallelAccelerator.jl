@@ -530,7 +530,7 @@ function estimateInstrCount(ast::Union{GlobalRef,GotoNode},
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function estimateInstrCount(ast::Union{QuoteNode,ASCIIString,Tuple,NewvarNode},
+function estimateInstrCount(ast::Union{QuoteNode,AbstractString,Tuple,NewvarNode},
                             state :: eic_state,
                             top_level_number,
                             is_top_level,
