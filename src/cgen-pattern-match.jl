@@ -337,7 +337,16 @@ function pattern_match_call_transpose(fun::ANY, C::ANY, A::ANY,linfo)
     return ""
 end
 
+function pattern_match_call_linalgtypeof(fun::GlobalRef, C::ANY,linfo)
+    if fun.mod==Base.LinAlg && fun.name==:typeof
+        return " "
+    end
+    return ""
+end
 
+function pattern_match_call_linalgtypeof(fun::ANY, C::ANY,linfo)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
@@ -346,6 +355,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     if(length(ast)==2)
         s = pattern_match_call_throw(ast[1],ast[2],linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
+        s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
     end
     
     if(length(ast)==3) # randn! call has 3 args
