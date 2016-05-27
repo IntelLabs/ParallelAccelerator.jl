@@ -24,6 +24,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdio.h>
+#include <math.h>
 
 void cgen_cblas_dgemm(bool tA, bool tB, int m, int n, int k, double* A, int lda, double* B, int ldb, double* C, int ldc)
 {
@@ -195,4 +196,39 @@ void cgen_cblas_sgemv(bool tA, int m, int n, float* A, int lda, float* y, float*
         }
     }
 }
+
+
+
+double cgen_cblas_dasum(int n, double* y)
+{
+    double tmp = 0.0;
+    for(int i=0; i<n; i++)
+        tmp += y[i];
+    return tmp;
+}
+
+float cgen_cblas_sasum(int n, float* y)
+{
+    float tmp = 0.0;
+    for(int i=0; i<n; i++)
+        tmp += y[i];
+    return tmp;
+}
+
+double cgen_cblas_dnrm2(int n, double* y)
+{
+    double tmp = 0.0;
+    for(int i=0; i<n; i++)
+        tmp += y[i]*y[i];
+    return sqrt(tmp);
+}
+
+float cgen_cblas_snrm2(int n, float* y)
+{
+    float tmp = 0.0;
+    for(int i=0; i<n; i++)
+        tmp += y[i]*y[i];
+    return sqrt(tmp);
+}
+
 

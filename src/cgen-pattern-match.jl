@@ -356,6 +356,51 @@ function pattern_match_call_linalgtypeof(fun::ANY, C::ANY,linfo)
     return ""
 end
 
+function pattern_match_call_vecnorm(fun::GlobalRef, y::RHSVar, p::Int,linfo)
+    if fun.mod!=Base.LinAlg || fun.name!=:vecnorm
+        return ""
+    end
+    cblas_fun = ""
+    typ = eltype(getSymType(y, linfo))
+    
+    if typ==Float32
+        cblas_fun = "cblas_s"
+    elseif typ==Float64
+        cblas_fun = "cblas_d"
+    else
+        return ""
+    end
+    
+    if p==1
+        cblas_fun *= "asum"
+    elseif p==2
+        cblas_fun *= "nrm2"
+    else
+        println("norm ",p)
+        error("vector norm not support")
+    end
+    
+    s = ""
+
+    n = from_arraysize(y,1,linfo)
+    
+    
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(cblas_fun)( $n, $(from_expr(y,linfo)).data, 1)"
+    else
+        #println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        s *= "cgen_$(cblas_fun)( $n, $(from_expr(y,linfo)).data)"
+    end
+
+    return s
+end
+
+function pattern_match_call_vecnorm(fun::ANY, C::ANY, tA::ANY,linfo)
+    return ""
+end
+
+
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
     s = ""
@@ -371,6 +416,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
+        s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
