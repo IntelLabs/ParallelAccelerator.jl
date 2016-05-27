@@ -103,7 +103,7 @@ end
 function isDeadCall(rhs::Expr, live_out)
     if rhs.head==:call
         if in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
-            println(rhs)
+            @dprintln(3, rhs)
             return true
         elseif in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
                 !in(toLHSVar(rhs.args[2]), live_out)
