@@ -994,8 +994,16 @@ function boxArraysetValueWalk(x::Expr, state, top_level_number, is_top_level, re
         if isBaseFunc(x.args[1], :unsafe_arrayset) || isBaseFunc(x.args[1], :arrayset)
             @dprintln(3, "boxArraysetValueWalk x = ", x)
             vtyp = CompilerTools.LambdaHandling.getType(x.args[3], state)
-            x.args[3] = Expr(:call, GlobalRef(Base, :box), vtyp, x.args[3])
-            return x
+            @dprintln(3, "x.args[3] = ", x.args[3], " type = ", vtyp)
+
+            if vtyp <: Complex
+                #(Base.arrayset)(x,$(Expr(:new, Complex{Float64}, :((Core.getfield)(z,:re)::Float64), :((Core.getfield)(z,:im)::Float64))),y)::Array{Complex{Float64},1}
+                @dprintln(3, "vtyp is Complex")
+                x.args[3] = Expr(:new, vtyp, Expr(:call, GlobalRef(Core,:getfield), deepcopy(x.args[3]), QuoteNode(:re)), Expr(:call, GlobalRef(Core,:getfield), deepcopy(x.args[3]), QuoteNode(:im)))
+            else
+                x.args[3] = Expr(:call, GlobalRef(Base, :box), vtyp, x.args[3])
+                return x
+            end
         end
     end
 
@@ -1071,6 +1079,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
             if cu_res != nothing
                 push!(new_body, Expr(:boundscheck, false)) 
                 push!(new_body, deepcopy(cu_res))
+                if DEBUG_TASK_FUNCTIONS
+                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                end
                 push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
             else
                 if isBareParfor(the_parfor.body[i])
@@ -1078,6 +1089,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                     recreateLoops(new_body, the_parfor.body[i], state, newLambdaVarInfo)
                 else
                     push!(new_body, deepcopy(the_parfor.body[i]))
+                    if DEBUG_TASK_FUNCTIONS
+                        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                    end
                 end
             end
         end
@@ -1313,6 +1327,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     for i in the_parfor.reductions
         push!(reduction_vars, toLHSVar(i.reductionVar))
     end
+    @dprintln(3,"reduction_vars = ", reduction_vars, " type = ", typeof(reduction_vars))
 
     # The call to getIO determines which variables are live at input to this parfor, live at output from this parfor
     # or just used exclusively in the parfor.  These latter become local variables.
@@ -1324,9 +1339,12 @@ function parforToTask(parfor_index, bb_statements, body, state)
     in_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in in_vars]
     out_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in out]
     locals_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in locals]
+    reduction_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in reduction_vars]
     @dprintln(3,"in_vars = ", in_vars_sym)
     @dprintln(3,"out_vars = ", out_vars_sym)
     @dprintln(3,"local_vars = ", locals_vars_sym)
+    @dprintln(3,"reduction_vars = ", reduction_vars_sym)
+    @dprintln(3,"the_parfor.rws = ", the_parfor.rws)
 
     # Convert Set to Array
     in_array_names   = LHSVar[]
@@ -1491,7 +1509,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3, "Before ParforBoxify")
     @dprintln(3, the_parfor)
 
-    ParforBoxify!(the_parfor, newLambdaVarInfo)
+#    ParforBoxify!(the_parfor, newLambdaVarInfo)
 
     @dprintln(3, "Before loopNest adjustment to range")
     @dprintln(3, the_parfor)
