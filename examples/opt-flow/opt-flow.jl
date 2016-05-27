@@ -27,7 +27,7 @@ using ParallelAccelerator
 using DocOpt
 
 include("image.jl")
-using Image
+using .Image
 
 #ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
@@ -196,8 +196,8 @@ Assumes that image files are in the same directory as opt-flow.jl.
 
     images_dir = dirname(@__FILE__)
 
-    filenames = UTF8String[ string(fname_prefix, string(i < 10 ? "0" : "", i), fname_suffix) for i = 1:nframes ]
-    filepaths = UTF8String[ joinpath(images_dir, i) for i in filenames ]
+    filenames = [ string(fname_prefix, string(i < 10 ? "0" : "", i), fname_suffix) for i = 1:nframes ]
+    filepaths = [ joinpath(images_dir, i) for i in filenames ]
 
     println("nframes = ", nframes)
     assert(nframes > 1)
