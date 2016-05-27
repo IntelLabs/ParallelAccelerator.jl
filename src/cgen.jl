@@ -40,7 +40,7 @@ using Core: IntrinsicFunction
 import ..ParallelIR
 import ..ParallelIR.DelayedFunc
 import CompilerTools
-export setvectorizationlevel, from_root, writec, compile, link, set_include_blas
+export setvectorizationlevel, from_root, writec, compile, link, set_include_blas, set_include_lapack
 import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.H5SizeArr_t
 import ParallelAccelerator.SizeArr_t
@@ -200,6 +200,11 @@ function set_include_blas(val::Bool=true)
     global include_blas = val
 end
 
+include_lapack = false
+function set_include_lapack(val::Bool=true)
+    global include_lapack = val
+end
+
 # include random number generator?
 include_rand = false
 
@@ -342,7 +347,7 @@ end
 function from_includes()
     packageroot = getPackageRoot()
     blas_include = ""
-    if include_blas == true 
+    if include_blas == true
         libblas = Base.libblas_name
         if mkl_lib!=""
             blas_include = "#include <mkl.h>\n"
@@ -350,6 +355,11 @@ function from_includes()
             blas_include = "#include <cblas.h>\n"
         else
             blas_include = "#include \"$packageroot/deps/include/cgen_mmul.h\"\n"
+        end
+    end
+    if include_lapack == true
+        if mkl_lib!=""
+            blas_include = "#include <mkl.h>\n"
         end
     end
     s = ""
@@ -613,6 +623,12 @@ function from_assignment(args::Array{Any,1}, linfo)
     end
 
     @dprintln(3,"external pattern match returned nothing")
+
+    # hack to convert triangular matrix output of cholesky
+    chol_match = pattern_match_assignment_chol(lhs, rhs, linfo)
+    if chol_match!=""
+        return chol_match
+    end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs, linfo)
     if match_hvcat!=""
@@ -2578,6 +2594,9 @@ function set_includes(ast)
     if contains(s,"gemm_wrapper!") || contains(s,"gemv!") 
         set_include_blas(true)
     end
+    if contains(s,"LinAlg.chol") 
+        set_include_lapack(true)
+    end
     if contains(s,"rand!") || contains(s,"randn!")
         global include_rand = true
     end
@@ -2975,6 +2994,11 @@ function getLinkCommand(outfile_name, lib, flags=[])
             push!(linkLibs,"-lopenblas")
         elseif sys_blas==1
             push!(linkLibs,"-lblas")
+        end
+    end
+    if include_lapack==true
+        if mkl_lib!=""
+            push!(linkLibs,"-lmkl_rt")
         end
     end
     if USE_HDF5==1

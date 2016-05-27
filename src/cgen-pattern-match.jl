@@ -220,7 +220,7 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),$m,$n, 1.0,
         $(from_expr(A,linfo)).data, $lda, $(from_expr(x,linfo)).data, 1, 0.0, $(from_expr(y,linfo)).data, 1)"
     else
-        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
     end
@@ -229,6 +229,64 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
 end
 
 function pattern_match_call_gemv(fun::ANY, C::ANY, tA::ANY, A::ANY, B::ANY,linfo)
+    return ""
+end
+
+function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
+    if fun.mod!=Base.LinAlg || fun.name!=:chol!
+        return ""
+    end
+
+    cblas_fun = ""
+    typ = eltype(getSymType(A, linfo))
+    
+    if typ==Float32
+        lapack_fun = "LAPACKE_spotrf"
+    elseif typ==Float64
+        lapack_fun = "LAPACKE_dpotrf"
+    else
+        return ""
+    end
+    
+    s = ".data=$(from_expr(A,linfo)); "
+ 
+    n = from_arraysize(A,1,linfo)
+
+
+    lda = from_arraysize(A,1,linfo)
+    
+
+    LAPACK_COL_MAJOR = 102
+    uplo = vUL==Val{:U} ? 'U' : 'L'
+
+
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', $n, $(from_expr(A,linfo)).data, $lda)"
+    else
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
+    end
+
+    return s
+end
+
+function pattern_match_call_chol(fun::ANY, C::ANY, tA::ANY, linfo)
+    return ""
+end
+
+function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
+    call = ""
+    if rhs.head==:call && length(rhs.args)==3
+        call *= pattern_match_call_chol(rhs.args[1],rhs.args[2],rhs.args[3],linfo)
+    end
+    if call!=""
+        return from_expr(lhs,linfo)*call
+    end
+    return ""
+end
+
+function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
     return ""
 end
 
