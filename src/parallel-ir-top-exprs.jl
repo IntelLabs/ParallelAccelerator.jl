@@ -702,7 +702,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         end
         @dprintln(3, "cstr_params = ", cstr_params)
         cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
-        whole_range_expr = mk_assignment_expr(range_lhsvar, TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
+        whole_range_expr = mk_assignment_expr(deepcopy(range_lhsvar), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
         @dprintln(3,"whole_range_expr = ", whole_range_expr)
         push!(new_body, whole_range_expr)
 
@@ -754,16 +754,16 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         call_tup = eval(call_tup_expr)
         @dprintln(3, "call_tup = ", call_tup)
         if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, range_lhsvar, real_args_build..., deepcopy(red_array_lhsvar)), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
         else
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, range_lhsvar, real_args_build...), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if false
             insert_task_expr = TypedExpr(Any,
                                          :call,
                                          cur_task.task_func,
-                                         range_lhsvar,
+                                         deepcopy(range_lhsvar),
                                          real_args_build...)
         else
             svec_args = mk_svec_expr(Any)
