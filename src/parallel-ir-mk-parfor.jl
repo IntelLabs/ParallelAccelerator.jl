@@ -214,7 +214,9 @@ function mk_arrayset1(num_dim_inputs,
                       boxit = false)
     @dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
     @dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
+    arr_typ = CompilerTools.LambdaHandling.getType(array_name, state.LambdaVarInfo)
     elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
+    @dprintln(3,"mk_arrayset1 array type = ", arr_typ)
     @dprintln(3,"mk_arrayset1 element type = ", elem_typ)
     @dprintln(3,"mk_arrayset1 range = ", range)
 
@@ -250,7 +252,7 @@ function mk_arrayset1(num_dim_inputs,
     end
 
     TypedExpr(
-       elem_typ,
+       arr_typ,
        :call,
        GlobalRef(Base, fname),
        array_name,
