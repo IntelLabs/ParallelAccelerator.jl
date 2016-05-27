@@ -53,6 +53,7 @@ import ParallelAccelerator.SizeArr_t
 type LambdaGlobalData
     #adp::ASTDispatcher
     ompprivatelist::Array{Any, 1}
+    globalConstants :: Dict{Any, Any}   # non-scalar global constants
     globalUDTs::Dict{Any, Any}
     symboltable::Dict{Any, Any}         # mapping from some kind of variable to a type
     tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
@@ -81,7 +82,7 @@ type LambdaGlobalData
     )
 
         #new(ASTDispatcher(), [], Dict(), Dict(), [], [])
-        new([], Dict(), Dict(), Dict(), [], [], _j, 0)
+        new([], Dict(), Dict(), Dict(), Dict(), [], [], _j, 0)
     end
 end
 
@@ -212,6 +213,7 @@ end
 # frames
 function resetLambdaState(l::LambdaGlobalData)
     empty!(l.ompprivatelist)
+    empty!(l.globalConstants)
     empty!(l.globalUDTs)
     empty!(l.symboltable)
     empty!(l.worklist)
@@ -334,7 +336,7 @@ include("cgen-pattern-match.jl")
 # Emit declarations and "include" directives
 function from_header(isEntryPoint::Bool, linfo)
     s = from_UDTs(linfo)
-    isEntryPoint ? from_includes() * s : s
+    isEntryPoint ? from_includes() * from_globals() * s : s
 end
 
 function from_includes()
@@ -390,6 +392,25 @@ function from_includes()
         s *= userOption.includeStatements
     end
     
+    return s
+end
+
+function from_globals()
+    global lstate
+    s = ""
+    for (name, value) in lstate.globalConstants
+        if isa(value, Array)
+            eltyp = toCtype(eltype(value))
+            len   = length(value)
+            dims  = ndims(value)
+            shape = mapfoldl(x -> string(x), (a,b) -> a * "," * b, size(value))
+            @dprintln(3,"Array alloc shape = ", shape)
+            data_name = "_" * name * "_"
+            value_str = "{" * mapfoldl(x -> string(x), (a,b) -> a * "," * b, value) * "}"
+            s *= "static $(eltyp) $(data_name)[$(len)] = " * value_str * ";\n"
+            s *= "static j2c_array<$eltyp> $(name) = j2c_array<$eltyp>::new_j2c_array_$(dims)d($(data_name), $shape);\n"
+        end
+    end
     return s
 end
 
@@ -465,6 +486,11 @@ function from_decl(k::DataType, linfo)
         return s
     end
     throw(string("Could not translate Julia Type: " * string(k)))
+    return ""
+end
+
+# no type declaration for Union{}
+function from_decl(k::Type{Union{}}, linfo)
     return ""
 end
 
@@ -658,6 +684,10 @@ function isArrayOfPrimitiveJuliaType(t::ANY)
     return false
 end
 
+
+function toCtype(typ::Type{Union{}})
+    return "void*" 
+end
 
 function toCtype(typ::Tuple)
     return "Tuple" * mapfoldl(canonicalize, (a, b) -> "$(a)$(b)", typ)
@@ -1695,16 +1725,24 @@ function from_globalref(ast,linfo)
     ast = Base.resolve(ast, force=true)
     mod = ast.mod
     name = ast.name
+    s = canonicalize(mod) * "_" * from_symbol(name,linfo)
     @dprintln(3,"Name is: ", name, " and its type is:", typeof(name))
     # handle global constant
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
-        if isbits(def) && !isa(def, IntrinsicFunction) && !isa(def, Function)
-          return from_expr(def,linfo)
+        if !isa(def, IntrinsicFunction) && !isa(def, Function)
+            if isbits(def) 
+                return from_expr(def,linfo)
+            elseif isa(def, Array)
+            # global constant array
+                @dprintln(3, "record global array: ", name)
+                lstate.globalConstants[s] = def
+            else
+                error("Global definition for ", name, " :: ", typeof(def), " is not supported by CGen.")
+            end
         end
     end
- 
-    canonicalize(mod) * "_" * from_symbol(name,linfo)
+    s
 end
 
 function from_topnode(ast,linfo)
@@ -1958,11 +1996,14 @@ function from_new(args, linfo)
     s = ""
     typ = args[1] #type of the object
     @dprintln(3,"from_new args = ", args)
+    if isa(typ, GlobalRef)
+        typ = getfield(typ.mod, typ.name)
+    end
     if isa(typ, DataType)
-        if typ == Complex64 || typ == Complex128
-            assert(length(args) == 3)
+        if typ <: AbstractString || typ == Complex64 || typ == Complex128
+            # assert(length(args) == 3)
             @dprintln(3, "new complex number")
-            s = toCtype(typ) * "(" * from_expr(args[2], linfo) * ", " * from_expr(args[3], linfo) * ")"
+            s = toCtype(typ) * "(" * mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
             ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
