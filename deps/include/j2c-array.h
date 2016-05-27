@@ -1067,6 +1067,11 @@ class ASCIIString {
          
     ASCIIString() { }
 
+    ASCIIString(const char* s, int64_t string_len) {
+        data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
+        strncpy((char *)data.data, s, string_len);
+    }
+
     ASCIIString(const char* s) {
         uint64_t string_len = strlen(s);
         data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
@@ -1143,4 +1148,9 @@ static void jl_array_grow_end(j2c_array<uint8_t> &a, int64_t size_inc)
     a.dims[0] = len;
 }
  
+static ASCIIString jl_pchar_to_string(uint8_t *ptr, int64_t len)
+{
+    return ASCIIString((char*)ptr, len);
+}
+
 #endif /* PSE_ARRAY_H_ */
