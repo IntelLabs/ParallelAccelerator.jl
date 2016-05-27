@@ -1126,5 +1126,21 @@ void delete_ascii_string(ASCIIString *s)
 {
     delete(s);
 }
+
+/* compatibility fix for Julia 0.5 function to handle string append! */
+static void jl_array_grow_end(j2c_array<uint8_t> &a, int64_t size_inc) 
+{
+    assert(a.num_dim == 1);
+    uint8_t *old_data = a.data;
+    int old_len = a.ARRAYLEN(); 
+    int len = a.ARRAYLEN() + size_inc;
+    uint8_t *new_data = j2c_array_copy<uint8_t>::alloc_elements(len);
+    memcpy((void*)new_data, (void*)old_data, old_len * sizeof(uint8_t));
+    a.decrement();
+    a.data = new_data;
+    a.refcount = new unsigned;
+    *(a.refcount) = 1;
+    a.dims[0] = len;
+}
  
 #endif /* PSE_ARRAY_H_ */
