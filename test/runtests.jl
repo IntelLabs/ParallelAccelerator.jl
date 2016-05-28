@@ -45,6 +45,7 @@ include("strings.jl")
 include("test_lr.jl")
 include("gemv_test.jl")
 include("transpose_test.jl")
+include("vecnorm_test.jl")
 
 # Examples.  We're not including them all here, because it would take
 # too long, but just including black-scholes and opt-flow seems like a

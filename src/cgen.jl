@@ -2591,7 +2591,7 @@ end
 
 function set_includes(ast)
     s = string(ast)
-    if contains(s,"gemm_wrapper!") || contains(s,"gemv!") || contains(s,"transpose!")
+    if contains(s,"gemm_wrapper!") || contains(s,"gemv!") || contains(s,"transpose!") || contains(s,"vecnorm")
         set_include_blas(true)
     end
     if contains(s,"LinAlg.chol") 
