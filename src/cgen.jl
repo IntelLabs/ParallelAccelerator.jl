@@ -2594,7 +2594,7 @@ function set_includes(ast)
     if contains(s,"gemm_wrapper!") || contains(s,"gemv!") || contains(s,"transpose!") || contains(s,"vecnorm")
         set_include_blas(true)
     end
-    if contains(s,"LinAlg.chol") 
+    if contains(s,"LinAlg.chol") ||  contains(s,"LAPACK")
         set_include_lapack(true)
     end
     if contains(s,"rand!") || contains(s,"randn!")
