@@ -759,12 +759,21 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
-        if false
+        if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
+          if cur_task.ret_types != Void
+            insert_task_expr = TypedExpr(Any,
+                                         :call,
+                                         cur_task.task_func,
+                                         deepcopy(range_lhsvar),
+                                         real_args_build...,
+                                         deepcopy(red_array_lhsvar))
+          else
             insert_task_expr = TypedExpr(Any,
                                          :call,
                                          cur_task.task_func,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
+          end
         else
             svec_args = mk_svec_expr(Any)
             insert_task_expr = TypedExpr(Any,
