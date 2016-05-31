@@ -29,6 +29,7 @@ using ParallelAccelerator
 importall ParallelAccelerator.API.Lib
 
 #using CompilerTools
+#CompilerTools.ReadWriteSet.set_debug_level(3)
 #CompilerTools.AstWalker.set_debug_level(3)
 #CompilerTools.OptFramework.set_debug_level(3)
 #ParallelAccelerator.set_debug_level(3)
