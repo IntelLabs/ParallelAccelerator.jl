@@ -307,6 +307,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     unique_node_id = get_unique_num()
 
     @dprintln(3,"(mk_parfor_args_from_reduce = ", input_args, " ", unique_node_id)
+    @dprintln(3,"state.LambdaVarInfo: ", state.LambdaVarInfo, " " , unique_node_id)
 
     # Make sure we get what we expect from domain IR.
     # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
@@ -517,8 +518,7 @@ end
 
 function createTempForRangeInfo(array_sn :: RHSVar, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)
     key = toLHSVar(array_sn) 
-    temp_type = getArrayElemType(array_sn, state)
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
 end
 
 """
@@ -752,6 +752,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     @dprintln(2,"(mk_parfor_args_from_mmap!: # input arrays = ", len_input_arrays, " ", unique_node_id)
     @dprintln(2,"input arrays: ", input_arrays, " " , unique_node_id)
     @dprintln(2,"dl.inputs: ", dl.inputs, " " , unique_node_id)
+    @dprintln(3,"state.LambdaVarInfo: ", state.LambdaVarInfo, " " , unique_node_id)
     @assert len_input_arrays>0 "mmap! should have input arrays"
 
     # Handle range selector
@@ -1094,6 +1095,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # First arg is an array of input arrays to the mmap
     len_input_arrays = length(input_arrays)
     @dprintln(2,"(mk_parfor_args_from_mmap: # input arrays = ", len_input_arrays, " " , unique_node_id)
+    @dprintln(3,"state.LambdaVarInfo: ", state.LambdaVarInfo, " " , unique_node_id)
     @dprintln(2,"input arrays: ", input_arrays, " " , unique_node_id)
     @assert len_input_arrays>0 "mmap should have input arrays"
 
