@@ -28,7 +28,7 @@ baremodule Lib
 using Base
 import Base: call, (==), copy
 
-using ..cartesianmapreduce, ..cartesianarray, ..sum, ..(.*)
+using ..cartesianmapreduce, ..cartesianarray, ..sum, ..(.*), ..map, ..map!
 
 type MT{T}
   val :: T
@@ -157,8 +157,100 @@ end
   repmat(A, m, 1)
 end
 
+baremodule NoInline 
+
+using Base
+import Base: call, (==)
+
+@noinline function rand(args...)
+  Base.Random.rand(args...)
+end
+
+@noinline function randn(args...)
+  Base.Random.rand(args...)
+end
+
+@noinline function rand!(args...)
+  Base.Random.rand(args...)
+end
+
+@noinline function randn!(args...)
+  Base.Random.rand(args...)
+end
+
+end
+import .NoInline
+
+@inline function rand(dims::Int...)
+  arr = Array(Float64, dims...)
+  map!(x -> NoInline.rand(Float64)::Float64, arr)
+  return arr
+end
+
+@inline function randn(dims::Int...)
+  arr = Array(Float64, dims...)
+  map!(x -> NoInline.randn(Float64)::Float64, arr)
+  return arr
+end
+
+@inline function rand(T::Type, d::Int, dims::Int...)
+  arr = Array(T, d, dims...)
+  map!(x -> NoInline.rand(T)::T, arr)
+  return arr
+end
+
+@inline function randn(T::Type, d::Int, dims::Int...)
+  arr = Array(T, d, dims...)
+  map!(x -> NoInline.randn(T)::T, arr)
+  return arr
+end
+
+@inline function rand(r::AbstractRNG, T::Type, d::Int, dims::Int...)
+  arr = Array(T, d, dims...)
+  map!(x -> NoInline.rand(r, T)::T, arr)
+  return arr
+end
+
+@inline function randn(r::AbstractRNG, T::Type, d::Int, dims::Int...)
+  arr = Array(T, d, dims...)
+  map!(x -> NoInline.randn(r, T)::T, arr)
+  return arr
+end
+
+@inline function rand!{T}(arr::DenseArray{T})
+  map!(x -> NoInline.rand(T)::T, arr)
+end
+
+@inline function randn!{T}(arr::DenseArray{T})
+  map!(x -> NoInline.randn(T)::T, arr)
+end
+
+@inline function rand!{T}(r::AbstractRNG, arr::DenseArray{T})
+  map!(x -> NoInline.rand(r, T)::T, arr)
+end
+
+@inline function randn!{T}(r::AbstractRNG, arr::DenseArray{T})
+  map!(x -> NoInline.randn(r, T)::T, arr)
+end
+
+@inline function rand(args...)
+  Base.Random.rand(args...)
+end
+
+@inline function randn(args...)
+  Base.Random.rand(args...)
+end
+
+@inline function rand!(args...)
+  Base.Random.rand(args...)
+end
+
+@inline function randn!(args...)
+  Base.Random.rand(args...)
+end
+
 export indmin, indmax, sumabs2
-export diag, diagm, trace, scale, eye, repmat 
+export diag, diagm, trace, scale, eye, repmat, rand, randn, rand!, randn!
 
 end
 

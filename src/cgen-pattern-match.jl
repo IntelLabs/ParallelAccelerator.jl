@@ -98,9 +98,9 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_rand(linfo, fun, RNG::Any, args...)
+function pattern_match_call_rand(linfo, fun, args...)
     res = ""
-    if isBaseFunc(fun, :rand!)
+    if isBaseFunc(fun, :rand) 
         if USE_OMP==1
             res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -110,9 +110,9 @@ function pattern_match_call_rand(linfo, fun, RNG::Any, args...)
     return res 
 end
 
-function pattern_match_call_randn(fun, RNG::Any, IN::Any,linfo)
+function pattern_match_call_randn(linfo, fun, args...)
     res = ""
-    if isBaseFunc(fun, :randn!)
+    if isBaseFunc(fun, :randn)
         if USE_OMP==1
             res = "cgen_n_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -456,7 +456,6 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     
     if(length(ast)==3) # randn! call has 3 args
-        s *= pattern_match_call_randn(ast[1],ast[2],ast[3],linfo)
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
@@ -464,6 +463,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
+        s *= pattern_match_call_randn(linfo, ast...)
     end
     # gemv calls have 5 args
     if(length(ast)==5)

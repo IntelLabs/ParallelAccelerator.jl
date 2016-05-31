@@ -55,7 +55,7 @@ const unary_map_operators = Symbol[
     :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
     :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh, 
-    :abs, :erf, :isnan, :rand!, :randn!]
+    :abs, :erf, :isnan]
 
 const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
@@ -257,7 +257,9 @@ export @par, cartesianmapreduce, cartesianarray, parallel_for, runStencil, point
 
 include("api-lib.jl")
 importall .Lib
-export indmin, indmax, sumabs2, diag, diagm, trace, scale, eye, repmat
+#export indmin, indmax, sumabs2, diag, diagm, trace, scale, eye, repmat, rand, randn, rand!, randn!
+  
+union!(operators, Set([:rand, :randn, :rand!, :randn!]))
 
 function enableLib()
   global operators
