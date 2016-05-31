@@ -2149,7 +2149,7 @@ end
 
 function translate_call_parallel_for(state, env, args::Array{Any,1})
     (lambda, ety) = lambdaTypeinf(args[1], (Int, ))
-    ast = from_expr("anonymous", env.cur_module, lambda)
+    ast = from_expr(env.cur_module, lambda)
     loopvars = [ if isa(x, Expr) x.args[1] else x end for x in ast.args[1] ]
     etys = [Int for _ in length(loopvars)]
     body = ast.args[3]
@@ -2181,6 +2181,10 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         args = normalize_args(state, env_, args)
         expr = args[1]
         typ = typeOfOpr(state, expr)
+        if typ == Any
+            typ = args[2]
+            updateTyp(state, expr, typ)
+        end
         @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
@@ -2245,6 +2249,9 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         #    dprintln(env,"got arraysize, args=", args)
         #   expr = mk_arraysize(args...)
         #    expr.typ = typ
+    elseif is(fun.mod, API.Lib.NoInline) 
+        oldfun = Base.resolve(GlobalRef(Base, fun.name))
+        dprintln(env,"Translate function from API.Lib back to Base: ", oldfun)
     elseif isdefined(fun.mod, fun.name)
         args = normalize_args(state, env_, args)
         args_typ = map(x -> typeOfOpr(state, x), args)
@@ -2290,22 +2297,22 @@ end
 """
 Entry point of DomainIR optimization pass.
 """
-function from_expr(function_name::AbstractString, cur_module :: Module, ast)
+function from_expr(cur_module :: Module, ast)
     assert(isfunctionhead(ast))
     linfo, body = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast) 
     return linfo, body
 end
 
 function from_expr(state::IRState, env::IREnv, ast::LambdaInfo)
-    dprintln(env, "from_expr: LambdaInfo inferred = ", ast.inferred)
-    if !ast.inferred
+    #dprintln(env, "from_expr: LambdaInfo inferred = ", ast.inferred)
+    #if !ast.inferred
         # we return this unmodified since we want the caller to
         # type check it before conversion.
-        return ast
-    else
-        ast = uncompressed_ast(ast)
+    #    return ast
+    #else
+    #    ast = uncompressed_ast(ast)
         # (tree, ty)=Base.typeinf(ast, argstyp, ())
-    end
+    #end
     return ast
 end
 

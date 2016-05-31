@@ -98,9 +98,9 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY,linfo)
     return ""
 end
 
-function pattern_match_call_rand(linfo, fun, RNG::Any, args...)
+function pattern_match_call_rand(linfo, fun, args...)
     res = ""
-    if isBaseFunc(fun, :rand!)
+    if isBaseFunc(fun, :rand) 
         if USE_OMP==1
             res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -110,9 +110,9 @@ function pattern_match_call_rand(linfo, fun, RNG::Any, args...)
     return res 
 end
 
-function pattern_match_call_randn(fun, RNG::Any, IN::Any,linfo)
+function pattern_match_call_randn(linfo, fun, args...)
     res = ""
-    if isBaseFunc(fun, :randn!)
+    if isBaseFunc(fun, :randn)
         if USE_OMP==1
             res = "cgen_n_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -273,6 +273,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        error("MKL LAPACK required for cholesky (TODO: support other lapack libraries and include a sequential implementation)")
         #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
     end
 
@@ -295,6 +296,49 @@ function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
 end
 
 function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
+    return ""
+end
+
+function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag::Char, A::RHSVar,B::RHSVar,  linfo)
+    if fun.mod!=Base.LinAlg.LAPACK || fun.name!=:trtrs!
+        return ""
+    end
+
+    cblas_fun = ""
+    typ = eltype(getSymType(A, linfo))
+    
+    if typ==Float32
+        lapack_fun = "LAPACKE_strtrs"
+    elseif typ==Float64
+        lapack_fun = "LAPACKE_dtrtrs"
+    else
+        return ""
+    end
+    
+    s = "$(from_expr(B,linfo)); "
+ 
+    n = from_arraysize(A,1,linfo)
+    nrhs = from_arraysize(B,2,linfo)
+
+
+    lda = from_arraysize(A,1,linfo)
+    ldb = n
+
+    LAPACK_COL_MAJOR = 102
+
+    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+        s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', '$trans', '$diag', $n, $nrhs, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+    else
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
+        error("MKL LAPACK required for triangular solution (TODO: support other lapack libraries and include a sequential implementation)")
+        #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
+    end
+
+    return s
+end
+
+function pattern_match_call_trtrs(fun::ANY, C::ANY, tA::ANY,A::ANY, t::ANY, d::ANY, linfo)
     return ""
 end
 
@@ -412,7 +456,6 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     
     if(length(ast)==3) # randn! call has 3 args
-        s *= pattern_match_call_randn(ast[1],ast[2],ast[3],linfo)
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
@@ -420,6 +463,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
+        s *= pattern_match_call_randn(linfo, ast...)
     end
     # gemv calls have 5 args
     if(length(ast)==5)
@@ -427,7 +471,8 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     # gemm calls have 6 args
     if(length(ast)==6)
-        s = pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
+        s *= pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
+        s *= pattern_match_call_trtrs(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
     end
     return s
 end
