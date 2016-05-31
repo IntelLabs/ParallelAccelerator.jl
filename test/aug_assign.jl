@@ -24,7 +24,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
 using Base.Test
-importall ParallelAccelerator
+#importall ParallelAccelerator
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(3)

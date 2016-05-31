@@ -26,7 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module APILibTest
 
 using ParallelAccelerator
-importall ParallelAccelerator.API.Lib
+#importall ParallelAccelerator.API.Lib
 
 #using CompilerTools
 #CompilerTools.ReadWriteSet.set_debug_level(3)
