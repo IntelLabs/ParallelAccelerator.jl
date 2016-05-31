@@ -1080,7 +1080,8 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                 push!(new_body, Expr(:boundscheck, false)) 
                 push!(new_body, deepcopy(cu_res))
                 if DEBUG_TASK_FUNCTIONS
-                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
+                   # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
                 end
                 push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
             else
@@ -1090,7 +1091,12 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                 else
                     push!(new_body, deepcopy(the_parfor.body[i]))
                     if DEBUG_TASK_FUNCTIONS
-                        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                        if isAssignmentNode(the_parfor.body[i])
+                            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "last assignment = ", deepcopy(the_parfor.body[i].args[1])))
+                        else
+                            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
+                        end
+                       # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
                     end
                 end
             end
@@ -1537,7 +1543,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3, "After loopNest adjustment")
     @dprintln(3, the_parfor)
 
-#    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "starting task function"))
+    if DEBUG_TASK_FUNCTIONS
+        push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "starting task function ", task_func_name))
+    end
 
     # Add the parfor stmt to the task function body.
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
@@ -1559,7 +1567,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
         ret_names = map(x -> toLHSVar(x.reductionVar), the_parfor.reductions)
         @dprintln(3, "ret_names = ", ret_names)
 
-#        push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "before call to set_reduction_array"))
+        if DEBUG_TASK_FUNCTIONS
+            push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "before call to set_reduction_array"))
+        end
         # Write the reduction tuple into reduction_array[threadid]
         if false
             push!(task_body.args, Expr(:call, mk_parallelir_ref(:set_reduction_array), deepcopy(red_array_LHSVar), ret_names...))
@@ -1571,7 +1581,13 @@ function parforToTask(parfor_index, bb_statements, body, state)
                                             TypedExpr(Tuple{ret_types...}, :call, GlobalRef(Core, :tuple), ret_names...),
                                             TypedExpr(Int, :call, GlobalRef(Base.Threads,:threadid))))
         end
-#        push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "end of task func red_array = ", deepcopy(red_array_LHSVar)))
+        if DEBUG_TASK_FUNCTIONS
+            push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "end of task func red_array = ", deepcopy(red_array_LHSVar)))
+        end
+    end
+
+    if DEBUG_TASK_FUNCTIONS
+        push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ending task function ", task_func_name))
     end
 
     push!(task_body.args, TypedExpr(Void, :return, nothing))
