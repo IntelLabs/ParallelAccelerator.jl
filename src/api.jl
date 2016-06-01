@@ -257,19 +257,22 @@ export @par, cartesianmapreduce, cartesianarray, parallel_for, runStencil, point
 
 include("api-lib.jl")
 importall .Lib
-#export indmin, indmax, sumabs2, diag, diagm, trace, scale, eye, repmat, rand, randn, rand!, randn!
-  
-union!(operators, Set([:rand, :randn, :rand!, :randn!]))
 
 function enableLib()
   global operators
-  union!(operators, delete!(Set(names(Lib)), :Lib))
+  oprs = delete!(Set(names(Lib)), :Lib)
+  union!(operators, oprs)
+  for opr in oprs
+    @eval export $opr
+  end
 end
 
 function disableLib()
   global operators
   setdiff!(operators, delete!(Set(names(Lib)), :Lib))
 end
+
+enableLib()
 
 include("api-capture.jl")
 
