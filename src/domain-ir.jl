@@ -1162,7 +1162,7 @@ end
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     fun = Base.resolve(fun, force=true)
-    if is(fun.mod, API) || is(fun.mod, API.Lib) || is(fun.mod, API.Stencil)
+    if is(fun.mod, API) || is(fun.mod, API.Stencil)
         return normalize_callname(state, env, fun.name, args)
     elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
         return (fun.name, args)
