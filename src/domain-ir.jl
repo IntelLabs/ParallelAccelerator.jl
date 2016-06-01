@@ -310,7 +310,7 @@ end
 type IRState
     linfo  :: LambdaVarInfo
     defs   :: Dict{LHSVar, Any}  # stores local definition of LHS = RHS
-    escDict :: Dict{Symbol, RHSVar} # mapping function closure fieldname to escaping variable
+    escDict :: Dict{Symbol, Any} # mapping function closure fieldname to escaping variable
     boxtyps:: Dict{LHSVar, Any}  # finer types for those have Box type
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
@@ -899,7 +899,7 @@ function from_lambda(state, env, expr, closure = nothing)
     @dprintln(3,"body = ", body)
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
-    escDict = Dict{Symbol,RHSVar}()
+    escDict = Dict{Symbol,Any}()
     if !is(closure, nothing)
         # Julia 0.5 feature, closure refers to the #self# argument
         if isa(closure, Expr)
@@ -927,15 +927,23 @@ function from_lambda(state, env, expr, closure = nothing)
                 qtyp = typeOfOpr(state, q)
                 qtyp = is(qtyp, Box) ? getBoxType(state, q) : qtyp
                 dprintln(env, "field ", p, " has type ", qtyp)
-                if isa(q, GenSym)  # tempvariable must be renamed to a named variable
-                    newq = addLocalVariable(gensym(string(q)), qtyp, getDesc(q, state.linfo), state.linfo)
-                    emitStmt(state, TypedExpr(qtyp, :(=), toLHSVar(newq, state.linfo), q))
-                    q = newq
+                if isa(q, RHSVar)
+                    if isa(q, GenSym)  # tempvariable must be renamed to a named variable
+                        newq = addLocalVariable(gensym(string(q)), qtyp, getDesc(q, state.linfo), state.linfo)
+                        emitStmt(state, TypedExpr(qtyp, :(=), toLHSVar(newq, state.linfo), q))
+                        q = newq
+                    end
+                    # if q has a Box type, we lookup its definition (due to setfield!) instead
+                    qname = lookupVariableName(q, state.linfo)
+                    dprintln(env, "closure variable in parent = ", qname)
+                    escDict[p] = addToEscapingVariable(qname, qtyp, linfo, state.linfo)
+                else
+                    if isa(q, GlobalRef) && isdefined(q.mod, q.name)
+                        q = getfield(q.mod, q.name) 
+                    end
+                    dprintln(env, "closure enclosed a constant? ", q)
+                    escDict[p] = q
                 end
-                # if q has a Box type, we lookup its definition (due to setfield!) instead
-                qname = lookupVariableName(q, state.linfo)
-                dprintln(env, "closure variable in parent = ", qname)
-                escDict[p] = addToEscapingVariable(qname, qtyp, linfo, state.linfo)
             end
         end
     end
@@ -1154,12 +1162,9 @@ end
 # Fix Julia inconsistencies in call before we pattern match
 function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     fun = Base.resolve(fun, force=true)
-    if is(fun.mod, API) || is(fun.mod, API.Stencil)
-      return normalize_callname(state, env, fun.name, args)
+    if is(fun.mod, API) || is(fun.mod, API.Lib) || is(fun.mod, API.Stencil)
+        return normalize_callname(state, env, fun.name, args)
     elseif is(fun.mod, Base.Random) && (is(fun.name, :rand!) || is(fun.name, :randn!))
-        if is(fun.name, :rand!) 
-            # splice!(args,3)
-        end
         return (fun.name, args)
     elseif is(fun.mod, Base) && is(fun.name, :getindex) || is(fun.name, :setindex!) || is(fun.name, :_getindex!)
         return (fun.name, args)
@@ -2183,6 +2188,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         typ = typeOfOpr(state, expr)
         if typ == Any
             typ = args[2]
+            dprintln(env, "got type =", typ)
             updateTyp(state, expr, typ)
         end
         @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
