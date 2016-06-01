@@ -193,6 +193,12 @@ end
   return arr
 end
 
+@inline function rand(T::Type{Float32}, d::Int, dims::Int...)
+  arr = Array(Float32, d, dims...)
+  map!(x -> NoInline.rand(Float32)::Float32, arr)
+  return arr
+end
+
 @inline function rand(T::Type, d::Int, dims::Int...)
   arr = Array(T, d, dims...)
   map!(x -> NoInline.rand(T)::T, arr)
