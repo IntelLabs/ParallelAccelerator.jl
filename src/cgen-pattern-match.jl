@@ -111,6 +111,7 @@ function pattern_match_call_rand(linfo, fun, args...)
 end
 
 function pattern_match_call_randn(linfo, fun, args...)
+    @dprintln(3,"pattern_match_call_randn ", fun)
     res = ""
     if isBaseFunc(fun, :randn)
         if USE_OMP==1
@@ -119,6 +120,7 @@ function pattern_match_call_randn(linfo, fun, args...)
             res = "cgen_n_distribution(cgen_rand_generator);\n"
         end
     end
+    @dprintln(3,"pattern_match_call_randn res = ", res)
     return res 
 end
 
@@ -461,9 +463,11 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
     end
+    if(length(ast)>=1) # rand! can have only 1 arg
+        s *= pattern_match_call_randn(linfo, ast...)
+    end
     if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
-        s *= pattern_match_call_randn(linfo, ast...)
     end
     # gemv calls have 5 args
     if(length(ast)==5)

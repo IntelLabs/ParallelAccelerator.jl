@@ -189,7 +189,7 @@ end
 
 @inline function randn(dims::Int...)
   arr = Array(Float64, dims...)
-  map!(x -> NoInline.randn(Float64)::Float64, arr)
+  map!(x -> NoInline.randn()::Float64, arr)
   return arr
 end
 
@@ -199,11 +199,11 @@ end
   return arr
 end
 
-@inline function randn(T::Type, d::Int, dims::Int...)
-  arr = Array(T, d, dims...)
-  map!(x -> NoInline.randn(T)::T, arr)
-  return arr
-end
+#@inline function randn(T::Type, d::Int, dims::Int...)
+#  arr = Array(T, d, dims...)
+#  map!(x -> NoInline.randn(T)::T, arr)
+#  return arr
+#end
 
 @inline function rand(r::AbstractRNG, T::Type, d::Int, dims::Int...)
   arr = Array(T, d, dims...)
@@ -211,27 +211,27 @@ end
   return arr
 end
 
-@inline function randn(r::AbstractRNG, T::Type, d::Int, dims::Int...)
-  arr = Array(T, d, dims...)
-  map!(x -> NoInline.randn(r, T)::T, arr)
-  return arr
-end
+#@inline function randn(r::AbstractRNG, T::Type, d::Int, dims::Int...)
+#  arr = Array(T, d, dims...)
+#  map!(x -> NoInline.randn(r, T)::T, arr)
+#  return arr
+#end
 
 @inline function rand!{T}(arr::DenseArray{T})
   map!(x -> NoInline.rand(T)::T, arr)
 end
 
-@inline function randn!{T}(arr::DenseArray{T})
-  map!(x -> NoInline.randn(T)::T, arr)
-end
+#@inline function randn!{T}(arr::DenseArray{T})
+#  map!(x -> NoInline.randn(T)::T, arr)
+#end
 
 @inline function rand!{T}(r::AbstractRNG, arr::DenseArray{T})
   map!(x -> NoInline.rand(r, T)::T, arr)
 end
 
-@inline function randn!{T}(r::AbstractRNG, arr::DenseArray{T})
-  map!(x -> NoInline.randn(r, T)::T, arr)
-end
+#@inline function randn!{T}(r::AbstractRNG, arr::DenseArray{T})
+#  map!(x -> NoInline.randn(r, T)::T, arr)
+#end
 
 @inline function rand(args...)
   Base.Random.rand(args...)
