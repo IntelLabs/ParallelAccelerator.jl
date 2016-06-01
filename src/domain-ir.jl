@@ -2284,8 +2284,12 @@ function from_return(state, env, expr)
     local head = expr.head
     local typ  = expr.typ
     local args = normalize_args(state, env, expr.args)
+    if length(args) == 0
+        args=Any[nothing]
+    end
+    assert(length(args) == 1)
     # fix return type, the assumption is there is either 0 or 1 args.
-    typ = length(args) > 0 ? typeOfOpr(state, args[1]) : Void
+    typ = typeOfOpr(state, args[1])
     return mk_expr(typ, head, args...)
 end
 
