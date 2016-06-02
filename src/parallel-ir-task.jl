@@ -1078,13 +1078,21 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                 @dprintln(3, "unmodified stmt = ", the_parfor.body[i])
             end
             if cu_res != nothing
-                push!(new_body, Expr(:boundscheck, false)) 
+                if VERSION >= v"0.5.0-dev+4449"
+                    push!(new_body, Expr(:inbounds, true)) 
+                else
+                    push!(new_body, Expr(:boundscheck, false)) 
+                end
                 push!(new_body, deepcopy(cu_res))
                 if DEBUG_TASK_FUNCTIONS
                     push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
                    # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
                 end
-                push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
+                if VERSION >= v"0.5.0-dev+4449"
+                    push!(new_body, Expr(:inbounds, :pop)) 
+                else
+                    push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
+                end
             else
                 if isBareParfor(the_parfor.body[i])
                     @dprintln(3,"Detected nested parfor.  Converting it to a loop.")
@@ -1202,7 +1210,8 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_lhsvar)), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), newLambdaVarInfo))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.first_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
+        #push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
         push!(new_body, LabelNode(label_after_first_unless))
 
         if DEBUG_TASK_FUNCTIONS
@@ -1210,7 +1219,8 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         end
 
         push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, ParallelAccelerator.ParallelIR.assign_gs4, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
+        #push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
         @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
         push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_lhsvar), newLambdaVarInfo))
 
@@ -1223,7 +1233,8 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaVarInfo)
 
         push!(new_body, LabelNode(label_before_second_unless))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
+        #push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
         push!(new_body, LabelNode(label_after_second_unless))
         push!(new_body, LabelNode(label_last))
     end
