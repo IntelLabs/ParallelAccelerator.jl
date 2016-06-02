@@ -26,8 +26,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module ComplexTest
 using ParallelAccelerator
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 
@@ -70,6 +70,9 @@ println("Testing complex number support...")
 @test ComplexTest.test1() 
 @test ComplexTest.test2()
 # test3 is no longer supported by OpenMP after we switch from C's _Complex to C++'s std::complex
-#@test ComplexTest.test3()
+# test3 should work for the native threading backend though.
+if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+    @test ComplexTest.test3()
+end
 println("Done testing complex number support.")
 
