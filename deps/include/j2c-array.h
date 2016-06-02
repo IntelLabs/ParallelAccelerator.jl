@@ -1073,9 +1073,10 @@ class ASCIIString {
     }
 
     ASCIIString(const char* s) {
-        uint64_t string_len = strlen(s);
+        uint64_t string_len = strlen(s)+1;
         data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
-        strncpy((char *)data.data, s, string_len);
+        strncpy((char *)data.data, s, string_len-1);
+        data.data[string_len-1] = 0x00;
     }
 
     ASCIIString(const j2c_array<uint8_t> &a) {
