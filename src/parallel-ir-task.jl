@@ -1065,10 +1065,11 @@ insert the body of the parfor into the new function body in "new_body".
 function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaVarInfo)
     @dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
     if loop_nest_level > length(the_parfor.loopNests)
+        @dprintln(3, "Body size ", length(the_parfor.body))
         # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
         # For each statement in the parfor body.
         for i = 1:length(the_parfor.body)
-            @dprintln(3, "Body index ", i)
+            @dprintln(3, "Body index ", i, " ", the_parfor.body[i])
             # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
             # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
             cu_res = convertUnsafe(the_parfor.body[i])
