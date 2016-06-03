@@ -33,13 +33,6 @@ DebugMsg.init()
 importall CompilerTools
 using CompilerTools.OptFramework
 
-#import Base.deepcopy_internal
-#
-#"""
-#Overload deepcopy_internal() to just return a Module instead of trying to duplicate it.
-#"""
-#deepcopy_internal(x :: Module, stackdict::ObjectIdDict) = x
-
 #######################################################################
 # Constants and functions below this line are not exported, and should 
 # be used either fully qualified, or explicitly imported.
@@ -251,6 +244,8 @@ function show_backtrace()
     println(s)
 end
 
+using Compat
+
 include("api.jl")
 include("domain-ir.jl")
 include("parallel-ir.jl")
@@ -267,9 +262,15 @@ Called when the package is loaded to do initialization.
 """
 function __init__()
     package_root = getPackageRoot()
-    @linux_only ld_env_key = "LD_LIBRARY_PATH"
-    @osx_only   ld_env_key = "DYLD_LIBRARY_PATH"
-    @windows_only ld_env_key = "PATH"
+    if Compat.is_linux()
+        ld_env_key = "LD_LIBRARY_PATH"
+    elseif Compat.is_apple()
+        ld_env_key = "DYLD_LIBRARY_PATH"
+    elseif Compat.is_windows()
+        ld_env_key = "PATH"
+    else
+        throw(string("System is not linux, apple, or windows...giving up."))
+    end
     prefix = ""
     # See if the LD_LIBRARY_PATH environment varible is already set.
     if haskey(ENV, ld_env_key)

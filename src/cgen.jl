@@ -45,6 +45,7 @@ import ParallelAccelerator, ..getPackageRoot
 import ParallelAccelerator.H5SizeArr_t
 import ParallelAccelerator.SizeArr_t
 
+using Compat
 
 # uncomment this line for using Debug.jl
 #using Debug
@@ -142,17 +143,12 @@ end
 if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     global USE_OMP = 0
 else # on osx, use OpenMP only when ICC is used since GCC/Clang doesn't support it
-    @osx? (
-    begin
+    if Compat.is_apple()
         global USE_OMP = USE_ICC
-    end
-    :
-    begin
+    else
         global USE_OMP = 1
     end
-    )
 end
-
 
 if isDistributedMode() #&& NERSC==0
     using MPI
@@ -2888,12 +2884,11 @@ function writec(s, outfile_name=nothing; with_headers=false)
 end
 
 function getGccName()
-    ret = "g++"
-    @windows_only begin
-         ret = "x86_64-w64-mingw32-g++"
-    end
-
-    return ret
+    if Compat.is_windows()
+        return "x86_64-w64-mingw32-g++"
+    else
+        return "g++"
+    end    
 end
 
 function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
@@ -3056,10 +3051,12 @@ end
 
 
 function link(outfile_name; flags=[])
-    lib = "$generated_file_dir/lib$outfile_name.so.1.0"
-    @windows_only begin
+    if Compat.is_windows()
         lib = "$generated_file_dir/lib$outfile_name.dll"
+    else
+        lib = "$generated_file_dir/lib$outfile_name.so.1.0"
     end
+
     if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
         linkCommand = getLinkCommand(outfile_name, lib, flags)
         @dprintln(1,linkCommand)
