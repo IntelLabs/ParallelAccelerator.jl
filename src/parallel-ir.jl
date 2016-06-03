@@ -66,6 +66,15 @@ const ISCONST = 8
 const ISASSIGNEDONCE = 16
 const ISPRIVATEPARFORLOOP = 32
 
+
+function getLoopPrivateFlags()
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE 
+        return 0
+    else
+        return ISPRIVATEPARFORLOOP
+    end
+end
+
 unique_num = 1
 
 """
@@ -727,7 +736,7 @@ function createTempForArray(array_sn :: RHSVar, unique_id :: Int64, state :: exp
     if temp_type == nothing
         temp_type = getArrayElemType(array_sn, state)
     end
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", get_unique_num(), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_array_temp_", key, "_", get_unique_num(), "_", unique_id), temp_type, ISASSIGNED | getLoopPrivateFlags())
 end
 
 
@@ -736,7 +745,7 @@ Takes an existing variable whose name is in "var_name" and adds the descriptor f
 variable to be parfor loop private and eventually go in an OMP private clause.
 """
 function makePrivateParfor(var_name :: Symbol, state)
-    res = CompilerTools.LambdaHandling.addDescFlag(var_name, ISPRIVATEPARFORLOOP, state.LambdaVarInfo)
+    res = CompilerTools.LambdaHandling.addDescFlag(var_name, getLoopPrivateFlags(), state.LambdaVarInfo)
     assert(res)
 end
 

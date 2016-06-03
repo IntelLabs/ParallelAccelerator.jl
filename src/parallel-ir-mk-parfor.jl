@@ -496,7 +496,7 @@ function createTempForRangeOffset(num_used, ranges :: Array{RangeData,1}, unique
     for i = 1:num_used
         range = ranges[i]
 
-        push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP))
+        push!(range_array, createStateVar(state, string("parallel_ir_range_", range.start, "_", range.skip, "_", range.last, "_", i, "_", unique_id), Int64, ISASSIGNED | getLoopPrivateFlags()))
     end
 
     return range_array
@@ -513,12 +513,12 @@ function createTempForRangedArray(array_sn :: RHSVar, range :: Array{DimensionSe
     key = toLHSVar(array_sn) 
     temp_type = getArrayElemType(array_sn, state)
     # Is it okay to just use range[1] here instead of all the ranges?
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSymbol(range[1], state.LambdaVarInfo), "_", unique_id), temp_type, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", getSymbol(range[1], state.LambdaVarInfo), "_", unique_id), temp_type, ISASSIGNED | getLoopPrivateFlags())
 end
 
 function createTempForRangeInfo(array_sn :: RHSVar, unique_id :: Int64, range_num::Int, info::AbstractString, state :: expr_state)
     key = toLHSVar(array_sn) 
-    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), Int, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    return createStateVar(state, string("parallel_ir_temp_", key, "_", unique_id, "_", range_num, info), Int, ISASSIGNED | getLoopPrivateFlags())
 end
 
 """
@@ -530,7 +530,7 @@ function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
         start = createTempForRangeInfo(arr, get_unique_num(), range_num, "start", state);
         step  = createTempForRangeInfo(arr, get_unique_num(), range_num, "step", state);
         last  = createTempForRangeInfo(arr, get_unique_num(), range_num, "last", state);
-        range_temp_var = createStateVar(state, string("parallel_ir_range_", start, "_", skip, "_", last, "_", range_num, "_1"), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+        range_temp_var = createStateVar(state, string("parallel_ir_range_", start, "_", skip, "_", last, "_", range_num, "_1"), Int64, ISASSIGNED | getLoopPrivateFlags())
         return RangeData(start, step, last, range.args[1], range.args[2], range.args[3], range_temp_var)
     elseif range.head == :tomask
         return MaskSelector(range.args[1])   # Return the BitArray mask
@@ -540,7 +540,7 @@ function rangeToRangeData(range :: Expr, arr, range_num :: Int, state)
 end
 function rangeToRangeData(other :: Union{RHSVar,Number}, arr, range_num :: Int, state)
     @dprintln(3,"rangeToRangeData for non-Expr")
-    singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other, "_", get_unique_num()), Int64, ISASSIGNEDONCE | ISASSIGNED | ISPRIVATEPARFORLOOP)
+    singular_temp_var = createStateVar(state, string("parallel_ir_singular_", other, "_", get_unique_num()), Int64, ISASSIGNED | getLoopPrivateFlags())
     return SingularSelector(other, singular_temp_var)
 end
 
