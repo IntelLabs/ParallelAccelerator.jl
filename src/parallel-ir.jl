@@ -576,10 +576,11 @@ end
 Create an expression that references something inside ParallelIR.
 In other words, returns an expression the equivalent of ParallelAccelerator.ParallelIR.sym where sym is an input argument to this function.
 """
-function mk_parallelir_ref(sym, ref_type=Function)
+function mk_parallelir_ref(sym :: Symbol, ref_type=Function)
     #inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
     #TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
     TypedExpr(ref_type, :call, GlobalRef(Base, :getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
+    #TypedExpr(ref_type, GlobalRef(ParallelAccelerator.ParallelIR, sym))
 end
 
 """
@@ -609,9 +610,8 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 """
 function mk_alloc_array_1d_expr(elem_type, atype, length)
     @dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
-    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 1)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 1)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
-    #arg_types = TypedExpr((Type{Any},Type{Int}), :call1, TopNode(:tuple), :Any, :Int)
 
     length_expr = get_length_expr(length)
 
@@ -622,7 +622,6 @@ function mk_alloc_array_1d_expr(elem_type, atype, length)
        QuoteNode(:jl_alloc_array_1d),
        ret_type,
        new_svec,
-       #arg_types,
        atype,
        0,
        length_expr,
@@ -648,9 +647,8 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
 
-    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core,:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
-    #arg_types = TypedExpr((Type{Any},Type{Int},Type{Int}), :call1, TopNode(:tuple), :Any, :Int, :Int)
 
     TypedExpr(
        atype,
@@ -659,7 +657,6 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        QuoteNode(:jl_alloc_array_2d),
        ret_type,
        new_svec,
-       #arg_types,
        atype,
        0,
        get_length_expr(length1),
@@ -675,7 +672,7 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 """
 function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
-    ret_type = TypedExpr(Type{atype}, :call1, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     
     TypedExpr(
@@ -2234,7 +2231,7 @@ function hasNoSideEffects(node :: Expr)
            func == QuoteNode(:jl_alloc_array_2d)
             return true
         end
-    elseif node.head == :call1
+    elseif node.head == :call1 || node.head == :call
         func = node.args[1]
         if isBaseFunc(func, :apply_type) ||
            isBaseFunc(func, :tuple)
@@ -3395,13 +3392,10 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
             typ = new_typ
         end
     elseif head == :return
-        args = from_exprs(args,depth,state)
-    elseif head == :call
-        args = from_call(args,depth,state)
-        # TODO: catch domain IR result here
-    elseif head == :call1
+        args = from_exprs(args, depth, state)
+    elseif head == :call || head == :call1
         args = from_call(args, depth, state)
-        # TODO?: tuple
+        # TODO: catch domain IR result here
     elseif head == :line
         # remove line numbers
         return []
@@ -3509,11 +3503,8 @@ function from_alloc(args::Array{Any,1})
     assert(n >= 1 && n <= 3)
     name = Symbol(string("jl_alloc_array_", n, "d"))
     appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Base, :apply_type), GlobalRef(Base,:Array), elemTyp, n)
-    #tupExpr = Expr(:call1, TopNode(:tuple), :Any, [ :Int for i=1:n ]...)
-    #tupExpr.typ = ntuple(i -> (i==1) ? Type{Any} : Type{Int}, n+1)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
     realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
-    #realArgs = Any[QuoteNode(name), appTypExpr, tupExpr, Array{elemTyp,n}, 0]
     for i=1:n
         push!(realArgs, sizes[i])
         push!(realArgs, 0)
