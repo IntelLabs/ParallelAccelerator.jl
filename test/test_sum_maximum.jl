@@ -1,5 +1,7 @@
 using ParallelAccelerator
 
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
+
 @acc function find_chg(k,m,W,Wp)	 
 	W_tmp = [abs(W[i,j] - Wp[i,j]) for i in 1:m, j in 1:k]
 	s = [sum(W_tmp[:,j]) for j in 1:k]
