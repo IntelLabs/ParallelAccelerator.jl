@@ -923,6 +923,33 @@ type cuw_state
     end
 end
 
+function safe_arrayref(arr, default, index1)
+    if index1 > 0 && index1 <= size(arr, 1)
+        return arr[index1]
+    else
+        return default
+    end
+end
+
+function safe_arrayref(arr, default, index1, index2)
+    if index1 > 0 && index1 <= size(arr,1) && 
+       index2 > 0 && index2 <= size(arr,2)
+        return arr[index1, index2]
+    else
+        return default
+    end
+end
+
+function safe_arrayref(arr, default, index1, index2, index3)
+    if index1 > 0 && index1 <= size(arr,1) && 
+       index2 > 0 && index2 <= size(arr,2) &&
+       index3 > 0 && index3 <= size(arr,3)
+        return arr[index1, index2, index3]
+    else
+        return default
+    end
+end
+
 """
 The AstWalk callback to find unsafe arrayset and arrayref variants and
 replace them with the regular Julia versions.  Sets the "found" flag
@@ -941,6 +968,11 @@ function convertUnsafeWalk(x::Expr, state, top_level_number, is_top_level, read)
             return x
         elseif isBaseFunc(x.args[1], :unsafe_arrayref)
             x.args[1] = GlobalRef(Base, :arrayref)
+            state.found = true
+            return x
+        elseif isBaseFunc(x.args[1], :safe_arrayref)
+            @dprintln(3,"Replace Base.safe_arrayref with ParallelAccelerator.ParallelIR.safe_arrayref.")
+            x.args[1] = GlobalRef(ParallelAccelerator.ParallelIR, :safe_arrayref)
             state.found = true
             return x
         end
