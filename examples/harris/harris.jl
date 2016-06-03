@@ -93,7 +93,7 @@ Options:
     println("output file = ", out_file)
 
     function harris(input_fname, output_fname)
-        local img :: Matrix{Float32} = convert(Array, float32(load(input_fname)))
+        local img :: Matrix{Float32} = convert(Matrix{Float32}, load(input_fname))
         tic()
         res = harrisCornerDetect(Matrix{Float32}())
         println("SELFPRIMED ", toq())
