@@ -1094,9 +1094,9 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, loop_nest_level, next_available_label, state, newLambdaVarInfo)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, parfor_nest_level, loop_nest_level, next_available_label, state, newLambdaVarInfo)
     @dprintln(3,"recreateLoopsInternal ", loop_nest_level, " ", next_available_label)
-    if loop_nest_level > length(the_parfor.loopNests)
+    if loop_nest_level > length(the_parfor.loopNests) 
         @dprintln(3, "Body size ", length(the_parfor.body))
         # A loop nest level greater than number of nests in the parfor means we can insert the body of the parfor here.
         # For each statement in the parfor body.
@@ -1104,31 +1104,31 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
             @dprintln(3, "Body index ", i, " ", the_parfor.body[i])
             # Convert any unsafe_arrayref or sets in this statements to regular arrayref or arrayset.
             # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
-            cu_res = convertUnsafe(the_parfor.body[i])
-            @dprintln(3, "cu_res = ", cu_res)
-            if cu_res == nothing
-                @dprintln(3, "unmodified stmt = ", the_parfor.body[i])
-            end
-            if cu_res != nothing
-                if VERSION >= v"0.5.0-dev+4449"
-                    push!(new_body, Expr(:inbounds, true)) 
-                else
-                    push!(new_body, Expr(:boundscheck, false)) 
-                end
-                push!(new_body, deepcopy(cu_res))
-                if DEBUG_TASK_FUNCTIONS
-                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
-                   # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
-                end
-                if VERSION >= v"0.5.0-dev+4449"
-                    push!(new_body, Expr(:inbounds, :pop)) 
-                else
-                    push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
-                end
+            if isBareParfor(the_parfor.body[i])
+                @dprintln(3,"Detected nested parfor.  Converting it to a loop.")
+                next_available_label = recreateLoopsInternal(new_body, the_parfor.body[i].args[1], parfor_nest_level + 1, 1, next_available_label, state, newLambdaVarInfo)
             else
-                if isBareParfor(the_parfor.body[i])
-                    @dprintln(3,"Detected nested parfor.  Converting it to a loop.")
-                    recreateLoops(new_body, the_parfor.body[i], state, newLambdaVarInfo)
+                cu_res = convertUnsafe(the_parfor.body[i])
+                @dprintln(3, "cu_res = ", cu_res)
+                if cu_res == nothing
+                    @dprintln(3, "unmodified stmt = ", the_parfor.body[i])
+                end
+                if cu_res != nothing
+                    if VERSION >= v"0.5.0-dev+4449"
+                        push!(new_body, Expr(:inbounds, true)) 
+                    else
+                        push!(new_body, Expr(:boundscheck, false)) 
+                    end
+                    push!(new_body, deepcopy(cu_res))
+                    if DEBUG_TASK_FUNCTIONS
+                        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
+                       # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                    end
+                    if VERSION >= v"0.5.0-dev+4449"
+                        push!(new_body, Expr(:inbounds, :pop)) 
+                    else
+                        push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
+                    end
                 else
                     push!(new_body, deepcopy(the_parfor.body[i]))
                     if DEBUG_TASK_FUNCTIONS
@@ -1208,18 +1208,19 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         label_before_second_unless = next_available_label + 1
         label_after_second_unless  = next_available_label + 2
         label_last                 = next_available_label + 3
+        next_available_label       = label_last + 1
 
         num_vars = 5
 
-        gensym2_var = string("#recreate_gensym2_", (loop_nest_level-1) * num_vars + 0)
+        gensym2_var = string("#recreate_gensym2_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 0)
         gensym2_sym = Symbol(gensym2_var)
-        gensym0_var = string("#recreate_gensym0_", (loop_nest_level-1) * num_vars + 1)
+        gensym0_var = string("#recreate_gensym0_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 1)
         gensym0_sym = Symbol(gensym0_var)
-        pound_s1_var = string("#recreate_pound_s1_", (loop_nest_level-1) * num_vars + 2)
+        pound_s1_var = string("#recreate_pound_s1_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 2)
         pound_s1_sym = Symbol(pound_s1_var)
-        gensym3_var = string("#recreate_gensym3_", (loop_nest_level-1) * num_vars + 3)
+        gensym3_var = string("#recreate_gensym3_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 3)
         gensym3_sym = Symbol(gensym3_var)
-        gensym4_var = string("#recreate_gensym4_", (loop_nest_level-1) * num_vars + 4)
+        gensym4_var = string("#recreate_gensym4_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 4)
         gensym4_sym = Symbol(gensym4_var)
         gensym2_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo))
         gensym0_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo))
@@ -1262,7 +1263,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
 
         push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), newLambdaVarInfo))
 
-        recreateLoopsInternal(new_body, the_parfor, loop_nest_level + 1, next_available_label + 4, state, newLambdaVarInfo)
+        next_available_label = recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, next_available_label, state, newLambdaVarInfo)
 
         push!(new_body, LabelNode(label_before_second_unless))
         push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
@@ -1273,6 +1274,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
     if DEBUG_TASK_FUNCTIONS
        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level))
     end
+    return next_available_label 
 end
 
 """
@@ -1280,11 +1282,11 @@ In threads mode, we can't have parfor_start and parfor_end in the code since Jul
 we have to reconstruct a loop infrastructure based on the parfor's loop nest information.  This function takes a parfor
 and outputs that parfor to the new function body as regular Julia loops.
 """
-function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaVarInfo)
+function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaVarInfo, parfor_nest_level = 1)
     max_label = getMaxLabel(0, the_parfor.body)
     @dprintln(2,"recreateLoops ", the_parfor, " max_label = ", max_label)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-    recreateLoopsInternal(new_body, the_parfor, 1, max_label + 1, state, newLambdaVarInfo)
+    recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, 1, max_label + 1, state, newLambdaVarInfo)
     nothing
 end
 
@@ -1547,9 +1549,11 @@ function parforToTask(parfor_index, bb_statements, body, state)
     task_body = TypedExpr(Int, :body)
     saved_loopNests = deepcopy(the_parfor.loopNests)
 
-    #  for i in all_arg_names
-    #    push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", Symbol(i)))
-    #  end
+    if DEBUG_TASK_FUNCTIONS
+      for i in all_arg_names
+        push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", toLHSVar(i, newLambdaVarInfo)))
+      end
+    end
 
     @dprintln(3, "Before LHSVar replacement in parfor")
     @dprintln(3, the_parfor)

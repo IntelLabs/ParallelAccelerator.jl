@@ -789,6 +789,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         if cur_task.ret_types != Void
             red_loop_index_lhsvar = createVarForTask(cur_task, "_reduction_loop_index", Int, state)
             unique_node_id = get_unique_num()
+            #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole reduction array = ", deepcopy(red_array_lhsvar)))
 
             # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
             for l = 1:red_len
@@ -800,7 +801,11 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                 for stmt in callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
                                                 deepcopy(cur_task.reduction_vars[l].name), 
                                                 Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
-                    push!(new_body, stmt)
+                    if isBareParfor(stmt) 
+                        recreateLoops(new_body, stmt.args[1], state, state.LambdaVarInfo)
+                    else
+                        push!(new_body, stmt)
+                    end
                 end
             end
 
