@@ -821,6 +821,10 @@ function from_getslice(args, linfo)
         i = i + 1
         if isa(a, GlobalRef) && a.name == :(:)
         else
+            if isa(a, Expr) && a.head == :call && a.args[1] == GlobalRef(Base, :UnitRange)
+              @assert (a.args[2] == a.args[3]) "Expect UnitRange to have identical start and end, but got " * string(a)
+              a = a.args[2]
+            end
             push!(idxs, string(i))
             push!(idxs, from_expr(a, linfo))
         end

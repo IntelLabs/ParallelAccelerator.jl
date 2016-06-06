@@ -82,6 +82,21 @@ function flattenParfors(out_body :: Array{Any,1}, in_body :: Array{Any,1}, linfo
     for i = 1:length(in_body)
         @dprintln(3,"Flatten index ", i, " ", in_body[i], " type = ", typeof(in_body[i]))
         if isBareParfor(in_body[i])
+            # flattern nested DelayedFunc if any
+            for red in in_body[i].args[1].reductions
+                if isa(red.reductionVarInit, DelayedFunc)
+                    func = red.reductionVarInit
+                    body = Any[]
+                    flattenParfors(body, func.args[1], linfo)
+                    func.args[1] = body
+                end
+                if isa(red.reductionFunc, DelayedFunc)
+                    func = red.reductionFunc
+                    body = Any[]
+                    flattenParfors(body, func.args[1], linfo)
+                    func.args[1] = body
+                end
+            end
             flattenParfor(out_body, in_body[i].args[1], linfo)
         else
             push!(out_body, in_body[i])

@@ -144,18 +144,18 @@ function mk_arrayslice(num_dim_inputs,
     elem_typ = getArrayElemType(array_name, state)
     @dprintln(3,"mk_arrayslice element type = ", elem_typ)
 
-    if inbounds
-        fname = :unsafe_arrayref
-    else
-        fname = :arrayref
-    end
-
-    indsyms = [ x == slice_dim ?  index_vars[x] : GlobalRef(Base, :(:))
+    #if inbounds
+    #    fname = :unsafe_arrayref
+    #else
+    #    fname = :arrayref
+    #end
+    fname = :getindex
+    indsyms = [ x == slice_dim ?  Expr(:call, GlobalRef(Base, :UnitRange), index_vars[x], index_vars[x]) : GlobalRef(Base, :(:))
                 for x = 1:length(index_vars) ]
     @dprintln(3,"mk_arrayslice indsyms = ", indsyms)
 
     TypedExpr(
-        elem_typ,
+        Array{elem_typ, length(index_vars)},
         :call,
         GlobalRef(Base, fname),
         :($array_name),
@@ -271,12 +271,12 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     assert(isa(neutral_val_body,Array))
     @dprintln(3, "neutral_val_body = ", neutral_val_body)
     pop!(neutral_val_body) # remove last Expr, which is Expr(:tuple)
-    neutral_val_flatten_body = Any[]
     neutral_val_body = top_level_expand_pre(neutral_val_body, state)
-    flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
-    @dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
+    #neutral_val_flatten_body = Any[]
+    #flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
+    #@dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
     f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), AstWalk)
-    return DelayedFunc(f, Any[neutral_val_flatten_body, init_var])
+    return DelayedFunc(f, Any[deepcopy(neutral_val_body), init_var])
 end
 
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
@@ -291,11 +291,11 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     assert(length(temp_body[end].args) == 1)
     temp_body[end] = mk_assignment_expr(reduction_var, temp_body[end].args..., state)
     temp_body = top_level_expand_pre(temp_body, state)
-    reduce_flatten_body = Any[]
-    flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
-    @dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
+    #reduce_flatten_body = Any[]
+    #flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
+    #@dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
     f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
-    reduce_func = DelayedFunc(f, Any[reduce_flatten_body, toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
+    reduce_func = DelayedFunc(f, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
     return temp_body, reduce_func 
 end
 
@@ -427,6 +427,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # special handling when zero_val is a DomainLambda
     if isa(zero_val, DomainIR.DomainLambda) 
         zero_val = translate_reduction_neutral_value(zero_val, state)
+        @dprintln(3, "mk_parfor_args_from_reduce translate_reduction_neutral_value zero_val = ", zero_val)
         init_body = callDelayedFuncWith(zero_val, reduction_output_snode)
         for exp in init_body 
             push!(pre_statements, exp)
