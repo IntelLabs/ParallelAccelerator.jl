@@ -3596,14 +3596,18 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
         val = cur_parfor.rws.readSet.arrays[sym]
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.readSet.arrays,sym)
-        cur_parfor.rws.readSet.arrays[o_sym] = val
+        if isa(o_sym, LHSVar) 
+            cur_parfor.rws.readSet.arrays[o_sym] = val
+        end
     end
     old_set = [k for k in keys(cur_parfor.rws.writeSet.arrays)]
     for sym in old_set
         val = cur_parfor.rws.writeSet.arrays[sym]
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.writeSet.arrays,sym)
-        cur_parfor.rws.writeSet.arrays[o_sym] = val
+        if isa(o_sym, LHSVar) 
+            cur_parfor.rws.writeSet.arrays[o_sym] = val
+        end
     end
 
     return cur_parfor
