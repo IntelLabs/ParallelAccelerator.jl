@@ -374,7 +374,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     #for i = 1:inp_dim #num_dim_inputs
     for i = 1:num_dim_inputs
         save_array_len   = Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
-        CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+        CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNED, state.LambdaVarInfo)
         if isWholeArray(inputInfo)
             push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
             input_array_rangeconds[i] = nothing
@@ -721,7 +721,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     end
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:num_dim_inputs
-        save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNEDONCE | ISASSIGNED, state.LambdaVarInfo)
+        save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNED, state.LambdaVarInfo)
         @dprintln(3, "Creating expr for ", save_array_len)
         
         if length(const_sizes)!=0
