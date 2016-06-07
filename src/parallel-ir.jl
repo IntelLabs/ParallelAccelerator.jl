@@ -1040,6 +1040,7 @@ function from_lambda_body(body :: Expr, depth, state)
     CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, cas.symbol_assigns)
 
     body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    CompilerTools.LambdaHandling.stripCaptureFlag(state.LambdaVarInfo)
 
     return body
 end
