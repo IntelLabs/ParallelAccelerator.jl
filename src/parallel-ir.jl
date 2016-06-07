@@ -58,6 +58,10 @@ function PIRNumThreadsMode(x)
     global num_threads_mode = x
 end
 
+print_times = true
+function PIRPrintTimes(x)
+    global print_times = x
+end
 
 const ISCAPTURED = 1
 const ISASSIGNED = 2
@@ -2665,7 +2669,9 @@ function nested_function_exprs(domain_lambda, out_state)
     lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
 
+    if print_times
     @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time), " " , unique_node_id)
+    end
 
     mtm_start = time_ns()
 
@@ -2678,7 +2684,9 @@ function nested_function_exprs(domain_lambda, out_state)
         @dprintln(3, "body = ", body, " " , unique_node_id)
     end
 
+    if print_times
     @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start), " " , unique_node_id)
+    end
 
     # We pass only the non-array params to the rearrangement code because if we pass array params then
     # the code will detect statements that depend only on array params and move them to the top which
@@ -2707,7 +2715,9 @@ function nested_function_exprs(domain_lambda, out_state)
     genEquivalenceClasses(LambdaVarInfo, body, new_vars)
     @dprintln(3,"Done creating nested equivalence classes.", " " , unique_node_id)
     print_correlations(3, new_vars)
+    if print_times
     @dprintln(1,"Creating nested equivalence classes time = ", ns_to_sec(time_ns() - eq_start), " " , unique_node_id)
+    end
 
     rep_start = time_ns()
 
@@ -2731,7 +2741,9 @@ function nested_function_exprs(domain_lambda, out_state)
         changed = rnd_state.change
     end
 
+    if print_times
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start), " " , unique_node_id)
+    end
 
     processAndUpdateBody(body, removeNothingStmts, nothing)
     @dprintln(1,"Re-starting liveness analysis.", " " , unique_node_id)
@@ -2991,7 +3003,9 @@ function from_root(function_name, ast)
     #  @dprintln(3,"udinfo = ", udinfo)
     @dprintln(1,"Finished liveness analysis. function = ", function_name)
 
+    if print_times
     @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time))
+    end
 
     mtm_start = time_ns()
 
@@ -3004,7 +3018,9 @@ function from_root(function_name, ast)
         printLambda(3, LambdaVarInfo, body)
     end
 
+    if print_times
     @dprintln(1,"mmap_to_mmap! time = ", ns_to_sec(time_ns() - mtm_start))
+    end
 
     # We pass only the non-array params to the rearrangement code because if we pass array params then
     # the code will detect statements that depend only on array params and move them to the top which
@@ -3050,7 +3066,9 @@ function from_root(function_name, ast)
         changed = rnd_state.change
     end
 
+    if print_times
     @dprintln(1,"Rearranging passes time = ", ns_to_sec(time_ns() - rep_start))
+    end
 
     processAndUpdateBody(body, removeNothingStmts, nothing)
     @dprintln(3,"AST after removing nothing stmts = ", " function = ", function_name)
@@ -3095,7 +3113,9 @@ function from_root(function_name, ast)
     @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
     print_correlations(3, new_vars)
 
+    if print_times
     @dprintln(1,"Creating equivalence classes time = ", ns_to_sec(time_ns() - eq_start))
+    end
 
     if doRemoveAssertEqShape
         processAndUpdateBody(body, removeAssertEqShape, new_vars)
