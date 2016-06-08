@@ -46,7 +46,9 @@ function flattenParfors(function_name, ast)
     flattenParfors(expanded_args, body.args, LambdaVarInfo)
     args = expanded_args
 
+    if print_times
     @dprintln(1,"Flattening parfor bodies time = ", ns_to_sec(time_ns() - flatten_start))
+    end
 
     @dprintln(3, "After flattening")
     for j = 1:length(args)
