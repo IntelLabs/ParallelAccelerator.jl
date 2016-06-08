@@ -1366,6 +1366,10 @@ function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either
     (createRetTupleType(all_array, unique_id, state), all_array, false)
 end
 
+function getAllAliases(input :: LHSVar, aliases :: Dict{LHSVar, LHSVar}) 
+    return getAllAliases(Set{LHSVar}([input]), aliases)
+end
+
 function getAllAliases(input :: Set{LHSVar}, aliases :: Dict{LHSVar, LHSVar})
     @dprintln(3,"getAllAliases input = ", input, " aliases = ", aliases)
     out = Set()
@@ -1694,6 +1698,34 @@ function substitute_cur_body(x,
     @dprintln(3,"replace_array_name_in_array_set = ", replace_array_name_in_arrayset)
     # Walk the AST and call sub_cur_body_walk for each node.
     return AstWalk(x, sub_cur_body_walk, cur_body_data(temp_map, index_map, arrays_set_in_cur_body, replace_array_name_in_arrayset, state))
+end
+
+function is_eliminated_arraysize(x::Expr, removed_allocs :: Set, aliases)
+    @dprintln(3,"is_eliminated_arraylen ", x)
+
+    @dprintln(3,"is_eliminated_arraylen is Expr")
+    if x.head == :(=)
+        rhs = x.args[2]
+        if isa(rhs, Expr) && rhs.head == :call
+            @dprintln(3,"is_eliminated_arraylen is :call")
+            if isBaseFunc(rhs.args[1], :arraysize)
+                array_used_lhsvar = toLHSVar(rhs.args[2])
+                array_used_aliases = getAllAliases(array_used_lhsvar, aliases)
+                intersection = intersect(array_used_aliases, removed_allocs)
+                @dprintln(3,"is_eliminated_arraylen is :arraysize lhsvar = ", array_used_lhsvar, " with_aliases = ", array_used_aliases, " intersection = ", intersection, " removed_allocs = ", removed_allocs)
+                if !isempty(intersection)
+                    @dprintln(3,"eliminated ", array_used_lhsvar)
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+function is_eliminated_arraysize(x::ANY, removed_allocs :: Set, aliases) 
+   return false
 end
 
 """
@@ -2222,7 +2254,7 @@ and we'd like to eliminate the whole assignment statement but we have to know th
 side effects before we can do that.  This function says whether the right-hand side passed into it has side effects
 or not.  Several common function calls that otherwise we wouldn't know are safe are explicitly checked for.
 """
-function hasNoSideEffects(node :: Union{Symbol, LHSVar, RHSVar, GlobalRef})
+function hasNoSideEffects(node :: Union{Symbol, LHSVar, RHSVar, GlobalRef, DataType})
     return true
 end
 
@@ -2652,7 +2684,7 @@ function nested_function_exprs(domain_lambda, out_state)
     @dprintln(2,"domain_lambda = ", domain_lambda, " " , unique_node_id)
     LambdaVarInfo = domain_lambda.linfo
     body = domain_lambda.body
-    @dprintln(1,"Starting nested_function_exprs. body = ", body, " " , unique_node_id)
+    @dprintln(1,"(Starting nested_function_exprs. body = ", body, " " , unique_node_id)
 
     start_time = time_ns()
 
@@ -2758,7 +2790,7 @@ function nested_function_exprs(domain_lambda, out_state)
     # Do the main work of Parallel IR.
     body = get_one(from_expr(LambdaVarInfo, body, 1, new_vars, false))
 
-    @dprintln(3,"Final ParallelIR = ", body, " " , unique_node_id)
+    @dprintln(3,"Final ParallelIR = ", body, " ) " , unique_node_id)
 
     #throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     out_state.max_label = new_vars.max_label
