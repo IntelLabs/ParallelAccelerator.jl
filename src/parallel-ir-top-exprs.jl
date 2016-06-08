@@ -590,7 +590,9 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
     end
 
     #    throw(string("debugging task graph"))
+    if print_times
     @dprintln(1,"Task formation time = ", ns_to_sec(time_ns() - task_start))
+    end
 
     return body
 end
@@ -774,6 +776,23 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
+        elseif haskey(ENV,"PROSPECT_CALL_ISF")
+          if cur_task.ret_types != Void
+            insert_task_expr = TypedExpr(Any,
+                                         :call,
+                                         ParallelAccelerator.ParallelIR.isf,
+                                         cur_task.task_func,
+                                         deepcopy(range_lhsvar),
+                                         real_args_build...,
+                                         deepcopy(red_array_lhsvar))
+          else
+            insert_task_expr = TypedExpr(Any,
+                                         :call,
+                                         ParallelAccelerator.ParallelIR.isf,
+                                         cur_task.task_func,
+                                         deepcopy(range_lhsvar),
+                                         real_args_build...)
+          end
         else
             svec_args = mk_svec_expr(Any)
             insert_task_expr = TypedExpr(Any,
@@ -810,11 +829,6 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             end
 
             push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
-
-#            push!(new_body, mk_assignment_expr(deepcopy(red_output_tuple_lhsvar), Expr(:call, mk_parallelir_ref(:run_reduction_func), deepcopy(red_array_lhsvar), cur_task.join_func), state))
-#            for l = 1:red_len
-#                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base,:getfield), deepcopy(red_output_tuple_lhsvar), l), state))
-#            end
         end
     else
         throw(string("insert sequential task not implemented yet"))
@@ -849,7 +863,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     
     body = top_level_mk_body(ast, depth, state)
 
+    if print_times
     @dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+    end
 
     @dprintln(3,"Body after first pass before task graph creation.")
     for j = 1:length(body)
@@ -866,7 +882,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     body = top_level_expand_pre(body, state)
 
+    if print_times
     @dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
+    end
 
 
     @dprintln(3,"expanded_body = ")
