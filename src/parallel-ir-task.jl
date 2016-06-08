@@ -678,6 +678,18 @@ function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_r
     return assignments
 end
 
+if false
+
+# Only for testing.
+function isf(t :: Function, 
+             full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
+             rest...)
+   #println("isf ", t, " ", full_iteration_space, " ", rest...)
+   return t(full_iteration_space, rest...)
+end
+
+else
+
 """
 An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
@@ -691,6 +703,7 @@ function isf(t :: Function,
 #    Base.Threads.lock!(println_mutex)
 #    tprintln("Starting isf. tid = ", tid, " space = ", full_iteration_space, " ta = ", ta)
 #    Base.Threads.unlock!(println_mutex)
+#   println("isf ", t, " ", full_iteration_space, " ", rest..., " tid = ", tid, " nthreads = ", nthreads())
 
     if full_iteration_space.dim == 1
         # Compute how many iterations to run.
@@ -700,6 +713,7 @@ function isf(t :: Function,
 #        tprintln("tid = ", tid, " num_iters = ", num_iters)
 #        Base.Threads.unlock!(println_mutex)
 
+#println("num_iters = ", num_iters)
         # Handle the case where iterations is less than the core count.
         if num_iters <= nthreads()
             if tid <= num_iters
@@ -720,8 +734,11 @@ function isf(t :: Function,
 #            tprintln("tid = ", tid, " ls = ", ls, " le = ", le, " func = ", Base.function_name(t))
 #            Base.Threads.unlock!(println_mutex)
             try 
-              tres = t(ParallelAccelerator.ParallelIR.pir_range_actual(ls,le), rest...)
+#println("ls, le = ", ls, ", ", le)
+              return t(ParallelAccelerator.ParallelIR.pir_range_actual(ls,le), rest...)
+#println("after ls, le = ", ls, ", ", le)
             catch something
+#println("caught ", something)
              # println("Call to t created exception ", something)
               bt = catch_backtrace()
               s = sprint(io->Base.show_backtrace(io, bt))
@@ -731,9 +748,10 @@ function isf(t :: Function,
               ccall(:puts, Cint, (Cstring,), msg)
               msg = string(something)
               ccall(:puts, Cint, (Cstring,), msg)
+              throw(msg)
             end 
 #            tprintln("After t call tid = ", tid)
-            return tres
+#println("After t call.")
         end
     elseif full_iteration_space.dim >= 2
         assignments = divide_fis(full_iteration_space, nthreads())
@@ -741,7 +759,7 @@ function isf(t :: Function,
         try 
 #            msg = string("Running num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
 #            ccall(:puts, Cint, (Cstring,), msg)
-            tres = t(assignments[tid], rest...)
+            return t(assignments[tid], rest...)
         catch something
             bt = catch_backtrace()
             s = sprint(io->Base.show_backtrace(io, bt))
@@ -751,9 +769,11 @@ function isf(t :: Function,
             ccall(:puts, Cint, (Cstring,), msg)
             msg = string(something)
             ccall(:puts, Cint, (Cstring,), msg)
+            throw(msg)
         end 
-        return tres
     end
+end
+
 end
 
 end # end if THREADS_MODE
@@ -1668,46 +1688,6 @@ function parforToTask(parfor_index, bb_statements, body, state)
     if length(the_parfor.reductions) > 0
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
             reduction_func_name = the_parfor.reductions
-if false
-            reduction_func_name = string("reduction_func_",unique_node_id)
-            fstring = string("function ", reduction_func_name, "(in1, in2)\n")
-            temp_array = Any[]
-            for i = 1:length(the_parfor.reductions)
-                if isa(the_parfor.reductions[i].reductionFunc, DelayedFunc)
-                    temp_red_value = Symbol(string(reduction_func_name,"_",i))
-                    fstring = string(fstring, "$(temp_red_value) = in1[$(i)]\n")
-                    for stmt in callDelayedFuncWith(the_parfor.reductions[i].reductionFunc, temp_red_value, :(in2[$i]))
-                       fstring = string(fstring, "$(stmt)\n")
-                    end
-                    push!(temp_array, temp_red_value)
-                else
-                    push!(temp_array, nothing)
-                end
-            end
-
-            fstring = string(fstring, "return (")
-
-            for i = 1:length(the_parfor.reductions)
-                if the_parfor.reductions[i].reductionFunc == :+
-                    fstring = string(fstring, "in1[", i, "] + in2[", i, "]")
-                elseif the_parfor.reductions[i].reductionFunc == :*
-                    fstring = string(fstring, "in1[", i, "] * in2[", i, "]")
-                elseif isa(the_parfor.reductions[i].reductionFunc, DelayedFunc)
-                    fstring = string(fstring, "$(temp_array[i])")
-                else
-                    throw(string("Unsupported reduction function ", the_parfor.reductions[i].reductionFunc, " during join function generation."))
-                end
-
-                # Add comma between tuple elements if there is at least one more tuple element.
-                fstring = string(fstring, " , ")
-            end
- 
-            fstring = string(fstring, ")\nend\n")
-            @dprintln(3, "Reduction function for threads mode = ", fstring)
-            fparse  = parse(fstring)
-            reduction_func_name = eval(fparse)
-            @dprintln(3, "Reduction function for threads done.")
-end
         else
             # The name of the new reduction function.
             reduction_func_name = string("reduction_func_",unique_node_id)
