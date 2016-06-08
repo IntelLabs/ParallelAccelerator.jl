@@ -418,9 +418,12 @@ function fuse(body, body_index, cur::Expr, state)
 
         # preParFor - Append cur preParFor to prev parParFor but eliminate array creation from
         # prevParFor where the array is in allocs_to_eliminate.
-        removed_allocs = Set{LHSVar}();
+        removed_allocs = Set{LHSVar}()
+        @dprintln(3, "preParFor cur prestatements are array input = ", parforArrayInput(prev_parfor))
         prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases, removed_allocs), prev_parfor.preParFor);
                                   parforArrayInput(prev_parfor) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor]
+        @dprintln(3,"removed_allocs = ", removed_allocs)
+        filter!( x -> !is_eliminated_arraysize(x, removed_allocs, prev_parfor.array_aliases), prev_parfor.preParFor)
         @dprintln(2,"New preParFor = ", prev_parfor.preParFor)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
