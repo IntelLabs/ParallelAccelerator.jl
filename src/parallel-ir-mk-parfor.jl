@@ -364,10 +364,12 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     indexed_array = atm
 
     # Create empty arrays to hold pre and post statements.
-    pre_statements  = copy(inputInfo.pre_offsets)
+    pre_statements  = deepcopy(inputInfo.pre_offsets)
     post_statements = Any[]
     save_array_lens  = []
     input_array_rangeconds = Array(Any, num_dim_inputs)
+
+    @dprintln(3, "initial pre_statements = ", pre_statements)
 
     # Insert a statement to assign the length of the input arrays to a var
     nest_idx = num_dim_inputs
@@ -377,6 +379,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNED, state.LambdaVarInfo)
         if isWholeArray(inputInfo)
             push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
+            @dprintln(3, "pre_statements after isWholeArray = ", pre_statements)
             input_array_rangeconds[i] = nothing
         elseif isRange(inputInfo)
             this_dim = inputInfo.range[i]
@@ -400,6 +403,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             else
                 error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
+            @dprintln(3, "pre_statements after isRange = ", pre_statements)
         end 
         push!(save_array_lens, save_array_len)
         loop_nest = PIRLoopNest(parfor_index_syms[i], 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
