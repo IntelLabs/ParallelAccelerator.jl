@@ -869,6 +869,8 @@ function getIO(stmt_ids, bb_statements)
 
     # Get the statements out of the basic block statement array such that those statement's ID's are in the stmt_ids ID array.
     stmts_for_ids = filter(x -> in(x.tls.index, stmt_ids) , bb_statements)
+    @dprintln(3, "stmts_for_ids = ", stmts_for_ids)
+
     # Make sure that we found a statement for every statement ID.
     if length(stmt_ids) != length(stmts_for_ids)
         @dprintln(0,"length(stmt_ids) = ", length(stmt_ids))
@@ -1403,7 +1405,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     assert(typeof(body[parfor_index]) == Expr)
     assert(body[parfor_index].head == :parfor)  # Make sure we got a parfor node to convert.
     the_parfor = body[parfor_index].args[1]     # Get the PIRParForAst object from the :parfor Expr.
-    @dprintln(3,"parforToTask = ", the_parfor)
+    @dprintln(3,"(parforToTask = ", the_parfor)
 
     # Create an array of the reduction vars used in this parfor.
     reduction_vars = LHSVar[]
@@ -1423,10 +1425,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
     out_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in out]
     locals_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in locals]
     reduction_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in reduction_vars]
-    @dprintln(3,"in_vars = ", in_vars_sym)
-    @dprintln(3,"out_vars = ", out_vars_sym)
-    @dprintln(3,"local_vars = ", locals_vars_sym)
-    @dprintln(3,"reduction_vars = ", reduction_vars_sym)
+    @dprintln(3,"in_vars names = ", in_vars_sym)
+    @dprintln(3,"out_vars names= ", out_vars_sym)
+    @dprintln(3,"local_vars names= ", locals_vars_sym)
+    @dprintln(3,"reduction_vars names= ", reduction_vars_sym)
     @dprintln(3,"the_parfor.rws = ", the_parfor.rws)
 
     # Convert Set to Array
@@ -1749,7 +1751,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
         end
     end
 
-    @dprintln(3,"End of parforToTask")
+    @dprintln(3,"End of parforToTask )")
 
     ret = TaskInfo(task_func,     # The task function that we just generated of type Function.
                     task_func_sym, # The task function's Symbol name.
