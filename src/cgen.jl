@@ -2375,10 +2375,14 @@ end
 # operations such as |getfield|. So we pack them here again.
 
 function from_varargpack(vargs, linfo)
+    @dprintln(3, "vargs = ", vargs)
     args = vargs[1]
     vsym = from_expr(args[1], linfo)
     vtyps = args[2]
-    toCtype(vtyps) * " " * vsym * " = " *
+    @dprintln(3, "vsym = ", vsym, " vtyps = ", vtyps)
+    assert(vtyps <: Tuple)
+    # skip producing the vararg declaration when its type list is empty
+    isempty(vtyps.types) ? "" : toCtype(vtyps) * " " * vsym * " = " *
         "{" * mapfoldl((i) -> vsym * string(i), (a, b) -> "$a, $b", 1:length(vtyps.types)) * "};"
 end
 
@@ -2398,10 +2402,10 @@ function from_formalargs(params, vararglist, unaliased, linfo)
             for i in 1:length(varargtyp.types)
                 vtyp = varargtyp.types[i]
                 cvtyp = toCtype(vtyp)
+                s = isempty(s) ? s : s * ", " 
                 s *= cvtyp * ((isArrayType(vtyp) ? "&" : "")
                 * (isArrayType(vtyp) ? " $ql " : " ")
-                * canonicalize(params[p].args[1]) * string(i)
-                * (i < length(varargtyp.types) ? ", " : ""))
+                * canonicalize(params[p].args[1]) * string(i))
             end
             if !isPrimitiveJuliaType(varargtyp) && !isArrayOfPrimitiveJuliaType(varargtyp)
                 if !haskey(lstate.globalUDTs, varargtyp)
@@ -2409,13 +2413,13 @@ function from_formalargs(params, vararglist, unaliased, linfo)
                 end
             end
         elseif inSymbolTable(params[p], linfo)
+            s = isempty(s) ? s : s * ", " 
             typ = lookupSymbolType(params[p], linfo)
             ptyp = toCtype(typ)
             is_array = isArrayType(typ) || isStringType(typ)
             s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
                 * (is_array ? " $ql " : " ")
-                * canonicalize(params[p])
-                * (p < length(params) ? ", " : ""))
+                * canonicalize(params[p]))
         else
             throw("Could not translate formal argument: " * string(params[p]))
         end
