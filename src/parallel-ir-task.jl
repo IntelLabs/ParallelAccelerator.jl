@@ -1144,11 +1144,11 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                 end
                 if cu_res != nothing
                     if !DEBUG_TASK_FUNCTIONS
-                    if VERSION >= v"0.5.0-dev+4449"
+                        if VERSION >= v"0.5.0-dev+4449"
                             line_num = addToBody!(new_body, Expr(:inbounds, true), line_num) 
-                    else
+                        else
                             line_num = addToBody!(new_body, Expr(:boundscheck, false), line_num) 
-                    end
+                        end
                     end
                     line_num = addToBody!(new_body, deepcopy(cu_res), line_num)
                     if DEBUG_TASK_FUNCTIONS
@@ -1156,9 +1156,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                        # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
                     end
                     if !DEBUG_TASK_FUNCTIONS
-                    if VERSION >= v"0.5.0-dev+4449"
+                        if VERSION >= v"0.5.0-dev+4449"
                             line_num = addToBody!(new_body, Expr(:inbounds, :pop), line_num) 
-                    else
+                        else
                             line_num = addToBody!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))), line_num)
                         end
                     end
