@@ -1108,7 +1108,7 @@ precompile(first_unless, (StepRange{Int64,Int64}, Int64))
 precompile(assign_gs4, (StepRange{Int64,Int64}, Int64))
 precompile(second_unless, (StepRange{Int64,Int64}, Int64))
 
-DEBUG_TASK_FUNCTIONS = true
+DEBUG_TASK_FUNCTIONS = false
 
 function addToBody!(new_body, x, line_num)
     push!(new_body, x) 
