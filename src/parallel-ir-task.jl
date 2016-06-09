@@ -1106,7 +1106,13 @@ precompile(first_unless, (StepRange{Int64,Int64}, Int64))
 precompile(assign_gs4, (StepRange{Int64,Int64}, Int64))
 precompile(second_unless, (StepRange{Int64,Int64}, Int64))
 
-DEBUG_TASK_FUNCTIONS = false
+DEBUG_TASK_FUNCTIONS = true
+
+function addToBody!(new_body, x, line_num)
+    push!(new_body, x) 
+    push!(new_body, LineNumberNode(line_num))
+    return line_num + 1
+end
 
 """
 This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
@@ -1114,7 +1120,7 @@ One call of this routine handles one level of the loop nest.
 If the incoming loop nest level is more than the number of loops nests in the parfor then that is the spot to
 insert the body of the parfor into the new function body in "new_body".
 """
-function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, parfor_nest_level, loop_nest_level, state, newLambdaVarInfo)
+function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, parfor_nest_level, loop_nest_level, state, newLambdaVarInfo, line_num)
     @dprintln(3,"recreateLoopsInternal loop_nest_level=", loop_nest_level, " parfor_nest_level=", parfor_nest_level)
     if loop_nest_level > length(the_parfor.loopNests) 
         @dprintln(3, "Body size ", length(the_parfor.body))
@@ -1127,7 +1133,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
             # But if it was labeled as "unsafe" then output :boundscheck false Expr so that Julia won't generate a boundscheck on the array access.
             if isBareParfor(the_parfor.body[i])
                 @dprintln(3,"Detected nested parfor.  Converting it to a loop.")
-                recreateLoopsInternal(new_body, the_parfor.body[i].args[1], parfor_nest_level + 1, 1, state, newLambdaVarInfo)
+                line_num = recreateLoopsInternal(new_body, the_parfor.body[i].args[1], parfor_nest_level + 1, 1, state, newLambdaVarInfo, line_num)
             else
                 cu_res = convertUnsafe(the_parfor.body[i])
                 @dprintln(3, "cu_res = ", cu_res)
@@ -1135,30 +1141,34 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                     @dprintln(3, "unmodified stmt = ", the_parfor.body[i])
                 end
                 if cu_res != nothing
+                    if !DEBUG_TASK_FUNCTIONS
                     if VERSION >= v"0.5.0-dev+4449"
-                        push!(new_body, Expr(:inbounds, true)) 
+                            line_num = addToBody!(new_body, Expr(:inbounds, true), line_num) 
                     else
-                        push!(new_body, Expr(:boundscheck, false)) 
+                            line_num = addToBody!(new_body, Expr(:boundscheck, false), line_num) 
                     end
-                    push!(new_body, deepcopy(cu_res))
+                    end
+                    line_num = addToBody!(new_body, deepcopy(cu_res), line_num)
                     if DEBUG_TASK_FUNCTIONS
-                        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
-                       # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+                       # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
                     end
+                    if !DEBUG_TASK_FUNCTIONS
                     if VERSION >= v"0.5.0-dev+4449"
-                        push!(new_body, Expr(:inbounds, :pop)) 
+                            line_num = addToBody!(new_body, Expr(:inbounds, :pop), line_num) 
                     else
-                        push!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))))
+                            line_num = addToBody!(new_body, Expr(:boundscheck, Expr(:call, GlobalRef(Base, :getfield), Base, QuoteNode(:pop))), line_num)
+                        end
                     end
                 else
-                    push!(new_body, deepcopy(the_parfor.body[i]))
+                    line_num = addToBody!(new_body, deepcopy(the_parfor.body[i]), line_num)
                     if DEBUG_TASK_FUNCTIONS
                         if isAssignmentNode(the_parfor.body[i])
-                            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "last assignment = ", deepcopy(the_parfor.body[i].args[1])))
+                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "last assignment = ", deepcopy(the_parfor.body[i].args[1])), line_num)
                         else
-                            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
+                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
                         end
-                       # push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"))
+                       # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
                     end
                 end
             end
@@ -1255,46 +1265,47 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         @dprintln(3, "gensym4_lhsvar  = ", gensym4_lhsvar)
 
         if DEBUG_TASK_FUNCTIONS
-            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))))
-            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))))
-            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))))
-            push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))))
+            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))), line_num)
+            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))), line_num)
+            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))), line_num)
         end
 
-        push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_lhsvar)), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), newLambdaVarInfo))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.first_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
-        #push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
-        push!(new_body, LabelNode(label_after_first_unless))
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_lhsvar)), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.first_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless), line_num)
+        #line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless), line_num)
+        line_num = addToBody!(new_body, LabelNode(label_after_first_unless), line_num)
 
         if DEBUG_TASK_FUNCTIONS
-           push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+           line_num = addToBody!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"), line_num)
         end
 
-        push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, ParallelAccelerator.ParallelIR.assign_gs4, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
-        #push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo))
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, ParallelAccelerator.ParallelIR.assign_gs4, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo), line_num)
+        #line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo), line_num)
         @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
-        push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_lhsvar), newLambdaVarInfo))
+        line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_lhsvar), newLambdaVarInfo), line_num)
 
         if DEBUG_TASK_FUNCTIONS
-           push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)))
+           line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)), line_num)
         end
 
-        push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), newLambdaVarInfo))
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), newLambdaVarInfo), line_num)
 
-        recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, state, newLambdaVarInfo)
+        line_num = recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, state, newLambdaVarInfo, line_num)
 
-        push!(new_body, LabelNode(label_before_second_unless))
-        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
-        #push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
-        push!(new_body, LabelNode(label_after_second_unless))
-        push!(new_body, LabelNode(label_last))
+        line_num = addToBody!(new_body, LabelNode(label_before_second_unless), line_num)
+        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless), line_num)
+        #line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless), line_num)
+        line_num = addToBody!(new_body, LabelNode(label_after_second_unless), line_num)
+        line_num = addToBody!(new_body, LabelNode(label_last), line_num)
     end
     if DEBUG_TASK_FUNCTIONS
-       push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level))
+       line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level), line_num)
     end
+    return line_num
 end
 
 """
@@ -1305,7 +1316,8 @@ and outputs that parfor to the new function body as regular Julia loops.
 function recreateLoops(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PIRParForAst, state, newLambdaVarInfo, parfor_nest_level = 1)
     @dprintln(2,"recreateLoops ", the_parfor, " unique_id = ", the_parfor.unique_id)
     # Call the internal loop re-construction code after initializing which loop nest we are working with and the next usable label ID (max_label+1).
-    recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, 1, state, newLambdaVarInfo)
+    push!(new_body, Expr(:line, 1, Symbol(string("from_parfor_", the_parfor.unique_id))))
+    recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, 1, state, newLambdaVarInfo, 2)
     nothing
 end
 
