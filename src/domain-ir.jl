@@ -1483,7 +1483,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
         elseif is(fun, :getfield) && length(oldargs) == 2 
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
-                return oldargs[1]
+                return toRHSVar(oldargs[1], typ, state.linfo)
             elseif isa(oldargs[1], RHSVar) && lookupVariableName(oldargs[1], state.linfo) == Symbol("#self#")
                 fname = oldargs[2]
                 assert(isa(fname, QuoteNode))
