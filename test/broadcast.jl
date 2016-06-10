@@ -27,11 +27,11 @@ module BroadcastTest
 using ParallelAccelerator
 using CompilerTools
 
-ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
 #ParallelAccelerator.ParallelIR.set_debug_level(4)
 #ParallelAccelerator.CGen.set_debug_level(3)
-ParallelAccelerator.set_debug_level(3)
-CompilerTools.LambdaHandling.set_debug_level(3)
+#ParallelAccelerator.set_debug_level(3)
+#CompilerTools.LambdaHandling.set_debug_level(3)
 
 @acc function twoargs(A, B)
     broadcast(*, A, B)
