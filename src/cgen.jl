@@ -1420,10 +1420,10 @@ function from_call1(ast::Array{Any, 1}, linfo)
     s
 end
 
-function isPendingCompilation(list, tgt)
+function isPendingCompilation(list, tgt, typs0)
     for i in 1:length(list)
         ast, name, typs = lstate.worklist[i]
-        if name == tgt
+        if name == tgt && typs == typs0
             return true
         end
     end
@@ -1530,6 +1530,36 @@ function setSymbolType(x, typ, linfo)
     lstate.symboltable[x] = typ
 end
 
+function typeToStr(typ)
+  if isa(typ, Array) || isa(typ, Tuple)
+    if isempty(typ)
+        "()"
+    else
+        "(" * foldl(*, String[typeToStr(t) for t in typ]) * ")"
+    end
+  elseif isa(typ, DataType) 
+      if typ <: Array
+          "Array{" * typeToStr(eltype(typ)) * "}"
+      elseif typ <: Tuple
+          "Tuple{" * foldl(*, String[typeToStr(t) for t in typ.parameters]) * "}"
+      else
+          string(typ)
+      end
+  else
+    string(typ)
+  end
+end
+
+function isFunctionCompiled(funStr, argTyps)
+    typs = typeToStr(argTyps)
+    has(lstate.compiledfunctions, (funStr, typs))
+end
+
+function setFunctionCompiled(funStr, argTyps)
+    typs = typeToStr(argTyps)
+    push!(lstate.compiledfunctions, (funStr, typs))
+end
+
 function from_call(ast::Array{Any, 1},linfo)
 
     pat_out = external_pattern_match_call.func(ast,linfo)
@@ -1578,13 +1608,6 @@ function from_call(ast::Array{Any, 1},linfo)
         funStr = "_" * from_expr(fun,linfo)
     end
 
-    # If we have previously compiled this function
-    # we fallthru and simply emit the call.
-    # Else we lookup the function Symbol and enqueue it
-    # TODO: This needs to specialize on types
-    skipCompilation = has(lstate.compiledfunctions, funStr) ||
-        isPendingCompilation(lstate.worklist, funStr)
-
     if isBaseFunc(fun, :println) || isBaseFunc(fun, :print)
         s =  "std::cout << "
         for a in 2:length(args)
@@ -1598,16 +1621,14 @@ function from_call(ast::Array{Any, 1},linfo)
         return s
     end
 
-
     s = ""
     map((i)->@dprintln(3,i[2]), lstate.worklist)
     map((i)->@dprintln(3,i), lstate.compiledfunctions)
-    s *= funStr * "("
     argTyps = []
     for a in 1:length(args)
         @dprintln(4, "a = ", a, " args[a] = ", args[a])
         s *= from_expr(args[a],linfo) * (a < length(args) ? "," : "")
-        if !skipCompilation
+        #if !skipCompilation
             # Attempt to find type
             if typeAvailable(args[a])
                 push!(argTyps, args[a].typ)
@@ -1620,9 +1641,17 @@ function from_call(ast::Array{Any, 1},linfo)
             else
                 throw(string("Could determine type for arg ", a, " to call ", mod, ".", fun, " with name ", args[a]))
             end
-        end
+        #end
     end
-    s *= ")"
+    s = funStr * "(" * s * ")"
+
+    # If we have previously compiled this function
+    # we fallthru and simply emit the call.
+    # Else we lookup the function Symbol and enqueue it
+    # TODO: This needs to specialize on types
+    skipCompilation = isFunctionCompiled(funStr, argTyps) ||
+        isPendingCompilation(lstate.worklist, funStr, argTyps)
+
     @dprintln(3,"Finished translating call : ", s)
     @dprintln(3,ast[1], " : ", typeof(ast[1]), " : ", hasfield(ast[1], :head) ? ast[1].head : "")
     if !skipCompilation && (isa(fun, Symbol) || isa(fun, Function) || isa(fun, TopNode) || isa(fun, GlobalRef))
@@ -1634,8 +1663,8 @@ function from_call(ast::Array{Any, 1},linfo)
         end
         @dprintln(3,"Compiled Functions are: ")
         for i in 1:length(lstate.compiledfunctions)
-            name = lstate.compiledfunctions[i]
-            @dprintln(3,name);
+            name, typs = lstate.compiledfunctions[i]
+            @dprintln(3,name, " ", typs);
         end
         =#
         @dprintln(3,"Inserting: ", fun, " : ", funStr, " : ", arrayToTuple(argTyps))
@@ -2664,7 +2693,7 @@ end
 
 
 # This is the entry point to CGen from the PSE driver
-function from_root_entry(ast, functionName::AbstractString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_entry(ast, functionName::AbstractString, argtyps, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     #assert(isfunctionhead(ast))
     global inEntryPoint
     inEntryPoint = true
@@ -2729,7 +2758,7 @@ function from_root_entry(ast, functionName::AbstractString, array_types_in_sig :
     @dprintln(3, "args = (", args, ")")
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
-    push!(lstate.compiledfunctions, functionName)
+    setFunctionCompiled(functionName, argtyps)
     forwards, funcs = from_worklist()
     hdr = from_header(true, linfo)
     c = hdr * forwards * funcs * s * wrapper
@@ -2747,7 +2776,7 @@ function from_root_entry(ast, functionName::AbstractString, array_types_in_sig :
 end
 
 # This is the entry point to CGen from the PSE driver
-function from_root_nonentry(ast, functionName::AbstractString, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
+function from_root_nonentry(ast, functionName::AbstractString, argtyps, array_types_in_sig :: Dict{DataType,Int64} = Dict{DataType,Int64}())
     global inEntryPoint
     inEntryPoint = false
     global lstate
@@ -2776,7 +2805,7 @@ function from_root_nonentry(ast, functionName::AbstractString, array_types_in_si
     @dprintln(3, "args = (", args, ")")
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     forwarddecl = "$rtyp $functionName($args);\n"
-    push!(lstate.compiledfunctions, functionName)
+    setFunctionCompiled(functionName, argtyps)
     if length(array_types_in_sig) > 0
         @dprintln(3, "Non-empty array_types_in_sig for non-entry point.")
     end
@@ -2815,7 +2844,7 @@ function insert(func::Function, name, typs)
     global lstate
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
-    if !has(lstate.compiledfunctions, name)
+    if !isFunctionCompiled(name,typs)
         @dprintln(3, "Adding function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
@@ -2825,7 +2854,7 @@ function insert(func::IntrinsicFunction, name, typs)
     global lstate
     #ast = code_typed(func, typs; optimize=true)
     ast = ParallelAccelerator.Driver.code_typed(func, typs)
-    if !has(lstate.compiledfunctions, name)
+    if !isFunctionCompiled(name,typs)
         @dprintln(3, "Adding intrinsic function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
     end
@@ -2840,7 +2869,7 @@ function from_worklist()
         a, fname, typs = splice!(lstate.worklist, 1)
         @dprintln(3,"Checking if we compiled ", fname, " before ", typeof(a), " ", typs)
         @dprintln(3,lstate.compiledfunctions)
-        if has(lstate.compiledfunctions, fname)
+        if isFunctionCompiled(fname,typs)
             @dprintln(3,"Yes, skipping compilation...")
             continue
         end
@@ -2854,13 +2883,13 @@ function from_worklist()
             error("Error: expect 1 AST for ", a, " with signature ", typs, " but got: ", length(a))
         else
             @dprintln(3,"============ Compiling AST for ", fname, " ============")
-            fi, si = from_root_nonentry(a[1], fname, Dict{DataType,Int64}())
+            fi, si = from_root_nonentry(a[1], fname, typs, Dict{DataType,Int64}())
             @dprintln(3,"============== C++ after compiling ", fname, " ===========")
             @dprintln(3,si)
             @dprintln(3,"============== End of C++ for ", fname, " ===========")
-            @dprintln(3,"Adding ", fname, " to compiledFunctions")
+            @dprintln(3,"Adding ", (fname,typs), " to compiledFunctions")
             @dprintln(3,lstate.compiledfunctions)
-            @dprintln(3,"Added ", fname, " to compiledFunctions")
+            @dprintln(3,"Added ", (fname,typs), " to compiledFunctions")
             @dprintln(3,lstate.compiledfunctions)
             f *= fi
             s *= si

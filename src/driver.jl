@@ -256,7 +256,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   end
   @dprintln(3, "array_types_in_sig including returns = ", array_types_in_sig)
  
-  outfile_name = CGen.writec(CGen.from_root_entry(code, function_name_string, array_types_in_sig))
+  outfile_name = CGen.writec(CGen.from_root_entry(code, function_name_string, signature, array_types_in_sig))
   CGen.compile(outfile_name)
   dyn_lib = CGen.link(outfile_name)
  
