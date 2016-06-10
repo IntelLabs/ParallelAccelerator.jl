@@ -129,8 +129,8 @@ mk_copy(arr) = Expr(:call, GlobalRef(Base, :copy), arr)
 mk_generate(range, f) = Expr(:generate, range, f)
 mk_reshape(arr, shape) = Expr(:reshape, arr, shape)
 mk_backpermute(arr, f) = Expr(:backpermute, arr, f)
-mk_arrayref(arr, idx) = Expr(:arrayref, arr, idx)
-mk_arrayset!(arr, idx, v) = Expr(:arrayset!, arr, idx, v)
+mk_arrayref(arr, idx) = Expr(:arrayref, arr, idx...)
+mk_arrayset(arr, idx, v) = Expr(:arrayset, arr, idx..., v)
 mk_range(start, step, final) = Expr(:range, start, step, final)
 mk_ranges(ranges...) = length(ranges) == 1 ? ranges[1] : Expr(:ranges, ranges...)
 mk_tomask(arr) = Expr(:tomask, arr)
@@ -293,7 +293,8 @@ end
 
 function addToEscapingVariable(v, typ, inner_linfo, outer_linfo)
     desc = getDesc(v, outer_linfo)
-    rhs = addEscapingVariable(v, typ, desc & (~ (ISCAPTURED | ISASSIGNEDONCE)), inner_linfo)
+    name = lookupVariableName(v, outer_linfo)
+    rhs = addEscapingVariable(name, typ, desc & (~ (ISCAPTURED | ISASSIGNEDONCE)), inner_linfo)
     if (desc & ISASSIGNED == ISASSIGNED) && (desc & ISASSIGNEDONCE != ISASSIGNEDONCE)
         setDesc(v, desc | ISCAPTURED | ISASSIGNEDBYINNERFUNCTION, outer_linfo)
     else
@@ -306,6 +307,27 @@ function addToEscapingVariable(v, inner_linfo, outer_linfo)
     typ = getType(v, outer_linfo)
     addToEscapingVariable(v, typ, inner_linfo, outer_linfo)
 end
+
+# Make a variable captured by inner lambda
+# If the variable is a GenSym, first create a local variable for it.
+function makeCaptured(state, var::RHSVar)
+    lhs = toLHSVar(var)
+    if isa(lhs, GenSym) # cannot put GenSym into lambda! Add a temp variable to do it
+       typ = getType(lhs, state.linfo)
+       tmpv = addFreshLocalVariable(string(lhs), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+       emitStmt(state, mk_expr(typ, :(=), toLHSVar(tmpv), var))
+       return tmpv
+    else
+       return var
+    end
+end
+
+function makeCaptured(state, val)
+   typ = typeof(val)
+   tmpv = addFreshLocalVariable(string("tmp"), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+   emitStmt(state, mk_expr(typ, :(=), toLHSVar(tmpv), val))
+   return tmpv
+end 
 
 type IRState
     linfo  :: LambdaVarInfo
@@ -746,12 +768,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
             push!(new_params, old_params[i])
             idx[j] = i
         else
-            if isa(args[i], GenSym) # cannot put GenSym into lambda! Add a temp variable to do it
-                typ = getType(args[i], state.linfo)
-                tmpv = addFreshLocalVariable(string(args[i]), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-                emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, args[i]))
-                args[i] = tmpv
-            end
+            args[i] = makeCaptured(state, args[i])
             if isa(args[i], Union{LHSVar,RHSVar})
                 tmpv = lookupVariableName(args[i], state.linfo)
                 args[i] = addToEscapingVariable(tmpv, f.linfo, state.linfo)
@@ -928,11 +945,7 @@ function from_lambda(state, env, expr, closure = nothing)
                 qtyp = is(qtyp, Box) ? getBoxType(state, q) : qtyp
                 dprintln(env, "field ", p, " has type ", qtyp)
                 if isa(q, RHSVar)
-                    if isa(q, GenSym)  # tempvariable must be renamed to a named variable
-                        newq = addLocalVariable(gensym(string(q)), qtyp, getDesc(q, state.linfo), state.linfo)
-                        emitStmt(state, TypedExpr(qtyp, :(=), toLHSVar(newq, state.linfo), q))
-                        q = newq
-                    end
+                    q = makeCaptured(state, q)
                     # if q has a Box type, we lookup its definition (due to setfield!) instead
                     qname = lookupVariableName(q, state.linfo)
                     dprintln(env, "closure variable in parent = ", qname)
@@ -1173,53 +1186,6 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
     end
 end
 
-# legacy v0.3
-#=
-function normalize_callname(state::IRState, env, fun::Symbol, args)
-    if is(fun, :broadcast!)
-        dst = lookupConstDefForArg(state, args[2])
-        if isa(dst, Expr) && is(dst.head, :call) && isBaseFunc(dst.args[1], :ccall) && 
-           isa(dst.args[2], QuoteNode) && is(dst.args[2].value, :jl_new_array)
-            # now we are sure destination array is new
-            fun   = args[1]
-            args  = args[3:end]
-            if isa(fun, GlobalRef)
-                fun = fun.name
-            end
-            if isa(fun, Symbol)
-            elseif isa(fun, TypedVar)
-                fun = lookupConstDef(state, fun)
-            else
-                error("DomainIR: cannot handle broadcast! with function ", fun)
-            end
-        elseif isa(dst, Expr) && is(dst.head, :call) && isa(dst.args[1], DataType) &&
-            isBitArrayType(dst.args[1])
-            # destination array is a new bitarray
-            fun   = args[1]
-            args  = args[3:end]
-            if isa(fun, RHSVar)
-                # fun could be a variable 
-                fun = get(state.defs, toLHSVar(fun), nothing)
-            end
-            if isa(fun, GlobalRef)
-                func = getfield(fun.mod, fun.name)  # should give back a function
-                assert(isa(func, Function))
-                fun = fun.name
-            end
-            if !isa(fun, Symbol)
-                error("DomainIR: cannot handle broadcast! with function ", fun)
-            end
-        else
-            dprintln(env, "cannot decide :broadcast! destination is temporary ")
-        end
-        if haskey(liftOps, fun) # lift operation to array level
-            fun = liftOps[fun]
-        end
-    end
-    return (fun, args)
-end
-=#
-
 function normalize_callname(state::IRState, env, fun::TopNode, args)
     fun = fun.name
     if is(fun, :ccall)
@@ -1453,6 +1419,8 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
         return translate_call_cartesianarray(state, env_, typ, args)
     elseif is(fun, :cartesianmapreduce)
         return translate_call_cartesianmapreduce(state, env_, typ, args)
+    elseif is(fun, :broadcast)
+        return translate_call_broadcast(state, env_, typ, args)
     elseif is(fun, :runStencil)
         return translate_call_runstencil(state, env_, args)
     elseif is(fun, :parallel_for)
@@ -1609,13 +1577,8 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                     # TODO: assert that vtyp must be equal to etyp here, or do a cast?
                     f = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, params[2])], state.linfo)
                 else # set to scalar value
-                    if isa(var, GenSym)
-                       tmpv = addFreshLocalVariable(string(args[i]), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-                       emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, args[i]))
-                       var = tmpv
-                    elseif isa(var, RHSVar)
-                       var = toLHSVar(var)
-                    end
+                    var = makeCaptured(state, var)
+                    var = toLHSVar(var)
                     pop!(args)
                     f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
                 end
@@ -1668,7 +1631,7 @@ Run type inference and domain process over the income function object.
 Return the result AST with a modified return statement, namely, return
 is changed to Expr(:tuple, retvals...)
 """
-function get_ast_for_lambda(state, env, func::Union{LambdaInfo,TypedVar,Expr}, argstyp)
+function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar,Expr}, argstyp)
     if isa(func, TypedVar) && func.typ <: Function
         # function/closure support is changed in julia 0.5
         lambda = func.typ #.name.primary
@@ -1756,10 +1719,80 @@ function get_lambda_for_arg(state, env, func::GlobalRef, argstyp)
     #if(isdefined(ParallelAccelerator, func))
     #    m = methods(getfield(ParallelAccelerator, func), tuple(argstyp...))
     #else
-    m = methods(getfield(func.mod, func.name), tuple(argstyp...))
-    dprintln(env,"get_lambda_for_arg: ", func, " methods=", m, " argstyp=", argstyp)
-    assert(length(m) > 0)
-    get_ast_for_lambda(state, env, m[1].func.code, argstyp)
+    # m = code_typed(getfield(func.mod, func.name), tuple(argstyp...))
+    #dprintln(env,"get_lambda_for_arg: ", func, " methods=", m, " argstyp=", argstyp)
+    #assert(length(m) > 0)
+    get_ast_for_lambda(state, env, getfield(func.mod, func.name), argstyp)
+end
+
+# broadcast support for Julia's semantics:
+# 1. the input dimensions may not match, output becomes the max of them
+# 2. for each dimension d, size(output, d) = size(A, d), if there exists one A in inputs, where size(A, d) > 1, otherwise size(output, d) = 1
+# 3. the value in output becomes a fold(op, A[i,j,k], B[i,j,k], ...)
+function translate_call_broadcast(state, env, typ, args::Array{Any,1})
+    # equivalent to creating an array first, then map! with indices.
+    dprintln(env, "got broadcast args=", args)
+    # need to retrieve map lambda from inits, since it is already moved out.
+    nargs = length(args)
+    args = normalize_args(state, env, args)
+    @assert (nargs >= 3) "Expect 3 or more arguments to broadcast, but got " * string(args[1:end])
+    argtyps = DataType[ typeOfOpr(state, arg) for arg in args[2:end] ]
+    dprintln(env, "argtyps =", argtyps)
+    inptyps = DataType[ isArrayType(t) ? elmTypOf(t) : t for t in argtyps ]
+    (body, linfo) = get_lambda_for_arg(state, env, args[1], inptyps) 
+    ety = getReturnType(linfo)
+    etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
+    dprintln(env, "etys = ", etys)
+    # return dimension is max of all input dimensions
+    rdim = maximum([ ndims(atyp) for atyp in argtyps ])
+    size_var = Array(RHSVar, nargs - 1, rdim)
+    size_var_inner = Array(RHSVar, nargs - 1, rdim)
+    rtyp = Array{ety, rdim}
+    rvar = addFreshLocalVariable(string("out_arr"), rtyp, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+    rsizes = Array(RHSVar, rdim)
+    for j = 1:rdim
+        sizes = Any[]
+        for i = 1:(nargs - 1)
+            inp = args[i + 1]
+            inptyp = inptyps[i]
+            if inptyp == argtyps[i] # scalar
+                push!(sizes, 1)
+            else
+                size_var[i, j] = addFreshLocalVariable(string("s_", i, "_", j), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+                # size_var will be used by inner lambda
+                size_var_inner[i, j] = addToEscapingVariable(toLHSVar(size_var[i, j]), Int, linfo, state.linfo)
+                emitStmt(state, mk_expr(Int, :(=), toLHSVar(size_var[i,j]), mk_expr(Int, :call, GlobalRef(Base, :size), inp, j)))
+                push!(sizes, size_var[i, j])
+            end
+        end
+        rsizes[j] = addFreshLocalVariable(string("s_", j), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
+        emitStmt(state, mk_expr(Int, :(=), toLHSVar(rsizes[j]), mk_expr(Int, :call, GlobalRef(Base, :max), sizes...)))
+    end
+    emitStmt(state, mk_expr(rtyp, :(=), toLHSVar(rvar), mk_alloc(state, ety, rsizes)))
+    pre_body = Any[]
+    idx_params = RHSVar[ addFreshLocalVariable(string("idx_", j), Int, ISASSIGNED | ISASSIGNEDONCE, linfo) for j = 1:rdim ]
+    idx_syms = Symbol[ lookupVariableName(p, linfo) for p in idx_params ]
+    dummy_sym = lookupVariableName(addFreshLocalVariable("dummy", ety, 0, linfo), linfo)
+    old_params = getInputParameters(linfo)
+    setInputParameters(vcat(dummy_sym, idx_syms), linfo)
+    # make the expression that calculates output element value
+    for i = 1:(nargs - 1)
+        inp = makeCaptured(state, args[i + 1])
+        inp = addToEscapingVariable(toLHSVar(inp, state.linfo), linfo, state.linfo)
+        inptyp = inptyps[i]
+        if inptyp == argtyps[i] # scalar
+            push!(pre_body, mk_expr(inptyp, :(=), toLHSVar(old_params[i], linfo), inp))
+        else
+            inp_dim = ndims(argtyps[i])
+            inp_idx = [ mk_expr(Int, :call, GlobalRef(Base, :min), idx_params[j], size_var_inner[i, j]) for j = 1:inp_dim ]
+            push!(pre_body, mk_expr(inptyp, :(=), toLHSVar(old_params[i], linfo), mk_expr(inptyp, :call, GlobalRef(Base, :unsafe_arrayref), inp, inp_idx...)))
+        end
+    end
+    body.args = vcat(pre_body, body.args)
+    domF = DomainLambda(linfo, body)
+    expr::Expr = mk_mmap!([rvar], domF, true)
+    expr.typ = rtyp
+    return expr
 end
 
 #map with a generic function 
@@ -2141,11 +2174,7 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     arr = args[1]
     ival = args[2]
     typs = Type[typeOfOpr(state, arr)]
-    if isa(ival, GenSym)
-        tmpv = addFreshLocalVariable(string(ival), getType(ival, state.linfo), ISASSIGNED | ISASSIGNEDONCE, state.linfo)
-        emitStmt(state, mk_expr(tmpv.typ, :(=), tmpv, ival))
-        ival = tmpv
-    end
+    ival = makeCaptured(state, ival)
     domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
     expr = mmapRemoveDupArg!(state, mk_mmap!([arr], domF))
     expr.typ = typ
@@ -2419,7 +2448,9 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :meta)
         # skip
     elseif is(head, :static_parameter)
-        # skip
+        p = args[1]
+        @assert (isa(p, Int)) "Expect constant Int argument to :static_parameter, but got " * string(ast)
+        ast = getStaticParameterValue(p, state.linfo)
     elseif is(head, :static_typeof)
         typ = getType(args[1], state.linfo)
         return typ  
