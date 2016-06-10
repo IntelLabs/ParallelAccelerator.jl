@@ -208,8 +208,20 @@ end
     Base.reduce(f, a...)
 end
 
+@noinline function broadcast{T<:Number}(f::Function, a::DenseArray{T}, b...)
+    Base.broadcast(f, a, b...)
+end
+
+@noinline function broadcast{T<:Number}(f::Function, a::T, b...)
+    Base.broadcast(f, a, b...)
+end
+
+@inline function broadcast(f, a...)
+    Base.broadcast(f, a...)
+end
+
 operators = Set(vcat(unary_operators, binary_operators, 
-    Symbol[:map, :map!, :reduce, :setindex!, :getindex]))
+    Symbol[:map, :map!, :reduce, :broadcast, :setindex!, :getindex]))
 
 for opr in operators
   @eval export $opr
