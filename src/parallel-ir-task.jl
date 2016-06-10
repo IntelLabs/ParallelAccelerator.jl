@@ -744,7 +744,7 @@ function isf(t :: Function,
               s = sprint(io->Base.show_backtrace(io, bt))
               ccall(:puts, Cint, (Cstring,), string(s))
   
-              msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
+              msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid)
               ccall(:puts, Cint, (Cstring,), msg)
               msg = string(something)
               ccall(:puts, Cint, (Cstring,), msg)
