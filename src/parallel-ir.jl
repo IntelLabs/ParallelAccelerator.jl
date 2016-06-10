@@ -561,7 +561,9 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: RHSVar, dim :: Int64)
-    TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), :($x), dim)
+    TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), deepcopy(x), dim)
+    #TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), :($x), dim)
+    #TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), deepcopy(:($x)), dim)
 end
 
 """
@@ -576,7 +578,7 @@ function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
             start = isa(r.exprs.start_val, Expr) ? r.start : r.exprs.start_val
             ret = DomainIR.add(DomainIR.sub(last, start), 1)
             @dprintln(3, "mk_arraylen_expr for range = ", r, " last = ", last, " start = ", start, " ret = ", ret)
-            return ret
+            return deepcopy(ret)
         elseif isa(x.range[dim], SingularSelector)
             return 1
         end
@@ -1320,7 +1322,8 @@ function mergeLambdaIntoOuterState(state, dl :: DomainLambda, args :: Array{Any,
     end
     @dprintln(3, "repl_dict = ", repl_dict)
     body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, AstWalk)
-    @dprintln(3, "after replacement, body = ", body)
+    @dprintln(3, "after replacement, body = ")
+    printBody(3, body)
     return body
 end
 
@@ -2145,14 +2148,18 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
         body_lives = CompilerTools.LivenessAnalysis.from_lambda(cbdata, this_parfor.body, pir_live_cb, cbdata)
         @dprintln(3, "body_lives = ", body_lives)
+        # This is some old code that looks wrong and should be removed once confirmed that the "all_uses" approach is better.
         live_in_to_start_block = body_lives.basic_blocks[body_lives.cfg.basic_blocks[-1]].live_in
         all_defs = Set()
+        all_uses = Set()
         for bb in body_lives.basic_blocks
             all_defs = union(all_defs, bb[2].def)
+            all_uses = union(all_uses, bb[2].use)
         end
         # as = CompilerTools.LivenessAnalysis.AccessSummary(setdiff(all_defs, live_in_to_start_block), live_in_to_start_block)
         # FIXME: is this correct?
-        as = CompilerTools.LivenessAnalysis.AccessSummary(all_defs, live_in_to_start_block)
+        as = CompilerTools.LivenessAnalysis.AccessSummary(all_defs, intersect(all_uses, live_in_to_start_block))
+        #as = CompilerTools.LivenessAnalysis.AccessSummary(all_defs, live_in_to_start_block)
         @dprintln(3, "as = ", as)
         push!(expr_to_process, as)
 
@@ -3632,13 +3639,13 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
         cur_parfor.postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
     end
     # update read write set in case of symbol replacement like unused variable elimination
-    old_set = copy(cur_parfor.rws.readSet.scalars)
+    old_set = deepcopy(cur_parfor.rws.readSet.scalars)
     for sym in old_set
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.readSet.scalars,sym)
         push!(cur_parfor.rws.readSet.scalars,o_sym)
     end
-    old_set = copy(cur_parfor.rws.writeSet.scalars)
+    old_set = deepcopy(cur_parfor.rws.writeSet.scalars)
     for sym in old_set
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.writeSet.scalars,sym)
