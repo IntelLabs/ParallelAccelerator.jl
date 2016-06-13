@@ -1133,7 +1133,7 @@ function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_num
             arr_class = state.array_length_correlation[arr]
             for (d, v) in state.symbol_array_correlation
                 if v==arr_class
-                    if d[rhs.args[3]]==lhs
+                    if isa(rhs.args[3], Int) && d[rhs.args[3]]==lhs
                         @dprintln(3, "reverse correlation arraysize() found: ", node," ", d)
                         return node
                     end
@@ -1147,11 +1147,13 @@ function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_num
         if isa(node.args[3],Int) && haskey(state.array_length_correlation, arr)
             arr_class = state.array_length_correlation[arr]
             for (d, v) in state.symbol_array_correlation
-                if v==arr_class
-                    #
+                if v==arr_class 
                     res = d[node.args[3]]
-                    @dprintln(3, "arraysize() replaced: ", node," res ",res)
-                    return res
+                    # only replace when the size is constant!
+                    if isbits(res)
+                        @dprintln(3, "arraysize() replaced: ", node," res ",res)
+                        return res
+                    end
                 end
             end
         end
