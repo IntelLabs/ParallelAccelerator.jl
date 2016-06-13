@@ -1627,6 +1627,7 @@ function sub_cur_body_walk(x::Expr,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+#=
 function sub_cur_body_walk(x::Symbol,
                            cbd::cur_body_data,
                            top_level_number::Int64,
@@ -1645,8 +1646,9 @@ function sub_cur_body_walk(x::Symbol,
     dprintln(dbglvl,"sub_cur_body_walk not substituting")
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+=#
 
-function sub_cur_body_walk(x::TypedVar,
+function sub_cur_body_walk(x::RHSVar,
                            cbd::cur_body_data,
                            top_level_number::Int64,
                            is_top_level::Bool,
@@ -3280,7 +3282,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         alloc_args = args[2].args[2:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
-        shape = map(toLHSVarOrInt,sh)
+        shape = map(x -> if isa(x, Expr) x else toLHSVarOrInt end, sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         CompilerTools.LambdaHandling.setType(arr, Int, state.LambdaVarInfo)
