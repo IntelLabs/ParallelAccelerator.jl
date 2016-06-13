@@ -225,7 +225,9 @@ end
 
 # These are primitive operators on scalars and arrays
 _operators = ["*", "/", "+", "-", "<", ">"]
-# These are primitive "methods" for scalars and arrays
+# these are builtins that for primitive type only
+_primitive_builtins = ["min", "max"]
+# These are builtin "methods" for scalars and arrays
 _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top", "box",
             "unbox", "tuple", "arraysize", "arraylen", "ccall",
             "arrayset", "getfield", "unsafe_arrayref", "unsafe_arrayset",
@@ -589,7 +591,9 @@ function checkGlobalRefName(arg::ANY, name::Symbol)
     return false
 end
 
-
+lookupType(a::RHSVar, linfo) = getType(a, linfo)
+lookupType(a::GlobalRef, linfo) = typeof(getfield(a.mod, a.name)) 
+lookupType(a, linfo) = typeAvailable(a) ? a.typ : typeof(a) 
 
 function from_assignment_fix_tuple(lhs, rhs::Expr, linfo)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
@@ -929,7 +933,7 @@ function from_ccall(args, linfo)
     end
     @dprintln(3,"End of ccall args")
     fun = args[1]
-    if isInlineable(fun, args)
+    if isInlineable(fun, args, linfo)
         return from_inlineable(fun, args, linfo)
     end
 
@@ -1029,7 +1033,7 @@ function from_getfield(args, linfo)
     mod, tgt = resolveCallTarget(args[1], args[2:end],linfo)
     if mod == "Intrinsics"
         return from_expr(tgt, linfo)
-    elseif isInlineable(tgt, args[2:end])
+    elseif isInlineable(tgt, args[2:end], linfo)
         return from_inlineable(tgt, args[2:end], linfo)
     end
     from_expr(mod, linfo) * "." * from_expr(tgt, linfo)
@@ -1206,6 +1210,15 @@ function from_builtins(f, args, linfo)
         return from_steprange_last(args, linfo)
     elseif tgt == "convert" || tgt == "unsafe_convert"
         return from_typecast(args[1], [args[2]], linfo)
+    elseif tgt == "min" || tgt == "max"
+        arg_x = from_expr(args[1], linfo)
+        arg_y = from_expr(args[2], linfo)
+        if tgt == "max" 
+            cmp_op = ">"
+        else
+            cmp_op = "<"
+        end
+        return "(($arg_x $cmp_op $arg_y) ? ($arg_x) : ($arg_y))"
     elseif isdefined(Base, f) 
         fval = getfield(Base, f)
         if isa(fval, DataType)
@@ -1369,21 +1382,25 @@ function from_inlineable(f, args, linfo)
         end
     elseif has(_builtins, string(f))
 =#
-    if has(_builtins, string(f))
+    s = string(f)
+    if has(_primitive_builtins, s) || has(_builtins, s)
         return from_builtins(f, args, linfo)
-    elseif has(_Intrinsics, string(f))
+    elseif has(_Intrinsics, s)
         return from_intrinsic(f, args, linfo)
     else
-        throw("Unknown Operator or Method encountered: " * string(f))
+        throw("Unknown Operator or Method encountered: " * s)
     end
 end
 
-function isInlineable(f, args)
+function isInlineable(f, args, linfo)
     #if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
-    if has(_builtins, string(f)) || has(_Intrinsics, string(f))
-        return true
+    s = string(f)
+    if has(_primitive_builtins, s) && length(args) > 0 
+        t = lookupType(args[1], linfo)
+        isPrimitiveJuliaType(t) 
+    else
+        has(_builtins, s) || has(_Intrinsics, s)
     end
-    return false
 end
 
 function arrayToTuple(a)
@@ -1444,7 +1461,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo)
     M = ""
     t = ""
     s = ""
-    if isInlineable(f, args)
+    if isInlineable(f, args, linfo)
         return M, string(f), from_inlineable(f, args, linfo)
     elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
@@ -1503,7 +1520,7 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo)
     #    @dprintln(3,"Case 2: calling")
     #    return resolveCallTarget(f,linfo)
     # case 3:
-    elseif (isa(f, TopNode) || isa(f, GlobalRef)) && isInlineable(f.name, args)
+    elseif (isa(f, TopNode) || isa(f, GlobalRef)) && isInlineable(f.name, args, linfo)
         t = from_inlineable(f.name, args,linfo)
         @dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
@@ -1596,7 +1613,7 @@ function from_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"fun is: ", fun)
     @dprintln(3,"call Args are: ", args)
 
-    if isInlineable(fun, args)
+    if isInlineable(fun, args, linfo)
         @dprintln(3,"Doing with inlining ", fun, "(", args, ")")
         fs = from_inlineable(fun, args,linfo)
         return fs
