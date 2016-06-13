@@ -2237,11 +2237,15 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         expr = args[1]
         typ = typeOfOpr(state, expr)
         if typ == Any
-            typ = args[2]
+            typ = lookupConstDefForArg(state, args[2])
             dprintln(env, "got type =", typ)
-            updateTyp(state, expr, typ)
+            if isa(typ, Type)
+                updateTyp(state, expr, typ)
+            else
+                dprintln(env, " skip updateTyp for typ = ", typ)
+            end
         end
-        @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
+        # @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
         args = normalize_args(state, env_, args)
