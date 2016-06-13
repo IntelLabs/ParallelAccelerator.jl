@@ -120,7 +120,7 @@ mk_eltype(arr) = Expr(:eltype, arr)
 mk_ndim(arr) = Expr(:ndim, arr)
 mk_length(arr) = Expr(:length, arr)
 #mk_arraysize(arr, d) = Expr(:arraysize, arr, d)
-mk_arraysize(arr, dim) = TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), arr, dim)
+mk_arraysize(state, arr, dim) = TypedExpr(Int64, :call, GlobalRef(Base, :arraysize), arr, simplify(state, dim))
 mk_sizes(arr) = Expr(:sizes, arr)
 mk_strides(arr) = Expr(:strides, arr)
 mk_alloc(typ, s) = Expr(:alloc, typ, s)
@@ -1276,7 +1276,7 @@ function inline_select(env, state, arr::RHSVar)
                 if length(range_extra) > 0
                     # if all ranges are int, then it is not a selection
                     if any(Bool[ismask(state,r) for r in range_extra])
-                        ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(arr, i)) for i in 1:length(range_extra)]...)
+                        ranges = mk_ranges([rangeToMask(state, range_extra[i], mk_arraysize(state, arr, i)) for i in 1:length(range_extra)]...)
                       dprintln(env, "inline-select: converted to ranges = ", ranges)
                       arr = mk_select(target_arr, ranges)
                     else
@@ -1454,7 +1454,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
     elseif is(fun, :arraysize)
         args = normalize_args(state, env_, args)
         dprintln(env,"got arraysize, args=", args)
-        arr_size_expr::Expr = mk_arraysize(args...)
+        arr_size_expr::Expr = mk_arraysize(state, args...)
         arr_size_expr.typ = typ
         return arr_size_expr
     elseif is(fun, :alloc) || is(fun, :Array)
@@ -1583,7 +1583,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
             #newsize = addGenSym(Int, state.linfo)
             #newlhs = addGenSym(typ, state.linfo)
             etyp = elmTypOf(arrTyp)
-            ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(arr, i)) for i in 1:length(ranges)]...)
+            ranges = mk_ranges([rangeToMask(state, ranges[i], mk_arraysize(state, arr, i)) for i in 1:length(ranges)]...)
             dprintln(env, "ranges becomes ", ranges)
             if is(fun, :getindex) 
                 expr = mk_select(arr, ranges)
@@ -1805,6 +1805,7 @@ function translate_call_broadcast(state, env, typ, args::Array{Any,1})
         else
             inp_dim = ndims(argtyps[i])
             inp_idx = [ mk_expr(Int, :call, GlobalRef(Base, :min), idx_params[j], size_var_inner[i, j]) for j = 1:inp_dim ]
+            #inp_idx = [ add_expr(1, mk_expr(Int, :call, GlobalRef(Base, :rem), sub_expr(idx_params[j], 1), size_var_inner[i, j])) for j = 1:inp_dim ]
             push!(pre_body, mk_expr(inptyp, :(=), toLHSVar(old_params[i], linfo), mk_expr(inptyp, :call, GlobalRef(Base, :unsafe_arrayref), inp, inp_idx...)))
         end
     end
@@ -2145,7 +2146,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
             sizeVars[i] = addFreshLocalVariable(string("red_dim_size"), Int, ISASSIGNED | ISASSIGNEDONCE, state.linfo)
             dimExp = mk_expr(arrtyp, :call, GlobalRef(Base, :select_value), 
                          mk_expr(Bool, :call, GlobalRef(Base, :eq_int), red_dim[1], i), 
-                         1, mk_arraysize(arr, i)) 
+                         1, mk_arraysize(state, arr, i)) 
             emitStmt(state, mk_expr(Int, :(=), sizeVars[i], dimExp))
             sizeVars[i] = addToEscapingVariable(lookupVariableName(sizeVars[i], state.linfo), Int, linfo, state.linfo)
         end
