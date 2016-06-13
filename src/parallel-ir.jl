@@ -3558,6 +3558,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :type_goto
         # skip
+    elseif head in DomainIR.exprHeadIgnoreList 
+        # other packages like HPAT can generate new nodes like :alloc, :join
     else
         throw(string("ParallelAccelerator.ParallelIR.from_expr: unknown Expr head :", head))
     end
