@@ -3791,9 +3791,9 @@ Parallel IR AstWalk calls Domain IR AstWalk which in turn calls CompilerTools.As
 For each AST node, CompilerTools.AstWalker.AstWalk calls Domain IR callback to give it a chance to handle the node if it is a Domain IR node.
 Likewise, Domain IR callback first calls Parallel IR callback to give it a chance to handle Parallel IR nodes.
 The Parallel IR callback similarly first calls the user-level callback to give it a chance to process the node.
-If a callback returns "nothing" it means it didn't modify that node and that the previous code should process it.
-The Parallel IR callback will return "nothing" if the node isn't a Parallel IR node.
-The Domain IR callback will return "nothing" if the node isn't a Domain IR node.
+If a callback returns "ASTWALK_RECURSE" it means it didn't modify that node and that the previous code should process it.
+The Parallel IR callback will return "ASTWALK_RECURSE" if the node isn't a Parallel IR node.
+The Domain IR callback will return "ASTWALK_RECURSE" if the node isn't a Domain IR node.
 """
 function AstWalk(ast::Any, callback, cbdata)
     dw = DirWalk(callback, cbdata)
