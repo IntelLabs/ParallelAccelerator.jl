@@ -135,17 +135,41 @@ end
   eye(size(A, 1), size(A, 2))
 end
 
+@inline function repmat{T<:Number}(A::Array{T, 3}, m::Int, n::Int, l::Int)
+  s::Int = size(A, 1)
+  t::Int = size(A, 2)
+  u::Int = size(A, 3)
+  cartesianarray(eltype(A), (m * s, n * t, l * u)) do i, j, k
+    A[1 + rem(i - 1, s), 1 + rem(j - 1, t), 1 + rem(k - 1, u)]
+  end
+end
+
+@inline function repmat(A::DenseMatrix, m::Int, n::Int, l::Int)
+  s::Int = size(A, 1)
+  t::Int = size(A, 2)
+  cartesianarray(eltype(A), (m * s, n * t, l)) do i, j, k
+    A[1 + rem(i - 1, s), 1 + rem(j -1, t)]
+  end
+end
+
+@inline function repmat(A::DenseVector, m::Int, n::Int, l::Int)
+  s::Int = size(A, 1)
+  cartesianarray(eltype(A), (m * s, n, l)) do i, j, k
+    A[1 + rem(i - 1, s)]
+  end
+end
+
 @inline function repmat(A::DenseVector, m::Int, n::Int)
   s::Int = size(A, 1)
   cartesianarray(eltype(A), (m * s, n)) do i, j
-    A[1 + mod(i - 1, s)]
+    A[1 + rem(i - 1, s)]
   end
 end
 
 @inline function repmat(A::DenseMatrix, m::Int, n::Int)
   s::Int, t::Int = size(A)
   cartesianarray(eltype(A), (m * s, n * t)) do i, j
-    A[1 + mod(i - 1, s), 1 + mod(j - 1, t)]
+    A[1 + rem(i - 1, s), 1 + rem(j - 1, t)]
   end
 end
 
