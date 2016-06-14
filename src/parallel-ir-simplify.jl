@@ -1150,7 +1150,7 @@ function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_num
                 if v==arr_class 
                     res = d[node.args[3]]
                     # only replace when the size is constant!
-                    if isbits(res)
+                    if isIntType(res)
                         @dprintln(3, "arraysize() replaced: ", node," res ",res)
                         return res
                     end

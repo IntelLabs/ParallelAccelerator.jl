@@ -63,6 +63,12 @@ using ParallelAccelerator
     scale(W,s)
 end
 
+@acc function testRepMat2(A, B) 
+   (l, m, n) = size(B)
+   C = repmat(A, 1, 1, n) ./ B
+   D = 1 ./ maximum(C, 2)
+   return D
+end
 
 function test1()
   A = rand(5)
@@ -106,6 +112,11 @@ function test7()
     abs(sum(W0) - sum(W1)) < 1.0e-10
 end
 
+function test8()
+    A = testRepMat2(ones(3,3), ones(3,3,3))
+    abs(sum(A) - 9.0) < 1.0e-10)
+end
+
 end
 
 using Base.Test
@@ -117,5 +128,6 @@ println("Testing parallel library functions...")
 @test APILibTest.test5() 
 @test APILibTest.test6() 
 @test APILibTest.test7() 
+@test APILibTest.test8() 
 println("Done testing parallel library functions.") 
 
