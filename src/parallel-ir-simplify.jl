@@ -1116,31 +1116,21 @@ function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims ::
     end
 end
 
-function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+"""
+Replace arraysize() calls for arrays with known constant sizes.
+Constant size is Int constants, as well as assigned once variables which are
+in symbol_array_correlation. Variables should be assigned before current statement, however. 
+"""
+function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
     @dprintln(4,"node.head: ", node.head)
     print_correlations(3, state)
 
-# TODO: handle arraylen similarly
-
-    # if the correlation is established in reverse direction using this assignment, then the array size call cannot be replaced 
-    if node.head==:(=) && isCall(node.args[2]) && isBaseFunc(node.args[2].args[1], :arraysize)
-        lhs = toLHSVar(node.args[1])
-        rhs = node.args[2]
-        arr = toLHSVar(rhs.args[2])
-        if haskey(state.array_length_correlation, arr)
-            arr_class = state.array_length_correlation[arr]
-            for (d, v) in state.symbol_array_correlation
-                if v==arr_class
-                    if isa(rhs.args[3], Int) && d[rhs.args[3]]==lhs
-                        @dprintln(3, "reverse correlation arraysize() found: ", node," ", d)
-                        return node
-                    end
-                end
-            end
-        end
-    end
+    # TODO: handle arraylen similarly
+    
+    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
+    
     if node.head == :call && isBaseFunc(node.args[1], :arraysize)
         # replace arraysize calls when size is known and constant
         arr = toLHSVar(node.args[2])
@@ -1149,8 +1139,9 @@ function replaceConstArraysizes(node :: Expr, state :: expr_state, top_level_num
             for (d, v) in state.symbol_array_correlation
                 if v==arr_class 
                     res = d[node.args[3]]
-                    # only replace when the size is constant!
-                    if isIntType(res)
+                    # only replace when the size is constant or a valid live variable 
+                    # check def since a symbol correlation might be defined with current arraysize() in reverse direction
+                    if isIntType(res) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
                         @dprintln(3, "arraysize() replaced: ", node," res ",res)
                         return res
                     end
