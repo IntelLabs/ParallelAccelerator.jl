@@ -114,7 +114,7 @@ end
 
 function test8()
     A = testRepMat2(ones(3,3), ones(3,3,3))
-    abs(sum(A) - 9.0) < 1.0e-10)
+    abs((sum(A) - 9.0)) < 1.0e-10
 end
 
 end
