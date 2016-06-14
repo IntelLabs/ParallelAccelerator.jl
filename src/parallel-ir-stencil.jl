@@ -80,12 +80,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # the following assumes contiguous column major layout for multi-dimensional arrays
   for i = 2:n
     strideInitExpr[i] = TypedExpr(Int, :(=), strideNodes[i],
-                                  TypedExpr(Int, :call, GlobalRef(Base, :mul_int), strideNodes[i-1], sizeNodes[i-1]))
+                                  DomainIR.mul_expr(strideNodes[i-1], sizeNodes[i-1]))
   end
   local idxNodes = Any[ DomainIR.addFreshLocalVariable(string("i",s.id), Int, ISASSIGNED | ISASSIGNEDONCE, linfo) for s in stat.idxSym ]
   local loopNest = [ PIRLoopNest(idxNodes[i],
                                  border_inloop ? 1 : 1-stat.shapeMin[i],
-                                 border_inloop ? sizeNodes[i] : TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[i], stat.shapeMax[i]),
+                                 border_inloop ? sizeNodes[i] : DomainIR.sub_expr(sizeNodes[i], stat.shapeMax[i]),
                                  1)
                      for i in n:-1:1 ]
   local nbufs = length(bufs)
@@ -127,15 +127,15 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   # border handling
   borderLabel = next_label(irState)
   afterBorderLabel = next_label(irState)
-  lowerExprs = [ TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), 1-stat.shapeMin[i], idxNodes[i])
+  lowerExprs = [ DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), 1-stat.shapeMin[i], idxNodes[i]))
                  for i in 1:n ]
-  upperExprs = [ TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), idxNodes[i],
-                      TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[i], stat.shapeMax[i]))
+  upperExprs = [ DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), idxNodes[i],
+                      DomainIR.sub_expr(sizeNodes[i], stat.shapeMax[i])))
                  for i in 1:n ]
   lowerGotos = [ Expr(:gotoifnot, e, borderLabel) for e in lowerExprs ]
   upperGotos = [ Expr(:gotoifnot, e, borderLabel) for e in upperExprs ]
   borderHead = Any[ TypedExpr(Int, :(=), toLHSVar(idxNodes[1]),
-                      TypedExpr(Int, :call, GlobalRef(Base, :sub_int), sizeNodes[1], stat.shapeMax[1])),
+                      DomainIR.sub_expr(sizeNodes[1], stat.shapeMax[1])),
                     GotoNode(afterBorderLabel),
                     LabelNode(borderLabel),
                   ]
@@ -171,12 +171,12 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
         rhs = expr.args[2]
         if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
           indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value), 
-                            TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), rhs.args[2+i], 0),
-                            TypedExpr(Int, :call, GlobalRef(Base, :add_int), rhs.args[2+i], sizeNodes[i]),
+                            DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), rhs.args[2+i], 0)),
+                            DomainIR.add_expr(rhs.args[2+i], sizeNodes[i]),
                             TypedExpr(Int, :call, GlobalRef(Base, :select_value),
-                              TypedExpr(Bool, :call, GlobalRef(Base, :sle_int), 
-                                TypedExpr(Int, :call, GlobalRef(Base, :add_int), sizeNodes[i], 1), rhs.args[2+i]),
-                              TypedExpr(Int, :call, GlobalRef(Base, :sub_int), rhs.args[2+i], sizeNodes[i]),
+                              DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), 
+                                DomainIR.add_expr(sizeNodes[i], 1), rhs.args[2+i]),
+                              DomainIR.sub_expr(rhs.args[2+i], sizeNodes[i])),
                               rhs.args[2+i])) for i = 1:n ]
           expr = TypedExpr(expr.typ, :(=), lhs,
                   TypedExpr(rhs.typ, :call, GlobalRef(Base, :unsafe_arrayref),

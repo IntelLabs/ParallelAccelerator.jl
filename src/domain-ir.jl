@@ -519,10 +519,9 @@ const pointWiseOps = setdiff(Set{Symbol}(mapSym), Set{Symbol}([:*, :/]))
 
 const compareOpSet = Set{Symbol}(API.comparison_map_operators)
 const mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
-# symbols that when lifted up to array level should be changed.
-const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
-
 # legacy v0.3
+# symbols that when lifted up to array level should be changed.
+# const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
 # const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
 
 const opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
@@ -880,11 +879,27 @@ end
 
 isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = is(x, TopNode(s)) || is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
 isTopNodeOrGlobalRef(x,s) = false
-add_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, GlobalRef(Base, :add_int), x, y)
-sub_expr(x,y) = y == 0 ? x : mk_expr(Int, :call, GlobalRef(Base, :sub_int), x, y)
-mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : mk_expr(Int, :call, GlobalRef(Base, :mul_int), x, y))
-sdiv_int_expr(x,y) = y == 1 ? x : mk_epr(Int, :call, GlobalRef(Base, :sdiv_int), x, y)
-neg_expr(x)   = mk_expr(Int, :call, GlobalRef(Base, :neg_int), x)
+function box_ty(ty, x::Expr)
+  @assert (x.head == :call)
+  @assert (length(x.args) >= 2)
+  opr = x.args[1]
+  @assert (isa(opr, GlobalRef))
+  real_opr = Base.resolve(opr, force = true) 
+  if real_opr.mod == Core.Intrinsics 
+    x.args[1] = real_opr
+    mk_expr(ty, :call, GlobalRef(Base, :box), ty, x)
+  else
+    return x
+  end
+end
+box_ty(ty, x) = x
+
+box_int(x) = box_ty(Int, x)
+add_expr(x,y) = y == 0 ? x : box_int(Expr(:call, GlobalRef(Base, :add_int), x, y))
+sub_expr(x,y) = y == 0 ? x : box_int(Expr(:call, GlobalRef(Base, :sub_int), x, y))
+mul_expr(x,y) = y == 0 ? 0 : (y == 1 ? x : box_int(Expr(:call, GlobalRef(Base, :mul_int), x, y)))
+sdiv_int_expr(x,y) = y == 1 ? x : box_int(Expr(:call, GlobalRef(Base, :sdiv_int), x, y))
+neg_expr(x)   = box_int(Expr(:call, GlobalRef(Base, :neg_int), x))
 isBoxExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :box)
 isNegExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :neg_int) 
 isAddExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :add_int) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd) || isTopNodeOrGlobalRef(x.args[1], :checked_sadd_int))
@@ -1570,7 +1585,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
         if isa(rExpr, Expr) && typ == Int 
             # only handle range of Int type 
             (start, step, final) = from_range(rExpr)
-            return mk_expr(typ, :call, GlobalRef(Base, :add_int), start, mk_expr(typ, :call, GlobalRef(Base, :mul_int), mk_expr(typ, :call, GlobalRef(Base, :sub_int), args[2], 1), step))
+            return add_expr(start, mul_expr(sub_expr(args[2], 1), step))
         end
     elseif isArrayType(arrTyp)
       ranges = is(fun, :getindex) ? args[2:end] : args[3:end]
@@ -1629,7 +1644,7 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     typs = reorder(typs)
     args = reorder(args)
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
-    f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], state.linfo)
+    f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
     (nonarrays, args, typs, f) = specialize(state, args, typs, f)
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
     for i = 1:length(args)
@@ -2169,7 +2184,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         setInputParameters(params, linfo)
         params = [ toRHSVar(x, outtyp, linfo) for x in params ]
         setReturnType(outtyp, linfo)
-        inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], LambdaVarInfo())
+        inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], LambdaVarInfo())
         inner_expr = mk_mmap!(params, inner_dl)
         inner_expr.typ = outtyp 
         f = DomainLambda(linfo, Expr(:body, mk_expr(outtyp, :tuple, inner_expr)))
@@ -2180,7 +2195,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         opr, reorder, cast = specializeOp(fun, [etyp])
         # ignore reorder and cast since they are always id function
         f = DomainLambda(Type[outtyp, outtyp], Type[outtyp], 
-                params->Any[Expr(:tuple, mk_expr(etyp, :call, opr, params...))], state.linfo)
+                params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
     end
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
@@ -2257,7 +2272,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
             opr, reorder, cast = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
             # ignore reorder and cast since they are always id function
             dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
-            expr = Base.afoldl((x,y)->mk_expr(typ, :call, opr, reorder([x, y])...), args[2:end]...)
+            expr = Base.afoldl((x,y)->box_ty(typ, Expr(:call, opr, reorder([x, y])...)), args[2:end]...)
             dprintln(env, "translated expr = ", expr)
         elseif is(fun.name, :copy!)
             expr = translate_call_copy!(state, env, args)

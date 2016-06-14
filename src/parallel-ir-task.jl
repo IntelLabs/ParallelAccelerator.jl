@@ -1255,11 +1255,16 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         gensym3_sym = Symbol(gensym3_var)
         gensym4_var = string("#recreate_gensym4_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 4)
         gensym4_sym = Symbol(gensym4_var)
-        gensym2_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-        gensym0_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo))
-        pound_s1_lhsvar = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-        gensym3_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-        gensym4_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo))
+        gensym2_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym0_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+        pound_s1_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym3_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym4_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym2_lhsvar  = toLHSVar(gensym2_rhsvar)
+        gensym0_lhsvar  = toLHSVar(gensym0_rhsvar)
+        pound_s1_lhsvar = toLHSVar(pound_s1_rhsvar)
+        gensym3_lhsvar  = toLHSVar(gensym3_rhsvar)  
+        gensym4_lhsvar  = toLHSVar(gensym4_rhsvar) 
         @dprintln(3, "gensym2_lhsvar  = ", gensym2_lhsvar)
         @dprintln(3, "gensym0_lhsvar  = ", gensym0_lhsvar)
         @dprintln(3, "pound_s1_lhsvar = ", pound_s1_lhsvar)
@@ -1274,9 +1279,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         end
 
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo), line_num)
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_lhsvar)), newLambdaVarInfo), line_num)
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), newLambdaVarInfo), line_num)
-        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.first_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), deepcopy(gensym2_rhsvar)), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_rhsvar), QuoteNode(:start)), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.first_unless, deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_second_unless), line_num)
         #line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless), line_num)
         line_num = addToBody!(new_body, LabelNode(label_after_first_unless), line_num)
 
@@ -1284,22 +1289,22 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
            line_num = addToBody!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"), line_num)
         end
 
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), newLambdaVarInfo), line_num)
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, ParallelAccelerator.ParallelIR.assign_gs4, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_rhsvar), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, ParallelAccelerator.ParallelIR.assign_gs4, deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), newLambdaVarInfo), line_num)
         #line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), newLambdaVarInfo), line_num)
         @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
-        line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_lhsvar), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_rhsvar), newLambdaVarInfo), line_num)
 
         if DEBUG_TASK_FUNCTIONS
            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)), line_num)
         end
 
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), newLambdaVarInfo), line_num)
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_rhsvar), newLambdaVarInfo), line_num)
 
         line_num = recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, state, newLambdaVarInfo, line_num)
 
         line_num = addToBody!(new_body, LabelNode(label_before_second_unless), line_num)
-        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless), line_num)
+        line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless), line_num)
         #line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless), line_num)
         line_num = addToBody!(new_body, LabelNode(label_after_second_unless), line_num)
         line_num = addToBody!(new_body, LabelNode(label_last), line_num)
@@ -1528,7 +1533,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3,"arg_types = ", arg_types)
     @dprintln(3,"ret_types = ", ret_types)
 
-    range_lhsvar = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(:ranges, ParallelAccelerator.ParallelIR.pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, newLambdaVarInfo))
+    range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(:ranges, ParallelAccelerator.ParallelIR.pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, newLambdaVarInfo)
+    range_lhsvar = toLHSVar(range_rhsvar)
 
     # Form an array including symbols for all the in and output parameters plus the additional iteration control parameter "ranges".
     # If we detect a GenSym in the parameter list we replace it with a symbol derived from the GenSym number and add it to gsmap.
@@ -1605,19 +1611,19 @@ function parforToTask(parfor_index, bb_statements, body, state)
         for i = 1:length(the_parfor.loopNests)
             # Put outerloop first in the loopNest
             j = length(the_parfor.loopNests) - i + 1
-            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, GlobalRef(Base, :add_int),
-            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_lhsvar), QuoteNode(:lower_bounds)), i),
+            the_parfor.loopNests[j].lower = DomainIR.add_expr(
+            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_rhsvar), QuoteNode(:lower_bounds)), i),
             1)
-            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, GlobalRef(Base, :add_int), 
-            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_lhsvar), QuoteNode(:upper_bounds)), i),
+            the_parfor.loopNests[j].upper = DomainIR.add_expr(
+            TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_rhsvar), QuoteNode(:upper_bounds)), i),
             1)
         end
     elseif ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
         for i = 1:length(the_parfor.loopNests)
             # Put outerloop first in the loopNest
             j = length(the_parfor.loopNests) - i + 1
-            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_lhsvar), QuoteNode(:lower_bounds)), i)
-            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_lhsvar), QuoteNode(:upper_bounds)), i)
+            the_parfor.loopNests[j].lower = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_rhsvar), QuoteNode(:lower_bounds)), i)
+            the_parfor.loopNests[j].upper = TypedExpr(Int64, :call, GlobalRef(Base, :unsafe_arrayref), TypedExpr(Array{Int64,1}, :call, GlobalRef(Base, :getfield), deepcopy(range_rhsvar), QuoteNode(:upper_bounds)), i)
         end
     end
 

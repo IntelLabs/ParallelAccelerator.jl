@@ -473,8 +473,8 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                         itn.phi_grain_size.dim = dims
                         for l = 1:dims
                             # Note that loopNest is outer-dimension first
-                            push!(itn.ranges.lower_bounds, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), cur_task.loopNests[dims - l + 1].lower, 1))
-                            push!(itn.ranges.upper_bounds, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), cur_task.loopNests[dims - l + 1].upper, 1))
+                            push!(itn.ranges.lower_bounds, Domain_IR.sub_expr(cur_task.loopNests[dims - l + 1].lower, 1))
+                            push!(itn.ranges.upper_bounds, Domain_IR.sub_expr(cur_task.loopNests[dims - l + 1].upper, 1))
                             push!(itn.host_grain_size.sizes, 2)
                             push!(itn.phi_grain_size.sizes, 2)
                         end

@@ -997,7 +997,7 @@ function generatePreOffsetStatement(range :: RangeData, ret)
     if !isStartOneRange(range.exprs)
         @dprintln(3,"range = ", range)
 
-        range_expr = mk_assignment_expr(range.offset_temp_var, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), range.start, 1))
+        range_expr = mk_assignment_expr(range.offset_temp_var, DomainIR.sub_expr(range.start, 1))
         push!(ret, range_expr)
     end
 end
@@ -1005,7 +1005,7 @@ end
 function generatePreOffsetStatement(ss :: SingularSelector, ret)
     @dprintln(3, "generatePreOffsetStatement for SingularSelector ", range)
     if !isSingularSelectorOne(ss)
-        range_expr = mk_assignment_expr(ss.offset_temp_var, TypedExpr(Int64, :call, GlobalRef(Base, :sub_int), ss.value, 1))
+        range_expr = mk_assignment_expr(ss.offset_temp_var, DomainIR.sub_expr(ss.value, 1))
         push!(ret, range_expr)
     end
 end
