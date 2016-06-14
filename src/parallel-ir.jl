@@ -1627,6 +1627,7 @@ function sub_cur_body_walk(x::Expr,
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+#=
 function sub_cur_body_walk(x::Symbol,
                            cbd::cur_body_data,
                            top_level_number::Int64,
@@ -1645,8 +1646,9 @@ function sub_cur_body_walk(x::Symbol,
     dprintln(dbglvl,"sub_cur_body_walk not substituting")
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
+=#
 
-function sub_cur_body_walk(x::TypedVar,
+function sub_cur_body_walk(x::RHSVar,
                            cbd::cur_body_data,
                            top_level_number::Int64,
                            is_top_level::Bool,
@@ -3280,7 +3282,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         alloc_args = args[2].args[2:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
-        shape = map(toLHSVarOrInt,sh)
+        shape = map(x -> if isa(x, Expr) x else toLHSVarOrInt end, sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         CompilerTools.LambdaHandling.setType(arr, Int, state.LambdaVarInfo)
@@ -3556,6 +3558,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :type_goto
         # skip
+    elseif head in DomainIR.exprHeadIgnoreList 
+        # other packages like HPAT can generate new nodes like :alloc, :join
     else
         throw(string("ParallelAccelerator.ParallelIR.from_expr: unknown Expr head :", head))
     end
@@ -3791,9 +3795,9 @@ Parallel IR AstWalk calls Domain IR AstWalk which in turn calls CompilerTools.As
 For each AST node, CompilerTools.AstWalker.AstWalk calls Domain IR callback to give it a chance to handle the node if it is a Domain IR node.
 Likewise, Domain IR callback first calls Parallel IR callback to give it a chance to handle Parallel IR nodes.
 The Parallel IR callback similarly first calls the user-level callback to give it a chance to process the node.
-If a callback returns "nothing" it means it didn't modify that node and that the previous code should process it.
-The Parallel IR callback will return "nothing" if the node isn't a Parallel IR node.
-The Domain IR callback will return "nothing" if the node isn't a Domain IR node.
+If a callback returns "ASTWALK_RECURSE" it means it didn't modify that node and that the previous code should process it.
+The Parallel IR callback will return "ASTWALK_RECURSE" if the node isn't a Parallel IR node.
+The Domain IR callback will return "ASTWALK_RECURSE" if the node isn't a Domain IR node.
 """
 function AstWalk(ast::Any, callback, cbdata)
     dw = DirWalk(callback, cbdata)
