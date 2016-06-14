@@ -1052,7 +1052,10 @@ end
 Gets (or adds if absent) the range correlation for the given array of RangeExprs.
 """
 function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, state :: expr_state)
-    @dprintln(3, "getOrAddRangeCorrelation for ", array, " with ranges = ", ranges, " and hash = ", hash(ranges))
+    @dprintln(3, "getOrAddRangeCorrelation for ", array, " with ranges = ", ranges)
+    if print_times
+        @dprintln(3, "with hash = ", hash(ranges))
+    end
     print_correlations(3, state)
 
     # We can't match on array of RangeExprs so we flatten to Array of Any
