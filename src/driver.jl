@@ -25,7 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module Driver
 
-export accelerate, toDomainIR, toParallelIR, toFlatParfors, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro, extractCallGraph
+export accelerate, toDomainIR, toParallelIR, toFlatParfors, toJulia, toCGen, toCartesianArray, runStencilMacro, captureOperators, expandParMacro, extractCallGraph
 
 using CompilerTools
 using CompilerTools.AstWalker
@@ -203,6 +203,16 @@ function toFlatParfors(func :: GlobalRef, ast, signature :: Tuple)
   return code
 end
 
+function toJulia(func :: GlobalRef, ast, signature :: Tuple)
+  if isa(ast, Tuple)
+    (LambdaVarInfo, body) = ast
+  else
+    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+  end
+  body = CompilerTools.OptFramework.cleanupBodyLabels(body)
+  @dprintln(3, "cleaned up code = ", body)
+  return (LambdaVarInfo, body)
+end
 
 function toCGen(func :: GlobalRef, code, signature :: Tuple)
   # In threads mode, we have already converted back to standard Julia AST so we skip this phase.

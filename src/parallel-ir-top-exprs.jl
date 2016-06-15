@@ -939,6 +939,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         end
     end
 
-    body = CompilerTools.OptFramework.cleanupBodyLabels(expanded_body)
+    #body = CompilerTools.OptFramework.cleanupBodyLabels(expanded_body, AstWalk)
     return body
 end

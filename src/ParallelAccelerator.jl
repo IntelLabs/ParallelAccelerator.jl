@@ -289,7 +289,7 @@ function __init__()
     if getPseMode() == OFF_MODE
       addOptPass(runStencilMacro, PASS_MACRO)
       #addOptPass(cleanupAPI, PASS_MACRO)
-    else
+    else 
       addOptPass(captureOperators, PASS_MACRO)
       addOptPass(toCartesianArray, PASS_MACRO)
       addOptPass(expandParMacro, PASS_MACRO)
@@ -297,7 +297,11 @@ function __init__()
       addOptPass(toDomainIR, PASS_TYPED)
       addOptPass(toParallelIR, PASS_TYPED)
       addOptPass(toFlatParfors, PASS_TYPED)
-      addOptPass(toCGen, PASS_TYPED)
+      if getPseMode() == THREADS_MODE
+        addOptPass(toJulia, PASS_TYPED)
+      else
+        addOptPass(toCGen, PASS_TYPED)
+      end
     end
 end
 
