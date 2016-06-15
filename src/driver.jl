@@ -273,7 +273,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
   proxy_sym = gensym(proxy_name)
-  @dprintln(2, "ParallelAccelerator.accelerate for ", proxy_name)
+  @dprintln(2, "toCGen for ", proxy_name)
   @dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
   @dprintln(2, "dyn_lib = ", dyn_lib)
   
@@ -444,6 +444,12 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   local out
   ast = code_typed(func, signature)[1]
   global alreadyOptimized 
+  global seenByMacroPass
+
+  # In threads mode we do not accelerator functions outside @acc
+  if ParallelAccelerator.getPseMode() == THREADS_MODE && !in(func_ref, seenByMacroPass)
+      return func
+  end
 
   try
     if !haskey(alreadyOptimized, (func, signature))
