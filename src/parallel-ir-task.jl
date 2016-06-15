@@ -1681,6 +1681,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     newLambdaVarInfo.return_type = Void
 
     # Create the new :lambda Expr for the task function.
+    task_body = CompilerTools.OptFramework.cleanupBodyLabels(task_body)
     code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(newLambdaVarInfo, task_body)
 
     @dprintln(3, "New task = ", code)
