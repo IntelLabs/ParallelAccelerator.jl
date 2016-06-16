@@ -390,6 +390,12 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                         end
                     end
                 end
+            elseif isCallNode(node)
+                @dprintln(3,"isCallNode. head = ", node.head, " type = ", typeof(node.args[1]), " name = ", node.args[1].name)
+                if hasNoSideEffects(node) || isDeadCall(node, live_info.live_out)
+                    @dprintln(3,"Eliminating dead call. node = ", node)
+                    return CompilerTools.AstWalker.ASTWALK_REMOVE
+                end
             end
         end
     end
