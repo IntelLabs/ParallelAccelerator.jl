@@ -400,7 +400,6 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
             # New body starts with the pre-task graph portion
             new_body = body[1:rr[i].start_index-1]
-            copy_back = Any[]
 
             # Then adds calls for each task
             for j = 1:length(rr[i].tasks)
@@ -409,12 +408,6 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
                 process_cur_task(cur_task, new_body, state)
             end
-
-            # Insert call to wait on the scheduler to complete all tasks.
-            #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
-
-            # Add the statements that copy results out of temp arrays into real variables.
-            append!(new_body, copy_back)
 
             # Then appends the post-task graph portion
             append!(new_body, body[rr[i].end_index+1:end])
@@ -426,7 +419,6 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
         elseif ParallelAccelerator.client_intel_task_graph
             # new body starts with the pre-task graph portion
             new_body = body[1:rr[i].start_index-1]
-            copy_back = Any[]
 
             # then adds calls for each task
             for j = 1:length(rr[i].tasks)
@@ -532,9 +524,6 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
             # Insert call to wait on the scheduler to complete all tasks.
             #push!(new_body, TypedExpr(Cint, :call, TopNode(:ccall), QuoteNode(:pert_wait_all_task), Type{Cint}, ()))
-
-            # Add the statements that copy results out of temp arrays into real variables.
-            append!(new_body, copy_back)
 
             # Then appends the post-task graph portion
             append!(new_body, body[rr[i].end_index+1:end])
@@ -650,20 +639,20 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
     push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
     push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_lhsvar)), state))
     push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
+    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
     push!(new_body, LabelNode(label_after_first_unless))
 
 #       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
     push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), state))
-    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, mk_parallelir_ref(:assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), state))
     push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_lhsvar), state))
     push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), state))
 
     for_loop_end = Any[]
 
     push!(for_loop_end, LabelNode(label_before_second_unless))
-    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, mk_parallelir_ref(:second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
+    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
     push!(for_loop_end, LabelNode(label_after_second_unless))
     push!(for_loop_end, LabelNode(label_last))
 
@@ -684,6 +673,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
     @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
     @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+    @dprintln(3,"Cur LambdaVarInfo = ", state.LambdaVarInfo)
 
     in_len  = length(cur_task.input_symbols)
     mod_len = length(cur_task.modified_inputs)
@@ -703,7 +693,8 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             push!(cstr_params, cur_task.loopNests[dims - l + 1].upper)
         end
         @dprintln(3, "cstr_params = ", cstr_params)
-        cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
+        cstr_expr = ParallelAccelerator.ParallelIR.pir_range_actual
+        #cstr_expr = mk_parallelir_ref(:pir_range_actual, Any)
         whole_range_expr = mk_assignment_expr(deepcopy(range_lhsvar), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...), state)
         @dprintln(3,"whole_range_expr = ", whole_range_expr)
         push!(new_body, whole_range_expr)
@@ -756,9 +747,9 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         call_tup = eval(call_tup_expr)
         @dprintln(3, "call_tup = ", call_tup)
         if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
         else
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(mk_parallelir_ref(:isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
@@ -817,18 +808,27 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
             push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, Expr(:call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
             for l = 1:red_len
-                for stmt in callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
+                @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
+                reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
                                                 deepcopy(cur_task.reduction_vars[l].name), 
-                                                Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
+                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
+                @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
+
+                for stmt in reduction_code
+                    @dprintln(3, "reduction stmt = ", stmt)
                     if isBareParfor(stmt) 
+                        @dprintln(3, "reduction stmt is parfor so recreating loops")
                         recreateLoops(new_body, stmt.args[1], state, state.LambdaVarInfo)
                     else
+                        @dprintln(3, "reduction stmt is normal")
                         push!(new_body, stmt)
                     end
                 end
             end
 
             push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
+
+            @dprintln(3,"LambdaVarInfo after reduction code = ", state.LambdaVarInfo)
         end
     else
         throw(string("insert sequential task not implemented yet"))
