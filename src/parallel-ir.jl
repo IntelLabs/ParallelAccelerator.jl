@@ -1106,6 +1106,14 @@ function isAssignmentNode(node::Any)
     return false
 end
 
+function isCallNode(node :: Expr)
+    return node.head == :call
+end
+
+function isCallNode(node::Any)
+    return false
+end
+
 """
 Is a node a loophead expression node (a form of assignment).
 """
@@ -2286,12 +2294,6 @@ function hasNoSideEffects(node :: Expr)
            func == QuoteNode(:jl_alloc_array_2d)
             return true
         end
-    elseif node.head == :call1 || node.head == :call
-        func = node.args[1]
-        if isBaseFunc(func, :apply_type) ||
-           isBaseFunc(func, :tuple)
-            return true
-        end
     elseif node.head == :lambda
         return true
     elseif node.head == :new
@@ -2300,7 +2302,7 @@ function hasNoSideEffects(node :: Expr)
             newtyp = getfield(newtyp.mod, newtyp.name)
         end
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
-    elseif node.head == :call
+    elseif node.head == :call1 || node.head == :call
         func = node.args[1]
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
@@ -2311,10 +2313,14 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :sub_int) ||
             isBaseFunc(func, :add_int) ||
             isBaseFunc(func, :mul_int) 
+            isBaseFunc(func, :apply_type) ||
+            isBaseFunc(func, :tuple)
             return true
-        elseif isBaseFunc(func, :apply_type) ||
-               isBaseFunc(func, :tuple)
-            return true
+        elseif isa(func, TopNode) 
+            @dprintln(3, "Found TopNode in hasNoSideEffects. type = ", typeof(func.name))
+            if func.name == :getfield
+                return true
+            end
         end
     end
 
