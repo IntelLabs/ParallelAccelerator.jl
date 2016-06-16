@@ -447,7 +447,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   global seenByMacroPass
 
   # In threads mode we do not accelerator functions outside @acc
-  if ParallelAccelerator.getPseMode() == THREADS_MODE && !in(func_ref, seenByMacroPass)
+  if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE && !in(func_ref, seenByMacroPass)
       return func
   end
 
