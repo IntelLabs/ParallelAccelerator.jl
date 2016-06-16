@@ -279,11 +279,33 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     return DelayedFunc(f, Any[deepcopy(neutral_val_body), init_var])
 end
 
+function reductionReplaceDict(body, snode, atm, var, val) 
+    @dprintln(3, "reductionReplaceDict")
+    @dprintln(3, "body = ")
+    printBody(3, body)
+    @dprintln(3, "snode = ", snode)
+    @dprintln(3, "atm = ", atm)
+    @dprintln(3, "var = ", var)
+    @dprintln(3, "val = ", val)
+
+    res = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
+    @dprintln(3, "res = ")
+    printBody(3, res)
+
+    res
+end
+
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
+    @dprintln(3,"translate_reduction_function ")
+    @dprintln(3,"reduction_var = ", reduction_var)
+    @dprintln(3,"delta_var = ", delta_var)
+    @dprintln(3,"reduction_func = ", reduction_func)
     # call domain ir to generate most of the body of the function (except for saving the output)
     reduction_func_inputs = Any[reduction_var, delta_var]
     nested_function_exprs(reduction_func, state)
+    @dprintln(3,"after nested_function_exprs reduction_func = ", reduction_func)
     temp_body = mergeLambdaIntoOuterState(state, reduction_func, reduction_func_inputs)
+    @dprintln(3,"temp_body = ", temp_body)
     assert(isa(temp_body,Array))
     assert(length(temp_body) > 0)
     assert(typeof(temp_body[end]) == Expr)
@@ -291,11 +313,12 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     assert(length(temp_body[end].args) == 1)
     temp_body[end] = mk_assignment_expr(reduction_var, temp_body[end].args..., state)
     temp_body = top_level_expand_pre(temp_body, state)
+    @dprintln(3,"temp_body = ", temp_body)
     #reduce_flatten_body = Any[]
     #flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     #@dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    f = (body, snode, atm, var, val) -> CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
-    reduce_func = DelayedFunc(f, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
+    reduce_func = DelayedFunc(reductionReplaceDict, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
+    @dprintln(3, "reduce_func = ", reduce_func)
     return temp_body, reduce_func 
 end
 
@@ -822,8 +845,8 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     assert(lbexpr.head == :tuple)
     assert(length(lbexpr.args) == length(dl.outputs))
 
-    @dprintln(2,"out_body is of length ",length(out_body), " " , unique_node_id)
-    printBody(3,out_body)
+    @dprintln(2, "out_body is of length ",length(out_body), " " , unique_node_id)
+    printBody(3, out_body)
 
     else_body = Any[]
     elseLabel = next_label(state)
