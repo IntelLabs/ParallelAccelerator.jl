@@ -592,13 +592,13 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
 
     if stmt.head == :loophead
         assert(length(stmt.args) == 3)
-        loop_id    = stmt.args[1]
+        loop_id    = toLHSVar(stmt.args[1])
         loop_start = stmt.args[2]
         loop_end   = stmt.args[3]
         @dprintln(3, "recreateFromLoophead ", loop_id, " ", loop_start, " ", loop_end)
     else
         assert(length(stmt.args) == 1)
-        loop_id = stmt.args[1]
+        loop_id = toLHSVar(stmt.args[1])
         if haskey(LoopEndDict, loop_id)
             append!(new_body, LoopEndDict[loop_id])
         else
