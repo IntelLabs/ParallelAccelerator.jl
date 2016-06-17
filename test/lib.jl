@@ -66,7 +66,7 @@ end
 @acc function testRepMat2(A, B) 
    (l, m, n) = size(B)
    C = repmat(A, 1, 1, n) ./ B
-   D = 1 ./ maximum(C, 2)
+   D = 1.0 ./ maximum(C, 2)
    return D
 end
 
@@ -121,13 +121,13 @@ end
 
 using Base.Test
 println("Testing parallel library functions...")
-@test APILibTest.test1() 
-@test APILibTest.test2() 
+@test APILibTest.test1()
+@test APILibTest.test2()
 @test APILibTest.test3()
-@test APILibTest.test4() 
-@test APILibTest.test5() 
-@test APILibTest.test6() 
-@test APILibTest.test7() 
+@test APILibTest.test4()
+@test APILibTest.test5()
+@test APILibTest.test6()
+@test APILibTest.test7()
 @test APILibTest.test8() 
 println("Done testing parallel library functions.") 
 
