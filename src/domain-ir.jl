@@ -511,7 +511,7 @@ function setExternalAliasCB(cb::Function)
     global externalAliasCB = cb
 end
 
-const mapSym = vcat(Symbol[:negate], API.unary_map_operators, API.binary_map_operators)
+const mapSym = vcat(API.unary_map_operators, API.binary_map_operators)
 
 const mapVal = Symbol[ begin s = string(x); startswith(s, '.') ? Symbol(s[2:end]) : x end for x in mapSym]
 
@@ -524,11 +524,6 @@ const mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
 # symbols that when lifted up to array level should be changed.
 # const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
 # const topOpsTypeFix = Set{Symbol}([:not_int, :and_int, :or_int, :neg_int, :add_int, :mul_int, :sub_int, :neg_float, :mul_float, :add_float, :sub_float, :div_float, :box, :fptrunc, :fpsiround, :checked_sadd, :checked_ssub, :rint_llvm, :floor_llvm, :ceil_llvm, :abs_float, :cat_t, :srem_int])
-
-const opsSym = Symbol[:negate, :+, :-, :*, :/, :(==), :!=, :<, :<=]
-const opsSymSet = Set{Symbol}(opsSym)
-const floatOps = Dict{Symbol,Symbol}(zip(opsSym, [:neg_float, :add_float, :sub_float, :mul_float, :div_float, :eq_float, :ne_float, :lt_float, :le_float]))
-const sintOps  = Dict{Symbol,Symbol}(zip(opsSym, [:neg_int, :add_int, :sub_int, :mul_int, :sdiv_int, :eq_int, :ne_int, :slt_int, :sle_int]))
 
 const reduceSym = Symbol[:sum, :prod, :maximum, :minimum, :any, :all]
 const reduceVal = Symbol[:+, :*, :max, :min, :|, :&]
@@ -712,50 +707,6 @@ function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
         end
         return (n == 1)
     end     
-end
-
-function specializeOp(opr::Symbol, argstyp)
-    reorder = x -> x        # default no reorder
-    cast = (ty, x) -> x     # defualt no cast
-    if opr == :>= 
-        opr = :<=
-        reorder = reverse
-    elseif opr == :>
-        opr = :<
-        reorder = reverse
-    end
-    # try to guess argument type
-    typ = nothing
-    for i = 1:length(argstyp)
-        atyp = argstyp[i]
-        if typ == nothing && atyp != nothing
-            typ = atyp
-        elseif is(atyp, Float32) || is(atyp, Float64)
-            typ = atyp
-        end
-    end
-    @dprintln(2, "specializeOp opsSymSet[", opr, "] = ", in(opr, opsSymSet), " typ=", typ)
-    if in(opr, opsSymSet)
-        try
-            # TODO: use subtype checking here?
-            if is(typ, Int) || is(typ, Int32) || is(typ, Int64)
-                if opr == :/ # special case for division
-                    opr = GlobalRef(Base, floatOps[opr])
-                    cast = (ty, x) -> Expr(:call, GlobalRef(Base, :sitofp), ty, x)
-                else
-                    opr = GlobalRef(Base, sintOps[opr])
-                end
-            elseif is(typ, Float32) || is(typ, Float64)
-                opr = GlobalRef(Base, floatOps[opr])
-            end
-        catch err
-            error(string("Cannot specialize operator ", opr, " to type ", typ))
-        end
-    end
-    if isa(opr, Symbol)
-        opr = GlobalRef(Base, opr)
-    end
-    return opr, reorder, cast
 end
 
 # Specialize non-array arguments into the body function as either constants
@@ -1640,17 +1591,16 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     # TODO: check for unboxed array type
     args = normalize_args(state, env, args)
     etyp = elmTypOf(typ) 
-    if is(fun, :-) && length(args) == 1
-        fun = :negate
-    end
+    #if is(fun, :-) && length(args) == 1
+    #    fun = :negate
+    #end
     typs = Type[ typeOfOpr(state, arg) for arg in args ]
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
-    opr, reorder, cast = specializeOp(mapOps[fun], elmtyps)
-    elmtyps = reorder(elmtyps)
-    typs = reorder(typs)
-    args = reorder(args)
+    opr = GlobalRef(Base, mapOps[fun])
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
-    f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
+    # f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
+    (body, linfo) = get_lambda_for_arg(state, env, opr, elmtyps)
+    f = DomainLambda(linfo, body)
     (nonarrays, args, typs, f) = specialize(state, args, typs, f)
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
     for i = 1:length(args)
@@ -2183,8 +2133,7 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
                            Expr(:tuple, rednode))
         neutral = DomainLambda(linfo, neutral_body)
         outtyp = arrtyp
-        opr, reorder, cast = specializeOp(fun, [etyp])
-        # ignore reorder and cast since they are always id function
+        opr = GlobalRef(Base, fun)
         params = Symbol[ gensym(s) for s in [:x, :y]]
         linfo = LambdaVarInfo()
         for i in 1:length(params)
@@ -2193,7 +2142,9 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         setInputParameters(params, linfo)
         params = [ toRHSVar(x, outtyp, linfo) for x in params ]
         setReturnType(outtyp, linfo)
-        inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], LambdaVarInfo())
+        (inner_body, inner_linfo) = get_lambda_for_arg(state, env, opr, [etyp, etyp])
+        inner_dl = DomainLambda(inner_linfo, inner_body)
+        # inner_dl = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], LambdaVarInfo())
         inner_expr = mk_mmap!(params, inner_dl)
         inner_expr.typ = outtyp 
         f = DomainLambda(linfo, Expr(:body, mk_expr(outtyp, :tuple, inner_expr)))
@@ -2201,10 +2152,9 @@ function translate_call_reduceop(state, env, typ, fun::Symbol, args::Array{Any,1
         red_dim = []
         neutral = neutralelt
         outtyp = etyp
-        opr, reorder, cast = specializeOp(fun, [etyp])
-        # ignore reorder and cast since they are always id function
-        f = DomainLambda(Type[outtyp, outtyp], Type[outtyp], 
-                params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
+        opr = GlobalRef(Base, fun)
+        (inner_body, inner_linfo) = get_lambda_for_arg(state, env, opr, [etyp, etyp])
+        f = DomainLambda(inner_linfo, inner_body)
     end
     # turn reduce(z, getindex(a, ...), f) into reduce(z, select(a, ranges(...)), f)
     arr = inline_select(env, state, arr)
@@ -2278,10 +2228,9 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         end
     elseif is(fun.mod, Base) 
         if is(fun.name, :afoldl) && haskey(afoldlDict, typeOfOpr(state, args[1]))
-            opr, reorder, cast = specializeOp(afoldlDict[typeOfOpr(state, args[1])], [typ, typ])
-            # ignore reorder and cast since they are always id function
+            opr = GlobalRef(Base, afoldlDict[typeOfOpr(state, args[1])])
             dprintln(env, "afoldl operator detected = ", args[1], " opr = ", opr)
-            expr = Base.afoldl((x,y)->box_ty(typ, Expr(:call, opr, reorder([x, y])...)), args[2:end]...)
+            expr = Base.afoldl((x,y)->box_ty(typ, Expr(:call, opr, [x, y]...)), args[2:end]...)
             dprintln(env, "translated expr = ", expr)
         elseif is(fun.name, :copy!)
             expr = translate_call_copy!(state, env, args)
