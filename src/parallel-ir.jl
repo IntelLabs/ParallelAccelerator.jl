@@ -521,7 +521,7 @@ The left-hand side has to be a symbol node from which we extract the type so as 
 """
 function mk_assignment_expr(lhs::RHSVar, rhs, linfo :: LambdaVarInfo)
     expr_typ = CompilerTools.LambdaHandling.getType(lhs, linfo)    
-    @dprintln(2,"mk_assignment_expr lhs = ", lhs, " type = ", typeof(lhs), " rhs = ", rhs)
+    @dprintln(2,"mk_assignment_expr lhs = ", lhs, " type = ", typeof(lhs), " expr_typ = ", expr_typ, " rhs = ", rhs)
     TypedExpr(expr_typ, :(=), toLHSVar(lhs), rhs)
 end
  
