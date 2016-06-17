@@ -594,8 +594,8 @@ In other words, returns an expression the equivalent of ParallelAccelerator.Para
 function mk_parallelir_ref(sym :: Symbol, ref_type=Function)
     #inner_call = TypedExpr(Module, :call, TopNode(:getfield), :ParallelAccelerator, QuoteNode(:ParallelIR))
     #TypedExpr(ref_type, :call, TopNode(:getfield), inner_call, QuoteNode(sym))
-    TypedExpr(ref_type, :call, GlobalRef(Base, :getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
-    #TypedExpr(ref_type, GlobalRef(ParallelAccelerator.ParallelIR, sym))
+    #TypedExpr(ref_type, :call, GlobalRef(Base, :getfield), GlobalRef(ParallelAccelerator,:ParallelIR), QuoteNode(sym))
+    TypedExpr(ref_type, GlobalRef(ParallelAccelerator.ParallelIR, sym))
 end
 
 """

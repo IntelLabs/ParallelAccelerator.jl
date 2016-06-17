@@ -345,6 +345,7 @@ newState(linfo, defs, escDict, state::IRState) = IRState(linfo, defs, escDict, D
 Update the type of a variable.
 """
 function updateTyp(state::IRState, s, typ)
+    @dprintln(3, "updateTyp ", s, " to type ", typ)
     setType(s, typ, state.linfo)
 end
 
@@ -880,6 +881,10 @@ end
 isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = is(x, TopNode(s)) || is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
 isTopNodeOrGlobalRef(x,s) = false
 function box_ty(ty, x::Expr)
+  if ty == Bool 
+    x.typ = ty
+    return x 
+  end
   @assert (x.head == :call)
   @assert (length(x.args) >= 2)
   opr = x.args[1]
@@ -889,6 +894,7 @@ function box_ty(ty, x::Expr)
     x.args[1] = real_opr
     mk_expr(ty, :call, GlobalRef(Base, :box), ty, x)
   else
+    x.typ = ty
     return x
   end
 end
@@ -1657,6 +1663,9 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     end
     expr::Expr = endswith(string(fun), '!') ? mk_mmap!(args, f) : mk_mmap(args, f)
     expr = mmapRemoveDupArg!(state, expr)
+    if typ <: BitArray
+        typ = Array{Bool, typ.parameters[1]}
+    end
     expr.typ = typ
     return expr
 end
@@ -2416,8 +2425,8 @@ function from_expr(state::IRState, env::IREnv, ast::Union{Symbol,TypedVar})
             return def
         end
     end
-    typ = typeOfOpr(state, ast)
-    if isa(ast, TypedVar) && ast.typ != typ
+    typ = typeOfOpr(state, toLHSVar(ast))
+    if isa(ast, TypedVar) && ast.typ != typ && typ != Void
         @dprintln(2, " Variable ", ast, " gets updated type ", typ)
         return toRHSVar(lookupVariableName(ast, state.linfo), typ, state.linfo)
     elseif isa(ast, Symbol)
