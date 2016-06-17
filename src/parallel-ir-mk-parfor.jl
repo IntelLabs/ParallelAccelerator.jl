@@ -412,7 +412,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
                 @dprintln(3, "mask_array = ", mask_array, " ", unique_node_id)
-                assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
+                #assert(isBitArrayType(CompilerTools.LambdaHandling.getType(mask_array, state.LambdaVarInfo)))
                 if isa(mask_array, TypedVar) # a hack to change type to Array{Bool}
                     mask_array = toRHSVar(mask_array, Array{Bool, mask_array.typ.parameters[1]}, state.LambdaVarInfo)
                 end
@@ -1239,7 +1239,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         tfa = createTempForArray(nans_sn, 1, state)
         tfa_typ = getArrayElemType(nans_sn, state)
         if box_tfa
-            push!(out_body, mk_assignment_expr(tfa, Expr(:call, GlobalRef(Base, :box), tfa_typ, lbexpr.args[i]), state))
+            push!(out_body, mk_assignment_expr(tfa, DomainIR.box_ty(tfa_typ, lbexpr.args[i]), state))
         else
             push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
         end
