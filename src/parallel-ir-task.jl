@@ -1252,9 +1252,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         this_nest = the_parfor.loopNests[loop_nest_level]
 
         label_after_first_unless   = next_label(state)
-        label_before_second_unless = next_label(state)
+#        label_before_second_unless = next_label(state)
         label_after_second_unless  = next_label(state)
-        label_last                 = next_label(state)
+#        label_last                 = next_label(state)
 
         num_vars = 5
 
@@ -1314,10 +1314,10 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
 
         line_num = recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, state, newLambdaVarInfo, line_num)
 
-        line_num = addToBody!(new_body, LabelNode(label_before_second_unless), line_num)
+#        line_num = addToBody!(new_body, LabelNode(label_before_second_unless), line_num)
         line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless), line_num)
         line_num = addToBody!(new_body, LabelNode(label_after_second_unless), line_num)
-        line_num = addToBody!(new_body, LabelNode(label_last), line_num)
+#        line_num = addToBody!(new_body, LabelNode(label_last), line_num)
     end
     if DEBUG_TASK_FUNCTIONS
        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level), line_num)
