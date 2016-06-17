@@ -587,7 +587,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 end
 
 
-function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar,Array{Any,1}}, state, newLambdaVarInfo, next_available_label)
+function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar,Array{Any,1}}, state, newLambdaVarInfo)
     # Only handle 1D loophead right now.
 
     if stmt.head == :loophead
@@ -604,16 +604,16 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         else
             throw(string("loophead information missing for loop ", loop_id))
         end
-        return next_available_label 
+        return nothing
     end
 
     assert(isa(loop_id, LHSVar))
     uniq = get_unique_num()
 
-    label_after_first_unless   = next_available_label
-    label_before_second_unless = next_available_label + 1
-    label_after_second_unless  = next_available_label + 2
-    label_last                 = next_available_label + 3
+    label_after_first_unless   = next_label(state)
+#    label_before_second_unless = next_label(state)
+    label_after_second_unless  = next_label(state)
+#    label_last                 = next_label(state)
 
     gensym2_var = string("#recreate_gensym2_", uniq, "_", 0)
     gensym2_sym = Symbol(gensym2_var)
@@ -625,40 +625,46 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
     gensym3_sym = Symbol(gensym3_var)
     gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
     gensym4_sym = Symbol(gensym4_var)
-    gensym2_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-    gensym0_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo))
-    pound_s1_lhsvar = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-    gensym3_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo))
-    gensym4_lhsvar  = toLHSVar(CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo))
+    gensym2_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    gensym0_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+    pound_s1_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    gensym3_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+    gensym4_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+
+    gensym2_lhsvar  = toLHSVar(gensym2_rhsvar) 
+    gensym0_lhsvar  = toLHSVar(gensym0_rhsvar) 
+    pound_s1_lhsvar = toLHSVar(pound_s1_rhsvar)
+    gensym3_lhsvar  = toLHSVar(gensym3_rhsvar) 
+    gensym4_lhsvar  = toLHSVar(gensym4_rhsvar) 
 
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
     #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
 
-    push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
-    push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), Expr(:new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_lhsvar)), state))
-    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), Expr(:call, GlobalRef(Base, :getfield), deepcopy(gensym0_lhsvar), QuoteNode(:start)), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :first_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_second_unless))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), TypedExpr(StepRange{Int64,Int64}, :new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_rhsvar)), state))
+    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base, :getfield), deepcopy(gensym0_rhsvar), QuoteNode(:start)), state))
+    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :first_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_second_unless))
     push!(new_body, LabelNode(label_after_first_unless))
 
 #       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
 
-    push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_lhsvar), state))
-    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :assign_gs4), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), state))
-    push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_lhsvar), state))
-    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_lhsvar), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_rhsvar), state))
+    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), TypedExpr(Int64, :call, GlobalRef(ParallelAccelerator.ParallelIR, :assign_gs4), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), state))
+    push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_rhsvar), state))
+    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_rhsvar), state))
 
     for_loop_end = Any[]
 
-    push!(for_loop_end, LabelNode(label_before_second_unless))
-    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :second_unless), deepcopy(gensym0_lhsvar), deepcopy(pound_s1_lhsvar)), label_after_first_unless))
+#    push!(for_loop_end, LabelNode(label_before_second_unless))
+    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :second_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless))
     push!(for_loop_end, LabelNode(label_after_second_unless))
-    push!(for_loop_end, LabelNode(label_last))
+#    push!(for_loop_end, LabelNode(label_last))
 
     LoopEndDict[loop_id] = for_loop_end    
 
-    return next_available_label + 3
+    return nothing
 end
 
 #function got_here_1(x)
@@ -736,16 +742,13 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
         if cur_task.ret_types != Void
             red_array_lhsvar = createVarForTask(cur_task, "_red_array", Array{Any,1}, state)
-            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, Expr(:call, GlobalRef(Base.Threads, :nthreads))), state))
+            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
 
             red_output_tuple_typ = Tuple{cur_task.ret_types...}
             red_output_tuple_lhsvar = createVarForTask(cur_task, "_red_output_tuple", red_output_tuple_typ, state)
         end
 
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
-        call_tup_expr = Expr(:tuple, Function, pir_range_actual, args_type.args...)
-        call_tup = eval(call_tup_expr)
-        @dprintln(3, "call_tup = ", call_tup)
         if cur_task.ret_types != Void
             push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
         else
@@ -754,14 +757,14 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
           if cur_task.ret_types != Void
-            insert_task_expr = TypedExpr(Any,
+            insert_task_expr = TypedExpr(Void,
                                          :call,
                                          cur_task.task_func,
                                          deepcopy(range_lhsvar),
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
-            insert_task_expr = TypedExpr(Any,
+            insert_task_expr = TypedExpr(Void,
                                          :call,
                                          cur_task.task_func,
                                          deepcopy(range_lhsvar),
@@ -769,7 +772,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
           end
         elseif haskey(ENV,"PROSPECT_CALL_ISF")
           if cur_task.ret_types != Void
-            insert_task_expr = TypedExpr(Any,
+            insert_task_expr = TypedExpr(Void,
                                          :call,
                                          ParallelAccelerator.ParallelIR.isf,
                                          cur_task.task_func,
@@ -777,7 +780,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
-            insert_task_expr = TypedExpr(Any,
+            insert_task_expr = TypedExpr(Void,
                                          :call,
                                          ParallelAccelerator.ParallelIR.isf,
                                          cur_task.task_func,
@@ -786,7 +789,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
           end
         else
             svec_args = mk_svec_expr(Any)
-            insert_task_expr = TypedExpr(Any,
+            insert_task_expr = TypedExpr(Void,
                                          :call,
                                          GlobalRef(Core, :ccall),
                                          QuoteNode(:jl_threading_run),
@@ -803,10 +806,12 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
             # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
             for l = 1:red_len
-                push!(new_body, mk_assignment_expr(deepcopy(cur_task.reduction_vars[l].name), Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), state))
+                push!(new_body, mk_assignment_expr(
+                                   deepcopy(cur_task.reduction_vars[l].name), 
+                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), state))
             end
 
-            push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, Expr(:call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
+            push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
             for l = 1:red_len
                 @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
                 reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
@@ -886,7 +891,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     @dprintln(1,"Expanding parfors time = ", ns_to_sec(time_ns() - expand_start))
     end
 
-
     @dprintln(3,"expanded_body = ")
     printBody(3, body)
 
@@ -926,16 +930,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
             typeof(body[i]) == Expr && 
             (body[i].head == :loophead || body[i].head == :loopend)
-            max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo, max_label + 1)
+            recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo)
         else
-            # Convert loophead and loopend into Julia loops.
-            if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
-               typeof(body[i]) == Expr && 
-               (body[i].head == :loophead || body[i].head == :loopend)
-                max_label = recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo, max_label + 1)
-            else
-                push!(expanded_body, body[i])
-            end
+            push!(expanded_body, body[i])
         end
     end
 
