@@ -1165,8 +1165,13 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                     end
                     line_num = addToBody!(new_body, deepcopy(cu_res), line_num)
                     if DEBUG_TASK_FUNCTIONS
-                        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
-                       # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
+                        if isAssignmentNode(cu_res)
+                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(CompilerTools.LambdaHandling.lookupVariableName(cu_res.args[1], newLambdaVarInfo)), " = ", deepcopy(the_parfor.body[i].args[1])), line_num)
+                            #line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "last assignment = ", deepcopy(cu_res.args[1])), line_num)
+                        else
+                           # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+                           line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
+                        end
                     end
                     if !DEBUG_TASK_FUNCTIONS
                         if VERSION >= v"0.5.0-dev+4449"
@@ -1179,11 +1184,11 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                     line_num = addToBody!(new_body, deepcopy(the_parfor.body[i]), line_num)
                     if DEBUG_TASK_FUNCTIONS
                         if isAssignmentNode(the_parfor.body[i])
-                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "last assignment = ", deepcopy(the_parfor.body[i].args[1])), line_num)
+                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(CompilerTools.LambdaHandling.lookupVariableName(the_parfor.body[i].args[1], newLambdaVarInfo)), " = ", deepcopy(the_parfor.body[i].args[1])), line_num)
                         else
-                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+                            #line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+                            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
                         end
-                       # line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after stmt"), line_num)
                     end
                 end
             end
@@ -1285,10 +1290,10 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         @dprintln(3, "gensym4_lhsvar  = ", gensym4_lhsvar)
 
         if DEBUG_TASK_FUNCTIONS
-            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
-            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))), line_num)
-            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))), line_num)
-            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))), line_num)
+#            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", deepcopy(toLHSVar(:ranges, newLambdaVarInfo))), line_num)
+#            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", convertUnsafeOrElse(deepcopy(this_nest.lower))), line_num)
+#            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", convertUnsafeOrElse(deepcopy(this_nest.step))), line_num)
+#            line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", convertUnsafeOrElse(deepcopy(this_nest.upper))), line_num)
         end
 
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo), line_num)
@@ -1298,7 +1303,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, LabelNode(label_after_first_unless), line_num)
 
         if DEBUG_TASK_FUNCTIONS
-           line_num = addToBody!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"), line_num)
+#           line_num = addToBody!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"), line_num)
         end
 
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_rhsvar), newLambdaVarInfo), line_num)
@@ -1307,7 +1312,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(gensym3_rhsvar), newLambdaVarInfo), line_num)
 
         if DEBUG_TASK_FUNCTIONS
-           line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)), line_num)
+           line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index_variable ", string(CompilerTools.LambdaHandling.lookupVariableName(this_nest.indexVariable, newLambdaVarInfo)), " = ", CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo)), line_num)
         end
 
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_rhsvar), newLambdaVarInfo), line_num)
