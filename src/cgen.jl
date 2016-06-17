@@ -251,6 +251,7 @@ _Intrinsics = [
         "xor_int", "and_int", "or_int", "ne_int", "eq_int",
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
+        "neg_float_fast", "add_float_fast", "sub_float_fast", "mul_float_fast", "div_float_fast",
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
         "le_float", "ne_float", "eq_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
@@ -1253,7 +1254,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
     elseif intr == "neg_int"
         return "-" * "(" * from_expr(args[1], linfo) * ")"
-    elseif intr == "mul_float"
+    elseif intr == "mul_float" || intr == "mul_float_fast"
         return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
     elseif intr == "urem_int"
         return "($(from_expr(args[1], linfo))) % ($(from_expr(args[2], linfo)))"
@@ -1318,7 +1319,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"
     elseif intr == "shl_int" 
         return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
-    elseif intr == "add_float"
+    elseif intr == "add_float" || intr == "add_float_fast"
         return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
     elseif intr == "lt_float"
         return "($(from_expr(args[1], linfo))) < ($(from_expr(args[2], linfo)))"
@@ -1328,15 +1329,16 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(from_expr(args[1], linfo))) != ($(from_expr(args[2], linfo)))"
     elseif intr == "le_float"
         return "($(from_expr(args[1], linfo))) <= ($(from_expr(args[2], linfo)))"
-    elseif intr == "neg_float"
+    elseif intr == "neg_float" || intr == "neg_float_fast"
         return "-($(from_expr(args[1], linfo)))"
     elseif intr == "abs_float"
         return "fabs(" * from_expr(args[1], linfo) * ")"
     elseif intr == "sqrt_llvm"
         return "sqrt(" * from_expr(args[1], linfo) * ")"
-    elseif intr == "sub_float"
+    elseif intr == "sub_float" || intr == "sub_float_fast"
         return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
-    elseif intr == "div_float" || intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int"
+    elseif intr == "div_float" || intr == "div_float_fast" || 
+           intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int" 
         return "($(from_expr(args[1], linfo))) / ($(from_expr(args[2], linfo)))"
     elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
         return "(" * toCtype(args[1]) * ")" * from_expr(args[2], linfo)
@@ -2068,9 +2070,13 @@ function from_new(args, linfo)
             s = toCtype(typ) * "(" * mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
-            ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
-            s = ctyp * "{"
-            s *= mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * "}"
+            if isempty(ptyps) 
+                s = canonicalize(objtyp) * "{}"
+            else
+                ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
+                s = ctyp * "{"
+                s *= mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * "}"
+            end
         end
     elseif isa(typ, Expr)
         if isBaseFunc(typ.args[1], :getfield)
