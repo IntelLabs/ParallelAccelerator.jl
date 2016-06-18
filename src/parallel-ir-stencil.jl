@@ -171,13 +171,13 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
         rhs = expr.args[2]
         if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
           indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value), 
-                            DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), rhs.args[2+i], 0)),
-                            DomainIR.add_expr(rhs.args[2+i], sizeNodes[i]),
+                            DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), deepcopy(rhs.args[2+i]), 0)),
+                            DomainIR.add_expr(deepcopy(rhs.args[2+i]), sizeNodes[i]),
                             TypedExpr(Int, :call, GlobalRef(Base, :select_value),
                               DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), 
-                                DomainIR.add_expr(sizeNodes[i], 1), rhs.args[2+i])),
-                              DomainIR.sub_expr(rhs.args[2+i], sizeNodes[i]),
-                              rhs.args[2+i])) for i = 1:n ]
+                                DomainIR.add_expr(sizeNodes[i], 1), deepcopy(rhs.args[2+i]))),
+                              DomainIR.sub_expr(deepcopy(rhs.args[2+i]), sizeNodes[i]),
+                              deepcopy(rhs.args[2+i]))) for i = 1:n ]
           expr = TypedExpr(expr.typ, :(=), lhs,
                   TypedExpr(rhs.typ, :call, GlobalRef(Base, :unsafe_arrayref),
                       rhs.args[2], indices...))
