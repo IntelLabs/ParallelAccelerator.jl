@@ -56,14 +56,18 @@ module TestBlackScholes
 using Base.Test
 include("../examples/black-scholes/black-scholes.jl")
 # black-scholes should have only 1 allocation and 1 parfor after optimization
+if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
 @test ParallelAccelerator.get_num_acc_allocs()==1 && ParallelAccelerator.get_num_acc_parfors()==1
+end
 end
 
 module TestPi
 using Base.Test
 include("../examples/pi/pi.jl")
 # pi should have no allocation and 1 parfor after optimization
+if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
 @test ParallelAccelerator.get_num_acc_allocs()==0 && ParallelAccelerator.get_num_acc_parfors()==1
+end
 end
 
 module TestOptFlow
