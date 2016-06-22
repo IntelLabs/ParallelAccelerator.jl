@@ -610,59 +610,152 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
     assert(isa(loop_id, LHSVar))
     uniq = get_unique_num()
 
-    label_after_first_unless   = next_label(state)
-#    label_before_second_unless = next_label(state)
-    label_after_second_unless  = next_label(state)
-#    label_last                 = next_label(state)
+    if VERSION >= v"0.5.0-dev+4449"
+        label_head = next_label(state)
+        label_end  = next_label(state)
 
-    gensym2_var = string("#recreate_gensym2_", uniq, "_", 0)
-    gensym2_sym = Symbol(gensym2_var)
-    gensym0_var = string("#recreate_gensym0_", uniq, "_", 1)
-    gensym0_sym = Symbol(gensym0_var)
-    pound_s1_var = string("#recreate_pound_s1_", uniq, "_", 2)
-    pound_s1_sym = Symbol(pound_s1_var)
-    gensym3_var = string("#recreate_gensym3_", uniq, "_", 3)
-    gensym3_sym = Symbol(gensym3_var)
-    gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
-    gensym4_sym = Symbol(gensym4_var)
-    gensym2_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    gensym0_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
-    pound_s1_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    gensym3_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
-    gensym4_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        num_vars = 6
+        parfor_nest_level = 1
+        loop_nest_level = 1
 
-    gensym2_lhsvar  = toLHSVar(gensym2_rhsvar) 
-    gensym0_lhsvar  = toLHSVar(gensym0_rhsvar) 
-    pound_s1_lhsvar = toLHSVar(pound_s1_rhsvar)
-    gensym3_lhsvar  = toLHSVar(gensym3_rhsvar) 
-    gensym4_lhsvar  = toLHSVar(gensym4_rhsvar) 
+        steprange_last_var  = Symbol(string("#recreate_steprange_last_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 0))
+        steprange_first_var = Symbol(string("#recreate_steprange_first_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 1))
+        steprange_step_var  = Symbol(string("#recreate_steprange_step_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 2))
+        recreate_temp_var   = Symbol(string("#recreate_temp_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 3))
+        recreate_ssa5_var   = Symbol(string("#recreate_ssa5_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 4))
+        recreate_ssa6_var   = Symbol(string("#recreate_ssa6_", uniq, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 5))
 
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
-    #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
+        steprange_last_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(steprange_last_var  , Int64, ISASSIGNED, newLambdaVarInfo)
+        steprange_first_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(steprange_first_var , Int64, ISASSIGNED, newLambdaVarInfo)
+        steprange_step_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(steprange_step_var  , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_temp_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_temp_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_ssa5_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa5_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_ssa6_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa6_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        
+        steprange_last_lhsvar  = toLHSVar(steprange_last_rhsvar)
+        steprange_first_lhsvar = toLHSVar(steprange_first_rhsvar)
+        steprange_step_lhsvar  = toLHSVar(steprange_step_rhsvar)
+        recreate_temp_lhsvar   = toLHSVar(recreate_temp_rhsvar)
+        recreate_ssa5_lhsvar   = toLHSVar(recreate_ssa5_rhsvar)
+        recreate_ssa6_lhsvar   = toLHSVar(recreate_ssa6_rhsvar)
+          
+        push!(new_body, mk_assignment_expr(deepcopy(steprange_last_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), deepcopy(loop_start), 1, deepcopy(loop_end)), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(steprange_first_lhsvar), deepcopy(loop_start), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(steprange_step_lhsvar), 1, newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(steprange_first_rhsvar), newLambdaVarInfo))
 
-    push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
-    push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), TypedExpr(StepRange{Int64,Int64}, :new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_rhsvar)), state))
-    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base, :getfield), deepcopy(gensym0_rhsvar), QuoteNode(:start)), state))
-    push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :first_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_second_unless))
-    push!(new_body, LabelNode(label_after_first_unless))
+#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_last_var = ", deepcopy(steprange_last_rhsvar)))
+#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_first_var = ", deepcopy(steprange_first_rhsvar)))
+#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_step_var = ", deepcopy(steprange_step_rhsvar)))
 
-#       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+        push!(new_body, LabelNode(label_head))
 
-    push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_rhsvar), state))
-    push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), TypedExpr(Int64, :call, GlobalRef(ParallelAccelerator.ParallelIR, :assign_gs4), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), state))
-    push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_rhsvar), state))
-    push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_rhsvar), state))
+#        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"))
 
-    for_loop_end = Any[]
+        push!(new_body, mk_gotoifnot_expr(
+               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
+                   Expr(:call, GlobalRef(Base, :not_int),
+                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                           Expr(:call, GlobalRef(Base, :or_int), 
+                               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                   Expr(:call, GlobalRef(Base, :and_int), 
+                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
+                                           Expr(:call, GlobalRef(Base, :not_int), 
+                                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar)) 
+                                           )
+                                       ),
+                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                           Expr(:call, GlobalRef(Base, :not_int),
+                                               Expr(:call, GlobalRef(Base, :(===)),
+                                                   Expr(:call, GlobalRef(Base, :slt_int),
+                                                       0,
+                                                       deepcopy(steprange_step_rhsvar)
+                                                   ),
+                                                   Expr(:call, GlobalRef(Base, :slt_int),
+                                                       deepcopy(steprange_first_rhsvar),
+                                                       deepcopy(steprange_last_rhsvar)
+                                                   )
+                                               )
+                                           )
+                                       )
+                                   )
+                               ),
+                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar), 
+                                   Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar))) 
+                               )
+                           )
+                       )
+                   )
+               )
+               , label_end))
 
-#    push!(for_loop_end, LabelNode(label_before_second_unless))
-    push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :second_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless))
-    push!(for_loop_end, LabelNode(label_after_second_unless))
-#    push!(for_loop_end, LabelNode(label_last))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa5_lhsvar), deepcopy(recreate_temp_rhsvar), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, Base.box, Int64, Expr(:call, Base.add_int, deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(loop_id), newLambdaVarInfo), deepcopy(recreate_ssa5_rhsvar), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(recreate_ssa6_rhsvar), newLambdaVarInfo))
 
-    LoopEndDict[loop_id] = for_loop_end    
+        for_loop_end = Any[]
+
+        push!(for_loop_end, GotoNode(label_head))
+        push!(for_loop_end, LabelNode(label_end))
+
+        LoopEndDict[loop_id] = for_loop_end    
+    else
+
+        label_after_first_unless   = next_label(state)
+    #    label_before_second_unless = next_label(state)
+        label_after_second_unless  = next_label(state)
+    #    label_last                 = next_label(state)
+
+        gensym2_var = string("#recreate_gensym2_", uniq, "_", 0)
+        gensym2_sym = Symbol(gensym2_var)
+        gensym0_var = string("#recreate_gensym0_", uniq, "_", 1)
+        gensym0_sym = Symbol(gensym0_var)
+        pound_s1_var = string("#recreate_pound_s1_", uniq, "_", 2)
+        pound_s1_sym = Symbol(pound_s1_var)
+        gensym3_var = string("#recreate_gensym3_", uniq, "_", 3)
+        gensym3_sym = Symbol(gensym3_var)
+        gensym4_var = string("#recreate_gensym4_", uniq, "_", 4)
+        gensym4_sym = Symbol(gensym4_var)
+        gensym2_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym2_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym0_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym0_sym, StepRange{Int64,Int64}, ISASSIGNED, newLambdaVarInfo)
+        pound_s1_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(pound_s1_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym3_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+        gensym4_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
+
+        gensym2_lhsvar  = toLHSVar(gensym2_rhsvar) 
+        gensym0_lhsvar  = toLHSVar(gensym0_rhsvar) 
+        pound_s1_lhsvar = toLHSVar(pound_s1_rhsvar)
+        gensym3_lhsvar  = toLHSVar(gensym3_rhsvar) 
+        gensym4_lhsvar  = toLHSVar(gensym4_rhsvar) 
+
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.step  = ", this_nest.step))
+        #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.upper = ", this_nest.upper))
+
+        push!(new_body, mk_assignment_expr(deepcopy(gensym2_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base,:steprange_last), loop_start, 1, loop_end), state))
+        push!(new_body, mk_assignment_expr(deepcopy(gensym0_lhsvar), TypedExpr(StepRange{Int64,Int64}, :new, StepRange{Int64,Int64}, loop_start, 1, deepcopy(gensym2_rhsvar)), state))
+        push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), TypedExpr(Int64, :call, GlobalRef(Base, :getfield), deepcopy(gensym0_rhsvar), QuoteNode(:start)), state))
+        push!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :first_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_second_unless))
+        push!(new_body, LabelNode(label_after_first_unless))
+
+    #       push!(new_body, Expr(:call, GlobalRef(Base,:println), GlobalRef(Base,:STDOUT), " in label_after_first_unless section"))
+
+        push!(new_body, mk_assignment_expr(deepcopy(gensym3_lhsvar), deepcopy(pound_s1_rhsvar), state))
+        push!(new_body, mk_assignment_expr(deepcopy(gensym4_lhsvar), TypedExpr(Int64, :call, GlobalRef(ParallelAccelerator.ParallelIR, :assign_gs4), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), state))
+        push!(new_body, mk_assignment_expr(deepcopy(loop_id), deepcopy(gensym3_rhsvar), state))
+        push!(new_body, mk_assignment_expr(deepcopy(pound_s1_lhsvar), deepcopy(gensym4_rhsvar), state))
+
+        for_loop_end = Any[]
+
+    #    push!(for_loop_end, LabelNode(label_before_second_unless))
+        push!(for_loop_end, mk_gotoifnot_expr(TypedExpr(Bool, :call, GlobalRef(ParallelAccelerator.ParallelIR, :second_unless), deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless))
+        push!(for_loop_end, LabelNode(label_after_second_unless))
+    #    push!(for_loop_end, LabelNode(label_last))
+
+        LoopEndDict[loop_id] = for_loop_end    
+    end
 
     return nothing
 end

@@ -1258,6 +1258,130 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         uid = the_parfor.unique_id
         this_nest = the_parfor.loopNests[loop_nest_level]
 
+        if VERSION >= v"0.5.0-dev+4449"
+# 1       SSAValue(2) = (Base.steprange_last)(x,z,y)::Int64
+# 2       SSAValue(3) = x
+# 3       SSAValue(4) = z
+# 4       #temp# = SSAValue(3)
+# 5       15: 
+# 6       unless (Base.box)(Base.Bool,
+#                    (Base.not_int)(
+#                        (Base.box)(Base.Bool,
+#                            (Base.or_int)(
+#                                (Base.box)(Base.Bool,
+#                                    (Base.and_int)(
+#                                        (Base.box)(Base.Bool,
+#                                            (Base.not_int)((SSAValue(3) === SSAValue(2))::Bool)),
+#                                        (Base.box)(Base.Bool,
+#                                            (Base.not_int)(
+#                                                ((Base.slt_int)(0,SSAValue(4))::Bool === (Base.slt_int)(SSAValue(3),SSAValue(2))::Bool)::Bool
+#                                            )
+#                                        )
+#                                    )
+#                                ),
+#                                (#temp# === (Base.box)(Int64,(Base.add_int)(SSAValue(2),SSAValue(4))))::Bool
+#                            )
+#                        )
+#                    )
+#                ) 
+#                 goto 25
+# 7       SSAValue(5) = #temp#
+# 8       SSAValue(6) = (Base.box)(Int64,(Base.add_int)(#temp#,SSAValue(4)))
+# 9       i = SSAValue(5)
+# 10      #temp# = SSAValue(6) # line 3:
+# 11      (Base.println)(Base.STDOUT,i)
+# 12      goto 15
+# 13      25: 
+# 14      return
+
+        label_head = next_label(state)
+        label_end  = next_label(state)
+
+        num_vars = 6
+
+        steprange_last_var  = Symbol(string("#recreate_steprange_last_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 0))
+        steprange_first_var = Symbol(string("#recreate_steprange_first_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 1))
+        steprange_step_var  = Symbol(string("#recreate_steprange_step_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 2))
+        recreate_temp_var   = Symbol(string("#recreate_temp_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 3))
+        recreate_ssa5_var   = Symbol(string("#recreate_ssa5_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 4))
+        recreate_ssa6_var   = Symbol(string("#recreate_ssa6_", uid, "_", parfor_nest_level, "_", (loop_nest_level-1) * num_vars + 5))
+
+        steprange_last_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(steprange_last_var  , Int64, ISASSIGNED, newLambdaVarInfo)
+        steprange_first_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(steprange_first_var , Int64, ISASSIGNED, newLambdaVarInfo)
+        steprange_step_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(steprange_step_var  , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_temp_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_temp_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_ssa5_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa5_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        recreate_ssa6_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa6_var   , Int64, ISASSIGNED, newLambdaVarInfo)
+        
+        steprange_last_lhsvar  = toLHSVar(steprange_last_rhsvar)
+        steprange_first_lhsvar = toLHSVar(steprange_first_rhsvar)
+        steprange_step_lhsvar  = toLHSVar(steprange_step_rhsvar)
+        recreate_temp_lhsvar   = toLHSVar(recreate_temp_rhsvar)
+        recreate_ssa5_lhsvar   = toLHSVar(recreate_ssa5_rhsvar)
+        recreate_ssa6_lhsvar   = toLHSVar(recreate_ssa6_rhsvar)
+          
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(steprange_last_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), convertUnsafeOrElse(deepcopy(this_nest.lower)), convertUnsafeOrElse(deepcopy(this_nest.step)), convertUnsafeOrElse(deepcopy(this_nest.upper))), newLambdaVarInfo), line_num) # 1
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(steprange_first_lhsvar), convertUnsafeOrElse(deepcopy(this_nest.lower)), newLambdaVarInfo), line_num) # 2
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(steprange_step_lhsvar), convertUnsafeOrElse(deepcopy(this_nest.step)), newLambdaVarInfo), line_num) # 3
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(steprange_first_rhsvar), newLambdaVarInfo), line_num) # 4
+
+#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_last_var = ", deepcopy(steprange_last_rhsvar)), line_num)
+#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_first_var = ", deepcopy(steprange_first_rhsvar)), line_num)
+#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_step_var = ", deepcopy(steprange_step_rhsvar)), line_num)
+
+        line_num = addToBody!(new_body, LabelNode(label_head), line_num) # 5
+
+#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"), line_num)
+
+        line_num = addToBody!(new_body, mk_gotoifnot_expr(
+               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
+                   Expr(:call, GlobalRef(Base, :not_int),
+                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                           Expr(:call, GlobalRef(Base, :or_int), 
+                               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                   Expr(:call, GlobalRef(Base, :and_int), 
+                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
+                                           Expr(:call, GlobalRef(Base, :not_int), 
+                                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar)) 
+                                           )
+                                       ),
+                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                           Expr(:call, GlobalRef(Base, :not_int),
+                                               Expr(:call, GlobalRef(Base, :(===)),
+                                                   Expr(:call, GlobalRef(Base, :slt_int),
+                                                       0,
+                                                       deepcopy(steprange_step_rhsvar)
+                                                   ),
+                                                   Expr(:call, GlobalRef(Base, :slt_int),
+                                                       deepcopy(steprange_first_rhsvar),
+                                                       deepcopy(steprange_last_rhsvar)
+                                                   )
+                                               )
+                                           )
+                                       )
+                                   )
+                               ),
+                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar), 
+                                   Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar))) 
+                               )
+                           )
+                       )
+                   )
+               )
+               , label_end), line_num) # 6
+
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_ssa5_lhsvar), deepcopy(recreate_temp_rhsvar), newLambdaVarInfo), line_num) # 7
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, Base.box, Int64, Expr(:call, Base.add_int, deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo), line_num) # 8
+        @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
+        line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(recreate_ssa5_rhsvar), newLambdaVarInfo), line_num) # 9
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(recreate_ssa6_rhsvar), newLambdaVarInfo), line_num) # 10
+
+        line_num = recreateLoopsInternal(new_body, the_parfor, parfor_nest_level, loop_nest_level + 1, state, newLambdaVarInfo, line_num) # 11
+        line_num = addToBody!(new_body, GotoNode(label_head), line_num) # 12
+        line_num = addToBody!(new_body, LabelNode(label_end), line_num) # 13
+
+#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_end"), line_num)
+else
         label_after_first_unless   = next_label(state)
 #        label_before_second_unless = next_label(state)
         label_after_second_unless  = next_label(state)
@@ -1325,6 +1449,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, mk_gotoifnot_expr(TypedExpr(Bool, :call, ParallelAccelerator.ParallelIR.second_unless, deepcopy(gensym0_rhsvar), deepcopy(pound_s1_rhsvar)), label_after_first_unless), line_num)
         line_num = addToBody!(new_body, LabelNode(label_after_second_unless), line_num)
 #        line_num = addToBody!(new_body, LabelNode(label_last), line_num)
+end
     end
     if DEBUG_TASK_FUNCTIONS
        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "finished loop nest = ", loop_nest_level), line_num)
