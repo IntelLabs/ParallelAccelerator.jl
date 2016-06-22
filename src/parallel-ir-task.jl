@@ -638,10 +638,15 @@ function chunk(rs :: Int, re :: Int, divisions :: Int)
     end
 end
 
-function isfRangeToActual(build :: Array{isf_range,1}, dims)
-    unsort = sort(build, by=x->x.dim)
+precompile(chunk, (Int, Int, Int))
+
+function isfRangeToActual(build :: Array{isf_range,1})
+    bcopy = deepcopy(build)
+    unsort = sort(bcopy, by=x->x.dim)
     ParallelAccelerator.ParallelIR.pir_range_actual(map(x -> x.lower_bound, unsort), map(x -> x.upper_bound, unsort))    
 end
+
+precompile(isfRangeToActual,(Array{isf_range,1},))
 
 function divide_work(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
                      assignments :: Array{ParallelAccelerator.ParallelIR.pir_range_actual,1}, 
@@ -655,7 +660,7 @@ function divide_work(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_
         assert(length(build) <= length(dims))
 
         if length(build) == length(dims)
-            pra = isfRangeToActual(build, dims)
+            pra = isfRangeToActual(build)
             assignments[start_thread] = pra
         else 
             new_build = [build[1:(index-1)]; isf_range(dims[index].dim, full_iteration_space.lower_bounds[dims[index].dim], full_iteration_space.upper_bounds[dims[index].dim])]
@@ -683,6 +688,8 @@ function divide_work(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_
     end
 end
 
+precompile(divide_work, (ParallelAccelerator.ParallelIR.pir_range_actual, Array{ParallelAccelerator.ParallelIR.pir_range_actual,1}, Array{isf_range, 1}, Int64, Int64, Array{dimlength,1}, Int64))
+
 function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual, numtotal :: Int)
 #    @dprintln(3, "divide_fis space = ", full_iteration_space, " numtotal = ", numtotal)
     dims = sort(dimlength[dimlength(i, full_iteration_space.upper_bounds[i] - full_iteration_space.lower_bounds[i] + 1)  for i = 1:full_iteration_space.dim], by=x->x.len, rev=true)
@@ -692,13 +699,16 @@ function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_r
     return assignments
 end
 
+precompile(divide_fis, (ParallelAccelerator.ParallelIR.pir_range_actual, Int64))
+
 if false
 
 # Only for testing.
 function isf(t :: Function, 
              full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
              rest...)
-   println("isf ", t, " ", full_iteration_space, " ", rest...)
+   #println("isf ", t, " ", full_iteration_space, " ", rest...)
+   println("isf ", t, " ", full_iteration_space)
    return t(full_iteration_space, rest...)
 end
 
@@ -769,7 +779,11 @@ function isf(t :: Function,
 #println("After t call.")
         end
     elseif full_iteration_space.dim >= 2
-        assignments = divide_fis(full_iteration_space, nthreads())
+        try
+            assignments = divide_fis(full_iteration_space, nthreads())
+        catch something
+            println(STDERR, "Error dividing up work for threads, range = ", full_iteration_space, " num_threads = ", nthreads())
+        end
 
         try 
             #msg = string("Running num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
