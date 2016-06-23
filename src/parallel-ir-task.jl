@@ -504,8 +504,8 @@ function estimateInstrCount(ast::Expr, state :: eic_state, top_level_number, is_
         state.non_calls = state.non_calls + ASSIGNMENT_COST
     elseif head == :return
         state.non_calls = state.non_calls + RETURN_COST
-    elseif head == :call
-        call_instruction_count(args, state, debug_level)
+    elseif ast == :call || ast == :invoke
+        call_instruction_count(getCallArguments(ast), state, debug_level)
     elseif head == :call1
         dprintln(debug_level,head, " not handled in instruction counter")
         # TODO?: tuple

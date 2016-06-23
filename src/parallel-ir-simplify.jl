@@ -101,12 +101,14 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
 end
 
 function isDeadCall(rhs::Expr, live_out)
-    if rhs.head==:call
-        if in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
+    if isCall(rhs)
+        fun = getCallFunction(rhs)
+        args = getCallArguments(rhs)
+        if in(fun, CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
             @dprintln(3, rhs)
             return true
-        elseif in(rhs.args[1], CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
-                !in(toLHSVar(rhs.args[2]), live_out)
+        elseif in(fun, CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
+                !in(toLHSVar(args[1]), live_out)
             return true
         end
     end
@@ -390,8 +392,14 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                         end
                     end
                 end
-            elseif isCallNode(node)
-                @dprintln(3,"isCallNode. head = ", node.head, " type = ", typeof(node.args[1]), " name = ", node.args[1].name)
+            elseif isInvoke(node)
+                @dprintln(3,"isInvoke. head = ", node.head, " type = ", typeof(node.args[2]), " name = ", node.args[2].name)
+                if hasNoSideEffects(node) || isDeadCall(node, live_info.live_out)
+                    @dprintln(3,"Eliminating dead call. node = ", node)
+                    return CompilerTools.AstWalker.ASTWALK_REMOVE
+                end
+            elseif isCall(node)
+                @dprintln(3,"isCall. head = ", node.head, " type = ", typeof(node.args[1]), " name = ", node.args[1].name)
                 if hasNoSideEffects(node) || isDeadCall(node, live_info.live_out)
                     @dprintln(3,"Eliminating dead call. node = ", node)
                     return CompilerTools.AstWalker.ASTWALK_REMOVE
@@ -453,43 +461,50 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
             @dprintln(3,"Is an assignment node.")
             lhs = toLHSVar(node.args[1])
             rhs = node.args[2]
-            if isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base,:transpose!)
-                original_matrix = toLHSVar(rhs.args[3])
-                transpose_var1 = toLHSVar(rhs.args[2])
+            if isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base,:transpose!)
+                args = getCallArguments(rhs)
+                original_matrix = toLHSVar(args[2])
+                transpose_var1 = toLHSVar(args[1])
                 transpose_var2 = lhs
                 data.transpose_map[transpose_var1] = original_matrix
                 data.transpose_map[transpose_var2] = original_matrix
-            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+            elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemm_wrapper!)
             #@bp
-                A = toLHSVar(rhs.args[5])
+                args = getCallArguments(rhs)
+                A = toLHSVar(args[4])
                 if haskey(data.transpose_map, A)
-                    rhs.args[5] = data.transpose_map[A]
-                    rhs.args[3] = 'T'
+                    args[4] = data.transpose_map[A]
+                    args[2] = 'T'
                 end
-                B = toLHSVar(rhs.args[6])
+                B = toLHSVar(args[5])
                 if haskey(data.transpose_map, B)
-                    rhs.args[6] = data.transpose_map[B]
-                    rhs.args[4] = 'T'
+                    args[5] = data.transpose_map[B]
+                    args[3] = 'T'
                 end
-            elseif isa(rhs,Expr) && rhs.head==:call && rhs.args[1]==GlobalRef(Base.LinAlg,:gemv!)
+                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
+            elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemv!)
             #@bp
-                A = toLHSVar(rhs.args[4])
+                args = getCallArguments(rhs)
+                A = toLHSVar(args[3])
                 if haskey(data.transpose_map, A)
-                    rhs.args[4] = data.transpose_map[A]
-                    rhs.args[3] = 'T'
+                    args[3] = data.transpose_map[A]
+                    args[2] = 'T'
                 end
+                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
             # replace arraysize() calls to the transposed matrix with original
-            elseif isa(rhs,Expr) && rhs.head==:call && isBaseFunc(rhs.args[1], :arraysize)
-                if haskey(data.transpose_map, rhs.args[2])
-                    rhs.args[2] = data.transpose_map[rhs.args[2]]
-                    if rhs.args[3] ==1
-                        rhs.args[3] = 2
-                    elseif rhs.args[3] ==2
-                        rhs.args[3] = 1
+            elseif isCall(rhs) && isBaseFunc(getCallFunction(rhs), :arraysize)
+                args = getCallArguments(rhs)
+                if haskey(data.transpose_map, args[1])
+                    args[1] = data.transpose_map[args[1]]
+                    if args[2] ==1
+                        args[2] = 2
+                    elseif args[2] ==2
+                        args[2] = 1
                     else
                         throw("transpose_propagate matrix dim error")
                     end
                 end
+                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
             end
             return node
         end
@@ -697,33 +712,35 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         assert(n >= 1 && n <= 3)
         @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
         checkAndAddSymbolCorrelation(lhs, state, sizes)            
-    elseif rhs.head == :call
+    elseif isCall(rhs) 
         @dprintln(3, "Detected call rhs in from_assignment.")
         @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
         if length(rhs.args) > 1
             @dprintln(3, " arg2 = ", rhs.args[2])
         end
-        if isBaseFunc(rhs.args[1], :ccall)
+        fun = getCallFunction(rhs)
+        args = getCallArguments(rhs)
+        if isBaseFunc(fun, :ccall)
             # Same as :alloc above.  Detect an array allocation call and map the specified array sizes to an array equivalence class.
-            if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                dim1 = rhs.args[7]
+            if args[1] == QuoteNode(:jl_alloc_array_1d)
+                dim1 = args[6]
                 @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
                 checkAndAddSymbolCorrelation(lhs, state, [dim1])            
-            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                dim1 = rhs.args[7]
-                dim2 = rhs.args[9]
+            elseif args[1] == QuoteNode(:jl_alloc_array_2d)
+                dim1 = args[6]
+                dim2 = args[8]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
-            elseif rhs.args[2] == QuoteNode(:jl_alloc_array_3d)
-                dim1 = rhs.args[7]
-                dim2 = rhs.args[9]
-                dim3 = rhs.args[11]
+            elseif args[1] == QuoteNode(:jl_alloc_array_3d)
+                dim1 = args[6]
+                dim2 = args[8]
+                dim3 = args[10]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
             end
-        elseif  isBaseFunc(rhs.args[1], :arraylen)
+        elseif  isBaseFunc(fun, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-            array_param = rhs.args[2]                  # length takes one param, which is the array
+            array_param = args[1]                  # length takes one param, which is the array
             assert(isa(array_param, RHSVar))
             array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.LambdaVarInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
@@ -731,10 +748,10 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
-        elseif isBaseFunc(rhs.args[1], :arraysize)
+        elseif isBaseFunc(fun, :arraysize)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-            if length(rhs.args) == 2
-                array_param = rhs.args[2]                  # length takes one param, which is the array
+            if length(args) == 1 
+                array_param = args[1]                  # length takes one param, which is the array
                 assert(isa(array_param, TypedVar))         # should be a TypedVar
                 array_param_type = getType(array_param, state.LambdaVarInfo)  # get its type
                 array_dims = ndims(array_param_type)
@@ -742,28 +759,28 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 for dim_i = 1:array_dims
                     push!(dim_symbols, lhs[dim_i])
                 end
-                lhsVar = toLHSVar(rhs.args[2])
+                lhsVar = toLHSVar(args[1])
                 @dprintln(3,"Adding symbol correlation from arraysize, name = ", lhsVar, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(lhsVar, state, dim_symbols)
-            elseif length(rhs.args) == 3
+            elseif length(args) == 2
                 @dprintln(1,"Can't establish symbol to array length correlations yet in the case where dimensions are extracted individually.")
             else
                 throw(string("arraysize AST node didn't have 2 or 3 arguments."))
             end
-        elseif rhs.args[1]==GlobalRef(Base,:reshape)
+        elseif isBaseFunc(fun, :reshape)
             # rhs.args[2] is the array to be reshaped, lhs is the result, rhs.args[3] is a tuple with new shape
-            if haskey(state.tuple_table, rhs.args[3])
-                checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[rhs.args[3]])
+            if haskey(state.tuple_table, args[2])
+                checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[args[2]])
             end
-        elseif isBaseFunc(rhs.args[1], :tuple)
+        elseif isBaseFunc(fun, :tuple)
             ok = true
-            for s in rhs.args[2:end]
+            for s in args
                 if !(isa(s,TypedVar) || isa(s,Int))
                     ok = false
                 end
             end
             if ok
-                state.tuple_table[lhs]=rhs.args[2:end]
+                state.tuple_table[lhs]=args[1:end]
             end
         end
     elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
@@ -1140,14 +1157,15 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
     
-    if node.head == :call && isBaseFunc(node.args[1], :arraysize)
+    if isCall(node) && isBaseFunc(getCallFunction(node), :arraysize)
         # replace arraysize calls when size is known and constant
-        arr = toLHSVar(node.args[2])
-        if isa(node.args[3],Int) && haskey(state.array_length_correlation, arr)
+        args = getCallArguments(node)
+        arr = toLHSVar(args[1])
+        if isa(args[2],Int) && haskey(state.array_length_correlation, arr)
             arr_class = state.array_length_correlation[arr]
             for (d, v) in state.symbol_array_correlation
                 if v==arr_class 
-                    res = d[node.args[3]]
+                    res = d[args[2]]
                     # only replace when the size is constant or a valid live variable 
                     # check def since a symbol correlation might be defined with current arraysize() in reverse direction
                     if isIntType(res) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )

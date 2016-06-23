@@ -155,16 +155,18 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     updateDef(state, lhs, rhs)
   end
   # fix getindex and setindex!, note that their operand may already have been replaced by bufSyms, which are LHSVar.
-  if is(expr.head, :call) && isa(expr.args[1], GlobalRef) && 
-     (is(expr.args[1].name, :getindex) || is(expr.args[1].name, :setindex!) ||
-      is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :arrayset)) && 
-     isa(expr.args[2], RHSVar) && in(expr.args[2], bufSyms)
-    local isGet = is(expr.args[1].name, :arrayref) || is(expr.args[1].name, :getindex)
+  if isCall(expr) || isInvoke(expr)
+   fun = getCallFunction(expr)
+   args = getCallArguments(expr)
+   if isa(fun, GlobalRef) && 
+     (is(fun.name, :getindex) || is(fun.name, :setindex!) || is(fun.name, :arrayref) || is(fun.name, :arrayset)) && 
+     isa(args[1], RHSVar) && in(args[1], bufSyms)
+    local isGet = is(fun.name, :arrayref) || is(fun.name, :getindex)
     #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
-    bufSym = expr.args[2]
+    bufSym = args[1]
     elmTyp = elmTypOf(getType(bufSym, state.linfo))
-    local idxOffset = isGet ? 2 : 3
-    local dim = length(expr.args) - idxOffset
+    local idxOffset = isGet ? 1 : 2
+    local dim = length(args) - idxOffset
     assert(dim <= 10)      # arbitrary limit controlling the total num of dimensions
     if !stat.initialized         # create stat if not already exists
       local idxSym = GenSym[ addTempVariable(Int, state.linfo) for i in 1:dim ]
@@ -174,14 +176,15 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
       assert(dim == stat.dimension)
     end
     for i = 1:dim           # update extents and index calculation in expr
-      local idx = Int(expr.args[idxOffset+i])
+      local idx = Int(args[idxOffset+i])
       stat.shapeMax[i] = max(idx, stat.shapeMax[i])
       stat.shapeMin[i] = min(idx, stat.shapeMin[i])
-      expr.args[idxOffset+i] = add_expr(stat.idxSym[i], idx)
+      args[idxOffset+i] = add_expr(stat.idxSym[i], idx)
     end
     # local idx1D = nDimTo1Dim(expr.args[(idxOffset+1):end], stat.strideSym)
-    expr.args = isGet ? [ GlobalRef(Base, :unsafe_arrayref), expr.args[2], expr.args[(idxOffset+1):end]...] :
-                        [ GlobalRef(Base, :unsafe_arrayset), expr.args[2], expr.args[3], expr.args[(idxOffset+1):end]... ]
+    expr.head = :call
+    expr.args = isGet ? [ GlobalRef(Base, :unsafe_arrayref), args[1], args[(idxOffset+1):end]...] :
+                        [ GlobalRef(Base, :unsafe_arrayset), args[1], args[2], args[(idxOffset+1):end]... ]
     # fix numerical coercion when converting setindex! into unsafe_arrayset
     if is(expr.args[1].name, :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
@@ -197,6 +200,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
         end
       end
     end
+   end
   end
 end
 

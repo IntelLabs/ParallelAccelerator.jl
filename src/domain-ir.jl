@@ -1101,24 +1101,28 @@ end
 
 function from_call(state::IRState, env::IREnv, expr::Expr)
     local env_ = nextEnv(env)
-    local head = expr.head
-    local ast = expr.args
+    local fun = getCallFunction(expr)
+    local args = getCallArguments(expr)
     local typ = expr.typ
-    @assert length(ast) >= 1 "call args cannot be empty"
-    local fun  = ast[1]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
         return expr
     end
     fun = lookupConstDefForArg(state, fun)
-    local args = ast[2:end]
     dprintln(env,"from_call: fun=", fun, " typeof(fun)=", typeof(fun), " args=",args, " typ=", typ)
     fun = from_expr(state, env_, fun)
     dprintln(env,"from_call: new fun=", fun)
     (fun_, args_) = normalize_callname(state, env, fun, args)
     dprintln(env,"normalized callname: ", fun_)
     result = translate_call(state, env, typ, :call, fun, args, fun_, args_)
-    result
+    if result == nothing 
+        # do not normalize :ccall
+        args = fun_ == :ccall ? args : normalize_args(state, env, args)
+        expr.args = expr.head == :invoke ? [expr.args[1:2]; args] : [fun; args]
+        expr
+    else
+        result
+    end
 end
 
 function translate_call(state, env, typ, head, oldfun::ANY, oldargs, fun::GlobalRef, args)
@@ -1173,13 +1177,18 @@ function normalize_callname(state::IRState, env, fun::GlobalRef, args)
         return (fun.name, args)
     elseif is(fun.mod, Base) && is(fun.name, :getindex) || is(fun.name, :setindex!) || is(fun.name, :_getindex!)
         return (fun.name, args)
+    elseif is(fun, GlobalRef(Core.Intrinsics, :ccall))
+        return normalize_callname(state, env, fun.name, args)
     else
         return (fun, args)
     end
 end
 
 function normalize_callname(state::IRState, env, fun::TopNode, args)
-    fun = fun.name
+    normalize_callname(state, env, fun.name, args)
+end
+
+function normalize_callname(state::IRState, env, fun::Symbol, args)
     if is(fun, :ccall)
         callee = lookupConstDefForArg(state, args[1])
         if isa(callee, QuoteNode) && in(callee.value, allocCalls)
@@ -1486,8 +1495,9 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
                 dprintln(env, "matched escaping variable = ", escVar)
                 return escVar
             end
+        else
+            return nothing
         end
-    else
     end
     return expr
 end
@@ -2260,6 +2270,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
             end
         elseif fun.name==:println || fun.name==:print # fix type for println
             typ = Void
+            expr = mk_expr(typ, head, oldfun, oldargs...)
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
@@ -2285,6 +2296,8 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     elseif is(fun.mod, API.Lib.NoInline) 
         oldfun = Base.resolve(GlobalRef(Base, fun.name))
         dprintln(env,"Translate function from API.Lib back to Base: ", oldfun)
+        oldargs = normalize_args(state, env_, oldargs)
+        expr = mk_expr(typ, head, oldfun, oldargs...)
     elseif isdefined(fun.mod, fun.name)
         args = normalize_args(state, env_, args)
         args_typ = map(x -> typeOfOpr(state, x), args)
@@ -2299,10 +2312,10 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     else
         dprintln(env,"function call not translated: ", fun, ", and is not found!")
     end
-    if isa(expr, Void)
-        oldargs = normalize_args(state, env_, oldargs)
-        expr = mk_expr(typ, head, oldfun, oldargs...)
-    end
+    #if isa(expr, Void)
+    #    oldargs = normalize_args(state, env_, oldargs)
+    #    expr = mk_expr(typ, head, oldfun, oldargs...)
+    #end
     return expr
 end
 
@@ -2400,7 +2413,7 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
         return from_assignment(state, env, ast)
     elseif is(head, :return)
         return from_return(state, env, ast)
-    elseif is(head, :call)
+    elseif is(head, :call) || is(head, :invoke)
         return from_call(state, env, ast)
         # TODO: catch domain IR result here
     # legacy v0.3
@@ -2755,14 +2768,16 @@ function dir_live_cb(ast :: Expr, cbdata :: ANY)
         end
         return expr_to_process
         # arrayref only add read access
-    elseif head == :call
-        if isBaseFunc(args[1], :arrayref) || isBaseFunc(args[1], :arraysize)
-            expr_to_process = Any[]
-            for i = 2:length(args)
-                push!(expr_to_process, args[i])
-            end
-            return expr_to_process
-        end
+#    elseif head == :call || head == :invoke
+#        fun = getCallFunction(ast)
+#        if isBaseFunc(fun, :arrayref) || isBaseFunc(fun, :arraysize)
+#            expr_to_process = Any[]
+#            args = getCallArguments(ast)
+#            for i = 2:length(args)
+#                push!(expr_to_process, args[i])
+#            end
+#            return expr_to_process
+#        end
     end
 
     return nothing

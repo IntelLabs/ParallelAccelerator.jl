@@ -288,8 +288,12 @@ end
 
 function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
     call = ""
-    if rhs.head==:call && length(rhs.args)==3
-        call *= pattern_match_call_chol(rhs.args[1],rhs.args[2],rhs.args[3],linfo)
+    if isCall(rhs) 
+        fun = getCallFunction(rhs)
+        args = getCallArguments(rhs)
+        if length(args) == 2
+            call *= pattern_match_call_chol(fun,args[1],args[2],linfo)
+        end
     end
     if call!=""
         return from_expr(lhs,linfo)*call
@@ -463,10 +467,8 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_transpose(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
     end
-    if(length(ast)>=1) # rand! can have only 1 arg
+    if(length(ast)>=1) # rand can have 1 or more arg
         s *= pattern_match_call_randn(linfo, ast...)
-    end
-    if(length(ast)>=2) # rand! has 2 or more args
         s *= pattern_match_call_rand(linfo, ast...)
     end
     # gemv calls have 5 args
@@ -485,28 +487,29 @@ end
 function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
-    if rhs.head==:call && (isBaseFunc(rhs.args[1],:typed_hvcat) || checkGlobalRefName(rhs.args[1],:hvcat))
+    if isCall(rhs) && (isBaseFunc(getCallFunction(rhs),:typed_hvcat) || checkGlobalRefName(getCallFunction(rhs),:hvcat))
         @dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
-        is_typed::Bool = isBaseFunc(rhs.args[1],:typed_hvcat)
+        is_typed::Bool = isBaseFunc(getCallFunction(rhs),:typed_hvcat)
         
         rows = Int64[]
         values = Any[]
         typ = "double"
+        args = getCallArguments(rhs)
 
         if is_typed
-            atyp = rhs.args[2]
+            atyp = args[1]
             if isa(atyp, GlobalRef) 
-                atyp = eval(rhs.args[2].name)
+                atyp = eval(args[1].name)
             end
-            @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * rhs.args[2])
+            @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * args[1])
             typ = toCtype(atyp)
-            rows = lstate.tupleTable[rhs.args[3]]
-            values = rhs.args[4:end]
+            rows = lstate.tupleTable[args[2]]
+            values = args[3:end]
         else
 
-            rows = lstate.tupleTable[rhs.args[2]]
-            values = rhs.args[3:end]
+            rows = lstate.tupleTable[args[1]]
+            values = args[2:end]
             atyp, arr_dims = parseArrayType(getSymType(lhs, linfo))
             typ = toCtype(atyp)
         end
@@ -525,13 +528,14 @@ end
 
 function from_assignment_match_cat_t(lhs, rhs::Expr, linfo)
     s = ""
-    if rhs.head==:call && isa(rhs.args[1],GlobalRef) && rhs.args[1].name==:cat_t
-        dims = rhs.args[2]
+    if isCall(rhs) && isBaseFunc(getCallFunction(rhs), :cat_t)
+        args = getCallArguments(rhs)
+        dims = args[1]
         @assert dims==2 "CGen: only 2d cat_t() is supported now"
-        size = length(rhs.args[4:end])
-        typ = toCtype(eval(rhs.args[3].name))
+        size = length(args[3:end])
+        typ = toCtype(eval(args[2].name))
         s *= from_expr(lhs,linfo) * " = j2c_array<$typ>::new_j2c_array_$(dims)d(NULL, 1,$size);\n"
-        values = rhs.args[4:end]
+        values = args[3:end]
         s *= mapfoldl((i) -> from_setindex([lhs,values[i],i],linfo)*";", (a, b) -> "$a $b", 1:length(values))
     end
     return s

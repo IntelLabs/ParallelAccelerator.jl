@@ -172,17 +172,18 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
         func = getfield(func_expr.mod, func_expr.name)
     elseif fetyp == Expr
         @dprintln(3,"head = ", func_expr.head)
-        if func_expr.head == :call && isBaseFunc(func_expr.args[1], :getfield)
-            @dprintln(3,"args2 = ", func_expr.args[2], " type = ", typeof(func_expr.args[2]))
-            @dprintln(3,"args3 = ", func_expr.args[3], " type = ", typeof(func_expr.args[3]))
-            fsym = func_expr.args[3]
+        if isCall(func_expr) && isBaseFunc(getCallFunction(func_expr), :getfield)
+            args = getCallArguments(func_expr)
+            @dprintln(3,"args2 = ", args[1], " type = ", typeof(args[1]))
+            @dprintln(3,"args3 = ", args[2], " type = ", typeof(args[2]))
+            fsym = args[2]
             if typeof(fsym) == QuoteNode
                 fsym = fsym.value
             end
-            if typeof(func_expr.args[2]) == GlobalRef
-                func = getfield(eval(func_expr.args[2]), fsym)
+            if typeof(args[1]) == GlobalRef
+                func = getfield(eval(args[1]), fsym)
             else
-                func = getfield(Main.(func_expr.args[2]), fsym)
+                func = getfield(Main.(args[1]), fsym)
             end
         else
             func = eval(func_expr)
@@ -264,14 +265,14 @@ function extractStaticCallGraphWalk(node::Expr,
             AstWalker.AstWalk(node, extractStaticCallGraphWalk, new_lambda_state)
             return node
         end
-    elseif head == :call || head == :call1
-        func_expr = args[1]
+    elseif head == :invoke || head == :call || head == :call1
+        func_expr = getCallFunction(node)
         @dprintln(4,"func_expr = ", func_expr)
         if isBaseFunc(func_expr, :ccall)
             state.cant_analyze = true
             return node
         end
-        call_args = args[2:end]
+        call_args = getCallArguments(node)
         @dprintln(4,"call_args = ", call_args)
         call_sig = Expr(:tuple)
         call_sig.args = map(x -> CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo), call_args)

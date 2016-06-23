@@ -1106,14 +1106,6 @@ function isAssignmentNode(node::Any)
     return false
 end
 
-function isCallNode(node :: Expr)
-    return node.head == :call
-end
-
-function isCallNode(node::Any)
-    return false
-end
-
 """
 Is a node a loophead expression node (a form of assignment).
 """
@@ -2288,12 +2280,6 @@ function hasNoSideEffects(node :: Expr)
         return all(Bool[hasNoSideEffects(a) for a in node.args])
     elseif node.head == :alloc
         return true
-    elseif node.head == :ccall
-        func = node.args[1]
-        if func == QuoteNode(:jl_alloc_array_1d) ||
-           func == QuoteNode(:jl_alloc_array_2d)
-            return true
-        end
     elseif node.head == :lambda
         return true
     elseif node.head == :new
@@ -2302,20 +2288,30 @@ function hasNoSideEffects(node :: Expr)
             newtyp = getfield(newtyp.mod, newtyp.name)
         end
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
-    elseif node.head == :call1 || node.head == :call
-        func = node.args[1]
+    elseif node.head == :call1 || node.head == :call || node.head == :invoke
+        func = CompilerTools.Helper.getCallFunction(node)
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
             isBaseFunc(func, :arraysize) ||
+            isBaseFunc(func, :getfield) ||
             isBaseFunc(func, :getindex) ||
-            isBaseFunc(func, :box) ||
             isBaseFunc(func, :sub_int) ||
             isBaseFunc(func, :add_int) ||
-            isBaseFunc(func, :mul_int) 
-            isBaseFunc(func, :apply_type) ||
-            isBaseFunc(func, :tuple)
+            isBaseFunc(func, :mul_int) ||
+            isBaseFunc(func, :sub_float) ||
+            isBaseFunc(func, :add_float) ||
+            isBaseFunc(func, :mul_float) ||
+            isBaseFunc(func, :sitofp) ||
+            isBaseFunc(func, :sltint) ||
+            isBaseFunc(func, :apply_type)
             return true
+        elseif func == :ccall
+            func = args[1]
+            if func == QuoteNode(:jl_alloc_array_1d) ||
+               func == QuoteNode(:jl_alloc_array_2d)
+                return true
+            end
         elseif isa(func, TopNode) 
             @dprintln(3, "Found TopNode in hasNoSideEffects. type = ", typeof(func.name))
             if func.name == :getfield
@@ -2452,15 +2448,17 @@ function from_assignment(lhs, rhs, depth, state)
             if from_assertEqShape(rhs, state)
                 return [], nothing
             end
-        elseif rhs.head == :call
+        elseif rhs.head == :call || rhs.head == :invoke
             @dprintln(3, "Detected call rhs in from_assignment.")
             @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
             if length(rhs.args) > 1
                 @dprintln(3, " arg2 = ", rhs.args[2])
             end
-            if isBaseFunc(rhs.args[1], :ccall)
-                if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                    dim1 = rhs.args[7]
+            fun = CompilerTools.Helper.getCallFunction(rhs)
+            args = CompilerTools.Helper.getCallArguments(rhs)
+            if isBaseFunc(fun, :ccall)
+                if args[1] == QuoteNode(:jl_alloc_array_1d)
+                    dim1 = args[6]
                     @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
                     if isa(dim1, TypedVar)
                         si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
@@ -2469,9 +2467,9 @@ function from_assignment(lhs, rhs, depth, state)
                             getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1])
                         end
                     end
-                elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                    dim1 = rhs.args[7]
-                    dim2 = rhs.args[9]
+                elseif args[1] == QuoteNode(:jl_alloc_array_2d)
+                    dim1 = args[6]
+                    dim2 = args[8]
                     @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
                     if isa(dim1, TypedVar) && isa(dim2, TypedVar)
                         si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
@@ -2501,12 +2499,11 @@ function from_assignment(lhs, rhs, depth, state)
 end
 
 """
-Process a call AST node.
+Process a call AST node. Note that it takes an Expr as input because it can be either :call or :invoke.
 """
-function from_call(ast::Array{Any,1}, depth, state)
-    assert(length(ast) >= 1)
-    fun  = ast[1]
-    args = ast[2:end]
+function from_call(ast::Expr, depth, state)
+    fun  = getCallFunction(ast)
+    args = getCallArguments(ast)
     @dprintln(2,"from_call fun = ", fun, " typeof fun = ", typeof(fun))
     if length(args) > 0
         @dprintln(2,"first arg = ",args[1], " type = ", typeof(args[1]))
@@ -2521,7 +2518,7 @@ function from_call(ast::Array{Any,1}, depth, state)
     # Recursively process the arguments to the call.  
     args = from_exprs(args, depth+1, state)
 
-    return [fun; args]
+    return ast.head == :invoke ? [ast.args[1]; fun; args] : [fun; args]
 end
 
 """
@@ -3470,8 +3467,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         end
     elseif head == :return
         args = from_exprs(args, depth, state)
-    elseif head == :call || head == :call1
-        args = from_call(args, depth, state)
+    elseif head == :invoke || head == :call || head == :call1
+        args = from_call(ast, depth, state)
         # TODO: catch domain IR result here
     elseif head == :line
         # remove line numbers

@@ -826,9 +826,10 @@ function from_getslice(args, linfo)
         i = i + 1
         if isa(a, GlobalRef) && a.name == :(:)
         else
-            if isa(a, Expr) && a.head == :call && a.args[1] == GlobalRef(Base, :UnitRange)
-              @assert (a.args[2] == a.args[3]) "Expect UnitRange to have identical start and end, but got " * string(a)
-              a = a.args[2]
+            if isCall(a) && isBaseFunc(getCallFunction(a), :UnitRange)
+              args = getCallArguments(a)
+              @assert (args[1] == args[2]) "Expect UnitRange to have identical start and end, but got " * string(a)
+              a = args[1]
             end
             push!(idxs, string(i))
             push!(idxs, from_expr(a, linfo))
@@ -1062,17 +1063,9 @@ function from_steprange_last(args, linfo)
 end
 
 
-function isTupleGlobalRef(arg::GlobalRef)
-    return arg.mod==Base && arg.name==:tuple
-end
-
-function isTupleGlobalRef(arg::Any)
-    return false
-end
-
 function get_shape_from_tuple(arg::Expr, linfo)
     res = ""
-    if arg.head==:call && isTupleGlobalRef(arg.args[1])
+    if arg.head==:call && isBaseFunc(arg.args[1], :tuple)
         shp = AbstractString[]
         for i in 2:length(arg.args)
             push!(shp, from_expr(arg.args[i], linfo))
@@ -2221,9 +2214,11 @@ function from_expr(ast::Expr, linfo)
         @dprintln(3, "Compiling ref")
         s *= from_ref(args, linfo)
 
-    elseif head == :call
+    elseif head == :invoke || head == :call
         @dprintln(3,"Compiling call")
-        s *= from_call(args, linfo)
+        fun  = getCallFunction(ast)
+        args = getCallArguments(ast)
+        s *= from_call([fun; args], linfo)
 
     elseif head == :call1
         @dprintln(3,"Compiling call1")
