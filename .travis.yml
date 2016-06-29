@@ -30,11 +30,11 @@ script:
   # Pull in and build CompilerTools dependency.
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
+  # Add packages necessary to run examples.
+  - julia -e 'Pkg.add("DocOpt"); Pkg.add("Images"); Pkg.add("Winston")'
   # Build and test ParallelAccelerator.
   - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator")'
   - julia --code-coverage=user test/runtests.jl
-  # Add packages necessary to run examples.
-  - julia -e 'Pkg.add("DocOpt"); Pkg.add("Images"); Pkg.add("Winston")'
   # Run examples.
   - julia examples/black-scholes/black-scholes.jl
   - julia --code-coverage=user examples/black-scholes/black-scholes.jl
