@@ -769,7 +769,7 @@ function isf(t :: Function,
               s = sprint(io->Base.show_backtrace(io, bt))
               ccall(:puts, Cint, (Cstring,), string(s))
   
-              msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid)
+              msg = string("caught some exception task = ", t, " num_threads = ", nthreads(), " tid = ", tid, " fis = ", full_iteration_space, " ", ls, " ", le)
               ccall(:puts, Cint, (Cstring,), msg)
               msg = string(something)
               ccall(:puts, Cint, (Cstring,), msg)
@@ -779,6 +779,7 @@ function isf(t :: Function,
 #println("After t call.")
         end
     elseif full_iteration_space.dim >= 2
+        assignments = ParallelAccelerator.ParallelIR.pir_range_actual[]
         try
             assignments = divide_fis(full_iteration_space, nthreads())
         catch something
@@ -790,12 +791,13 @@ function isf(t :: Function,
             #ccall(:puts, Cint, (Cstring,), msg)
             return t(assignments[tid], rest...)
         catch something
+            msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignments = ", assignments)
+            ccall(:puts, Cint, (Cstring,), msg)
+
             bt = catch_backtrace()
             s = sprint(io->Base.show_backtrace(io, bt))
             ccall(:puts, Cint, (Cstring,), string(s))
 
-            msg = string("caught some exception num_threads = ", nthreads(), " tid = ", tid, " assignment = ", assignments[tid])
-            ccall(:puts, Cint, (Cstring,), msg)
             msg = string(something)
             ccall(:puts, Cint, (Cstring,), msg)
             throw(msg)
@@ -1339,13 +1341,17 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(steprange_step_lhsvar), convertUnsafeOrElse(deepcopy(this_nest.step)), newLambdaVarInfo), line_num) # 3
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(steprange_first_rhsvar), newLambdaVarInfo), line_num) # 4
 
-#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_last_var = ", deepcopy(steprange_last_rhsvar)), line_num)
-#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_first_var = ", deepcopy(steprange_first_rhsvar)), line_num)
-#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_step_var = ", deepcopy(steprange_step_rhsvar)), line_num)
+        if DEBUG_TASK_FUNCTIONS
+        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_last_var = ", deepcopy(steprange_last_rhsvar)), line_num)
+        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_first_var = ", deepcopy(steprange_first_rhsvar)), line_num)
+        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "steprange_step_var = ", deepcopy(steprange_step_rhsvar)), line_num)
+        end
 
         line_num = addToBody!(new_body, LabelNode(label_head), line_num) # 5
 
-#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"), line_num)
+        if DEBUG_TASK_FUNCTIONS
+        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"), line_num)
+        end
 
         line_num = addToBody!(new_body, mk_gotoifnot_expr(
                Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
@@ -1394,7 +1400,9 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, GotoNode(label_head), line_num) # 12
         line_num = addToBody!(new_body, LabelNode(label_end), line_num) # 13
 
-#        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_end"), line_num)
+        if DEBUG_TASK_FUNCTIONS
+        line_num = addToBody!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_end"), line_num)
+        end
 else
         label_after_first_unless   = next_label(state)
 #        label_before_second_unless = next_label(state)

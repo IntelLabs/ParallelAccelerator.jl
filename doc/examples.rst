@@ -51,7 +51,6 @@ You can also run the examples at the ``julia>`` prompt::
     checksum: 0.49989453
 
 
-Some of the examples require additional Julia packages.  The 
-`REQUIRE file <https://github.com/IntelLabs/ParallelAccelerator.jl/blob/master/REQUIRE>`_ in our repository lists all registered packages that
-examples depend on.
+Some of the examples require additional Julia packages to be installed.
+
 
