@@ -870,25 +870,25 @@ sub(x, y) = add(x, neg(y))
 add(x::Int,  y::Int) = x + y
 add(x::Int,  y::Expr)= add(y, x)
 add(x::Int,  y)      = add(y, x)
-add(x::Expr, y::Int) = isAddExprInt(x) ? add(x.args[2], x.args[3] + y) : add_expr(x, y)
-add(x::Expr, y::Expr)= isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y)
-add(x::Expr, y)      = isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y)
+add(x::Expr, y::Int) = isBoxExpr(x) ? add(x.args[3], y) : (isAddExprInt(x) ? add(x.args[2], x.args[3] + y) : add_expr(x, y))
+add(x::Expr, y::Expr)= isBoxExpr(x) ? add(x.args[3], y) : (isBoxExpr(y) ? add(x, y.args[3]) : (isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y)))
+add(x::Expr, y)      = isBoxExpr(x) ? add(x.args[3], y) : (isAddExprInt(x) ? add(add(x.args[2], y), x.args[3]) : add_expr(x, y))
 add(x,       y::Expr)= add(y, x)
 add(x,       y)      = add_expr(x, y)
 neg(x::Int)          = -x
-neg(x::Expr)         = isNegExpr(x) ? x.args[2] : 
+neg(x::Expr)         = isBoxExpr(x) ? neg(x.args[3]) : (isNegExpr(x) ? x.args[2] : 
                        (isAddExpr(x) ? add(neg(x.args[2]), neg(x.args[3])) :
-                       (isMulExpr(x) ? mul(x.args[2], neg(x.args[3])) : neg_expr(x)))
+                       (isMulExpr(x) ? mul(x.args[2], neg(x.args[3])) : neg_expr(x))))
 neg(x)               = neg_expr(x)
 mul(x::Int,  y::Int) = x * y
 mul(x::Int,  y::Expr)= mul(y, x)
 mul(x::Int,  y)      = mul(y, x)
-mul(x::Expr, y::Int) = isMulExprInt(x) ? mul(x.args[2], x.args[3] * y) : 
-                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
-mul(x::Expr, y::Expr)= isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
-                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
-mul(x::Expr, y)      = isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
-                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))
+mul(x::Expr, y::Int) = isBoxExpr(x) ? mul(x.args[3], y) : (isMulExprInt(x) ? mul(x.args[2], x.args[3] * y) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y)))
+mul(x::Expr, y::Expr)= isBoxExpr(x) ? mul(x.args[3], y) : (isBoxExpr(y) ? mul(x, y.args[3]) : (isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y))))
+mul(x::Expr, y)      = isBoxExpr(x) ? mul(x.args[3], y) : (isMulExprInt(x) ? mul(mul(x.args[2], y), x.args[3]) : 
+                       (isAddExpr(x) ? add(mul(x.args[2], y), mul(x.args[3], y)) : mul_expr(x, y)))
 mul(x,       y::Expr)= mul(y, x)
 mul(x,       y)      = mul_expr(x, y)
 
