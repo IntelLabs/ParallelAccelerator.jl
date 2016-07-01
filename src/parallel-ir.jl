@@ -2293,17 +2293,27 @@ function hasNoSideEffects(node :: Expr)
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
+            isBaseFunc(func, :arrayref) ||
+            isBaseFunc(func, :arraylen) ||
             isBaseFunc(func, :arraysize) ||
             isBaseFunc(func, :getfield) ||
             isBaseFunc(func, :getindex) ||
+            isBaseFunc(func, :not_int) ||
             isBaseFunc(func, :sub_int) ||
             isBaseFunc(func, :add_int) ||
             isBaseFunc(func, :mul_int) ||
+            isBaseFunc(func, :neg_int) ||
+            isBaseFunc(func, :checked_sadd) ||
+            isBaseFunc(func, :checked_ssub) ||
+            isBaseFunc(func, :checked_smul) ||
+            isBaseFunc(func, :checked_trunc_sint) ||
             isBaseFunc(func, :sub_float) ||
             isBaseFunc(func, :add_float) ||
             isBaseFunc(func, :mul_float) ||
+            isBaseFunc(func, :div_float) ||
             isBaseFunc(func, :sitofp) ||
             isBaseFunc(func, :sltint) ||
+            isBaseFunc(func, :(===)) ||
             isBaseFunc(func, :apply_type)
             return true
         elseif func == :ccall
