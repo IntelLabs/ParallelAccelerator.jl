@@ -630,7 +630,8 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                     intersection     = intersect(cur.def, next.use)
                     @dprintln(3,"cur_domain_node = ", cur_domain_node, " next_domain_node = ", next_domain_node, " intersection = ", intersection)
                     if cur_domain_node && !cannot_move_next
-                        if !next_domain_node && isempty(intersection)
+                        if !next_domain_node 
+                          if isempty(intersection)
                             # If the current statement is a domain node and the next staterment isn't and we are allowed to move the next node
                             # in the block and the next statement doesn't use anything produced by this statement then we can switch the order of
                             # the current and next statement.
@@ -639,6 +640,22 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                             (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
                             (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
                             found_change = true
+                          else # intersection is not empty, but let's check if it is no longer live
+                            if length(intersection) == 1 && isAssignmentNode(cur.tls.expr) && isAssignmentNode(next.tls.expr) 
+                                lhsvar = toLHSVar(cur.tls.expr.args[1])
+                                tmpvar = toLHSVar(next.tls.expr.args[2])
+                                if lhsvar == tmpvar && in(tmpvar, intersection) && !in(tmpvar, next.live_out)
+                                    @dprintln(3, "next is assignment, and RHS is not live afterwards") 
+                                    (bb.statements[i], bb.statements[i+1]) = (bb.statements[i+1], bb.statements[i])
+                                    (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
+                                    (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
+                                    found_change = true
+                                    bb.statements[i+1].tls.expr.args[1] = bb.statements[i].tls.expr.args[1]
+                                    bb.statements[i].tls.expr = nothing
+                                    @dprintln(3, "after rewrite, cur = ", bb.statements[i+1])
+                                end
+                            end
+                          end
                         else
                             if i < earliest_parfor
                                 earliest_parfor = i
