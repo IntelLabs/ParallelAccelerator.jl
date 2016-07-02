@@ -2762,7 +2762,8 @@ function nested_function_exprs(domain_lambda, out_state)
 
     new_vars = expr_state(lives, max_label, input_arrays)
     # import correlations of escaping variables to enable optimizations
-    setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
+    # TODO: fix imported GenSym symbols
+    # setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
     @dprintln(3,"Creating nested equivalence classes. Imported correlations:", " " , unique_node_id)
     print_correlations(3, new_vars)
