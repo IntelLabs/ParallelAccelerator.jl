@@ -2293,17 +2293,27 @@ function hasNoSideEffects(node :: Expr)
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
+            isBaseFunc(func, :arrayref) ||
+            isBaseFunc(func, :arraylen) ||
             isBaseFunc(func, :arraysize) ||
             isBaseFunc(func, :getfield) ||
             isBaseFunc(func, :getindex) ||
+            isBaseFunc(func, :not_int) ||
             isBaseFunc(func, :sub_int) ||
             isBaseFunc(func, :add_int) ||
             isBaseFunc(func, :mul_int) ||
+            isBaseFunc(func, :neg_int) ||
+            isBaseFunc(func, :checked_sadd) ||
+            isBaseFunc(func, :checked_ssub) ||
+            isBaseFunc(func, :checked_smul) ||
+            isBaseFunc(func, :checked_trunc_sint) ||
             isBaseFunc(func, :sub_float) ||
             isBaseFunc(func, :add_float) ||
             isBaseFunc(func, :mul_float) ||
+            isBaseFunc(func, :div_float) ||
             isBaseFunc(func, :sitofp) ||
             isBaseFunc(func, :sltint) ||
+            isBaseFunc(func, :(===)) ||
             isBaseFunc(func, :apply_type)
             return true
         elseif func == :ccall
@@ -2752,7 +2762,8 @@ function nested_function_exprs(domain_lambda, out_state)
 
     new_vars = expr_state(lives, max_label, input_arrays)
     # import correlations of escaping variables to enable optimizations
-    setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
+    # TODO: fix imported GenSym symbols
+    # setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
     @dprintln(3,"Creating nested equivalence classes. Imported correlations:", " " , unique_node_id)
     print_correlations(3, new_vars)

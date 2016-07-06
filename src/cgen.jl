@@ -77,7 +77,7 @@ type LambdaGlobalData
             Float64 =>  "double",
             Bool    =>  "bool",
             Char    =>  "char",
-            Void    =>  "void",
+            Void    =>  "void*",
             H5SizeArr_t => "hsize_t*",
             SizeArr_t => "uint64_t*"
     )
@@ -234,7 +234,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "safe_arrayref", "safe_arrayset", "tupleref",
             "call1", ":jl_alloc_array_1d", ":jl_alloc_array_2d", ":jl_alloc_array_3d", "nfields",
             "_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
-            ":jl_array_ptr", "sizeof", "pointer", 
+            ":jl_array_ptr", "sizeof", "pointer", "pointerref",
             # We also consider type casting here
             "Float32", "Float64", 
             "Int8", "Int16", "Int32", "Int64",
@@ -247,7 +247,7 @@ _Intrinsics = [
         "===",
         "box", "unbox",
         #arithmetic
-        "neg_int", "add_int", "sub_int", "mul_int", "sle_int",
+        "neg_int", "add_int", "sub_int", "mul_int", "sle_int", "ule_int",
         "xor_int", "and_int", "or_int", "ne_int", "eq_int",
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
@@ -563,7 +563,9 @@ function from_exprs(args::Array, linfo)
     for a in args
         @dprintln(3, "from_exprs working on = ", a)
         se = from_expr(a, linfo)
-        s *= se * (!isempty(se) ? ";\n" : "")
+        if se != "nothing" # skip nothing statement
+          s *= se * (!isempty(se) ? ";\n" : "")
+        end
     end
     s
 end
@@ -753,6 +755,21 @@ function toCtype(typ::DataType)
     else
         return canonicalize(typ)
     end
+end
+
+function toCtype(utyp::Union)
+    typ = Void
+    for t in utyp.types
+        if t != Void
+            if typ == Void
+                typ = t
+            else
+                error("CGen does not handle Union type: ", utyp)
+            end
+        end
+    end
+    dprintln(3, "Type ", utyp, " is being treated as ", typ)
+    toCtype(typ)
 end
 
 function canonicalize_re(tok)
@@ -1150,6 +1167,14 @@ function from_pointer(args, linfo)
     s
 end
 
+function from_pointerref(args, linfo)
+    s = ""
+    if length(args) > 1
+        s *= " *($(from_expr(args[1], linfo)) + $(from_expr(args[2], linfo)) - 1)"
+    end
+    s
+end
+
 function from_raw_pointer(args, linfo)
     if length(args) == 1
         return "$(from_expr(args[1], linfo))"
@@ -1186,8 +1211,10 @@ function from_builtins(f, args, linfo)
         return from_arrayalloc(args, linfo)
     elseif tgt == ":jl_array_ptr"
         return from_array_ptr(args, linfo)
-    elseif tgt == "pointer"
+    elseif tgt == "pointer" 
         return from_pointer(args, linfo)
+    elseif tgt == "pointerref"
+        return from_pointerref(args, linfo)
     elseif tgt == "getfield"
         return from_getfield(args, linfo)
     elseif tgt == "setfield!"
@@ -1267,7 +1294,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
     elseif intr == "slt_int" || intr == "ult_int"
         return "($(from_expr(args[1], linfo))) < ($(from_expr(args[2], linfo)))"
-    elseif intr == "sle_int"
+    elseif intr == "sle_int" || intr == "ule_int"
         return "($(from_expr(args[1], linfo))) <= ($(from_expr(args[2], linfo)))"
     elseif intr == "lshr_int"
         return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"

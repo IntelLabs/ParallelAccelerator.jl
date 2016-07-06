@@ -78,6 +78,19 @@ end
 module TestKMeans
 using Base.Test
 include("../examples/k-means/k-means.jl")
+# k-means should have 3 top-level parfors after optimization
+if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
+@test ParallelAccelerator.get_num_acc_parfors()==3
+end
+end
+
+module TestLR
+using Base.Test
+include("../examples/logistic_regression/logistic_regression.jl")
+# logistic_regression should have 5 top-level parfors after optimization
+if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
+@test ParallelAccelerator.get_num_acc_parfors()==5
+end
 end
 
 # Delete file left behind by opt-flow.
