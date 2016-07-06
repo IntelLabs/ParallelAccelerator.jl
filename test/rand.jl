@@ -43,6 +43,18 @@ end
     return C
 end
 
+@acc function tuple_rand()
+    y = [1.0 2.0 3.0 ;1.1 2.1 3.1]
+    y += 0.1*rand(size(y))
+    return y
+end
+
+@acc function tuple_randn()
+    y = [1.0 2.0 3.0 ;1.1 2.1 3.1]
+    y += 0.1*randn(size(y))
+    return y
+end
+
 function test1()
     return simple_rand(2,3)
 end
@@ -51,11 +63,22 @@ function test2()
     return simple_randn(2,3)
 end
 
+function test3()
+    return tuple_rand()
+end
+
+function test4()
+    return tuple_randn()
+end
+
+
 end
 
 using Base.Test
 println("Testing rand()...")
 @test all(RandTest.test1() .<= ones(2,3).*2.0) && all(RandTest.test1() .>= zeros(2,3)) 
 @test size(RandTest.test2())==(2,3)
+@test size(RandTest.test3())==(2,3)
+@test size(RandTest.test4())==(2,3)
 println("Done testing rand()...")
 
