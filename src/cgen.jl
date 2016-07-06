@@ -395,11 +395,15 @@ function from_includes()
     "#include <iostream>\n",
     "#include \"$packageroot/deps/include/j2c-array.h\"\n",
     "#include \"$packageroot/deps/include/pse-types.h\"\n",
-    "#include \"$packageroot/deps/include/cgen_intrinsics.h\"\n")
+    "#include \"$packageroot/deps/include/cgen_intrinsics.h\"\n",
+    "#include <sstream>\n",
+    "#include <string>\n")
     )
     for userOption in userOptions
         s *= userOption.includeStatements
     end
+
+    s *= "unsigned main_count = 0;"
     
     return s
 end
@@ -2438,6 +2442,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
     ql = unaliased ? "__restrict" : ""
     @dprintln(3,"Compiling formal args: ", params)
     dumpSymbolTable(lstate.symboltable)
+    argtypes = []
     for p in 1:length(params)
         @dprintln(3,"Doing param $p: ", params[p])
         @dprintln(3,"Type is: ", typeof(params[p]))
@@ -2449,6 +2454,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
             for i in 1:length(varargtyp.types)
                 vtyp = varargtyp.types[i]
                 cvtyp = toCtype(vtyp)
+                push!(argtypes, cvtyp)
                 s = isempty(s) ? s : s * ", " 
                 s *= cvtyp * ((isArrayType(vtyp) ? "&" : "")
                 * (isArrayType(vtyp) ? " $ql " : " ")
@@ -2463,6 +2469,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
             s = isempty(s) ? s : s * ", " 
             typ = lookupSymbolType(params[p], linfo)
             ptyp = toCtype(typ)
+            push!(argtypes, ptyp)
             is_array = isArrayType(typ) || isStringType(typ)
             s *= ptyp * ((is_array && !CGEN_RAW_ARRAY_MODE ? "&" : "")
                 * (is_array ? " $ql " : " ")
@@ -2472,7 +2479,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
         end
     end
     @dprintln(3,"Formal args are: ", s)
-    s
+    s, argtypes
 end
 
 function from_newvarnode(args, linfo)
@@ -2487,7 +2494,7 @@ function from_callee(ast::Expr, functionName::AbstractString, linfo)
     typ = toCtype(CompilerTools.LambdaHandling.getReturnType(linfo))
     f = Dict(ast => functionName)
     bod = from_expr(body, linfo)
-    args = from_formalargs(params, [], false, linfo)
+    args, argtypes = from_formalargs(params, [], false, linfo)
     dumpSymbolTable(lstate.symboltable)
     s = "$typ $functionName($args) { $bod } "
     s
@@ -2499,10 +2506,16 @@ function isScalarType(typ::Type)
     !(isArrayType(typ) || isCompositeType(typ) || isStringType(typ))
 end
 
+createMain = false
+function setCreateMain(val)
+    global createMain = val
+end
+
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
-function createEntryPointWrapper(functionName, params, args, jtyp, alias_check = nothing)
-    @dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp)
+function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, alias_check = nothing)
+    @dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp, " argtypes = ", argtypes)
+    assert(length(params) == length(argtypes))
     if length(params) > 0
         paramstr = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
     else
@@ -2534,6 +2547,54 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
     end
     #printf(\"Starting execution of CGen generated code\\n\");
     #printf(\"End of execution of CGen generated code\\n\");
+
+    genMain = ""
+    genMainParam = ""
+    if createMain
+       genMainParam = ", bool genMain = true"
+       genMain *= "if (genMain) {\n"
+       genMain *= "++main_count;\n"  
+       genMain *= "std::stringstream newMain;\n"
+       genMain *= "std::stringstream newMainData;\n"
+       genMain *= "newMain << \"main\" << main_count << \".cc\";\n"
+       genMain *= "newMainData << \"main\" << main_count << \".data\";\n"
+       genMain *= "std::cout << \"Main will be generated in file \" << newMain.str() << std::endl;\n" 
+       genMain *= "std::cout << \"Data for main will be in file \" << newMainData.str() << std::endl;\n" 
+       genMain *= "std::ofstream mainFileData(newMainData.str(), std::ios::out | std::ios::binary);\n"
+       genMain *= "mainFileData << run_where << std::endl;\n"
+       for i = 1:length(params)
+           genMain *= "mainFileData << " * canonicalize(params[i]) * " << std::endl;\n"
+       end
+       genMain *= "mainFileData.close();\n"
+       genMain *= "std::ofstream mainFile(newMain.str());\n"
+       genMain *= "mainFile << \"#include \\\"\" << __FILE__ << \"\\\"\" << std::endl;\n"
+       genMain *= "mainFile << \"int main(int argc, char *argv[]) {\" << std::endl;\n"
+       if isDistributedMode()
+           genMain *= "mainFile << \"    MPI_Init(&argc, &argv);\" << std::endl;\n"
+       end
+       genMain *= "mainFile << \"    std::ifstream mainFileData(\\\"\" << newMainData.str() << \"\\\", std::ios::in | std::ios::binary);\" << std::endl;\n"
+       genMain *= "mainFile << \"    int runwhere;\" << std::endl;\n"
+       genMain *= "mainFile << \"    mainFileData >> runwhere;\" << std::endl;\n"
+       for i in 1:length(jtyp)
+           genMain *= "mainFile << \"    " * toCtype(jtyp[i]) * (isScalarType(jtyp[i]) ? "" : "*") * " ret" * string(i-1) * ";\" << std::endl;\n"
+       end
+       for i = 1:length(argtypes)
+           genMain *= "mainFile << \"    " * argtypes[i] * " " * canonicalize(params[i]) * ";\" << std::endl;\n"
+           genMain *= "mainFile << \"    mainFileData >> " * canonicalize(params[i]) * ";\" << std::endl;\n"
+       end
+       genMain *= "mainFile << \"    _$(functionName)_(runwhere"
+       for i = 1:length(params)
+           genMain *= ", " * canonicalize(params[i])
+       end
+       for i in 1:length(jtyp)
+           genMain *= ", &ret" * string(i-1)
+       end
+       genMain *= ", false);\" << std::endl;\n"
+       genMain *= "mainFile << \"    return 0;\" << std::endl;\n"
+       genMain *= "mainFile << \"}\" << std::endl;\n"
+       genMain *= "mainFile.close();\n"
+       genMain *= "}\n"
+    end
 
     unaliased_func = functionName * "_unaliased"
     unaliased_func_call = "$unaliased_func($actualParams);"
@@ -2622,7 +2683,8 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
         assert(isa(alias_check, AbstractString))
 
         s *=
-        "extern \"C\" void _$(functionName)_($wrapperParams $retSlot) {\n
+        "extern \"C\" void _$(functionName)_($wrapperParams $retSlot $genMainParam) {\n
+            $genMain
             $allocResult
             if ($alias_check) {
                 $functionName($actualParams);
@@ -2632,7 +2694,8 @@ function createEntryPointWrapper(functionName, params, args, jtyp, alias_check =
         }\n"
     else
         s *=
-    "extern \"C\" void _$(functionName)_($wrapperParams $retSlot) {\n
+    "extern \"C\" void _$(functionName)_($wrapperParams $retSlot $genMainParam) {\n
+        $genMain
         $allocResult
         $functionName($actualParams);
     }\n"
@@ -2699,14 +2762,19 @@ function check_params(emitunaliasedroots, params, linfo)
     end
 
     # Translate arguments
-    args = from_formalargs(params, vararglist, false, linfo)
+    args, argtypes = from_formalargs(params, vararglist, false, linfo)
 
     # If emitting unaliased versions, get "restrict"ed decls for arguments
-    argsunal = emitunaliasedroots ? from_formalargs(params, vararglist, true, linfo) : ""
+    if emitunaliasedroots
+       argsunal, argunaltypes = from_formalargs(params, vararglist, true, linfo)
+    else
+       argsunal = ""
+       argunaltypes = []
+    end
 
     vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist, linfo) 
 
-    return vararg_bod, args, argsunal, alias_check
+    return vararg_bod, args, argsunal, alias_check, argtypes
 end
 
 
@@ -2744,7 +2812,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
         dumpSymbolTable(lstate.symboltable)
     end
 
-    vararg_bod, args, argsunal, alias_check = check_params(emitunaliasedroots, params, linfo)
+    vararg_bod, args, argsunal, alias_check, argtypes = check_params(emitunaliasedroots, params, linfo)
     bod = vararg_bod * bod
 
     @dprintln(3,"returnType = ", returnType)
@@ -2759,7 +2827,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
     end
 
     # Create an entry point that will be called by the Julia code.
-    wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType) : "") * createEntryPointWrapper(functionName, params, args, returnType, alias_check)
+    wrapper = (emitunaliasedroots ? createEntryPointWrapper(functionName * "_unaliased", params, argsunal, returnType, argtypes) : "") * createEntryPointWrapper(functionName, params, args, returnType, argtypes, alias_check)
     rtyp = "void"
     if length(returnType) > 0
         retargs = foldl((a, b) -> "$a, $b",
@@ -2813,7 +2881,7 @@ function from_root_nonentry(ast, functionName::AbstractString, argtyps, array_ty
     #bod = from_expr(ast, linfo)
     bod = from_lambda(linfo, body)
 
-    vararg_bod, args, argsunal, alias_check = check_params(false, params, linfo)
+    vararg_bod, args, argsunal, alias_check, argtypes = check_params(false, params, linfo)
     bod = vararg_bod * bod
 
     #hdr = from_header(false)
@@ -3026,7 +3094,7 @@ function compile(outfile_name; flags=[])
 
         full_outfile_name = `$generated_file_dir/$outfile_name.o`
         compileCommand = getCompileCommand(full_outfile_name, cgenOutput, flags)
-        @dprintln(1,compileCommand)
+        @dprintln(1,"Compilation command = ", compileCommand)
         run(compileCommand)
     end
 end
@@ -3114,7 +3182,7 @@ function link(outfile_name; flags=[])
 
     if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
         linkCommand = getLinkCommand(outfile_name, lib, flags)
-        @dprintln(1,linkCommand)
+        @dprintln(1,"Link command = ", linkCommand)
         run(linkCommand)
         @dprintln(3,"Done CGen linking")
     end
