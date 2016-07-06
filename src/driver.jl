@@ -269,12 +269,14 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   outfile_name = CGen.writec(CGen.from_root_entry(code, function_name_string, signature, array_types_in_sig))
   CGen.compile(outfile_name)
   dyn_lib = CGen.link(outfile_name)
+  full_outfile_name = "$package_root/deps/generated/$outfile_name.cpp"
+  full_outfile_base = "$package_root/deps/generated/$outfile_name"
  
   # The proxy function name is the original function name with "_j2c_proxy" appended.
   proxy_name = string("_",function_name_string,"_j2c_proxy")
   proxy_sym = gensym(proxy_name)
   @dprintln(2, "toCGen for ", proxy_name)
-  @dprintln(2, "C File  = $package_root/deps/generated/$outfile_name.cpp")
+  @dprintln(2, "C File  = ", full_outfile_name)
   @dprintln(2, "dyn_lib = ", dyn_lib)
   
   # This is the name of the function that j2c generates.
