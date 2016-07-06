@@ -1157,7 +1157,7 @@ template <typename ELEMENT_TYPE>
 std::fstream & operator>>(std::fstream &in, j2c_array<ELEMENT_TYPE> &a) {
     binary_file_j2c_array_io bfjai(&in);
     a.deserialize(bfjai);
-    return out;
+    return in;
 }
 
 extern "C" 
