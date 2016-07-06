@@ -34,6 +34,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdio.h>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <array>
@@ -110,6 +111,34 @@ public:
     virtual void write_in(void *arr, uint64_t arr_length, unsigned int elem_size, bool immutable) = 0;
     virtual void write(void *arr, uint64_t arr_length, unsigned int elem_size, bool immutable) = 0;
     virtual void read(void **arr, uint64_t *length) = 0;
+};
+
+class binary_file_j2c_array_io : public j2c_array_io {
+protected:
+    std::fstream *the_file;
+public:
+    binary_file_j2c_array_io(std::fstream *cf) : the_file(cf) {}
+
+    virtual void write_in(void *arr, uint64_t arr_length, unsigned int elem_size, bool immutable) {
+        the_file->write((char*)&arr_length, sizeof(arr_length));
+        the_file->write((char*)&elem_size,  sizeof(elem_size));
+        the_file->write((char*)arr, arr_length * elem_size);
+    }
+
+    virtual void write(void *arr, uint64_t arr_length, unsigned int elem_size, bool immutable) {
+        write_in(arr, arr_length, elem_size, immutable);
+    }
+
+    virtual void read(void **arr, uint64_t *length) {
+        unsigned int elem_size;
+        uint64_t arr_length;
+        the_file->read((char*)&arr_length, sizeof(arr_length));
+        the_file->read((char*)&elem_size, sizeof(elem_size));
+        char *newarr = (char*)malloc(arr_length * elem_size);
+        the_file->read(newarr, arr_length * elem_size);
+        *length = arr_length;
+        *arr = newarr;
+    }
 };
 
 template <typename ELEMENT_TYPE>
@@ -1115,6 +1144,20 @@ std::istream& operator>>(std::istream& in, ASCIIString& p)
     in >> s;
     p = s.c_str();
     return in;
+}
+
+template <typename ELEMENT_TYPE>
+std::fstream & operator<<(std::fstream &out, const j2c_array<ELEMENT_TYPE> &a) {
+    binary_file_j2c_array_io bfjai(&out);
+    a.serialize(bfjai);
+    return out;
+}
+
+template <typename ELEMENT_TYPE>
+std::fstream & operator>>(std::fstream &in, j2c_array<ELEMENT_TYPE> &a) {
+    binary_file_j2c_array_io bfjai(&in);
+    a.deserialize(bfjai);
+    return out;
 }
 
 extern "C" 
