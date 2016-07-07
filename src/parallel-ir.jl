@@ -2677,23 +2677,7 @@ A nested lambda may contain labels that conflict with labels in the top-level st
 We take the maxLabel or those top-level statements and re-number labels in the nested lambda and update maxLabel.
 """
 function integrateLabels(body, maxLabel) 
-  state = CompilerTools.OptFramework.lmstate()
-  AstWalk(body, CompilerTools.OptFramework.create_label_map, state)
-  @dprintln(3,"integrateLabels label mapping = ", state.label_map, " incoming maxLabel = ", maxLabel)
-  state.last_was_label = false
-
-  for entry in state.label_map
-    key   = entry[1]
-    value = entry[2]
-    #if value <= maxLabel
-    #delete!(state.label_map, key)
-    maxLabel = maxLabel + 1
-    state.label_map[key] = maxLabel
-  end
-
-  @dprintln(3,"integrateLabels updated label mapping = ", state.label_map, " new maxLabel = ", maxLabel)
-
-  body = AstWalk(body, CompilerTools.OptFramework.update_labels, state)
+  max_label = CompilerTools.OptFramework.updateLabels!(body.args, maxLabel)
   return (body, maxLabel)
 end
 
@@ -3364,6 +3348,7 @@ function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level,
 end
 
 function get_alloc_shape(args)
+    @dprintln(3, "get_alloc_shape args = ", args)
     # tuple
     if args[1]==:(:jl_new_array) && length(args)==7
         return args[6].args[2:end]
