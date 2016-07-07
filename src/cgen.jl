@@ -2583,16 +2583,23 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
        genMain *= "++main_count;\n"  
        genMain *= "std::stringstream newMain;\n"
        genMain *= "std::stringstream newMainData;\n"
+       genMain *= "std::stringstream newMainSh;\n"
+       genMain *= "std::stringstream newMainExe;\n"
        genMain *= "newMain << \"main\" << main_count << \".cc\";\n"
        genMain *= "newMainData << \"main\" << main_count << \".data\";\n"
+       genMain *= "newMainSh << \"main\" << main_count << \".sh\";\n"
+       genMain *= "newMainExe << \"main\" << main_count;\n"
        genMain *= "std::cout << \"Main will be generated in file \" << newMain.str() << std::endl;\n" 
        genMain *= "std::cout << \"Data for main will be in file \" << newMainData.str() << std::endl;\n" 
+       genMain *= "std::cout << \"Script to compile is in \" << newMainSh.str() << std::endl;\n" 
+       # ---------------------------------------------------------------------------------------------
        genMain *= "std::ofstream mainFileData(newMainData.str(), std::ios::out | std::ios::binary);\n"
        genMain *= "mainFileData << run_where << std::endl;\n"
        for i = 1:length(params)
            genMain *= "mainFileData << " * canonicalize(params[i]) * " << std::endl;\n"
        end
        genMain *= "mainFileData.close();\n"
+       # ---------------------------------------------------------------------------------------------
        genMain *= "std::ofstream mainFile(newMain.str());\n"
        genMain *= "mainFile << \"#include \\\"\" << __FILE__ << \"\\\"\" << std::endl;\n"
        genMain *= "mainFile << \"int main(int argc, char *argv[]) {\" << std::endl;\n"
@@ -2620,6 +2627,13 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
        genMain *= "mainFile << \"    return 0;\" << std::endl;\n"
        genMain *= "mainFile << \"}\" << std::endl;\n"
        genMain *= "mainFile.close();\n"
+       # ---------------------------------------------------------------------------------------------
+       genMain *= "std::ofstream mainFileSh(newMainSh.str());\n"
+       genMain *= "mainFileSh << \"#!/bin/sh\" << std::endl;\n"
+       before, after = getShellBase()
+       genMain *= "mainFileSh << \"$before -o \" << newMainExe.str() << \" \" << newMain.str() << \" $after \" << std::endl;\n"
+       genMain *= "mainFileSh.close();\n"
+       # ---------------------------------------------------------------------------------------------
        genMain *= "}\n"
     end
 
@@ -3039,6 +3053,100 @@ function getGccName()
     else
         return "g++"
     end    
+end
+
+function getShellBase(flags=[])
+  # return an error if this is not overwritten with a valid compiler
+  compileCommand = `echo "invalid backend compiler"`
+
+  packageroot = getPackageRoot()
+  # otherArgs = ["-DJ2C_REFCOUNT_DEBUG", "-DDEBUGJ2C"]
+  otherArgs = flags
+
+  Opts = ["-O3 "]
+  if USE_DAAL==1
+    DAALROOT=ENV["DAALROOT"]
+    push!(Opts,"-I$DAALROOT/include ")
+  end
+
+  push!(Opts, "-std=c++11 ")
+
+   link_Opts = flags
+    linkLibs = []
+    if include_blas==true
+        if mkl_lib!=""
+            push!(linkLibs,"-lmkl_rt ")
+        elseif openblas_lib!=""
+            push!(linkLibs,"-lopenblas ")
+        elseif sys_blas==1
+            push!(linkLibs,"-lblas ")
+        end
+    end
+    if include_lapack==true
+        if mkl_lib!=""
+            push!(linkLibs,"-lmkl_rt ")
+        end
+    end
+    if USE_HDF5==1
+        if haskey(ENV,"HDF5_DIR")
+            HDF5_DIR=ENV["HDF5_DIR"]
+            push!(linkLibs,"-L$HDF5_DIR/lib ")
+        end
+#        if NERSC==1
+#          HDF5_DIR=ENV["HDF5_DIR"]
+#          push!(linkLibs,"-L$HDF5_DIR/lib ")
+#      end
+      #push!(linkLibs,"-L/usr/local/hdf5/lib -lhdf5 ")
+      push!(linkLibs,"-lhdf5 ")
+  end
+  if USE_DAAL==1
+      DAALROOT=ENV["DAALROOT"]
+    push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_core.a ")
+    if USE_OMP==1
+        push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_thread.a ")
+    else
+        push!(linkLibs,"$DAALROOT/lib/intel64_lin/libdaal_sequential.a ")
+    end
+    push!(linkLibs,"-L$DAALROOT/../tbb/lib/intel64_lin/gcc4.4/ ")
+    push!(linkLibs,"-ltbb ")
+    push!(linkLibs,"-liomp5 ")
+    push!(linkLibs,"-ldl ")
+  end
+
+  if backend_compiler == USE_ICC
+    comp = "icpc"
+    if isDistributedMode()
+        if haskey(ENV,"HDF5_DIR")
+            HDF5_DIR=ENV["HDF5_DIR"]
+            push!(Opts, "-I$HDF5_DIR/include ")
+        end
+        if NERSC==1
+            comp = "CC"
+        else
+            comp = "mpiicpc"
+        end
+    end
+    vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec " : " ")
+    if USE_OMP == 1 || USE_DAAL==1
+        push!(Opts, "-qopenmp")
+    end
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE ||
+       ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
+        push!(Opts,"-DJ2C_ARRAY_OFFLOAD ")
+        push!(Opts,"-qoffload-attribute-target=mic ")
+    end
+    # Generate dyn_lib
+    return "$comp $(Opts...) -g $vecOpts -fpic $(otherArgs...)", "$(linkLibs...) -lm"
+  elseif backend_compiler == USE_GCC
+    comp = getGccName()
+    if isDistributedMode()
+        comp = "mpic++"
+    end
+    if USE_OMP == 1
+        push!(Opts, "-fopenmp")
+    end
+    return "$comp $(Opts...) -g -fpic $(otherArgs...)", "$(linkLibs...) -lm"
+  end
 end
 
 function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
