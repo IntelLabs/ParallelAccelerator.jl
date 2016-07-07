@@ -43,6 +43,9 @@ if Compat.is_windows()
     installed_packages = Pkg.installed()
     println("Installing ParallelAccelerator for Windows.")
 
+    builddir = dirname(Base.source_path())
+    println("Build directory is ", builddir)
+
     if !haskey(installed_packages, "WinRPM")
         println("WinRPM is not currently installed so installing now.")
         Pkg.add("WinRPM")
@@ -52,20 +55,20 @@ if Compat.is_windows()
 
     println("Installing gcc-c++.")
     WinRPM.install("gcc-c++";yes=true)
+    WinRPM.install("gcc";yes=true)
+    WinRPM.install("headers";yes=true)
 
     gpp = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin","g++")
     RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
-    incdir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","lib","gcc","x86_64-w64-mingw32","6.1.0","include","c++")
+    incdir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","include")
 
-    push!(DL_LOAD_PATH,RPMbindir)
+    push!(Base.Libdl.DL_LOAD_PATH,RPMbindir)
     ENV["PATH"]=ENV["PATH"]*";"*RPMbindir
 
     println("Installed gcc is version ")
     run(`$gpp --version`)
 
-    builddir = dirname(Base.source_path())
-    println("Build directory is ", builddir)
-
+    println("Building libj2carray.dll.")
     run(`$gpp -g -shared -std=c++11 -I $incdir -o $builddir\\libj2carray.dll -lm $builddir\\j2c-array.cpp`)
 else
     run(`./build.sh $dyld_library_path $ld_library_path`)
