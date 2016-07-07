@@ -650,6 +650,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                                     (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
                                     (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
                                     found_change = true
+                                    bb.statements[i+1].def = bb.statements[i].def
                                     bb.statements[i+1].tls.expr.args[1] = bb.statements[i].tls.expr.args[1]
                                     bb.statements[i].tls.expr = nothing
                                     @dprintln(3, "after rewrite, cur = ", bb.statements[i+1])

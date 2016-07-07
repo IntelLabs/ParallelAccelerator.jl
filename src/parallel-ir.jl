@@ -2617,7 +2617,7 @@ function isDomainNode(ast :: Expr)
     head = ast.head
     args = ast.args
 
-    if head == :mmap || head == :mmap! || head == :reduce || head == :stencil!
+    if head == :mmap || head == :mmap! || head == :reduce || head == :stencil! || head == :parallel_for
         return true
     end
 
