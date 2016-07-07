@@ -2304,8 +2304,11 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :mul_int) ||
             isBaseFunc(func, :neg_int) ||
             isBaseFunc(func, :checked_sadd) ||
+            isBaseFunc(func, :checked_sadd_int) ||
             isBaseFunc(func, :checked_ssub) ||
+            isBaseFunc(func, :checked_ssub_int) ||
             isBaseFunc(func, :checked_smul) ||
+            isBaseFunc(func, :checked_smul_int) ||
             isBaseFunc(func, :checked_trunc_sint) ||
             isBaseFunc(func, :sub_float) ||
             isBaseFunc(func, :add_float) ||
