@@ -1202,7 +1202,7 @@ function normalize_callname(state::IRState, env, fun::Symbol, args)
                     dprintln(env, "found tuple arg: ", args[i])
                     def = lookupConstDefForArg(state, args[i])
                     dprintln(env, "definition: ", def)
-                    if isa(def, Expr) && is(def.head, :call) && (is(def.args[1], GlobalRef(Base, :tuple)) || is(def.args[1], TopNode(:tuple)))
+                    if isa(def, Expr) && is(def.head, :call) && (isBaseFunc(def.args[1], :tuple) || is(def.args[1], TopNode(:tuple)))
                         dprintln(env, "definition is inlined")
                         for j = 1:length(def.args) - 1
                             push!(realArgs, def.args[j + 1])
@@ -1468,20 +1468,20 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             if is(fun, :box) && isa(oldargs[2], Expr) # fix the type of arg[2] to be arg[1]
               oldargs[2].typ = typ
             end
-            oldargs = normalize_args(state, env_, oldargs)
         end
-        expr = mk_expr(typ, head, oldfun, oldargs...)
         if is(fun, :setfield!) && length(oldargs) == 3 && oldargs[2] == QuoteNode(:contents) #&& 
             #typeOfOpr(state, oldargs[1]) == Box
             # special handling for setting Box variables
+            oldargs = normalize_args(state, env_, oldargs)
             dprintln(env, "got setfield! with Box argument: ", oldargs)
             #assert(isa(oldargs[1], TypedVar))
             typ = typeOfOpr(state, oldargs[3])
             updateTyp(state, oldargs[1], typ)
             updateBoxType(state, oldargs[1], typ)
             # change setfield! to direct assignment
-            expr = mk_expr(typ, :(=), toLHSVar(oldargs[1]), oldargs[3])
+            return mk_expr(typ, :(=), toLHSVar(oldargs[1]), oldargs[3])
         elseif is(fun, :getfield) && length(oldargs) == 2 
+            oldargs = normalize_args(state, env_, oldargs)
             dprintln(env, "got getfield ", oldargs)
             if oldargs[2] == QuoteNode(:contents)
                 return toRHSVar(oldargs[1], typ, state.linfo)
@@ -1495,9 +1495,8 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
                 dprintln(env, "matched escaping variable = ", escVar)
                 return escVar
             end
-        else
-            return nothing
         end
+        return nothing
     end
     return expr
 end
@@ -2299,11 +2298,11 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         oldargs = normalize_args(state, env_, oldargs)
         expr = mk_expr(typ, head, oldfun, oldargs...)
     elseif isdefined(fun.mod, fun.name)
-        args = normalize_args(state, env_, args)
-        args_typ = map(x -> typeOfOpr(state, x), args)
         gf = getfield(fun.mod, fun.name)
         if isa(gf, Function) && !is(fun.mod, Core) # fun != GlobalRef(Core, :(===))
             dprintln(env,"function to offload: ", fun, " methods=", methods(gf))
+            args = normalize_args(state, env_, args)
+            args_typ = map(x -> typeOfOpr(state, x), args)
             _accelerate(gf, tuple(args_typ...))
             expr = mk_expr(typ, head, oldfun, args...)
         else
