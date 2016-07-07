@@ -52,25 +52,12 @@ function isSymbolsUsed(vars :: Dict{LHSVar,LHSVar}, top_level_numbers :: Array{I
     return false
 end
 
-function compareIndex(sn1 :: TypedVar, sn2 :: TypedVar)
-    @dprintln(3, "compareIndex TypedVar to TypedVar")
+function compareIndex(sn1 :: RHSVar, sn2 :: RHSVar)
     return toLHSVar(sn1) == toLHSVar(sn2)
 end
-function compareIndex(sn :: TypedVar, s :: Symbol)
-    @dprintln(3, "compareIndex TypedVar to Symbol")
-    return toLHSVar(sn) == s
-end
-function compareIndex(s1 :: Symbol, s2 :: Symbol)
-    @dprintln(3, "compareIndex Symbol to Symbol")
+
+function compareIndex(a :: Any, s :: Any)
     return s1 == s2
-end
-function compareIndex(ex :: Expr, s :: Symbol)
-    @dprintln(3, "compareIndex Expr to Symbol")
-    return false
-end
-function compareIndex(a :: Any, s :: Symbol)
-    @dprintln(3, "compareIndex Any to Symbol")
-    return false
 end
 
 """
@@ -198,6 +185,15 @@ function fuse(body, body_index, cur::Expr, state)
             end
         end
     end
+
+    @dprintln(3, (prev_iei ,
+        cur_iei  ,
+        out_correlation == in_correlation ,
+        !reduction_var_used ,
+        isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) ,
+        isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur) ,
+        (prev_num_dims == cur_num_dims) ,
+        !found_array_access_problem        ))
 
     if  prev_iei &&
         cur_iei  &&
