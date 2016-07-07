@@ -2624,6 +2624,9 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
            genMain *= ", &ret" * string(i-1)
        end
        genMain *= ", false);\" << std::endl;\n"
+       if isDistributedMode()
+           genMain *= "mainFile << \"    MPI_Finalize();\" << std::endl;\n"
+       end
        genMain *= "mainFile << \"    return 0;\" << std::endl;\n"
        genMain *= "mainFile << \"}\" << std::endl;\n"
        genMain *= "mainFile.close();\n"
