@@ -625,7 +625,7 @@ Return an expression that allocates and initializes a 1D Julia array that has an
 """
 function mk_alloc_array_1d_expr(elem_type, atype, length)
     @dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
-    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 1)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 1)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
 
     length_expr = get_length_expr(length)
@@ -662,7 +662,7 @@ Return an expression that allocates and initializes a 2D Julia array that has an
 function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
 
-    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 2)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 2)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core,:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
 
     TypedExpr(
@@ -687,7 +687,7 @@ Return an expression that allocates and initializes a 3D Julia array that has an
 """
 function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
-    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Base, :apply_type), :Array, elem_type, 3)
+    ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
     
     TypedExpr(
@@ -3283,7 +3283,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         alloc_args = args[2].args[2:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
-        shape = map(x -> if isa(x, Expr) x else toLHSVarOrInt end, sh)
+        shape = map(x -> if isa(x, Expr) x else toLHSVarOrInt(x) end, sh)
         @dprintln(3,"rm alloc shape ", shape)
         ast.args[2] = 0 #Expr(:call,TopNode(:tuple), shape...)
         CompilerTools.LambdaHandling.setType(arr, Int, state.LambdaVarInfo)
@@ -3577,7 +3577,7 @@ function from_alloc(args::Array{Any,1})
     n = length(sizes)
     assert(n >= 1 && n <= 3)
     name = Symbol(string("jl_alloc_array_", n, "d"))
-    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Base, :apply_type), GlobalRef(Base,:Array), elemTyp, n)
+    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Core, :apply_type), GlobalRef(Core,:Array), elemTyp, n)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
     realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
     for i=1:n

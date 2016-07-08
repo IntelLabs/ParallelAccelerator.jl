@@ -288,7 +288,7 @@ end
 
 function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
     call = ""
-    if isCall(rhs) 
+    if isCall(rhs) || isInvoke(rhs)
         fun = getCallFunction(rhs)
         args = getCallArguments(rhs)
         if length(args) == 2
@@ -487,7 +487,7 @@ end
 function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
     s = ""
     # if this is a hvcat call, the array should be allocated and initialized
-    if isCall(rhs) && (isBaseFunc(getCallFunction(rhs),:typed_hvcat) || checkGlobalRefName(getCallFunction(rhs),:hvcat))
+    if (isCall(rhs) || isInvoke(rhs)) && (isBaseFunc(getCallFunction(rhs),:typed_hvcat) || checkGlobalRefName(getCallFunction(rhs),:hvcat))
         @dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
         is_typed::Bool = isBaseFunc(getCallFunction(rhs),:typed_hvcat)
@@ -528,7 +528,7 @@ end
 
 function from_assignment_match_cat_t(lhs, rhs::Expr, linfo)
     s = ""
-    if isCall(rhs) && isBaseFunc(getCallFunction(rhs), :cat_t)
+    if (isCall(rhs) || isInvoke(rhs)) && isBaseFunc(getCallFunction(rhs), :cat_t)
         args = getCallArguments(rhs)
         dims = args[1]
         @assert dims==2 "CGen: only 2d cat_t() is supported now"

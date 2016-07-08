@@ -250,7 +250,7 @@ _Intrinsics = [
         #arithmetic
         "neg_int", "add_int", "sub_int", "mul_int", "sle_int", "ule_int",
         "xor_int", "and_int", "or_int", "ne_int", "eq_int",
-        "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int",
+        "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int", "ctlz_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "neg_float_fast", "add_float_fast", "sub_float_fast", "mul_float_fast", "div_float_fast",
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
@@ -1153,7 +1153,14 @@ function from_array_ptr(args, linfo)
 end
 
 function from_sizeof(args, linfo)
-    s = toCtype(args[1])
+    if isa(args[1], RHSVar)
+        t = lookupType(args[1], linfo)
+    elseif isa(args[1], Type)
+        t = args[1]
+    else
+        error("Cannot translate size(", args[1], ") to C")
+    end
+    s = toCtype(t)
     return "sizeof($s)"
 end
 
@@ -1312,6 +1319,8 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "sext_int"
         return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
+    elseif intr == "ctlz_int"
+        return " __builtin_clz($(from_expr(args[1], linfo)))"
     elseif intr == "smod_int"
         m = from_expr(args[1], linfo)
         n = from_expr(args[2], linfo)
@@ -2352,9 +2361,8 @@ function from_expr(ast::TopNode, linfo)
 end
 
 function from_expr(ast::QuoteNode, linfo)
-    # All QuoteNode should have been explicitly handled, otherwise we ignore them.
-    # s = from_quotenode(ast)
-    return ""
+    # All QuoteNode should have been explicitly handled, otherwise we translate the value inside
+    return from_expr(ast.value, linfo)
 end
 
 function from_expr(ast::NewvarNode, linfo)
