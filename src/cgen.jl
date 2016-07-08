@@ -1783,8 +1783,11 @@ function from_gotoifnot(args,linfo)
     @dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
     if isa(exp, Expr) || isa(exp, RHSVar)
         s *= "if (!(" * from_expr(exp,linfo) * ")) "
+        s *= "goto " * "label" * string(labelId)
+    elseif exp == true
+    elseif exp == false
+        s *= "goto " * "label" * string(labelId)
     end
-    s *= "goto " * "label" * string(labelId)
     s
 end
 #=
