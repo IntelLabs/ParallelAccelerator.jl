@@ -398,6 +398,7 @@ function from_includes()
     "#include \"$packageroot/deps/include/pse-types.h\"\n",
     "#include \"$packageroot/deps/include/cgen_intrinsics.h\"\n",
     "#include <sstream>\n",
+    "#include <vector>\n",
     "#include <string>\n")
     )
     for userOption in userOptions
