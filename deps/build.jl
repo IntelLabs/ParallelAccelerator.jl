@@ -40,16 +40,16 @@ if haskey(ENV, "LD_LIBRARY_PATH")
 end
 
 if Compat.is_windows()
-    installed_packages = Pkg.installed()
+#    installed_packages = Pkg.installed()
     println("Installing ParallelAccelerator for Windows.")
 
     builddir = dirname(Base.source_path())
     println("Build directory is ", builddir)
 
-    if !haskey(installed_packages, "WinRPM")
-        println("WinRPM is not currently installed so installing now.")
-        Pkg.add("WinRPM")
-    end
+#    if !haskey(installed_packages, "WinRPM")
+#        println("WinRPM is not currently installed so installing now.")
+#        Pkg.add("WinRPM")
+#    end
 
     import WinRPM
 
@@ -70,6 +70,11 @@ if Compat.is_windows()
 
     println("Building libj2carray.dll.")
     run(`$gpp -g -shared -std=c++11 -I $incdir -o $builddir\\libj2carray.dll -lm $builddir\\j2c-array.cpp`)
+
+    conf_file = builddir * "\\generated\\config.jl"
+    cf = open(conf_file, "w")
+    println(cf, "backend_compiler = USE_MINGW")
+    close(cf) 
 else
     run(`./build.sh $dyld_library_path $ld_library_path`)
 end
