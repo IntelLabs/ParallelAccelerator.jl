@@ -389,6 +389,26 @@ function deleteDef(state::IRState, s::RHSVar)
     delete!(state.defs, toLHSVar(s))
 end
 
+"""
+Delete all definitions for non-constant variables
+"""
+function deleteNonConstDefs(state)
+    defs = Dict{LHSVar, Any}()
+    for (v, d) in state.defs
+        if (getDesc(v, state.linfo) & (ISASSIGNEDONCE | ISCONST) != 0) && (!isa(d, Expr) || d.head == :new)
+            defs[v] = d
+        end
+    end
+    for (v, d) in defs
+        if isa(d, RHSVar)
+            x = toLHSVar(d)
+            if !haskey(defs, x)
+                defs[v] = nothing
+            end
+        end
+    end
+    state.defs = defs
+end
 
 """
 Look up a definition of a variable.
@@ -464,7 +484,7 @@ function emitStmt(state::IRState, stmt)
     @dprintln(2,"emit stmt: ", stmt)
     if isa(stmt, Expr) && is(stmt.head, :(=)) && stmt.typ == Box
         @dprintln(2, "skip Box assigment")
-    else
+    elseif stmt != nothing
         push!(state.stmts, stmt)
     end
 end
@@ -1403,7 +1423,7 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
                 typ = in(fun, compareOpSet) ? Bool : atyp
             end
         end
-        if isArrayType(typ)
+        if isArrayType(typ) || (isa(typ, Union) && any(Bool[isArrayType(x) for x in typ.types]))
             return translate_call_mapop(state,env_,typ, fun, args)
         else
             return mk_expr(typ, :call, oldfun, args...)
@@ -1599,7 +1619,7 @@ end
 function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     # TODO: check for unboxed array type
     args = normalize_args(state, env, args)
-    etyp = elmTypOf(typ) 
+    #etyp = elmTypOf(typ) 
     #if is(fun, :-) && length(args) == 1
     #    fun = :negate
     #end
@@ -1609,6 +1629,17 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
     # f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
     (body, linfo) = get_lambda_for_arg(state, env, opr, elmtyps)
+    if isa(typ, Union)
+        dim = 1
+        for x in typ.types
+            if isArrayType(x)
+                dim = x.parameters[2]
+            end
+        end
+        @dprintln(3, "Found result type ", typ)
+        typ = Array{body.typ, dim}
+        @dprintln(3, "New result type ", typ)
+    end
     f = DomainLambda(linfo, body)
     (nonarrays, args, typs, f) = specialize(state, args, typs, f)
     dprintln(env,"translate_call_mapop: after specialize, typs=", typs)
@@ -2213,11 +2244,11 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
     if is(fun.mod, Core.Intrinsics) || (is(fun.mod, Core) && 
        (is(fun.name, :Array) || is(fun.name, :arraysize) || is(fun.name, :getfield) || is(fun.name, :setfield!)))
         expr = translate_call_symbol(state, env, typ, head, fun, oldargs, fun.name, args)
-    elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :typeassert)
+    elseif (is(fun.mod, Core) || is(fun.mod, Base)) && (is(fun.name, :typeassert) || is(fun.name, :isa))
         # remove all typeassert
         dprintln(env, "got typeassert args = ", args)
         args = normalize_args(state, env_, args)
-        expr = args[1]
+        expr = is(fun.name, :isa) ? (getType(args[1], state.linfo) == args[2]) : args[1]
         typ = typeOfOpr(state, expr)
         if typ == Any
             typ = lookupConstDefForArg(state, args[2])
@@ -2228,6 +2259,7 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
                 dprintln(env, " skip updateTyp for typ = ", typ)
             end
         end
+        dprintln(env, "typ = ", typ, " expr = ", expr)
         # @assert (typ == args[2]) "typeassert finds mismatch " *string(expr)* " and " *string(args[2])
     elseif (is(fun.mod, Core) || is(fun.mod, Base)) && is(fun.name, :convert)
         # fix type of convert
@@ -2451,6 +2483,11 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
             return GotoNode(args[2])
         else # translate arguments
           ast.args = normalize_args(state, env, args)
+          if ast.args[1] == true
+            return nothing
+          elseif ast.args[1] == false
+            return GotoNode(args[2]) 
+          end
         end
         # ?
     elseif is(head, :inbounds)
@@ -2474,7 +2511,7 @@ end
 
 function from_expr(state::IRState, env::IREnv, ast::LabelNode)
     # clear defs for every basic block.
-    state.defs = Dict{LHSVar, Any}()
+    deleteNonConstDefs(state)
     return ast
 end
 
