@@ -25,21 +25,29 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module J2CArray
 
+using Compat
+
 export to_j2c_array, from_j2c_array, j2c_array_delete, from_ascii_string
 import CompilerTools.Helper.isArrayType
 import ..getPackageRoot
 
 #eval(x) = Core.eval(J2CArray, x)
 
-package_root = getPackageRoot()
-dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
-if !isfile(dyn_lib)
+function getLib()
+    package_root = getPackageRoot()
+    if Compat.is_windows()
+        return string(package_root, "/deps/libj2carray.dll")
+    else
+        return string(package_root, "/deps/libj2carray.so.1.0")
+    end
+end
+    
+if !isfile(getLib())
   error("libj2carray not compiled, build with: julia -e 'Pkg.build(\"ParallelAccelerator\")'")
 end
 
 function __init__()
-  package_root = getPackageRoot()
-  dyn_lib = string(package_root, "/deps/libj2carray.so.1.0")
+  dyn_lib = getLib()
 
   @eval begin
     # Create a new j2c array object with element size in bytes and given dimension.
