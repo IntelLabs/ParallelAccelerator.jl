@@ -2361,9 +2361,8 @@ function from_expr(ast::TopNode, linfo)
 end
 
 function from_expr(ast::QuoteNode, linfo)
-    # All QuoteNode should have been explicitly handled, otherwise we ignore them.
-    # s = from_quotenode(ast)
-    return ""
+    # All QuoteNode should have been explicitly handled, otherwise we translate the value inside
+    return from_expr(ast.value, linfo)
 end
 
 function from_expr(ast::NewvarNode, linfo)
