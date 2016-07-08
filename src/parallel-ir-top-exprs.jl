@@ -690,7 +690,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
                , label_end))
 
         push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa5_lhsvar), deepcopy(recreate_temp_rhsvar), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, Base.box, Int64, Expr(:call, Base.add_int, deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(loop_id), newLambdaVarInfo), deepcopy(recreate_ssa5_rhsvar), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(recreate_ssa6_rhsvar), newLambdaVarInfo))
 

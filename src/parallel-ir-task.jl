@@ -1391,7 +1391,7 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                , label_end), line_num) # 6
 
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_ssa5_lhsvar), deepcopy(recreate_temp_rhsvar), newLambdaVarInfo), line_num) # 7
-        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, Base.box, Int64, Expr(:call, Base.add_int, deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo), line_num) # 8
+        line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo), line_num) # 8
         @dprintln(3, "this_nest.indexVariable = ", this_nest.indexVariable, " type = ", typeof(this_nest.indexVariable))
         line_num = addToBody!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(this_nest.indexVariable), newLambdaVarInfo), deepcopy(recreate_ssa5_rhsvar), newLambdaVarInfo), line_num) # 9
         line_num = addToBody!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(recreate_ssa6_rhsvar), newLambdaVarInfo), line_num) # 10
