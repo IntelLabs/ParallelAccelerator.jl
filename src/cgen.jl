@@ -3329,7 +3329,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
         push!(Opts, "-fopenmp")
     end
     push!(Opts, "-std=c++11")
-    linkCommand = `$gpp -static-libgcc -static-libstdc++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+    linkCommand = `$gpp -static-libgcc -static-libstdc++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm -Wl,-static -lgomp -Wl,-Bdynamic -lpthread`
   end
 
   return linkCommand
