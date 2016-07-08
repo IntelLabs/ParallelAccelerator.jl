@@ -1155,10 +1155,8 @@ end
 function from_sizeof(args, linfo)
     if isa(args[1], RHSVar)
         t = lookupType(args[1], linfo)
-    elseif isa(args[1], Type)
-        t = args[1]
     else
-        error("Cannot translate size(", args[1], ") to C")
+        t = args[1]
     end
     s = toCtype(t)
     return "sizeof($s)"
