@@ -1130,6 +1130,10 @@ class ASCIIString {
         data = rhs.data;
         return *this;
     }
+
+    uint8_t& ARRAYELEM(uint64_t i) {
+        return data.ARRAYELEM(i);
+    }
 };
 
 std::ostream& operator<<(std::ostream& out, ASCIIString& p)
