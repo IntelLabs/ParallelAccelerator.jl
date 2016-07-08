@@ -100,6 +100,7 @@ const VECDISABLE = 1
 const VECFORCE = 2
 const USE_ICC = 0
 const USE_GCC = 1
+const USE_MINGW = 2
 USE_OMP = 1
 CGEN_RAW_ARRAY_MODE = false
 
@@ -3146,6 +3147,8 @@ function getShellBase(flags=[])
         push!(Opts, "-fopenmp")
     end
     return "$comp $(Opts...) -g -fpic $(otherArgs...)", "$(linkLibs...) -lm"
+  elseif backend_compiler == USE_MINGW
+    throw(string("getShellBase implementation for mingw not completed."))
   end
 end
 
@@ -3196,6 +3199,19 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     end
     push!(Opts, "-std=c++11")
     compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
+  elseif backend_compiler == USE_MINGW
+    gpp = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin","g++")
+    RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
+    incdir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","include")
+
+    push!(Base.Libdl.DL_LOAD_PATH,RPMbindir)
+    ENV["PATH"]=ENV["PATH"]*";"*RPMbindir
+
+    if USE_OMP == 1
+        push!(Opts, "-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
+    compileCommand = `$gpp $Opts -g -fpic -I $incdir -c -o $full_outfile_name $otherArgs $cgenOutput`
   end
 
   return compileCommand
@@ -3302,6 +3318,18 @@ function getLinkCommand(outfile_name, lib, flags=[])
     end
     push!(Opts, "-std=c++11")
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
+  elseif backend_compiler == USE_MINGW
+    gpp = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin","g++")
+    RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
+
+    push!(Base.Libdl.DL_LOAD_PATH,RPMbindir)
+    ENV["PATH"]=ENV["PATH"]*";"*RPMbindir
+
+    if USE_OMP == 1
+        push!(Opts, "-fopenmp")
+    end
+    push!(Opts, "-std=c++11")
+    linkCommand = `$gpp -static-libgcc -static-libstdc++ -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
   end
 
   return linkCommand
