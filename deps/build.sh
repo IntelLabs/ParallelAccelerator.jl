@@ -66,6 +66,17 @@ do
     fi
 done
 
+if [ -z "$MKL_LIB" ]; then
+    echo "#include <mkl.h>" > blas_test.cpp
+    echo "int main(){return 0;}" >> blas_test.cpp
+    SYS_BLAS=`icpc blas_test.cpp -mkl 2>&1`
+    rm blas_test.cpp
+    if [ -z "$SYS_BLAS" ]; then
+        echo "System installed MKL found"
+        MKL_LIB="/opt/intel/mkl/lib"
+    fi
+fi
+
 echo "#include <cblas.h>" > blas_test.cpp
 echo "int main(){return 0;}" >> blas_test.cpp
 SYS_BLAS=`$CC blas_test.cpp -lblas 2>&1`
