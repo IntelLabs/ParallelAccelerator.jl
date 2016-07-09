@@ -3089,7 +3089,7 @@ function getShellBase(flags=[])
     linkLibs = []
     if include_blas==true
         if mkl_lib!=""
-            push!(linkLibs,"-lmkl_rt ")
+            push!(linkLibs,"-mkl ")
         elseif openblas_lib!=""
             push!(linkLibs,"-lopenblas ")
         elseif sys_blas==1
@@ -3098,7 +3098,7 @@ function getShellBase(flags=[])
     end
     if include_lapack==true
         if mkl_lib!=""
-            push!(linkLibs,"-lmkl_rt ")
+            push!(linkLibs,"-mkl ")
         end
     end
     if USE_HDF5==1
@@ -3195,6 +3195,9 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     if USE_OMP == 1 || USE_DAAL==1
         push!(Opts, "-qopenmp")
     end
+    if mkl_lib!=""
+        push!(Opts,"-mkl")
+    end
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE ||
        ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD2_MODE
         push!(Opts,"-DJ2C_ARRAY_OFFLOAD")
@@ -3271,7 +3274,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
     linkLibs = []
     if include_blas==true
         if mkl_lib!=""
-            push!(linkLibs,"-lmkl_rt")
+            push!(linkLibs,"-mkl")
         elseif openblas_lib!=""
             push!(linkLibs,"-lopenblas")
         elseif sys_blas==1
@@ -3280,7 +3283,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
     end
     if include_lapack==true
         if mkl_lib!=""
-            push!(linkLibs,"-lmkl_rt")
+            push!(linkLibs,"-mkl")
         end
     end
     if USE_HDF5==1
