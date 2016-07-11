@@ -38,6 +38,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 static unsigned cur_threads_used = 1;
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 class J2cParRegionThreadCount {
 protected:
     unsigned num_threads_used;
