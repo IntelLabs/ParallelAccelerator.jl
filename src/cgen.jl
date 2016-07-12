@@ -1318,7 +1318,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     elseif intr == "sext_int"
         return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "ctlz_int"
-        return " __builtin_clz($(from_expr(args[1], linfo)))"
+        return " (uint64_t)(__builtin_clzll($(from_expr(args[1], linfo))))"
     elseif intr == "smod_int"
         m = from_expr(args[1], linfo)
         n = from_expr(args[2], linfo)
@@ -1328,7 +1328,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
     elseif intr == "flipsign_int"
-        return "-" * "(" * from_expr(args[1], linfo) * ")"
+        return "cgen_flipsign_int(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "check_top_bit"
         typ = typeof(args[1])
         if !isPrimitiveJuliaType(typ)
