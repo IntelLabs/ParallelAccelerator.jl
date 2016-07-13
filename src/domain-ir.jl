@@ -309,10 +309,11 @@ function addToEscapingVariable(v, inner_linfo, outer_linfo)
 end
 
 # Make a variable captured by inner lambda
-# If the variable is a GenSym, first create a local variable for it.
-function makeCaptured(state, var::RHSVar)
+# If the variable is a GenSym or already exists in inner lambda, first create a local variable for it.
+function makeCaptured(state, var::RHSVar, inner_linfo=nothing)
     lhs = toLHSVar(var)
-    if isa(lhs, GenSym) # cannot put GenSym into lambda! Add a temp variable to do it
+    if isa(lhs, GenSym) || (inner_linfo != nothing && isVariableDefined(lookupVariableName(lhs, state.linfo), inner_linfo)) 
+    # cannot put GenSym into lambda! Add a temp variable to do it
        typ = getType(lhs, state.linfo)
        tmpv = addFreshLocalVariable(string(lhs), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
        emitStmt(state, mk_expr(typ, :(=), toLHSVar(tmpv), var))
@@ -322,7 +323,7 @@ function makeCaptured(state, var::RHSVar)
     end
 end
 
-function makeCaptured(state, val)
+function makeCaptured(state, val, inner_linfo)
    typ = typeof(val)
    tmpv = addFreshLocalVariable(string("tmp"), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
    emitStmt(state, mk_expr(typ, :(=), toLHSVar(tmpv), val))
@@ -759,7 +760,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
             push!(new_params, old_params[i])
             idx[j] = i
         else
-            args[i] = makeCaptured(state, args[i])
+            args[i] = makeCaptured(state, args[i], f.linfo)
             if isa(args[i], Union{LHSVar,RHSVar})
                 tmpv = lookupVariableName(args[i], state.linfo)
                 args[i] = addToEscapingVariable(tmpv, f.linfo, state.linfo)
@@ -957,7 +958,7 @@ function from_lambda(state, env, expr, closure = nothing)
                 qtyp = is(qtyp, Box) ? getBoxType(state, q) : qtyp
                 dprintln(env, "field ", p, " has type ", qtyp)
                 if isa(q, RHSVar)
-                    q = makeCaptured(state, q)
+                    q = makeCaptured(state, q, linfo)
                     # if q has a Box type, we lookup its definition (due to setfield!) instead
                     qname = lookupVariableName(q, state.linfo)
                     dprintln(env, "closure variable in parent = ", qname)
@@ -1811,7 +1812,7 @@ function translate_call_broadcast(state, env, typ, args::Array{Any,1})
     setInputParameters(vcat(dummy_sym, idx_syms), linfo)
     # make the expression that calculates output element value
     for i = 1:(nargs - 1)
-        inp = makeCaptured(state, args[i + 1])
+        inp = makeCaptured(state, args[i + 1], linfo)
         inp = addToEscapingVariable(toLHSVar(inp, state.linfo), linfo, state.linfo)
         inptyp = inptyps[i]
         if inptyp == argtyps[i] # scalar
