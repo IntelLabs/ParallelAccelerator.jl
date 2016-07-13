@@ -487,12 +487,16 @@ function from_decl(k::DataType, linfo)
     elseif issubtype(k, AbstractString)
         # Strings are handled by a speciall class in j2c-array.h.
         return ""
+    elseif issubtype(k, Base.LibuvStream)
+        # Stream type support is limited to STDOUT now
+        return "typedef FILE *" * canonicalize(k.name) * ";\n"
     else
         if haskey(lstate.globalUDTs, k)
             lstate.globalUDTs[k] = 0
         end
         ftyps = k.types
         fnames = fieldnames(k)
+        dprintln(3, "k = ", k, " ftyps = ", ftyps, " fnames = ", fnames)
         s = "typedef struct {\n"
         for i in 1:length(ftyps)
             s *= toCtype(ftyps[i]) * " " * canonicalize(fnames[i]) * ";\n"
@@ -1318,7 +1322,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     elseif intr == "sext_int"
         return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "ctlz_int"
-        return " __builtin_clz($(from_expr(args[1], linfo)))"
+        return " (uint64_t)(__builtin_clzll($(from_expr(args[1], linfo))))"
     elseif intr == "smod_int"
         m = from_expr(args[1], linfo)
         n = from_expr(args[2], linfo)
@@ -1328,7 +1332,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
     elseif intr == "flipsign_int"
-        return "-" * "(" * from_expr(args[1], linfo) * ")"
+        return "cgen_flipsign_int(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "check_top_bit"
         typ = typeof(args[1])
         if !isPrimitiveJuliaType(typ)
@@ -1841,6 +1845,8 @@ function from_globalref(ast,linfo)
                 error("Global definition for ", name, " :: ", typeof(def), " is not supported by CGen.")
             end
         end
+    elseif mod == Base && name == :STDOUT
+        s = "stdout"
     end
     s
 end
@@ -2385,11 +2391,12 @@ function from_expr(ast::Type, linfo)
 end
 
 function from_expr(ast::Char, linfo)
-    s = "'$(string(ast))'"
+    #s = "'$(string(ast))'"
     # We do not handle widechar in C, force a conversion here
-    if ast > Char(255) 
-      s = "(char)L" * s
-    end
+    s = ast > Char(255) ? "(char)L" : ""
+    buf=IOBuffer()
+    show(buf, ast)
+    s *= takebuf_string(buf)
     s
 end
 

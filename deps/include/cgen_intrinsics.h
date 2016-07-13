@@ -31,4 +31,7 @@ int cgen_cttz_int(int n)
     return __builtin_ctz(n);
 }
 
-
+int cgen_flipsign_int(int64_t x, int64_t y)
+{
+    return (y >= 0 ? x : -x);
+}
