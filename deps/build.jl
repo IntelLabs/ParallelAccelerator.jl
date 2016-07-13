@@ -40,16 +40,10 @@ if haskey(ENV, "LD_LIBRARY_PATH")
 end
 
 if Compat.is_windows()
-#    installed_packages = Pkg.installed()
     println("Installing ParallelAccelerator for Windows.")
 
     builddir = dirname(Base.source_path())
     println("Build directory is ", builddir)
-
-#    if !haskey(installed_packages, "WinRPM")
-#        println("WinRPM is not currently installed so installing now.")
-#        Pkg.add("WinRPM")
-#    end
 
     import WinRPM
 
@@ -74,6 +68,26 @@ if Compat.is_windows()
     conf_file = builddir * "\\generated\\config.jl"
     cf = open(conf_file, "w")
     println(cf, "backend_compiler = USE_MINGW")
+    println(cf, "openblas_lib = \"", Base.Libdl.find_library("libopenblas64_"), "\"")
+    println(cf, "mkl_lib = \"", Base.Libdl.find_library("libmkl"), "\"")
+    
+    try
+        run(`bcpp`)
+        println(cf, "use_bcpp = 1")
+    catch some_exception
+        println("bcpp not found and will not be used.")
+    end
+        
+    try
+        btest = open("blas_test.cpp","w")
+        println(btest,"#include <cblas.h>\nint main(){return 0;}")
+        close(btest)
+        run(`$gpp -I $incdir blas_test.cpp`)
+        println(cf, "sys_blas = 1")
+    catch some_exception
+        println(cf, "sys_blas = 0")
+    end
+
     close(cf) 
 else
     run(`./build.sh $dyld_library_path $ld_library_path`)
