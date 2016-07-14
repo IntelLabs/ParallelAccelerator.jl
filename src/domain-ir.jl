@@ -323,7 +323,7 @@ function makeCaptured(state, var::RHSVar, inner_linfo=nothing)
     end
 end
 
-function makeCaptured(state, val, inner_linfo)
+function makeCaptured(state, val, inner_linfo=nothing)
    typ = typeof(val)
    tmpv = addFreshLocalVariable(string("tmp"), typ, ISCAPTURED | ISASSIGNED | ISASSIGNEDONCE, state.linfo)
    emitStmt(state, mk_expr(typ, :(=), toLHSVar(tmpv), val))
