@@ -720,7 +720,7 @@ Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: RHSVar, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
-    @assert isArrayType(gstyp) "Array expected"
+    @assert isArrayType(gstyp) "Array expected, but got " * string(gstyp)
     ndims(gstyp)
 end
 
@@ -2290,6 +2290,7 @@ function hasNoSideEffects(node :: Expr)
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
     elseif node.head == :call1 || node.head == :call || node.head == :invoke
         func = CompilerTools.Helper.getCallFunction(node)
+dprintln(3,"hasNoSideEffects func=", func, " ", isBaseFunc(func,:<:))
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
@@ -2317,6 +2318,7 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :sitofp) ||
             isBaseFunc(func, :sltint) ||
             isBaseFunc(func, :(===)) ||
+            isBaseFunc(func, :<:) ||
             isBaseFunc(func, :apply_type)
             return true
         elseif func == :ccall
