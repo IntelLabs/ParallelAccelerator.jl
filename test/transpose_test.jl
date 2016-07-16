@@ -1,11 +1,6 @@
 module TestTranspose
 using ParallelAccelerator
 
-ParallelAccelerator.set_debug_level(3)
-ParallelAccelerator.DomainIR.set_debug_level(3)
-ParallelAccelerator.ParallelIR.set_debug_level(3)
-ParallelAccelerator.CGen.set_debug_level(3)
-
 @acc transpose_t(A) = A'
 
 function test()
