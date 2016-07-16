@@ -198,7 +198,7 @@ function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::
 end
 
 function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar, x::RHSVar,linfo)
-    if fun.mod!=Base.LinAlg.BLAS || fun.name!=:gemv!
+    if !((fun.mod==Base.LinAlg || fun.mod==Base.LinAlg.BLAS) && fun.name==:gemv!)
         return ""
     end
     cblas_fun = ""
