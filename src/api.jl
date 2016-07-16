@@ -42,8 +42,8 @@ end
   Base.getindex(A, args...)
 end
 
-@inline function getindex(A::DataType, args...)
-  A[ x for x in args ]
+@inline function getindex{T}(A::Type{T}, X...)
+  T[ X[i] for i=1:length(X) ]
 end
 
 @inline function getindex(A, args...) 
@@ -136,7 +136,25 @@ end
   end
 end
 
-function cartesianarray(body, T, ndims)
+if VERSION >= v"0.5.0-dev+5381"
+@inline function to_tuple_type(t)
+  if t <: Tuple
+    t
+  else
+    Tuple{t}
+  end
+end
+
+@inline function cartesianarray{I,T}(body, itr::Base.Generator{I,T}, ndims)
+   cartesianarray(body, to_tuple_type(Base._default_eltype(Base.Generator{I,T})), ndims)
+end
+
+@inline function cartesianarray(body, ndims)
+   cartesianarray(body, Base.Generator(x->body(x...), Base.product(ndims...)), ndims)
+end
+end
+
+function cartesianarray{T}(body, ::Type{Tuple{T}}, ndims)
   a = Array(T, ndims...)
   for I in CartesianRange(ndims)
     a[I.I...] = body(I.I...)
@@ -144,7 +162,7 @@ function cartesianarray(body, T, ndims)
   a
 end
 
-function cartesianarray(body, T1, T2, ndims)
+function cartesianarray{T1,T2}(body, ::Type{Tuple{T1, T2}}, ndims)
   a = Array(T1, ndims...)
   b = Array(T2, ndims...)
   for I in CartesianRange(ndims)
@@ -155,7 +173,7 @@ function cartesianarray(body, T1, T2, ndims)
   return a, b
 end
 
-function cartesianarray(body, T1, T2, T3, ndims)
+function cartesianarray{T1,T2,T3}(body, ::Type{Tuple{T1, T2, T3}}, ndims)
   a = Array(T1, ndims...)
   b = Array(T2, ndims...)
   c = Array(T3, ndims...)
@@ -177,6 +195,14 @@ end
 end
 
 @noinline function map{T<:Number}(f::Function, a::DenseArray{T}, b...)
+    Base.map(f, a, b...)
+end
+
+@noinline function map(f, a::Range)
+    Base.map(f, a)
+end
+
+@noinline function map(f, a::Range, b...)
     Base.map(f, a, b...)
 end
 

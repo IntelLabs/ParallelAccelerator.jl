@@ -924,6 +924,9 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
 function from_lambda(state, env, expr, closure = nothing)
     local env_ = nextEnv(env)
     linfo, body = lambdaToLambdaVarInfo(expr) 
+    # first we get rid of empty basic blocks!
+    lives = CompilerTools.LivenessAnalysis.from_lambda(linfo, body, dir_live_cb, linfo)
+    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(lives.cfg), CompilerTools.LambdaHandling.getReturnType(linfo))
     @dprintln(2,"from_lambda typeof(body) = ", typeof(body))
     @dprintln(3,"expr = ", expr)
     @dprintln(3,"body = ", body)
@@ -1022,19 +1025,23 @@ function from_body(state, env, expr::Expr)
         emitStmt(state, stmt)
     end
     # fix return type
-    n = length(state.stmts)
-    while n > 0
-        last_exp = state.stmts[n]
-        if isa(last_exp, LabelNode) 
-            n = n - 1
-        elseif isa(last_exp, Expr) && last_exp.head == :return
-            typ = state.stmts[n].typ
-            break
-        else
-            error("Cannot figure out return type from function body")
+    # typ = getReturnType(state.linfo) 
+    if typ == Any
+        n = length(state.stmts)
+        while n > 0
+            last_exp = state.stmts[n]
+            if isa(last_exp, LabelNode) 
+                n = n - 1
+            elseif isa(last_exp, Expr) && last_exp.head == :return
+                typ = state.stmts[n].typ
+                break
+            else
+                error("Cannot figure out return type from function body")
+            end
         end
+        setReturnType(typ, state.linfo)
+    
     end
-    setReturnType(typ, state.linfo)
     return mk_expr(typ, head, state.stmts...)
 end
 
@@ -1139,7 +1146,7 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     if result == nothing 
         # do not normalize :ccall
         args = fun_ == :ccall ? args : normalize_args(state, env, args)
-        expr.args = expr.head == :invoke ? [expr.args[1:2]; args] : [fun; args]
+        expr.args = expr.head == :invoke ? [expr.args[1]; fun; args] : [fun; args]
         expr
     else
         result
@@ -2406,7 +2413,7 @@ function from_expr(state::IRState, env::IREnv, ast::GlobalRef)
         end
     end
     @dprintln(2, " not handled ", ast)
-    return ast
+    return Base.resolve(ast, force=true)
 end
 
 function from_expr(state::IRState, env::IREnv, ast::Union{Symbol,TypedVar})
@@ -2517,7 +2524,7 @@ function from_expr(state::IRState, env::IREnv, ast::LabelNode)
 end
 
 function from_expr(state::IRState, env::IREnv, ast::ANY)
-    @dprintln(2, " not handled ", ast)
+    @dprintln(2, " not handled ", ast, " :: ", typeof(ast))
     return ast
 end
 

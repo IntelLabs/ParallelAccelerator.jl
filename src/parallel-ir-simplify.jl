@@ -707,7 +707,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
     elseif rhs.head == :alloc
         # Here an array on the left-hand side is being created from size specification on the right-hand side.
         # Map those array sizes to the corresponding array equivalence class.
-        sizes = rhs.args[2]
+        sizes = Any[ x for x in rhs.args[2]]
         n = length(sizes)
         assert(n >= 1 && n <= 3)
         @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
@@ -725,18 +725,18 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             if args[1] == QuoteNode(:jl_alloc_array_1d)
                 dim1 = args[6]
                 @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                checkAndAddSymbolCorrelation(lhs, state, [dim1])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1])            
             elseif args[1] == QuoteNode(:jl_alloc_array_2d)
                 dim1 = args[6]
                 dim2 = args[8]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2])            
             elseif args[1] == QuoteNode(:jl_alloc_array_3d)
                 dim1 = args[6]
                 dim2 = args[8]
                 dim3 = args[10]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
-                checkAndAddSymbolCorrelation(lhs, state, [dim1, dim2, dim3])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])            
             end
         elseif  isBaseFunc(fun, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
@@ -744,7 +744,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             assert(isa(array_param, RHSVar))
             array_param_type = CompilerTools.LambdaHandling.getType(array_param, state.LambdaVarInfo) # get its type
             if ndims(array_param_type) == 1            # can only associate when number of dimensions is 1
-                dim_symbols = [toLHSVar(lhs)]
+                dim_symbols = Any[toLHSVar(lhs)]
                 @dprintln(3,"Adding symbol correlation from arraylen, name = ", array_param, " dims = ", dim_symbols)
                 checkAndAddSymbolCorrelation(toLHSVar(array_param), state, dim_symbols)
             end
@@ -755,7 +755,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 assert(isa(array_param, TypedVar))         # should be a TypedVar
                 array_param_type = getType(array_param, state.LambdaVarInfo)  # get its type
                 array_dims = ndims(array_param_type)
-                dim_symbols = Symbol[]
+                dim_symbols = Any[]
                 for dim_i = 1:array_dims
                     push!(dim_symbols, lhs[dim_i])
                 end

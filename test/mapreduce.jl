@@ -26,10 +26,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 module MapReduceTest
 using ParallelAccelerator
 
-#ParallelAccelerator.DomainIR.set_debug_level(4)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
-#ParallelAccelerator.CGen.set_debug_level(4)
-#ParallelAccelerator.set_debug_level(4)
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+#ParallelAccelerator.set_debug_level(3)
 
 @acc function map_1(A)
     a = map(x -> x + 1, A) 
@@ -82,7 +82,7 @@ end
     A[1,1] = -1
     B = [ i for i = 1:col ]
     C = B .> 2
-    cartesianarray(Int, (col,)) do j
+    cartesianarray(Tuple{Int}, (col,)) do j
         sum(A[C, j:j])
     end
 end

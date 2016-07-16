@@ -35,13 +35,21 @@ Translate an ast whose head is :comprehension into equivalent code that uses car
 function comprehension_to_cartesianarray(ast)
   assert(ast.head == :comprehension)
   body = ast.args[1]
-  ndim = length(ast.args) - 1
+  if isa(body, Expr) && body.head == :generator
+    body = ast.args[1].args[1]
+    args = ast.args[1].args[2:end]
+    ndim = length(args)
+  else
+    body = ast.args[1]
+    args = ast.args[2:end]
+    ndim = length(args)
+  end
   params = Array(Symbol, ndim)
   indices = Array(Symbol, ndim)
   ranges = Array(Any, ndim)
   headers = Array(Any, ndim)
   for i = 1:ndim
-    r = ast.args[i + 1]
+    r = args[i]
     assert(r.head == :(=))
     indices[i] = r.args[1]
     params[i] = gensym(string(indices[i]))
@@ -62,9 +70,15 @@ function comprehension_to_cartesianarray(ast)
   tmpret = gensym("tmp")
   tmpinits = [ :($idx = 1) for idx in params ]
   typetest = :(local $tmpret; if 1<0 let $(tmpinits...); $(headers...); $tmpret=$body end end)
-  ast = Expr(:call, GlobalRef(API, :cartesianarray), 
-                :($args -> let $(headers...); $body end), Expr(:static_typeof, tmpret), :($dims))
-  Expr(:block, typetest, ast) 
+  if VERSION < v"0.5.0-dev+5381"
+      ast = Expr(:call, GlobalRef(API, :cartesianarray), 
+                    :($args -> let $(headers...); $body end), Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(Base, :Tuple), Expr(:static_typeof, tmpret)), :($dims))
+      ast = Expr(:block, typetest, ast) 
+  else
+      ast = Expr(:call,  GlobalRef(API, :cartesianarray), 
+                    :($args -> let $(headers...); $body end), :($dims))
+  end
+  ast
 end
 
 function isStart1UnitRange(node::Expr)

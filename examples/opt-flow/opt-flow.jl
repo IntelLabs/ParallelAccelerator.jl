@@ -151,7 +151,7 @@ end
 end
 
 function multiFrameOpticalFlow(frames, nframes)
-  cartesianarray(Matrix{Float32}, Matrix{Float32}, (nframes - 1,)) do i
+  cartesianarray(Tuple{Matrix{Float32}, Matrix{Float32}}, (nframes - 1,)) do i
     multiScaleOpticalFlow(frames[i], frames[i+1], Float32(0.025), 100, 44)
   end
 end
