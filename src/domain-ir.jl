@@ -1035,6 +1035,8 @@ function from_body(state, env, expr::Expr)
         elseif isa(last_exp, Expr) && last_exp.head == :return
             newtyp = state.stmts[n].typ
             break
+        else
+            break
         end
     end
     if newtyp <: typ
