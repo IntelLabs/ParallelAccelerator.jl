@@ -1026,21 +1026,20 @@ function from_body(state, env, expr::Expr)
     end
     # fix return type
     # typ = getReturnType(state.linfo) 
-    if typ == Any
-        n = length(state.stmts)
-        while n > 0
-            last_exp = state.stmts[n]
-            if isa(last_exp, LabelNode) 
-                n = n - 1
-            elseif isa(last_exp, Expr) && last_exp.head == :return
-                typ = state.stmts[n].typ
-                break
-            else
-                error("Cannot figure out return type from function body")
-            end
+    newtyp = Any
+    n = length(state.stmts)
+    while n > 0
+        last_exp = state.stmts[n]
+        if isa(last_exp, LabelNode) 
+            n = n - 1
+        elseif isa(last_exp, Expr) && last_exp.head == :return
+            newtyp = state.stmts[n].typ
+            break
         end
-        setReturnType(typ, state.linfo)
-    
+    end
+    if newtyp <: typ
+      setReturnType(newtyp, state.linfo)
+      typ = newtyp
     end
     return mk_expr(typ, head, state.stmts...)
 end
