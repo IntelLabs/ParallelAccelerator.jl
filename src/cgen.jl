@@ -405,7 +405,7 @@ function from_includes()
         s *= userOption.includeStatements
     end
 
-    s *= "unsigned main_count = 0;"
+    s *= "unsigned main_count = 0;\n"
     
     return s
 end
@@ -653,6 +653,10 @@ function from_assignment(args::Array{Any,1}, linfo)
         return match_cat_t
     end
 
+    match_iostream = from_assignment_match_iostream(lhs, rhs, linfo)
+    if match_iostream!=""
+        return match_iostream
+    end
 
     lhsO = from_expr(lhs, linfo)
     rhsO = from_expr(rhs, linfo)

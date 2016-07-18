@@ -547,4 +547,21 @@ function from_assignment_match_cat_t(lhs, rhs::ANY, linfo)
     return ""
 end
 
+function from_assignment_match_iostream(lhs, rhs::GlobalRef, linfo)
+    s = ""
+    ltype = getType(lhs, linfo)
+    @dprintln(3, "from_assignment_match_iostream ltype = ", ltype)
+    if (ltype == IOStream)
+        if rhs.mod == Base && rhs.name == :STDOUT
+            lhsO = from_expr(lhs, linfo)
+            s *= lhsO * ".handle = (void**)&(std::cout);"
+        end
+    end
+    return s
+end
+
+function from_assignment_match_iostream(lhs, rhs::ANY, linfo)
+    return ""
+end
+
 
