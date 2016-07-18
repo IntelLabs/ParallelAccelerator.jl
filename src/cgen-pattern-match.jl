@@ -198,7 +198,7 @@ function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::
 end
 
 function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar, x::RHSVar,linfo)
-    if fun.mod!=Base.LinAlg || fun.name!=:gemv!
+    if !((fun.mod==Base.LinAlg || fun.mod==Base.LinAlg.BLAS) && fun.name==:gemv!)
         return ""
     end
     cblas_fun = ""
@@ -368,7 +368,8 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
         return ""
     end
     
-    s = "$(from_expr(B,linfo)); "
+    #s = "$(from_expr(B,linfo)); "
+    s = ""
 
     m = from_arraysize(A,1,linfo) 
     n = from_arraysize(A,2,linfo)
@@ -383,15 +384,10 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     else
         #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
         #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.""")
-        
-        s *= """
-                for(int i=0; i<$m; i++) {
-                    for(int j=0; j<$n; j++) {
-                       $(from_expr(B,linfo)).data[j+$ldb*i] = $(from_expr(A,linfo)).data[i+$lda*j];
-                    }
-                }
-             """
+        s *= "cgen_$(blas_fun)($m,$n,
+        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     end
+    s = "(" * s * ", " * from_expr(B,linfo) * ")"
 
     return s
 end

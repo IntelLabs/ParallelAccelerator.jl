@@ -354,7 +354,7 @@ function from_includes()
         elseif openblas_lib!="" || sys_blas==1
             blas_include = "#include <cblas.h>\n"
         else
-            blas_include = "#include \"$packageroot/deps/include/cgen_mmul.h\"\n"
+            blas_include = "#include \"$packageroot/deps/include/cgen_linalg.h\"\n"
         end
     end
     if include_lapack == true

@@ -16,5 +16,3 @@ println("testing transpose...")
 @test_approx_eq TestTranspose.test() [1. 4.; 2. 5.; 3. 6.]
 println("Done testing transpose.")
 
-
-

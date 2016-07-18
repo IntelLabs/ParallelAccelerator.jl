@@ -68,8 +68,8 @@ if Compat.is_windows()
     conf_file = builddir * "\\generated\\config.jl"
     cf = open(conf_file, "w")
     println(cf, "backend_compiler = USE_MINGW")
-    println(cf, "openblas_lib = \"", Base.Libdl.find_library("libopenblas64_"), "\"")
-    println(cf, "mkl_lib = \"", Base.Libdl.find_library("libmkl"), "\"")
+    println(cf, "openblas_lib = \"", Base.Libdl.find_library([string("libopenblas64_")]), "\"")
+    println(cf, "mkl_lib = \"", Base.Libdl.find_library([string("libmkl")]), "\"")
     
     try
         run(`bcpp`)
@@ -82,7 +82,7 @@ if Compat.is_windows()
         btest = open("blas_test.cpp","w")
         println(btest,"#include <cblas.h>\nint main(){return 0;}")
         close(btest)
-        run(`$gpp -I $incdir blas_test.cpp`)
+        run_result = readall(`$gpp -I $incdir blas_test.cpp`)
         println(cf, "sys_blas = 1")
     catch some_exception
         println(cf, "sys_blas = 0")

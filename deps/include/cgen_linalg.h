@@ -231,4 +231,21 @@ float cgen_cblas_snrm2(int n, float* y)
     return sqrt(tmp);
 }
 
+void cgen_somatcopy(int m, int n, float *A, int lda, float *B, int ldb)
+{
+    for(int i=0; i<m; i++) {
+        for(int j=0; j<n; j++) {
+            Bmat(j, i) = Amat(i, j);
+        }
+    }
+}
+
+void cgen_domatcopy(int m, int n, double *A, int lda, double *B, int ldb)
+{
+    for(int i=0; i<m; i++) {
+        for(int j=0; j<n; j++) {
+            Bmat(j, i) = Amat(i, j);
+        }
+    }
+}
 

@@ -89,14 +89,14 @@ end
 
 @inline function diag(A::DenseMatrix)
   d::Int = min(size(A, 1), size(A, 2))
-  cartesianarray(eltype(A), (d,)) do i
+  cartesianarray(Tuple{eltype(A)}, (d,)) do i
      A[i, i]
   end
 end
 
 @inline function diagm(A::DenseVector)
   d::Int = size(A, 1)
-  cartesianarray(eltype(A), (d, d)) do i, j
+  cartesianarray(Tuple{eltype(A)}, (d, d)) do i, j
     # the assignment below is a hack to avoid mutiple return in body
     v = i == j ? A[i] : zero(eltype(A))
   end
@@ -108,20 +108,20 @@ end
 
 @inline function scale(A::DenseMatrix, b::DenseVector)
   m::Int, n::Int = size(A)
-  cartesianarray(eltype(A), (m, n)) do i, j
+  cartesianarray(Tuple{eltype(A)}, (m, n)) do i, j
     A[i,j] * b[j]
   end
 end
 
 @inline function scale(b::DenseVector, A::DenseMatrix)
   m::Int, n::Int = size(A)
-  cartesianarray(eltype(A), (m, n)) do i, j
+  cartesianarray(Tuple{eltype(A)}, (m, n)) do i, j
     b[i] * A[i,j] 
   end
 end
 
 @inline function eye(m::Int, n::Int)
-  cartesianarray(Float64, (m, n)) do i, j
+  cartesianarray(Tuple{Float64}, (m, n)) do i, j
     # the assignment below is a hack to avoid mutiple return in body
     v = i == j ? 1.0 : 0.0
   end
@@ -139,7 +139,7 @@ end
   s::Int = size(A, 1)
   t::Int = size(A, 2)
   u::Int = size(A, 3)
-  cartesianarray(eltype(A), (m * s, n * t, l * u)) do i, j, k
+  cartesianarray(Tuple{eltype(A)}, (m * s, n * t, l * u)) do i, j, k
     A[1 + rem(i - 1, s), 1 + rem(j - 1, t), 1 + rem(k - 1, u)]
   end
 end
@@ -147,28 +147,28 @@ end
 @inline function repmat(A::DenseMatrix, m::Int, n::Int, l::Int)
   s::Int = size(A, 1)
   t::Int = size(A, 2)
-  cartesianarray(eltype(A), (m * s, n * t, l)) do i, j, k
+  cartesianarray(Tuple{eltype(A)}, (m * s, n * t, l)) do i, j, k
     A[1 + rem(i - 1, s), 1 + rem(j -1, t)]
   end
 end
 
 @inline function repmat(A::DenseVector, m::Int, n::Int, l::Int)
   s::Int = size(A, 1)
-  cartesianarray(eltype(A), (m * s, n, l)) do i, j, k
+  cartesianarray(Tuple{eltype(A)}, (m * s, n, l)) do i, j, k
     A[1 + rem(i - 1, s)]
   end
 end
 
 @inline function repmat(A::DenseVector, m::Int, n::Int)
   s::Int = size(A, 1)
-  cartesianarray(eltype(A), (m * s, n)) do i, j
+  cartesianarray(Tuple{eltype(A)}, (m * s, n)) do i, j
     A[1 + rem(i - 1, s)]
   end
 end
 
 @inline function repmat(A::DenseMatrix, m::Int, n::Int)
   s::Int, t::Int = size(A)
-  cartesianarray(eltype(A), (m * s, n * t)) do i, j
+  cartesianarray(Tuple{eltype(A)}, (m * s, n * t)) do i, j
     A[1 + rem(i - 1, s), 1 + rem(j - 1, t)]
   end
 end
