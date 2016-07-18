@@ -1096,17 +1096,6 @@ end
 end
 
 """
-Is a node an assignment expression node.
-"""
-function isAssignmentNode(node :: Expr)
-    return node.head == :(=)
-end
-
-function isAssignmentNode(node::Any)
-    return false
-end
-
-"""
 Is a node a loophead expression node (a form of assignment).
 """
 function isLoopheadNode(node :: Expr)
@@ -2290,7 +2279,7 @@ function hasNoSideEffects(node :: Expr)
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
     elseif node.head == :call1 || node.head == :call || node.head == :invoke
         func = CompilerTools.Helper.getCallFunction(node)
-dprintln(3,"hasNoSideEffects func=", func, " ", isBaseFunc(func,:<:))
+        @dprintln(3,"hasNoSideEffects func=", func, " ", isBaseFunc(func,:<:))
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
