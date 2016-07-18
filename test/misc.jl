@@ -31,6 +31,7 @@ using ParallelAccelerator
 #ParallelAccelerator.CGen.set_debug_level(4)
 #ParallelAccelerator.set_debug_level(4)
 #using CompilerTools
+#CompilerTools.LivenessAnalysis.set_debug_level(3)
 #CompilerTools.LambdaHandling.set_debug_level(3)
 
 @acc function for_ret()
@@ -88,6 +89,22 @@ end
     Int[ mod(x, y), rem(x, y) ]
 end
 
+@acc function end_test_numeric(a)
+    a[3:4] .+ 1
+end
+
+function test7()
+    end_test_numeric([1;2;3;4]) == [4;5]
+end
+
+@acc function end_test(a)
+    a[3:end] .+ 1
+end
+
+function test6()
+    end_test([1;2;3;4]) == [4;5]
+end
+
 end
 
 using Base.Test
@@ -97,6 +114,8 @@ println("Testing miscellaneous features...")
 @test MiscTest.test3() 
 @test MiscTest.test4() == [0.0, 0.0, 0.0, 0.0, 0.0]
 @test MiscTest.test5() 
+@test MiscTest.test6() 
+@test MiscTest.test7() 
 @test MiscTest.mod_rem_test(7,3) == [1, 1]
 @test MiscTest.mod_rem_test(7,-3) == [-2, 1]
 @test MiscTest.mod_rem_test(-7,3) == [2, -1]
