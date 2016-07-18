@@ -56,6 +56,7 @@ type LambdaGlobalData
     ompprivatelist::Array{Any, 1}
     globalConstants :: Dict{Any, Any}   # non-scalar global constants
     globalUDTs::Dict{Any, Any}
+    globalUDTsOrder::Array{Any, 1}
     symboltable::Dict{Any, Any}         # mapping from some kind of variable to a type
     tupleTable::Dict{Any, Array{Any,1}} # a table holding tuple values to be used for hvcat allocation
     compiledfunctions::Array{Any, 1}
@@ -83,7 +84,7 @@ type LambdaGlobalData
     )
 
         #new(ASTDispatcher(), [], Dict(), Dict(), [], [])
-        new([], Dict(), Dict(), Dict(), Dict(), [], [], _j, 0)
+        new([], Dict(), Dict(), [], Dict(), Dict(), [], [], _j, 0)
     end
 end
 
@@ -217,6 +218,7 @@ function resetLambdaState(l::LambdaGlobalData)
     empty!(l.ompprivatelist)
     empty!(l.globalConstants)
     empty!(l.globalUDTs)
+    empty!(l.globalUDTsOrder)
     empty!(l.symboltable)
     empty!(l.worklist)
     inEntryPoint = false
@@ -433,7 +435,18 @@ end
 # and emit a C++ type declaration for each
 function from_UDTs(linfo)
     global lstate
-    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a, linfo) : ""), *, keys(lstate.globalUDTs))
+    @dprintln(3,"from_UDTs globalUDTs = ", lstate.globalUDTs)
+    @dprintln(3,"from_UDTs globalUDTsOrder = ", lstate.globalUDTsOrder)
+    s = ""
+    for udt in lstate.globalUDTsOrder
+        @dprintln(3, "udt = ", udt)
+        if lstate.globalUDTs[udt] == 1
+            @dprintln(3, "udt not processed yet so doing it now.")
+            s *= from_decl(udt, linfo)
+        end
+    end
+#    isempty(lstate.globalUDTs) ? "" : mapfoldl((a) -> (lstate.globalUDTs[a] == 1 ? from_decl(a, linfo) : ""), *, keys(lstate.globalUDTs))
+    return s
 end
 
 # Tuples are represented as structs
@@ -546,7 +559,9 @@ function from_lambda(linfo :: LambdaVarInfo, body)
         # If we have user defined types, record them
         #if isCompositeType(lstate.symboltable[k]) || isUDT(lstate.symboltable[k])
         if !isPrimitiveJuliaType(t) && !isArrayOfPrimitiveJuliaType(t)
+            @dprintln(3, "from_lambda adding to globalUDTs ", t)
             lstate.globalUDTs[t] = 1
+            push!(lstate.globalUDTsOrder, t)
         end
     end
 
@@ -2511,7 +2526,9 @@ function from_formalargs(params, vararglist, unaliased, linfo)
             end
             if !isPrimitiveJuliaType(varargtyp) && !isArrayOfPrimitiveJuliaType(varargtyp)
                 if !haskey(lstate.globalUDTs, varargtyp)
+                    @dprintln(3, "from_formalargs adding to globalUDTs ", varargtyp)
                     lstate.globalUDTs[varargtyp] = 1
+                    push!(lstate.globalUDTsOrder, varargtyp)
                 end
             end
         elseif inSymbolTable(params[p], linfo)
