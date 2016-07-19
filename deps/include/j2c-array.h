@@ -954,6 +954,13 @@ uint64_t TOTALSIZE(j2c_array<ELEMENT_TYPE> &array) {
 }
 
 template <typename ELEMENT_TYPE>
+j2c_array<ELEMENT_TYPE> j2c_array_copyto(j2c_array<ELEMENT_TYPE> A, int64_t i, j2c_array<ELEMENT_TYPE> B, int64_t j, int64_t n) {
+    assert( i + n <= A.ARRAYLEN() + 1);
+    for (int k = 0; k < n; k++) A.ARRAYELEM(i + k) = B.ARRAYELEM(j + k);
+    return A;
+}
+
+template <typename ELEMENT_TYPE>
 uint64_t TOTALSIZE(j2c_array< j2c_array<ELEMENT_TYPE> > &array) {
     uint64_t len = array.ARRAYLEN();
     uint64_t ret = len * sizeof(j2c_array<ELEMENT_TYPE>);
