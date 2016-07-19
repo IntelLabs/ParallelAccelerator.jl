@@ -262,7 +262,7 @@ _Intrinsics = [
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int", 
-        "checked_smul", "checked_sdiv_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
+        "checked_smul", "checked_sdiv_int", "checked_udiv_int", "checked_urem_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
@@ -1310,7 +1310,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "-" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "mul_float" || intr == "mul_float_fast"
         return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
-    elseif intr == "urem_int"
+    elseif intr == "urem_int" || intr == "checked_urem_int"
         return "($(from_expr(args[1], linfo))) % ($(from_expr(args[2], linfo)))"
     elseif intr == "add_int"
         return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
@@ -1394,7 +1394,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     elseif intr == "sub_float" || intr == "sub_float_fast"
         return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
     elseif intr == "div_float" || intr == "div_float_fast" || 
-           intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int" 
+           intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int" || intr == "checked_udiv_int"
         return "($(from_expr(args[1], linfo))) / ($(from_expr(args[2], linfo)))"
     elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
         return "(" * toCtype(args[1]) * ")" * from_expr(args[2], linfo)

@@ -348,6 +348,19 @@ function pattern_match_call_trtrs(fun::ANY, C::ANY, tA::ANY,A::ANY, t::ANY, d::A
     return ""
 end
 
+function pattern_match_call_copy!(linfo, fun, A, i, B, j, n)
+    if isBaseFunc(fun, :copy!)
+        "j2c_array_copyto(" * 
+          from_expr(A, linfo) * ", " * 
+          from_expr(i, linfo) * ", " * 
+          from_expr(B, linfo) * ", " * 
+          from_expr(j, linfo) * ", " * 
+          from_expr(n, linfo) * ")"
+    else
+        ""
+    end
+end
+
 function pattern_match_call_transpose(linfo, fun::GlobalRef, fun1::GlobalRef, B::RHSVar, A::RHSVar)
     pattern_match_call_transpose(linfo, fun, B, A)
 end
@@ -479,6 +492,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     end
     # gemm calls have 6 args
     if s=="" && (length(ast)==6)
+        s *= pattern_match_call_copy!(linfo, ast...)
         s *= pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
         s *= pattern_match_call_trtrs(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
     end

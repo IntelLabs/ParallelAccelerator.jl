@@ -145,13 +145,27 @@ if VERSION >= v"0.5.0-dev+5381"
   end
 end
 
-@inline function cartesianarray{I,T}(body, itr::Base.Generator{I,T}, ndims)
-   cartesianarray(body, to_tuple_type(Base._default_eltype(Base.Generator{I,T})), ndims)
+@inline function cartesianarray(body, L::Int)
+   if 1<0
+     x=body(L)
+   end
+   cartesianarray(body, to_tuple_type(typeof(x)), (L,))
 end
 
-@inline function cartesianarray(body, ndims)
-   cartesianarray(body, Base.Generator(x->body(x...), Base.product(ndims...)), ndims)
+@inline function cartesianarray(body, L::Int, M::Int)
+   if 1<0
+     x=body(L, M)
+   end
+   cartesianarray(body, to_tuple_type(typeof(x)), (L,M,))
 end
+
+@inline function cartesianarray(body, L::Int, M::Int, N::Int)
+   if 1<0
+     x=body(L, M, N)
+   end
+   cartesianarray(body, to_tuple_type(typeof(x)), (L,M,N))
+end
+
 end
 
 function cartesianarray{T}(body, ::Type{Tuple{T}}, ndims)

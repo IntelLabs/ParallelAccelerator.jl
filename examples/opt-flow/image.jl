@@ -60,7 +60,8 @@ function downSample(a::Array{Float32, 2}, nw::Int, nh::Int)
   (w, h) = size(a)
   sx::Float32 = Float32(w) / Float32(nw)
   sy::Float32 = Float32(h) / Float32(nh)
-  Float32[ downsample_inner(x, y, sx, sy, a) for x = 1:nw, y = 1:nh ]
+  na::Array{Float32,2} = Float32[ downsample_inner(x, y, sx, sy, a) for x = 1:nw, y = 1:nh ]
+  return na
 end
 
 # Linearly interpolate between array values

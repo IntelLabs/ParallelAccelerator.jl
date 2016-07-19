@@ -66,17 +66,18 @@ function comprehension_to_cartesianarray(ast)
     end
   end
   args = Expr(:tuple, params...)
-  dims = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
+  dims = [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]
+  dimsExpr = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
   tmpret = gensym("tmp")
   tmpinits = [ :($idx = 1) for idx in params ]
   typetest = :(local $tmpret; if 1<0 let $(tmpinits...); $(headers...); $tmpret=$body end end)
   if VERSION < v"0.5.0-dev+5381"
       ast = Expr(:call, GlobalRef(API, :cartesianarray), 
-                    :($args -> let $(headers...); $body end), Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(Base, :Tuple), Expr(:static_typeof, tmpret)), :($dims))
+                    :($args -> let $(headers...); $body end), Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(Base, :Tuple), Expr(:static_typeof, tmpret)), :($dimsExpr))
       ast = Expr(:block, typetest, ast) 
   else
       ast = Expr(:call,  GlobalRef(API, :cartesianarray), 
-                    :($args -> let $(headers...); $body end), :($dims))
+                    :($args -> let $(headers...); $body end), dims...)
   end
   ast
 end
