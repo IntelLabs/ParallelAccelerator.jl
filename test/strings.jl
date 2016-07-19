@@ -51,6 +51,10 @@ end
     return x * "bar"
 end
 
+@acc function f5(x)
+    string(x) * "bar"
+end
+
 function test1()
     f1() == 108 # ASCII 'l' is 108
 end
@@ -67,6 +71,10 @@ function test4()
     f4("foo")  == "foobar"
 end
 
+function test5()
+    f5(1)  == "1bar"
+end
+
 end
 
 using Base.Test
@@ -76,5 +84,6 @@ println("Testing strings...")
 @test StringTest.test2() 
 @test StringTest.test3() 
 @test StringTest.test4() 
+@test StringTest.test5() 
 println("Done testing strings...")
 
