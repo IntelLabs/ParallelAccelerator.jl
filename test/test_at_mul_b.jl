@@ -1,5 +1,8 @@
 using ParallelAccelerator
 
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
+#ParallelAccelerator.CGen.set_debug_level(3)
+
 @acc function opt_At_mul_B!(U, X, W)
 	 #At_mul_B!(U, X, W)  # u <- w'x
 	 U = X' * W
