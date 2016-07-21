@@ -1226,6 +1226,9 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     local fun = getCallFunction(expr)
     local args = getCallArguments(expr)
     local typ = expr.typ
+    # change all :invoke to :call, since :invoke doesn't pass inference
+    expr.head = :call
+    expr.args = [fun; args]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
         return expr
