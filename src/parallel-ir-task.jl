@@ -1356,16 +1356,11 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
         line_num = addToBody!(new_body, mk_gotoifnot_expr(
                Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
                    Expr(:call, GlobalRef(Base, :not_int),
-                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
                            Expr(:call, GlobalRef(Base, :or_int), 
-                               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
                                    Expr(:call, GlobalRef(Base, :and_int), 
-                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
                                            Expr(:call, GlobalRef(Base, :not_int), 
                                                Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar)) 
-                                           )
-                                       ),
-                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                           ),
                                            Expr(:call, GlobalRef(Base, :not_int),
                                                Expr(:call, GlobalRef(Base, :(===)),
                                                    Expr(:call, GlobalRef(Base, :slt_int),
@@ -1378,15 +1373,12 @@ function recreateLoopsInternal(new_body, the_parfor :: ParallelAccelerator.Paral
                                                    )
                                                )
                                            )
-                                       )
-                                   )
-                               ),
+                                   ),
                                Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar), 
                                    Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar))) 
                                )
                            )
                        )
-                   )
                )
                , label_end), line_num) # 6
 
@@ -1850,7 +1842,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     newLambdaVarInfo.return_type = Void
 
     # Create the new :lambda Expr for the task function.
-    task_body = CompilerTools.OptFramework.cleanupBodyLabels(task_body)
+    newLambdaVarInfo, task_body = CompilerTools.OptFramework.cleanupFunction(newLambdaVarInfo, task_body)
     code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(newLambdaVarInfo, task_body)
 
     @dprintln(3, "New task = ", code)

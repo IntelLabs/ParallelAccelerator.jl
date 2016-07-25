@@ -209,8 +209,6 @@ function toJulia(func :: GlobalRef, ast, signature :: Tuple)
   else
     LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
   end
-  body = CompilerTools.OptFramework.cleanupBodyLabels(body)
-  @dprintln(3, "cleaned up code = ", body)
   return (LambdaVarInfo, body)
 end
 

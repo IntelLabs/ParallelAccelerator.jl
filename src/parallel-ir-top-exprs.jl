@@ -655,16 +655,11 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         push!(new_body, mk_gotoifnot_expr(
                Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
                    Expr(:call, GlobalRef(Base, :not_int),
-                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
                            Expr(:call, GlobalRef(Base, :or_int), 
-                               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
                                    Expr(:call, GlobalRef(Base, :and_int), 
-                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
                                            Expr(:call, GlobalRef(Base, :not_int), 
                                                Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar)) 
-                                           )
-                                       ),
-                                       Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+                                           ),
                                            Expr(:call, GlobalRef(Base, :not_int),
                                                Expr(:call, GlobalRef(Base, :(===)),
                                                    Expr(:call, GlobalRef(Base, :slt_int),
@@ -677,14 +672,11 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
                                                    )
                                                )
                                            )
-                                       )
-                                   )
-                               ),
+                                       ),
                                Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar), 
                                    Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar))) 
                                )
                            )
-                       )
                    )
                )
                , label_end))
@@ -842,24 +834,25 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         end
 
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
+        task_globalref = GlobalRef(ParallelAccelerator.ParallelIR, Base.function_name(cur_task.task_func))
         if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
         else
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
           if cur_task.ret_types != Void
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
@@ -868,15 +861,15 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             insert_task_expr = TypedExpr(Void,
                                          :call,
                                          ParallelAccelerator.ParallelIR.isf,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         ParallelAccelerator.ParallelIR.isf,
-                                         cur_task.task_func,
+                                         GlobalRef(ParallelAccelerator.ParallelIR, :isf),
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
@@ -901,7 +894,8 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             for l = 1:red_len
                 push!(new_body, mk_assignment_expr(
                                    deepcopy(cur_task.reduction_vars[l].name), 
-                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), state))
+                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                     Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
             end
 
             push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
@@ -909,7 +903,8 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                 @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
                 reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
                                                 deepcopy(cur_task.reduction_vars[l].name), 
-                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
+                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                                  Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l), cur_task.ret_types[l]))
                 @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
 
                 for stmt in reduction_code

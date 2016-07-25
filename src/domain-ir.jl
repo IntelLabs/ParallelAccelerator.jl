@@ -334,13 +334,14 @@ type IRState
     linfo  :: LambdaVarInfo
     defs   :: Dict{LHSVar, Any}  # stores local definition of LHS = RHS
     escDict :: Dict{Symbol, Any} # mapping function closure fieldname to escaping variable
-    boxtyps:: Dict{LHSVar, Any}  # finer types for those have Box type
+    boxtyps :: Dict{LHSVar, Any} # finer types for those have Box type
+    nonNegs :: Set{LHSVar}       # remember single-assigned variables which are non-negative
     stmts  :: Array{Any, 1}
     parent :: Union{Void, IRState}
 end
 
-emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{Symbol,RHSVar}(), Dict{LHSVar,Any}(), Any[], nothing)
-newState(linfo, defs, escDict, state::IRState) = IRState(linfo, defs, escDict, Dict{LHSVar,Any}(), Any[], state)
+emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{Symbol,RHSVar}(), Dict{LHSVar,Any}(), Set{LHSVar}(), Any[], nothing)
+newState(linfo, defs, escDict, state::IRState) = IRState(linfo, defs, escDict, Dict{LHSVar,Any}(), Set{LHSVar}(), Any[], state)
 
 """
 Update the type of a variable.
@@ -361,6 +362,11 @@ function getBoxType(state::IRState, s::RHSVar)
     get(state.boxtyps, v, Any)
 end
 
+isNonNeg(state::IRState, s::RHSVar) = in(toLHSVar(s), state.nonNegs)
+isNonNeg(state::IRState, s::Integer) = s >= 0
+isNonNeg(state::IRState, s::Expr) = (isCall(s) || isInvoke(s)) && isBaseFunc(getCallFunction(s), :arraysize)
+isNonNeg(state::IRState, s::Any) = false
+
 """
 Update the definition of a variable.
 """
@@ -372,6 +378,9 @@ function updateDefInternal(state::IRState, s::LHSVar, rhs)
 #    (isa(s, Symbol) && isInputParameter(s, state.linfo)) ||
 #    (isa(s, Symbol) && isEscapingVariable(s, state.linfo))) state.linfo
     state.defs[s] = rhs
+    if isNonNeg(state, rhs) && (getDesc(s, state.linfo) & (ISASSIGNEDONCE | ISCONST) != 0)
+        push!(state.nonNegs, s)
+    end
 end
 
 function updateDef(state::IRState, s::RHSVar, rhs)
@@ -828,18 +837,48 @@ function simplify(state, expr::Expr, default::Any)
         neg(simplify(state, expr.args[2]))
     elseif isBoxExpr(expr)
         simplify(state, expr.args[3])
+    elseif isCondExpr(expr)
+        f = getCondFunc(expr.args[1], x -> isNonNeg(state, x))
+        x = simplify(state, expr.args[2])
+        y = simplify(state, expr.args[3])
+        f(x, y)
+    elseif isSelectExpr(expr)
+        cond = simplify(state, expr.args[2])
+        tval = simplify(state, expr.args[3])
+        fval = simplify(state, expr.args[4])
+        if cond == true
+            tval
+        elseif cond == false
+            fval
+        else
+            # rewrite (1 <= x ? x : 0) to x when x >= 0
+            if (isCall(cond) || isInvoke(cond)) 
+                opr = getCallFunction(cond)
+                args = getCallArguments(cond)
+                if (isTopNodeOrGlobalRef(opr, :sle_int) || isTopNodeOrGlobalRef(opr, :ule_int)) &&
+                   args[1] == 1 && isNonNeg(state, args[2]) && tval == args[2] && fval == 0
+                   return tval
+                end
+            end       
+            mk_expr(expr.typ, :call, expr.args[1], cond, tval, fval)
+        end
     else
         default
     end
 end
 
 function simplify(state, expr::Expr)
-    simplify(state, expr, expr)
+    expr_ = simplify(state, expr, expr)
+@dprintln(2, "simplify ", expr, " to ", expr_)
+    return expr_
 end 
 
 function simplify(state, expr::RHSVar)
     def = lookupConstDefForArg(state, expr)
-    is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
+@dprintln(2, "lookup ", expr, " to be ", def)
+    expr_ = is(def, nothing) ? expr : (isa(def, Expr) ? simplify(state, def, expr) : def)
+@dprintln(2, "simplify ", expr, " to ", expr_)
+    return expr_
 end
 
 function simplify(state, expr::Array)
@@ -887,6 +926,10 @@ isAddExprInt(x::Expr) = isAddExpr(x) && isa(x.args[3], Int)
 isMulExprInt(x::Expr) = isMulExpr(x) && isa(x.args[3], Int)
 isAddExpr(x::ANY) = false
 isSubExpr(x::ANY) = false
+isCondExpr(x::Expr) = is(x.head, :call) && (isTopNodeOrGlobalRef(x.args[1], :sle_int) || isTopNodeOrGlobalRef(x.args[1], :ule_int) || 
+                                            isTopNodeOrGlobalRef(x.args[1], :ne_int) || isTopNodeOrGlobalRef(x.args[1], :eq_int) ||
+                                            isTopNodeOrGlobalRef(x.args[1], :slt_int) || isTopNodeOrGlobalRef(x.args[1], :ult_int))
+isSelectExpr(x::Expr) = is(x.head, :call) && isTopNodeOrGlobalRef(x.args[1], :select_value)
 sub(x, y) = add(x, neg(y))
 add(x::Int,  y::Int) = x + y
 add(x::Int,  y::Expr)= add(y, x)
@@ -913,6 +956,49 @@ mul(x::Expr, y)      = isBoxExpr(x) ? mul(x.args[3], y) : (isMulExprInt(x) ? mul
 mul(x,       y::Expr)= mul(y, x)
 mul(x,       y)      = mul_expr(x, y)
 
+# convert a conditional to a Julia function for static evaluation
+function getCondFunc(opr, isNonNeg)
+  if isTopNodeOrGlobalRef(opr, :sle_int) || isTopNodeOrGlobalRef(opr, :ule_int) 
+     (x, y) -> mk_le_expr(opr, x, y, isNonNeg)
+  elseif isTopNodeOrGlobalRef(opr, :slt_int) || isTopNodeOrGlobalRef(opr, :ult_int) 
+     (x, y) -> mk_lt_expr(opr, x, y, isNonNeg)
+  elseif isTopNodeOrGlobalRef(opr, :ne_int) 
+     (x, y) -> mk_ne_expr(opr, x, y)
+  elseif isTopNodeOrGlobalRef(opr, :eq_int)
+     (x, y) -> mk_eq_expr(opr, x, y)
+  else
+     (x, y) -> mk_expr(Bool, :call, opr, x, y)
+  end
+end
+
+function mk_le_expr(opr, x, y, isNonNeg)
+    if isa(x, Integer) && isa(y, Integer)
+        x <= y
+    elseif isa(x, Integer) && x <= 1 && isNonNeg(y)
+        true
+    elseif isa(y, Integer) && y <= 0 && isNonNeg(x)
+        false
+    else
+        mk_expr(Bool, :call, opr, x, y)
+    end 
+end
+
+function mk_lt_expr(opr, x, y, isNonNeg)
+    if isa(x, Integer) && isa(y, Integer)
+        x < y
+    elseif isa(x, Integer) && x <= 0 && isNonNeg(y)
+        true
+    elseif isa(y, Integer) && y <= 1 && isNonNeg(x)
+        false
+    else
+        mk_expr(Bool, :call, opr, x, y)
+    end 
+end
+
+mk_ne_expr(opr, x, y) = x != y ?  true : mk_expr(Bool, :call, opr, x, y)
+mk_eq_expr(opr, x, y) = x == y ?  true : mk_expr(Bool, :call, opr, x, y)
+
+
 # simplify expressions passed to alloc and range.
 mk_alloc(state, typ, s) = mk_alloc(typ, simplify(state, s))
 mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(state, step), simplify(state, final))
@@ -924,12 +1010,8 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
 function from_lambda(state, env, expr, closure = nothing)
     local env_ = nextEnv(env)
     linfo, body = lambdaToLambdaVarInfo(expr) 
-    # first we get rid of empty basic blocks!
-    lives = CompilerTools.LivenessAnalysis.from_lambda(linfo, body, dir_live_cb, linfo)
-    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(lives.cfg), CompilerTools.LambdaHandling.getReturnType(linfo))
     @dprintln(2,"from_lambda typeof(body) = ", typeof(body))
     @dprintln(3,"expr = ", expr)
-    @dprintln(3,"body = ", body)
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
     escDict = Dict{Symbol,Any}()
@@ -979,6 +1061,17 @@ function from_lambda(state, env, expr, closure = nothing)
     dprintln(env,"from_lambda: linfo=", linfo)
     dprintln(env,"from_lambda: escDict=", escDict)
     local state_ = newState(linfo, defs, escDict, state)
+    # first we rewrite gotoifnot with constant condition
+    for i in 1:length(body.args)
+       s = body.args[i]
+       if isa(s, Expr) && is(s.head, :gotoifnot) && simplify(state_, s.args[1]) == false
+          body.args[i] = GotoNode(s.args[2])
+       end
+    end
+    # then we get rid of empty basic blocks!
+    lives = CompilerTools.LivenessAnalysis.from_lambda(linfo, body, dir_live_cb, linfo)
+    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(lives.cfg), CompilerTools.LambdaHandling.getReturnType(linfo))
+    @dprintln(3,"body = ", body)
     body = from_expr(state_, env_, body)
     # fix return type
     typ = body.typ
@@ -1133,6 +1226,9 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     local fun = getCallFunction(expr)
     local args = getCallArguments(expr)
     local typ = expr.typ
+    # change all :invoke to :call, since :invoke doesn't pass inference
+    expr.head = :call
+    expr.args = [fun; args]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
         return expr
@@ -2079,7 +2175,7 @@ function translate_call_cartesianarray(state, env, typ, args::Array{Any,1})
     dimExp_e::Expr = lookupConstDefForArg(state, dimExp_var)
     dprintln(env, "dimExp = ", dimExp_e, " head = ", dimExp_e.head, " args = ", dimExp_e.args)
     assert(is(dimExp_e.head, :call) && isBaseFunc(dimExp_e.args[1], :tuple))
-    dimExp = dimExp_e.args[2:end]
+    dimExp = Any[simplify(state, x) for x in dimExp_e.args[2:end]]
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ] 
     
@@ -2874,7 +2970,7 @@ function dir_alias_cb(ast::Expr, state, cbdata)
         iterations = args[2]
         bufs = args[3]
         @dprintln(4, "AA: rotateNum = ", krnStat.rotateNum, " out of ", length(bufs), " input bufs")
-        if !((isa(iterations, Number) && iterations == 1) || (krnStat.rotateNum == 0))
+        if !((isa(iterations, Integer) && iterations == 1) || (krnStat.rotateNum == 0))
             # when iterations > 1, and we have buffer rotation, need to set alias Unknown for all rotated buffers
             for i = 1:min(krnStat.rotateNum, length(bufs))
                 v = bufs[i]
