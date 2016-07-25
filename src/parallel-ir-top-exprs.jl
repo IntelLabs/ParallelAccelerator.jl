@@ -894,7 +894,8 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             for l = 1:red_len
                 push!(new_body, mk_assignment_expr(
                                    deepcopy(cur_task.reduction_vars[l].name), 
-                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), state))
+                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                     Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
             end
 
             push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
@@ -902,7 +903,8 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                 @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
                 reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
                                                 deepcopy(cur_task.reduction_vars[l].name), 
-                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l))
+                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                                  Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l), cur_task.ret_types[l]))
                 @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
 
                 for stmt in reduction_code
