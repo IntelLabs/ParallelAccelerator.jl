@@ -834,24 +834,25 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         end
 
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
+        task_globalref = GlobalRef(ParallelAccelerator.ParallelIR, Base.function_name(cur_task.task_func))
         if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
         else
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), cur_task.task_func, deepcopy(range_lhsvar), real_args_build...), state))
+            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
           if cur_task.ret_types != Void
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
@@ -860,15 +861,15 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             insert_task_expr = TypedExpr(Void,
                                          :call,
                                          ParallelAccelerator.ParallelIR.isf,
-                                         cur_task.task_func,
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...,
                                          deepcopy(red_array_lhsvar))
           else
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         ParallelAccelerator.ParallelIR.isf,
-                                         cur_task.task_func,
+                                         GlobalRef(ParallelAccelerator.ParallelIR, :isf),
+                                         task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
