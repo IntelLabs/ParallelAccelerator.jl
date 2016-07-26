@@ -9,10 +9,6 @@ os:
   - osx
 
 julia:
-  - 0.4.0
-  - 0.4.1
-  - 0.4.2
-  - 0.4.3
   - 0.4.4
   - 0.4.5
   - 0.4.6
@@ -36,7 +32,6 @@ script:
   - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator")'
   - julia --code-coverage=user test/runtests.jl
   # Run examples.
-  - julia examples/black-scholes/black-scholes.jl
   - julia --code-coverage=user examples/black-scholes/black-scholes.jl
   - julia --code-coverage=user examples/boltzmann/boltzmann.jl
   - julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl
