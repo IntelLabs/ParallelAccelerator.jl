@@ -720,6 +720,7 @@ Return the number of dimensions of an Array.
 """
 function getArrayNumDims(array :: RHSVar, state :: expr_state)
     gstyp = CompilerTools.LambdaHandling.getType(array, state.LambdaVarInfo)
+    @dprintln(3, "getArrayNumDims ", array, " gstyp = ", gstyp, " state = ", state)
     @assert isArrayType(gstyp) "Array expected, but got " * string(gstyp)
     ndims(gstyp)
 end
