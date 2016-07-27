@@ -19,10 +19,9 @@ matrix:
     - julia: nightly
 
 env:
-    - PROSPECT_DEV_MODE=1
-    - TEST_SUITE=pa-tests
-    - TEST_SUITE=pa-examples
-    - TEST_SUITE=hpat-tests
+    - PROSPECT_DEV_MODE=1 TEST_SUITE=pa-tests
+    - PROSPECT_DEV_MODE=1 TEST_SUITE=pa-examples
+    - PROSPECT_DEV_MODE=1 TEST_SUITE=hpat-tests
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
