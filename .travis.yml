@@ -20,6 +20,9 @@ matrix:
 
 env:
     - PROSPECT_DEV_MODE=1
+    - TEST_SUITE=pa-tests
+    - TEST_SUITE=pa-examples
+    - TEST_SUITE=hpat-tests
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
@@ -28,21 +31,30 @@ script:
   - julia -e 'Pkg.build("CompilerTools")'
   # Add packages necessary to run examples.
   - julia -e 'Pkg.add("DocOpt"); Pkg.add("Images"); Pkg.add("ImageMagick"); Pkg.add("Winston")'
-  # Build and test ParallelAccelerator.
+  # Build ParallelAccelerator.
   - julia -e 'Pkg.clone(pwd()); Pkg.build("ParallelAccelerator")'
-  - julia --code-coverage=user test/runtests.jl
+
+  # Run tests.
+  - if [ $TEST_SUITE = 'pa-tests' ]; julia --code-coverage=user test/runtests.jl; fi
+
   # Run examples.
-  - julia --code-coverage=user examples/black-scholes/black-scholes.jl
-  - julia --code-coverage=user examples/boltzmann/boltzmann.jl
-  - julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl
-  - julia --code-coverage=user examples/harris/harris.jl
-  - julia --code-coverage=user examples/juliaset/juliaset.jl
-  - julia --code-coverage=user examples/laplace-3d/laplace-3d.jl
-  - julia --code-coverage=user examples/opt-flow/opt-flow.jl
-  - julia --code-coverage=user examples/quant/quant.jl
-  - julia --code-coverage=user examples/wave-2d/wave-2d.jl
+  - if [ $TEST_SUITE = 'pa-examples' ]; >
+      julia --code-coverage=user examples/black-scholes/black-scholes.jl; fi;
+      julia --code-coverage=user examples/boltzmann/boltzmann.jl;
+      julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl;
+      julia --code-coverage=user examples/harris/harris.jl;
+      julia --code-coverage=user examples/juliaset/juliaset.jl;
+      julia --code-coverage=user examples/laplace-3d/laplace-3d.jl;
+      julia --code-coverage=user examples/opt-flow/opt-flow.jl;
+      julia --code-coverage=user examples/quant/quant.jl;
+      julia --code-coverage=user examples/wave-2d/wave-2d.jl;
+      fi
+
 after_success:
-      - julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
-      - sudo apt-get install -y nodejs npm
-      - npm install travis-ci
-      - node trigger-build.js
+  # Run HPAT tests.
+  - if [ $TEST_SUITE = 'hpat-tests' ]; >
+      julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
+      sudo apt-get install -y nodejs npm;
+      npm install travis-ci;
+      node trigger-build.js;
+      fi
