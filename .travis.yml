@@ -38,7 +38,7 @@ script:
 
   # Run examples.
   - if [ $TEST_SUITE = 'pa-examples' ]; then >
-      julia --code-coverage=user examples/black-scholes/black-scholes.jl; fi;
+      julia --code-coverage=user examples/black-scholes/black-scholes.jl;
       julia --code-coverage=user examples/boltzmann/boltzmann.jl;
       julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl;
       julia --code-coverage=user examples/harris/harris.jl;
