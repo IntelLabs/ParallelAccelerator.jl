@@ -256,7 +256,7 @@ _Intrinsics = [
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "neg_float_fast", "add_float_fast", "sub_float_fast", "mul_float_fast", "div_float_fast",
         "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
-        "le_float", "ne_float", "eq_float",
+        "le_float", "ne_float", "eq_float", "copysign_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
         "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
@@ -1350,6 +1350,8 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "($(from_expr(args[1], linfo))) % ($(from_expr(args[2], linfo)))"
     #TODO: Check if flip semantics are the same as Julia codegen.
     # For now, we emit unary negation
+    elseif intr == "copysign_float"
+        return "copysign(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "flipsign_int"
         return "cgen_flipsign_int(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "check_top_bit"

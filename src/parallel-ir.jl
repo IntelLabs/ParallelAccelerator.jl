@@ -3420,6 +3420,16 @@ function from_expr(ast::Number, depth, state :: expr_state, top_level)
     return [ast] 
 end
 
+function from_expr(ast::ANY, depth, state :: expr_state, top_level)
+    typ = typeof(ast)
+    if typeof(typ) == DataType
+        @dprintln(4, "from_expr object encountered ", ast, " of type ", typ)
+        return [ast]
+    else
+        throw(string("from_expr unknown type for ", ast, " of type ", typ))
+    end
+end
+
 """
 The main ParallelIR function for processing some node in the AST.
 """
