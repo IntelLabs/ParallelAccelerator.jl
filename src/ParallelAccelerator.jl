@@ -183,13 +183,16 @@ include("$current_file")
 module __UserimgDummyModule__
 
 using ParallelAccelerator
-importall ParallelAccelerator.API
+const dottimes=GlobalRef(ParallelAccelerator.API, :*)
+const dotplus=GlobalRef(ParallelAccelerator.API, :-)
+const runStencil=GlobalRef(ParallelAccelerator.API, :runStencil)
 
-__userimg_dummy_fn__(A::Array{Float64,1}, B::Array{Float64,1}) = begin
-    runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip, A .* B .+ 2)
+@eval __userimg_dummy_fn__(A::Array{Float64,2}, B::Array{Float64,2}) = begin
+    \$runStencil((a, b) -> a[0,0] = b[0,0], A, B, 1, :oob_skip)
+    \$dotplus(2, \$dottimes(A, B))
 end
 
-ParallelAccelerator.accelerate(__userimg_dummy_fn__, (Array{Float64,1},Array{Float64,1},))
+ParallelAccelerator.accelerate(__userimg_dummy_fn__, (Array{Float64,2},Array{Float64,2},))
 
 end
 """)
