@@ -762,7 +762,13 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
     range_lhsvar = toLHSVar(range_rhsvar)
 
-    @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
+    if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
+        @dprintln(3,"Inserting call to task function directly ", range_sym, " ", range_rhsvar)
+    elseif haskey(ENV,"PROSPECT_CALL_ISF")
+        @dprintln(3,"Inserting call to isf ", range_sym, " ", range_rhsvar)
+    else
+        @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
+    end
     @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
     @dprintln(3,"Cur LambdaVarInfo = ", state.LambdaVarInfo)
 
