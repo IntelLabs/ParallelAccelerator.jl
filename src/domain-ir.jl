@@ -1789,6 +1789,7 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     # recursively process through domain IR with new state and env
     (linfo, body) = from_lambda(state, env, ast, func)
     params = getInputParameters(linfo)
+    dprintln(env, "type inferred AST linfo = ", linfo, " body = ", body)
     dprintln(env, "params = ", params)
     lastExp::Expr = body.args[end]
     assert(is(lastExp.head, :return))
