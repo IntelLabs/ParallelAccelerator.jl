@@ -25,13 +25,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // count trailing zeros with llvm semantics
-int cgen_cttz_int(int n)
+int64_t cgen_cttz_int(int64_t n)
 {
-    if(n==0) return sizeof(int);
+    if(n==0) return sizeof(int64_t);
     return __builtin_ctz(n);
 }
 
-int cgen_flipsign_int(int64_t x, int64_t y)
+int64_t cgen_flipsign_int(int64_t x, int64_t y)
 {
     return (y >= 0 ? x : -x);
 }
