@@ -6,6 +6,10 @@ import CompilerTools
 import ..API
 import ..operators
 import ..binary_operators
+import ParallelAccelerator
+
+import CompilerTools.DebugMsg
+DebugMsg.init()
 
 const binary_operator_set = Set(binary_operators)
 
@@ -22,12 +26,31 @@ ref_assign_map = Dict{Symbol, Symbol}(
     :(./=) => :(./)
 )
 
+type process_node_state
+    array
+    dim
+end
+
+function process_node(node::Symbol, state, top_level_number, is_top_level, read)
+    if node == :end
+        if state == nothing
+            @dprintln(3, "Found :end symbol in AST but had no array name to generate replacement length expression.")
+        else
+            @assert isa(state, process_node_state) "process_node state was not nothing nor a process_node_state."       
+            return Expr(:call, GlobalRef(Base, :arraysize), state.array, state.dim)
+        end
+    end
+
+    CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 """
 At macro level, we translate function calls and operators that matches operator names
 in our API module to direct call to those in the API module. 
 """
 function process_node(node::Expr, state, top_level_number, is_top_level, read)
     head = node.head
+    @dprintln(3, "api-capture process_node ", node, " head = ", head)
     if head == :comparison
         # Surprise! Expressions like x > y are not :call in AST at macro level
         opr = node.args[2]
@@ -63,7 +86,13 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
         node.args = Any[ lhs, Expr(:call, GlobalRef(API, ref_assign_map[head]), lhs, rhs) ]
     elseif node.head == :ref
         node.head = :call
+        @dprintln(3, "ref array = ", node.args[1], " args = ", node.args[2:end])
+        for i = 2:length(node.args)
+            node.args[i] = CompilerTools.AstWalker.AstWalk(node.args[i], process_node, process_node_state(node.args[1], i-1))
+        end
+        @dprintln(3, "after args = ", node.args[2:end])
         node.args = Any[GlobalRef(API, :getindex), node.args...]
+        return node
     end
 
     CompilerTools.AstWalker.ASTWALK_RECURSE
