@@ -166,6 +166,8 @@ external_pattern_match_assignment = ExternalPatternMatchCall((lhs,rhs,linfo)->""
 
 type CgenUserOptions
     includeStatements
+    compileFlags
+    linkFlags
 end
 
 userOptions = CgenUserOptions[]
@@ -3204,6 +3206,9 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
   otherArgs = flags
 
   Opts = ["-O3"]
+  for user_option in userOptions
+      push!(Opts, user_option.compileFlags)
+  end
   if USE_DAAL==1
     DAALROOT=ENV["DAALROOT"]
     push!(Opts,"-I$DAALROOT/include")
@@ -3302,6 +3307,9 @@ function getLinkCommand(outfile_name, lib, flags=[])
 
     Opts = flags
     linkLibs = []
+    for user_option in userOptions
+        push!(linkLibs, user_option.linkFlags)
+    end
     if include_blas==true
         if mkl_lib!=""
             push!(linkLibs,"-mkl")
