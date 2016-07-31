@@ -3207,7 +3207,9 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
 
   Opts = ["-O3"]
   for user_option in userOptions
-      push!(Opts, user_option.compileFlags)
+      if user_option.compileFlags!=""
+          push!(Opts, user_option.compileFlags)
+      end
   end
   if USE_DAAL==1
     DAALROOT=ENV["DAALROOT"]
@@ -3308,7 +3310,9 @@ function getLinkCommand(outfile_name, lib, flags=[])
     Opts = flags
     linkLibs = []
     for user_option in userOptions
-        push!(linkLibs, user_option.linkFlags)
+        if user_option.linkFlags!=""
+            push!(linkLibs, user_option.linkFlags)
+        end
     end
     if include_blas==true
         if mkl_lib!=""
