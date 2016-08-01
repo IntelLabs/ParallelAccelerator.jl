@@ -675,6 +675,11 @@ function from_assignment(args::Array{Any,1}, linfo)
         return match_iostream
     end
 
+    match_transpose = pattern_match_assignment_transpose(lhs, rhs, linfo)
+    if match_transpose!=""
+        return match_transpose
+    end
+
     lhsO = from_expr(lhs, linfo)
     rhsO = from_expr(rhs, linfo)
     if lhsO == rhsO # skip x = x due to issue with j2c_array 
@@ -2792,7 +2797,7 @@ end
 
 function set_includes(ast)
     s = string(ast)
-    if contains(s,"gemm_wrapper!") || contains(s,"gemv!") || contains(s,"transpose!") || contains(s,"vecnorm")
+    if contains(s,"gemm_wrapper!") || contains(s,"gemv!") || contains(s,"transpose!") || contains(s,"vecnorm") || contains(s,"transpose")
         set_include_blas(true)
     end
     if contains(s,"LinAlg.chol") ||  contains(s,"LAPACK")

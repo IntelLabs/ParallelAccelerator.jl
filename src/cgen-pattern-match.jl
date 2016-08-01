@@ -99,6 +99,7 @@ function pattern_match_call_powersq(fun::ANY, x::ANY, y::ANY,linfo)
 end
 
 function pattern_match_call_rand(linfo, fun, args...)
+    @dprintln(3,"pattern_match_call_rand ", fun)
     res = ""
     if isBaseFunc(fun, :rand) 
         if USE_OMP==1
@@ -107,6 +108,7 @@ function pattern_match_call_rand(linfo, fun, args...)
             res = "cgen_distribution(cgen_rand_generator);\n"
         end
     end
+    @dprintln(3,"pattern_match_call_rand res = ", res)
     return res 
 end
 
@@ -305,6 +307,22 @@ function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
     return ""
 end
 
+function pattern_match_assignment_transpose(lhs::LHSVar, rhs::Expr, linfo)
+    @dprintln(3, "pattern_match_assignment_transpose ", lhs, " ", rhs)
+    call = ""
+    if isCall(rhs) || isInvoke(rhs)
+        fun = getCallFunction(rhs)
+        args = getCallArguments(rhs)
+        res = pattern_match_call_transpose(linfo, fun, lhs, args...) 
+        return res
+    end
+    return ""
+end
+
+function pattern_match_assignment_transpose(lhs::ANY, rhs::ANY, linfo)
+    return ""
+end
+
 function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag::Char, A::RHSVar,B::RHSVar,  linfo)
     if fun.mod!=Base.LinAlg.LAPACK || fun.name!=:trtrs!
         return ""
@@ -366,12 +384,13 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, fun1::GlobalRef, B:
 end
 
 function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVar)
-    dprintln(3, "pattern_match_call_transpose, ", (fun, B, A))
-    if !(fun.mod==Base && fun.name==:transpose! || fun.name ==:transpose_f!)
+    dprintln(3, "pattern_match_call_transpose, ", (fun, B, A), " mkl_lib=", mkl_lib, " openblas=",openblas_lib, " sys_blas=",sys_blas)
+    if !(fun.mod==Base && fun.name==:transpose! || fun.name ==:transpose_f! || fun.name == :transpose)
         return ""
     end
     blas_fun = ""
     typ = eltype(getSymType(A, linfo))
+    ctyp = toCtype(typ)
     
     if typ==Float32
         blas_fun = "somatcopy"
@@ -390,22 +409,27 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     lda = from_arraysize(A,1,linfo)
     ldb = from_arraysize(A,2,linfo)
 
-
     if mkl_lib!=""
         s *= "mkl_$(blas_fun)('C','T',$m,$n, 1.0,
-        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+             $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+    elseif openblas_lib!="" || sys_blas==1
+        s *= "cblas_$(blas_fun)(CblasColMajor,CblasTrans,$m,$n, 1.0,
+             $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
         #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
         #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.""")
         s *= "cgen_$(blas_fun)($m,$n,
-        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+             $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     end
-    s = "(" * s * ", " * from_expr(B,linfo) * ")"
+    s = "(" * (fun.name == :transpose ? (from_expr(B,linfo) * " = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $n, $m), "): "") * s * ", " * from_expr(B,linfo) * ")"
 
     return s
 end
 
 function pattern_match_call_transpose(args...)
+    for i in args
+       dprintln(3, "pattern_match_call_transpose, i = ", i, " type = ", typeof(i))
+    end
     return ""
 end
 
