@@ -427,9 +427,6 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
 end
 
 function pattern_match_call_transpose(args...)
-    for i in args
-       dprintln(3, "pattern_match_call_transpose, i = ", i, " type = ", typeof(i))
-    end
     return ""
 end
 
