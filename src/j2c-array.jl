@@ -171,7 +171,11 @@ function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_d
     if haskey(ptr_array_dict, array_ptr)
       arr = ptr_array_dict[array_ptr]
     else
+if VERSION > v"0.5.0-dev+3260"
+      arr = unsafe_wrap(Array,convert(Ptr{elem_typ}, array_ptr), tuple(dims...), true)
+else
       arr = pointer_to_array(convert(Ptr{elem_typ}, array_ptr), tuple(dims...), true)
+end
     end
   elseif isArrayType(elem_typ)
     arr = Array(elem_typ, dims...)
