@@ -3294,12 +3294,13 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
 end
 
 function rm_allocs_cb_call(state::rm_allocs_state, func, arr::RHSVar, rest_args::Array{Any,1})
-    if isBaseFunc(func, :arraysize) && in(arr, keys(state.removed_arrs))
+    arr = toLHSVar(arr)
+    if isBaseFunc(func, :arraysize) && haskey(state.removed_arrs, arr)
         shape = state.removed_arrs[arr]
         return shape[rest_args[1]]
-    elseif isBaseFunc(func, :unsafe_arrayref) && in(arr, keys(state.removed_arrs))
+    elseif isBaseFunc(func, :unsafe_arrayref) && haskey(state.removed_arrs, arr)
         return 0
-    elseif isBaseFunc(func, :arraylen) && in(arr, keys(state.removed_arrs))
+    elseif isBaseFunc(func, :arraylen) && haskey(state.removed_arrs, arr)
         shape = state.removed_arrs[arr]
         dim = length(shape)
         @dprintln(3, "arraylen found")
