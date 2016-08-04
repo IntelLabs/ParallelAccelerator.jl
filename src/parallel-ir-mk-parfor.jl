@@ -737,10 +737,10 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
         arr_class = state.array_length_correlation[arr]
         if arr_class >= 0
             for (d, v) in state.symbol_array_correlation
-                if v==arr_class
+                if v==arr_class && all(Bool[isa(x, Int) for x in d])
                     #
                     const_sizes = d
-                    @dprintln(3, "parfor input array size found: ", const_sizes)
+                    @dprintln(3, "parfor input array const size found: ", const_sizes)
                     break
                 end
             end
