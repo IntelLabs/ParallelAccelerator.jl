@@ -78,7 +78,7 @@ type LambdaGlobalData
             Float64 =>  "double",
             Bool    =>  "bool",
             Char    =>  "char",
-            Void    =>  "void*",
+            Void    =>  "void",
             H5SizeArr_t => "hsize_t*",
             SizeArr_t => "uint64_t*"
     )
@@ -1767,7 +1767,7 @@ function from_return(args,linfo)
     global inEntryPoint
     @dprintln(3,"Return args are: ", args)
     retExp = ""
-    if length(args) == 0 || (length(args) == 1 && args[1] == nothing)
+    if length(args) == 0 || (length(args) == 1 && args[1] == nothing || isa(args[1], GlobalRef) && Base.resolve(args[1], force=true) == GlobalRef(Core, :nothing))
         return "return"
     elseif inEntryPoint
         arg1 = args[1]
@@ -2967,6 +2967,8 @@ function from_root_nonentry(ast, functionName::AbstractString, argtyps, array_ty
     else
         linfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     end
+    @dprintln(3,"linfo = ", linfo)
+    @dprintln(3,"body = ", body)
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
