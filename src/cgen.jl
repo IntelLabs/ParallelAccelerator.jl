@@ -1235,7 +1235,8 @@ function from_builtins(f, args, linfo)
     elseif tgt == "tupleref"
         return from_tupleref(args, linfo)
     elseif tgt == "tuple"
-        return from_tuple(args, linfo)
+        typs = Any[lookupType(x, linfo) for x in args]
+        return toCtype(Tuple{typs...}) * from_tuple(args, linfo)
     elseif tgt == "arraylen"
         return from_arraysize(args, linfo)
     elseif tgt == "arraysize"
@@ -1534,7 +1535,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
         arglist = mapfoldl(x->from_expr(x,linfo), (a,b)->"$a, $b", args[2:end])
         if isa(args[1], DataType)
-            t = "{" * arglist * "}"
+            t = toCtype(args[1]) * "{" * arglist * "}"
         else
             t = from_expr(args[1],linfo) * "(" * arglist * ")"
         end
