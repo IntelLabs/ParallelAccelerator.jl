@@ -1211,13 +1211,13 @@ function from_assignment(state, env, expr::Expr)
 
     # The following is unsafe unless x is not aliased, AND x is not parameter.
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
-    if isa(rhs, Expr) && is(rhs.head, :mmap) && length(rhs.args[1]) > 0 &&
-        (isa(rhs.args[1][1], RHSVar) && lhs == toLHSVar(rhs.args[1][1]))
-        rhs.head = :mmap!
-        # NOTE that we keep LHS to avoid a bug (see issue #...)
-        typ = getType(lhs, state.linfo)
-        lhs = addTempVariable(typ, state.linfo) 
-    end
+    # if isa(rhs, Expr) && is(rhs.head, :mmap) && length(rhs.args[1]) > 0 &&
+    #     (isa(rhs.args[1][1], RHSVar) && lhs == toLHSVar(rhs.args[1][1]))
+    #     rhs.head = :mmap!
+    #     # NOTE that we keep LHS to avoid a bug (see issue #...)
+    #     typ = getType(lhs, state.linfo)
+    #     lhs = addTempVariable(typ, state.linfo) 
+    # end
     updateDef(state, lhs, rhs)
     return mk_expr(typ, head, lhs, rhs)
 end
