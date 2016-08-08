@@ -29,6 +29,12 @@ THE POSSIBILITY OF SUCH DAMAGE.
 Try to hoist allocations outside the loop if possible.
 """
 function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
+    # Only allocations that are not aliased can be safely hoisted. 
+    # Note that we must rule out simple re-assignment in alias analysis to be conservative about object uniqueness 
+    # (instead of just variable uniqueness).
+    body = CompilerTools.LambdaHandling.getBody(ast, CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo))
+    uniqSet = AliasAnalysis.from_lambda(state.LambdaVarInfo, body, lives, pir_alias_cb, nothing; noReAssign = true)
+    @dprintln(3, "HA: uniqSet = ", uniqSet)
     for l in domLoop.loops
         @dprintln(3, "HA: loop from block ", l.head, " to ", l.back_edge)
         headBlk = lives.cfg.basic_blocks[ l.head ]
@@ -68,7 +74,7 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
                 lhs = ast[i].args[1]
                 rhs = ast[i].args[2]
                 lhs = toLHSVar(lhs)
-                if (haskey(state.array_length_correlation, lhs))
+                if in(lhs, uniqSet) && (haskey(state.array_length_correlation, lhs))
                     c = state.array_length_correlation[lhs]
                     for (d, v) in state.symbol_array_correlation
                         if v == c
