@@ -1208,6 +1208,8 @@ function from_assignment(state, env, expr::Expr)
         #end
         typ = rhstyp
     end
+
+    # The following is unsafe unless x is not aliased, AND x is not parameter.
     # turn x = mmap((x,...), f) into x = mmap!((x,...), f)
     if isa(rhs, Expr) && is(rhs.head, :mmap) && length(rhs.args[1]) > 0 &&
         (isa(rhs.args[1][1], RHSVar) && lhs == toLHSVar(rhs.args[1][1]))
@@ -1217,7 +1219,6 @@ function from_assignment(state, env, expr::Expr)
         lhs = addTempVariable(typ, state.linfo) 
     end
     updateDef(state, lhs, rhs)
-    # TODO: handle indirections like x = y so that x gets y's definition instead of just y.
     return mk_expr(typ, head, lhs, rhs)
 end
 
@@ -1415,13 +1416,36 @@ end
 
 function translate_call_copy!(state, env, args)
     nargs = length(args)
-    @assert (nargs == 2 || nargs == 4) "Expect either 2 or 4 argument to copy!, but got " * string(args)
-    args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
+    idx_to = nothing 
+    if nargs == 2
+       args = normalize_args(state, env, args)
+    elseif nargs == 4
+       args = normalize_args(state, env, args[[2,4]])
+    elseif nargs == 5
+       args = normalize_args(state, env, args)
+       idx_to = args[2]
+       idx_from = args[4]
+       copy_len = args[5]
+       args = args[[1,3]]
+       dprintln(env,"got copy!, idx_to=", idx_to, " idx_from=", idx_from, " copy_len=", copy_len)
+    else 
+       error("Expect either 2 or 4 or 5 arguments to copy!, but got " * string(args))
+    end
+    #args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
     dprintln(env,"got copy!, args=", args)
     argtyp = typeOfOpr(state, args[1])
     if isArrayType(argtyp)
         eltyp = eltype(argtyp)
-        expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
+        if idx_to == nothing
+          expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
+        else # range copy
+          to_range = mk_range(state, idx_to, 1, copy_len)
+          from_range = mk_range(state, idx_from, 1, copy_len)
+          ranges = Any[from_range, to_range]
+          args = Any[inline_select(env, state, mk_select(args[1], mk_ranges(to_range))),
+                     inline_select(env, state, mk_select(args[2], mk_ranges(from_range)))]
+          expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
+        end
         dprintln(env, "turn copy! into mmap! ", expr)
     else
         warn("cannot handle copy! with arguments ", args)
