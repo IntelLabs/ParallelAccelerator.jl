@@ -89,6 +89,15 @@ end
     Int[ mod(x, y), rem(x, y) ]
 end
 
+@acc function end_test(a)
+    a[3:end] .+ 1
+end
+
+function test6()
+    end_test([1;2;3;4]) == [4;5]
+end
+
+
 @acc function end_test_numeric(a)
     a[3:4] .+ 1
 end
@@ -97,13 +106,24 @@ function test7()
     end_test_numeric([1;2;3;4]) == [4;5]
 end
 
-@acc function end_test(a)
-    a[3:end] .+ 1
+@acc function accum1()
+    a = zeros(Int, 3)
+    b = a
+    for i = 1:3
+       a += ones(Int, 3)
+    end
+    a .+ b
 end
 
-function test6()
-    end_test([1;2;3;4]) == [4;5]
+@acc function accum2()
+    a = zeros(Int, 3)
+    b = a
+    for i = 1:3
+       a .+= ones(Int, 3)
+    end
+    a .+ b
 end
+
 
 end
 
@@ -120,5 +140,11 @@ println("Testing miscellaneous features...")
 @test MiscTest.mod_rem_test(7,-3) == [-2, 1]
 @test MiscTest.mod_rem_test(-7,3) == [2, -1]
 @test MiscTest.mod_rem_test(-7,-3) == [-1, -1]
+@test MiscTest.accum1() == [3,3,3] 
+if VERSION > v"0.5.0-"
+@test MiscTest.accum2() == [6,6,6]
+else
+@test MiscTest.accum2() == [3,3,3] 
+end
 println("Done testing miscellaneous features...")
 
