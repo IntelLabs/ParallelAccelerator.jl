@@ -124,18 +124,58 @@ end
     a .+ b
 end
 
+@acc function test8_acc1(a :: Array{Int64, 3})
+    a[:, 1, 1] .+ 2 .* 3
+end
+@acc function test8_acc2(a :: Array{Int64, 3})
+    a[1, :, 1] .+ 2 .* 3
+end
+@acc function test8_acc3(a :: Array{Int64, 3})
+    a[1, 1, :] .+ 2 .* 3
+end
+@acc function test8_acc4(a :: Array{Int64, 3})
+    a[:, :, 1] .+ 2 .* 3
+end
+@acc function test8_acc5(a :: Array{Int64, 3})
+    a[:, 1, :] .+ 2 .* 3
+end
+@acc function test8_acc6(a :: Array{Int64, 3})
+    a[1, :, :] .+ 2 .* 3
+end
+
+function test8()
+    a = ones(Int64, 5,6,7)
+    sub_tests = [test8_acc1; 
+                 test8_acc2;
+                 test8_acc3;
+                 test8_acc4;
+                 test8_acc5;
+                 test8_acc6]
+    res = true
+    for subtest in sub_tests
+        b = subtest(a)
+        c = @noacc subtest(a)
+        this_res = (ndims(b) == ndims(c) && sum(b) == sum(c))
+        if !this_res
+            println("sub-test ", subtest, " failed. correct = ", c, " accelerated = ", b)
+        end
+        res = res && this_res
+    end
+    res
+end
 
 end
 
 using Base.Test
 println("Testing miscellaneous features...")
-@test MiscTest.test1() == nothing
-@test MiscTest.test2() == nothing
+#@test MiscTest.test1() == nothing
+#@test MiscTest.test2() == nothing
 @test MiscTest.test3() 
 @test MiscTest.test4() == [0.0, 0.0, 0.0, 0.0, 0.0]
 @test MiscTest.test5() 
 #@test MiscTest.test6() 
 @test MiscTest.test7() 
+@test MiscTest.test8() 
 @test MiscTest.mod_rem_test(7,3) == [1, 1]
 @test MiscTest.mod_rem_test(7,-3) == [-2, 1]
 @test MiscTest.mod_rem_test(-7,3) == [2, -1]
