@@ -302,16 +302,17 @@ type InputInfo
     array                                # The name of the array.
     dim                                  # The number of dimensions.
     out_dim                              # The number of indexed (non-const) dimensions.
+    indexed_dims                         # Length of dim where 1 means we index that dimension and 0 means we don't (it is singular).
     range :: Array{DimensionSelector,1}  # Empty if whole array, else one RangeData or BitArray mask per dimension.
     elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
     pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
     rangeconds :: Array{Expr,1}          # If selecting based on bitarrays, conditional for selecting elements
 
     function InputInfo()
-        new(nothing, 0, 0, DimensionSelector[], nothing, Expr[], Expr[])
+        new(nothing, 0, 0, nothing, DimensionSelector[], nothing, Expr[], Expr[])
     end
     function InputInfo(arr)
-        new(arr, 0, 0, DimensionSelector[], nothing, Expr[], Expr[])
+        new(arr, 0, 0, nothing, DimensionSelector[], nothing, Expr[], Expr[])
     end
 end
 
@@ -320,6 +321,7 @@ function show(io::IO, ii :: ParallelAccelerator.ParallelIR.InputInfo)
     println(io,"array   = ", ii.array)
     println(io,"dim     = ", ii.dim)
     println(io,"out_dim = ", ii.out_dim)
+    println(io,"indexed_dims = ", ii.indexed_dims)
     println(io,"range   = ", length(ii.range), " ", ii.range)
     println(io,"eltemp  = ", ii.elementTemp)
     println(io,"pre     = ", ii.pre_offsets)
