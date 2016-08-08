@@ -57,14 +57,14 @@ end
 """
 Make sure the index parameters to arrayref or arrayset are Int64 or TypedVar.
 """
-function augment_sn(dim :: Int64, index_vars, range :: Array{DimensionSelector,1}, linfo :: LambdaVarInfo)
-    xtyp = typeof(index_vars[dim])
-    @dprintln(3,"augment_sn dim = ", dim, " index_vars = ", index_vars, " range = ", range, " xtyp = ", xtyp)
+function augment_sn(dim :: Int64, index_var, range :: Array{DimensionSelector,1}, linfo :: LambdaVarInfo)
+    xtyp = typeof(index_var)
+    @dprintln(3,"augment_sn dim = ", dim, " index_var = ", index_var, " range = ", range, " xtyp = ", xtyp)
 
     if xtyp == Int64 || xtyp == TypedVar || xtyp == Expr
-        base = index_vars[dim]
+        base = index_var
     elseif xtyp == Symbol
-        base = toRHSVar(index_vars[dim],Int64,linfo)
+        base = toRHSVar(index_var,Int64,linfo)
     end
 
     @dprintln(3,"pre-base = ", base)
@@ -93,6 +93,7 @@ function mk_arrayref1(num_dim_inputs,
                       state     :: expr_state, 
                       range     :: Array{DimensionSelector,1} = DimensionSelector[])
     @dprintln(3,"mk_arrayref1 typeof(index_vars) = ", typeof(index_vars))
+    @dprintln(3,"mk_arrayref1 index_vars = ", index_vars)
     @dprintln(3,"mk_arrayref1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     elem_typ = getArrayElemType(array_name, state)
     @dprintln(3,"mk_arrayref1 element type = ", elem_typ)
@@ -108,16 +109,19 @@ function mk_arrayref1(num_dim_inputs,
     # If num_dim_inputs < length(range), we have signular selection along one or more of the dimensions
     range_size = length(range)
     if num_dim_inputs < range_size
-        num_dim_inputs = range_size
+       num_dim_inputs = range_size
     end
     indsyms = Any[]
+    index_to_use = 1
     for i = 1:num_dim_inputs
         if i > range_size
-            push!(indsyms, index_vars[i])
+            push!(indsyms, index_vars[index_to_use])
+            index_to_use += 1
         elseif isa(range[i], SingularSelector)
             push!(indsyms, range[i].value)
         else
-            push!(indsyms, augment_sn(i, index_vars, range, state.LambdaVarInfo))
+            push!(indsyms, augment_sn(i, index_vars[index_to_use], range, state.LambdaVarInfo))
+            index_to_use += 1
         end
     end
 
@@ -187,7 +191,7 @@ function mk_mask_arrayref1(cur_dimension,
     end
 
     indsyms = [ x <= num_dim_inputs ? 
-                   augment_sn(x, index_vars, range, state.LambdaVarInfo) : 
+                   augment_sn(x, index_vars[x], range, state.LambdaVarInfo) : 
                    index_vars[x] 
                 for x = 1:length(index_vars) ]
     @dprintln(3,"mk_mask_arrayref1 indsyms = ", indsyms)
@@ -233,13 +237,16 @@ function mk_arrayset1(num_dim_inputs,
         num_dim_inputs = range_size
     end
     indsyms = Any[]
+    index_to_use = 1
     for i = 1:num_dim_inputs
         if i > range_size
-            push!(indsyms, index_vars[i])
+            push!(indsyms, index_vars[index_to_use])
+            index_to_use += 1
         elseif isa(range[i], SingularSelector)
             push!(indsyms, range[i].value)
         else
-            push!(indsyms, augment_sn(i, index_vars, range, state.LambdaVarInfo))
+            push!(indsyms, augment_sn(i, index_vars[index_to_use], range, state.LambdaVarInfo))
+            index_to_use += 1
         end
     end
 
@@ -611,30 +618,47 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
     end
 
     @dprintln(3,"range_array = ", range_array)
+    used_dims = ones(Int64, length(range_array))
 
-    # Should be the full dimensions of the array.
-    cur = length(range_array)
-    # See how many index variables we need to loop over this array.
-    # We might need less than the full number because of singular ranges, e.g., col:col.
-    # Scan backward from last dimension to the first.
-    for rindex = cur:-1:1
-        rd = range_array[rindex]
-        if isa(rd, SingularSelector)
-            @dprintln(3, "Found singular ending dimension so eliminated this dimension.")
-            cur -= 1
-        else
-            # Once we find one trailing dimension that isn't eliminated then dimension shrinking has to stop.
-            break
-        end 
-    end    
+    if VERSION >= v"0.5.0-dev+3875"
+        @dprintln(3, "Version 0.5 singular dimension section.")
+        cur = length(range_array)
+        for rindex = 1:length(range_array)
+            rd = range_array[rindex]
+            if isa(rd, SingularSelector)
+                @dprintln(3, "Found singular ending dimension at index ", rindex, " so eliminated this dimension.")
+                cur -= 1
+                used_dims[rindex] = 0
+            else
+                addRangePreoffsets(range_array[rindex], pre_offsets, state)
+            end 
+        end    
+    else
+        # Should be the full dimensions of the array.
+        cur = length(range_array)
+        # See how many index variables we need to loop over this array.
+        # We might need less than the full number because of singular ranges, e.g., col:col.
+        # Scan backward from last dimension to the first.
+        for rindex = cur:-1:1
+            rd = range_array[rindex]
+            if isa(rd, SingularSelector)
+                @dprintln(3, "Found singular ending dimension so eliminated this dimension.")
+                cur -= 1
+                used_dims[rindex] = 0
+            else
+                # Once we find one trailing dimension that isn't eliminated then dimension shrinking has to stop.
+                break
+            end 
+        end    
 
-    # We only need generate extra code for non-singular ranges.
-    # For singular ranges, we just use the singular range start as a constant.
-    for i = 1:cur
-        addRangePreoffsets(range_array[i], pre_offsets, state)
+        # We only need generate extra code for non-singular ranges.
+        # For singular ranges, we just use the singular range start as a constant.
+        for i = 1:cur
+            addRangePreoffsets(range_array[i], pre_offsets, state)
+        end
     end
 
-    return (range_array, cur)
+    return (range_array, cur, used_dims)
 end
 
 function get_mmap_input_info(input_array :: Expr, state)
@@ -643,6 +667,7 @@ function get_mmap_input_info(input_array :: Expr, state)
     if is(input_array.head, :select)
         thisInfo.array = input_array.args[1]
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
+        thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
         thisInfo.out_dim = thisInfo.dim
         argtyp = typeof(thisInfo.array)
         @dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: RHSVar)
@@ -674,13 +699,14 @@ function get_mmap_input_info(input_array :: Expr, state)
             end
             thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
         else
-            (thisInfo.range, thisInfo.out_dim) = selectToRangeData(input_array, thisInfo.pre_offsets, state)
+            (thisInfo.range, thisInfo.out_dim, thisInfo.indexed_dims) = selectToRangeData(input_array, thisInfo.pre_offsets, state)
             thisInfo.elementTemp = createTempForRangedArray(thisInfo.array, thisInfo.range, 1, state)
             thisInfo.pre_offsets = [thisInfo.pre_offsets; generatePreOffsetStatements(thisInfo.out_dim, thisInfo.range)]
         end
     else
         thisInfo.array = input_array
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
+        thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
         thisInfo.out_dim = thisInfo.dim
         thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
     end
@@ -691,6 +717,7 @@ function get_mmap_input_info(input_array :: RHSVar, state)
     thisInfo = InputInfo()
     thisInfo.array = input_array
     thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
+    thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
     thisInfo.out_dim = thisInfo.dim
     thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
     return thisInfo
@@ -729,8 +756,8 @@ end
 function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, inputInfo, unique_node_id, parfor_index_syms, state)
     loopNests = Array(PIRLoopNest, num_dim_inputs)
     @dprintln(3, "gen_pir_loopnest for ", inputInfo[1])
-    # don't generate arraysize calls if input array's size is constant
-    # this will help allocation of mmap output have constant size enabling optimizations
+    # Don't generate arraysize calls if input array's size is constant.
+    # This will help allocation of mmap output have constant size enabling optimizations.
     arr = toLHSVar(inputInfo[1].array)
     const_sizes = []
     if haskey(state.array_length_correlation, arr)
@@ -746,21 +773,45 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
             end
         end
     end
-    # Insert a statement to assign the length of the input arrays to a var
-    for i = 1:num_dim_inputs
-        save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNED, state.LambdaVarInfo)
-        @dprintln(3, "Creating expr for ", save_array_len)
-        
-        if length(const_sizes)!=0
-            array1_len = mk_assignment_expr(save_array_len, const_sizes[i], state)
-            push!(save_array_lens, const_sizes[i])
-        else
-            push!(save_array_lens, save_array_len)
-            array1_len = mk_assignment_expr(save_array_len, mk_arraylen_expr(inputInfo[1],i), state)
+    if VERSION >= v"0.5.0-dev+3875"
+        cur_loopnest = num_dim_inputs
+        cur_sym = 1
+        for i = 1:length(inputInfo[1].indexed_dims)
+            if inputInfo[1].indexed_dims[i] != 0
+                save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNED, state.LambdaVarInfo)
+                @dprintln(3, "Creating expr for ", save_array_len)
+                
+                if length(const_sizes)!=0
+                    array1_len = mk_assignment_expr(save_array_len, const_sizes[i], state)
+                    push!(save_array_lens, const_sizes[i])
+                else
+                    push!(save_array_lens, save_array_len)
+                    array1_len = mk_assignment_expr(save_array_len, mk_arraylen_expr(inputInfo[1],i), state)
+                end
+                # Add that assignment to the set of statements to execute before the parfor.
+                push!(pre_statements,array1_len)
+                loopNests[cur_loopnest] = PIRLoopNest(parfor_index_syms[cur_sym], 1, save_array_len, 1)
+                cur_loopnest-=1
+                cur_sym+=1
+            end
         end
-        # add that assignment to the set of statements to execute before the parfor
-        push!(pre_statements,array1_len)
-        loopNests[num_dim_inputs - i + 1] = PIRLoopNest(parfor_index_syms[i], 1, save_array_len, 1)
+    else
+        # Insert a statement to assign the length of the input arrays to a var.
+        for i = 1:num_dim_inputs
+            save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNED, state.LambdaVarInfo)
+            @dprintln(3, "Creating expr for ", save_array_len)
+            
+            if length(const_sizes)!=0
+                array1_len = mk_assignment_expr(save_array_len, const_sizes[i], state)
+                push!(save_array_lens, const_sizes[i])
+            else
+                push!(save_array_lens, save_array_len)
+                array1_len = mk_assignment_expr(save_array_len, mk_arraylen_expr(inputInfo[1],i), state)
+            end
+            # Add that assignment to the set of statements to execute before the parfor.
+            push!(pre_statements,array1_len)
+            loopNests[num_dim_inputs - i + 1] = PIRLoopNest(parfor_index_syms[i], 1, save_array_len, 1)
+        end
     end
     return loopNests
 end
@@ -1091,23 +1142,42 @@ the indexing expression needs the expression that selects those constant trailin
 that are being dropped.  This function returns an array of those constant expressions for
 the trailing dimensions.
 """
-function getConstDims(num_dim_inputs, inputInfo :: InputInfo)
+function getConstDims(parfor_index_syms, num_dim_inputs, inputInfo :: InputInfo)
     assert(num_dim_inputs <= inputInfo.dim)
-
-    if num_dim_inputs == inputInfo.dim
-        return []
-    end
-
-    # Assume that we can only get here through a :select and :range operation and therefore
-    # range should be larger than the number of output dimensions.
-    assert(length(inputInfo.range) > num_dim_inputs)
 
     ret = []
 
-    for i = num_dim_inputs+1:length(inputInfo.range)
-        this_dim = inputInfo.range[i]
-        assert(isa(this_dim, SingularSelector))
-        push!(ret, this_dim.value)
+    if VERSION >= v"0.5.0-dev+3875"
+        @dprintln(3, "getConstDims num_dim_inputs = ", num_dim_inputs, " inputInfo = ", inputInfo)
+        rlen = length(inputInfo.range)
+        if rlen == 0
+            return parfor_index_syms
+        else 
+            pis_to_use = 1
+            for i = 1:rlen
+                this_dim = inputInfo.range[i]
+                if isa(this_dim, SingularSelector)
+                    push!(ret, this_dim.value)
+                else
+                    push!(ret, parfor_index_syms[pis_to_use])
+                    pis_to_use+=1
+                end
+            end
+        end
+    else
+        if num_dim_inputs == inputInfo.dim
+            return []
+        end
+
+        # Assume that we can only get here through a :select and :range operation and therefore
+        # range should be larger than the number of output dimensions.
+        assert(length(inputInfo.range) > num_dim_inputs)
+
+        for i = num_dim_inputs+1:length(inputInfo.range)
+            this_dim = inputInfo.range[i]
+            assert(isa(this_dim, SingularSelector))
+            push!(ret, this_dim.value)
+        end
     end
 
     return ret
@@ -1161,16 +1231,29 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body.
     for i = 1:length(inputInfo)
-        push!(out_body, mk_assignment_expr(
-                           inputInfo[i].elementTemp, 
-                           mk_arrayref1(
-                              num_dim_inputs,
-                              inputInfo[i].array, 
-                              [parfor_index_syms; getConstDims(num_dim_inputs, inputInfo[i])...], 
-                              true,  # inbounds is true
-                              state, 
-                              inputInfo[i].range), 
-                           state))
+        if VERSION >= v"0.5.0-dev+3875"
+            push!(out_body, mk_assignment_expr(
+                               inputInfo[i].elementTemp, 
+                               mk_arrayref1(
+                                  num_dim_inputs,
+                                  inputInfo[i].array, 
+                                  getConstDims(parfor_index_syms, num_dim_inputs, inputInfo[i]), 
+                                  true,  # inbounds is true
+                                  state, 
+                                  inputInfo[i].range), 
+                               state))
+        else
+            push!(out_body, mk_assignment_expr(
+                               inputInfo[i].elementTemp, 
+                               mk_arrayref1(
+                                  num_dim_inputs,
+                                  inputInfo[i].array, 
+                                  [parfor_index_syms; getConstDims(parfor_index_syms, num_dim_inputs, inputInfo[i])...], 
+                                  true,  # inbounds is true
+                                  state, 
+                                  inputInfo[i].range), 
+                               state))
+        end
     end
 
     # TODO - make sure any ranges for any input arrays are inbounds in the pre-statements
