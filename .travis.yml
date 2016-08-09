@@ -24,6 +24,8 @@ env:
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq gcc g++ gfortran
   # Pull in and build CompilerTools dependency.
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
