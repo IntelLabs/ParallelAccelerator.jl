@@ -343,7 +343,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     # There should be three entries in the array, how to initialize the reduction variable, the arrays to work on and a DomainLambda.
     assert(length(input_args) == 3 || length(input_args) == 4)
 
-    zero_val  = input_args[1]   # The initial value of the reduction variable.
+    zero_val = input_args[1]      # The initial value of the reduction variable.
 
     # Handle range selector
     inputInfo = get_mmap_input_info(input_args[2], state)
@@ -397,25 +397,34 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     pre_statements  = deepcopy(inputInfo.pre_offsets)
     post_statements = Any[]
     save_array_lens  = []
-    input_array_rangeconds = Array(Any, num_dim_inputs)
+    #input_array_rangeconds = Array(Any, num_dim_inputs)
+    input_array_rangeconds = Any[]
 
     @dprintln(3, "initial pre_statements = ", pre_statements)
 
     # Insert a statement to assign the length of the input arrays to a var
     nest_idx = num_dim_inputs
     #for i = 1:inp_dim #num_dim_inputs
-    for i = 1:num_dim_inputs
+    #for i = 1:num_dim_inputs
+    next_index_to_use = 1
+    for i = 1:length(inputInfo.indexed_dims)
+        @dprintln(3, "loop over inputInfo. indexed_dims = ", inputInfo.indexed_dims, " i = ", i, " next_index_to_use = ", next_index_to_use)
+        if inputInfo.indexed_dims[i] == 0
+            continue
+        end 
         save_array_len   = Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
         CompilerTools.LambdaHandling.addLocalVariable(save_array_len, Int, ISASSIGNED, state.LambdaVarInfo)
         if isWholeArray(inputInfo)
             push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
             @dprintln(3, "pre_statements after isWholeArray = ", pre_statements)
-            input_array_rangeconds[i] = nothing
+            #input_array_rangeconds[next_index_to_use] = nothing
         elseif isRange(inputInfo)
             this_dim = inputInfo.range[i]
+            @dprintln(3, "isRange = ", this_dim)
             if isa(this_dim, RangeData)
+                @dprintln(3, "range is RangeData")
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
-                input_array_rangeconds[i] = nothing
+                #input_array_rangeconds[next_index_to_use] = nothing
             elseif isa(this_dim, MaskSelector)
                 mask_array = this_dim.value
                 @dprintln(3, "mask_array = ", mask_array, " ", unique_node_id)
@@ -425,18 +434,19 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
                 end
                 # TODO: generate dimension check on mask_array
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), mk_arraylen_expr(inputInfo,i), state))
-                input_array_rangeconds[i] = TypedExpr(Bool, :call, GlobalRef(Base, :unsafe_arrayref), mask_array, parfor_index_syms[i])
+                #input_array_rangeconds[next_index_to_use] = TypedExpr(Bool, :call, GlobalRef(Base, :unsafe_arrayref), mask_array, parfor_index_syms[next_index_to_use])
+                push!(input_array_rangeconds, TypedExpr(Bool, :call, GlobalRef(Base, :unsafe_arrayref), mask_array, parfor_index_syms[next_index_to_use]))
             elseif isa(this_dim, SingularSelector)
                 push!(pre_statements,mk_assignment_expr(toRHSVar(save_array_len, Int, state.LambdaVarInfo), 1, state))
                 generatePreOffsetStatement(this_dim, pre_statements)
-                input_array_rangeconds[i] = nothing
+                #input_array_rangeconds[next_index_to_use] = nothing
             else
                 error("Unhandled inputInfo to reduce function: ", inputInfo)
             end
             @dprintln(3, "pre_statements after isRange = ", pre_statements)
         end 
         push!(save_array_lens, save_array_len)
-        loop_nest = PIRLoopNest(parfor_index_syms[i], 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
+        loop_nest = PIRLoopNest(parfor_index_syms[next_index_to_use], 1, toRHSVar(save_array_len,Int, state.LambdaVarInfo), 1)
         if red_dim > 0
             if red_dim == i
                loopNests[1] = loop_nest
@@ -445,6 +455,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
             loopNests[nest_idx] = loop_nest
             nest_idx -= 1
         end
+        next_index_to_use += 1
     end
 
     @dprintln(3,"mk_parfor_args_from_reduce loopNests = ", loopNests, " ", unique_node_id)
@@ -477,11 +488,15 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     fallthroughLabel = next_label(state)
     condExprs = Any[]
-    for i = 1:num_dim_inputs
-        if input_array_rangeconds[i] != nothing
-            push!(condExprs, Expr(:gotoifnot, input_array_rangeconds[i], fallthroughLabel))
-        end
+#    for i = 1:num_dim_inputs
+#        if input_array_rangeconds[i] != nothing
+#            push!(condExprs, Expr(:gotoifnot, input_array_rangeconds[i], fallthroughLabel))
+#        end
+#    end
+    for iarange in input_array_rangeconds
+        push!(condExprs, Expr(:gotoifnot, iarange, fallthroughLabel))
     end
+
     if length(condExprs) > 0
         out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
     end
@@ -1109,8 +1124,7 @@ function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
     for i = 1:num_dim_inputs
         parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
         parfor_index_sym = Symbol(parfor_index_var)
-       parfor_index_syms[i] = CompilerTools.LambdaHandling.addLocalVariable(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
-        
+        parfor_index_syms[i] = CompilerTools.LambdaHandling.addLocalVariable(parfor_index_sym, Int, ISASSIGNED, state.LambdaVarInfo)
     end
     return parfor_index_syms
 end
