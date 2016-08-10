@@ -798,6 +798,10 @@ function typeOfOpr(state :: IRState, x)
     CompilerTools.LivenessAnalysis.typeOfOpr(x, state.linfo)
 end
 
+function typeOfOpr(linfo :: LambdaVarInfo, x)
+    CompilerTools.LivenessAnalysis.typeOfOpr(x, linfo)
+end
+
 """
 get elem type T from an Array{T} type
 """
@@ -1815,54 +1819,87 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     params = getInputParameters(linfo)
     dprintln(env, "type inferred AST linfo = ", linfo, " body = ", body)
     dprintln(env, "params = ", params)
-    lastExp::Expr = body.args[end]
-    assert(is(lastExp.head, :return))
-    args1_typ::DataType = Void
-    if length(lastExp.args) > 0 
-        args1 = lastExp.args[1]
-        if isa(args1, RHSVar)
-            args1_typ = getType(args1, linfo)
-            dprintln(env, "lastExp=", lastExp, " args1=", args1, " typ=", args1_typ)
+    # Check for multiple return statements 
+    max_label = 0
+    rtys = Any[]
+    for expr in body.args
+        if isa(expr, Expr) && is(expr.head, :return)
+            rty = Void
+            if length(expr.args) > 0
+                rty = typeOfOpr(linfo, expr.args[1])
+            end
+            push!(rtys, rty)
+        elseif isa(expr, LabelNode)
+            max_label = max(max_label, expr.label)
+        end
+    end
+    @assert (length(rtys) > 0) "cannot find a return statement in body"
+    if aty == Any
+        # TODO: take a Union of all rtys
+        aty = rtys[1]
+        dprintln(env, "aty becomes ", aty)
+    end
+    ret_var = nothing
+    lastExp = body.args[end]
+    dprintln(env, "rtys = ", rtys, " lastExp = ", lastExp)
+    # Turn multiple return into a single return
+    if length(rtys) > 1
+        ret_var = addTempVariable(aty, linfo) 
+        max_label = max_label + 1
+        new_body = Any[]
+        for expr in body.args
+            if isa(expr, Expr) && is(expr.head, :return)
+                push!(new_body, mk_expr(expr.typ, :(=), ret_var, expr.args[1]))
+                push!(new_body, GotoNode(max_label))
+            else
+                push!(new_body, expr)
+            end
+        end 
+        push!(new_body, LabelNode(max_label))
+        push!(new_body, mk_expr(aty, :return, ret_var))
+        body.args = new_body
+        lastExp = body.args[end]
+        dprintln(env, "expanded body with one return is ", body)
+    elseif isa(lastExp, Expr) && is(lastExp.head, :return) && length(lastExp.args) > 0 
+        if isa(lastExp.args[1], RHSVar)
+            ret_var = toLHSVar(lastExp.args[1])
+        elseif isa(lastExp.args[1], Expr)
+            ret_var = addTempVariable(aty, linfo) 
+            body.args[end] = mk_expr(aty, :(=), ret_var, lastExp.args[1])
+            lastExp = mk_expr(aty, :return, ret_var)
+            push!(body.args, lastExp)
         end
     end
     # modify the last return statement if it's a tuple
-    if isTupleType(args1_typ)
+    if isTupleType(aty)
         # take a shortcut if the second last statement is the tuple creation
-        exp = body.args[end-1]
-        if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
-           exp.args[2].head == :call && isBaseFunc(exp.args[2].args[1], :tuple)
-            dprintln(env, "second last is tuple assignment, we'll take shortcut")
-            pop!(body.args)
-            exp.head = :tuple
-            exp.args = exp.args[2].args[2:end]
-        else
+        #exp = body.args[end-1]
+        #if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
+        #   exp.args[2].head == :call && isBaseFunc(exp.args[2].args[1], :tuple)
+        #    dprintln(env, "second last is tuple assignment, we'll take shortcut")
+        #    pop!(body.args)
+        #    exp.head = :tuple
+        #    exp.args = exp.args[2].args[2:end]
+        #else
             # create tmp variables to store results
-            tvar = args1
-            typs::SimpleVector = args1_typ.parameters
-            nvar = length(typs)
-            retNodes = GenSym[ addTempVariable(t, linfo) for t in typs ]
-            retExprs = Array(Expr, length(retNodes))
-            for i in 1:length(retNodes)
-                n = retNodes[i]
-                t = typs[i]
-                retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), tvar, i))
-            end
-            lastExp.head = retExprs[1].head
-            lastExp.args = retExprs[1].args
-            lastExp.typ  = retExprs[1].typ
-            for i = 2:length(retExprs)
-                push!(body.args, retExprs[i])
-            end
-            push!(body.args, mk_expr(typs, :tuple, retNodes...))
+        @assert (ret_var != nothing) "cannot find return value in lastExp = " * string(lastExp)
+        typs::SimpleVector = aty.parameters
+        nvar = length(typs)
+        retNodes = GenSym[ addTempVariable(t, linfo) for t in typs ]
+        retExprs = Array(Expr, length(retNodes))
+        for i in 1:length(retNodes)
+            n = retNodes[i]
+            t = typs[i]
+            retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), ret_var, i))
         end
+        body.args[end] = retExprs[1]
+        for i = 2:length(retExprs)
+            push!(body.args, retExprs[i])
+        end
+        push!(body.args, mk_expr(typs, :tuple, retNodes...))
     else
         lastExp.head = :tuple
     end
-    if aty == Any
-        aty = args1_typ
-    end
-    dprintln(env, "aty becomes ", aty)
-    lastExp.typ = aty
     body.typ = aty
     setReturnType(aty, linfo)
     return body, linfo
