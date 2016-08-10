@@ -889,7 +889,7 @@ function simplify(state, expr)
     return expr
 end
 
-isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = is(x, TopNode(s)) || is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
+isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = isa(x, TopNode) ? is(x, TopNode(s)) : is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
 isTopNodeOrGlobalRef(x,s) = false
 function box_ty(ty, x::Expr)
   if ty == Bool 
