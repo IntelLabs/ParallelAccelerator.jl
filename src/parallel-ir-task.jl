@@ -38,12 +38,12 @@ type TaskInfo
     function_sym
     join_func                                    # The name of the C join function that we constructed and forced into the C file.
     ret_types                                    # Tuple containing the types of reduction variables.
-    input_symbols   :: Array{EntityType,1}       # Variables that are need as input to the task.
+    input_symbols   :: Array{EntityType,1}       # Variables that are needed as input to the task.
     modified_inputs :: Array{EntityType,1} 
     io_symbols      :: Array{EntityType,1}
     reduction_vars  :: Array{EntityType,1}
     code
-    loopNests       :: Array{PIRLoopNest,1}      # holds information about the loop nests
+    loopNests       :: Array{PIRLoopNest,1}      # Holds information about the loop nests.
 end
 
 function show(io::IO, ti :: TaskInfo)
@@ -1865,16 +1865,16 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     @dprintln(3,"End of parforToTask )")
 
-    ret = TaskInfo(task_func,     # The task function that we just generated of type Function.
-                    task_func_sym, # The task function's Symbol name.
-                    reduction_func_name, # The name of the C reduction function created for this task.
-                    ret_types,
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), in_array_names),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), modified_symbols),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), io_symbols),
-                    map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), reduction_vars),
-                    code,          # The AST for the task function.
-                    saved_loopNests)
+    ret = TaskInfo(task_func,           # The task function that we just generated of type Function.
+                   task_func_sym,       # The task function's Symbol name.
+                   reduction_func_name, # The name of the C reduction function created for this task.
+                   ret_types,
+                   map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), in_array_names),
+                   map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), modified_symbols),
+                   map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), io_symbols),
+                   map(x -> EntityType(x, CompilerTools.LambdaHandling.getType(x, state.LambdaVarInfo)), reduction_vars),
+                   code,          # The AST for the task function.
+                   saved_loopNests)
     return ret
 end
 

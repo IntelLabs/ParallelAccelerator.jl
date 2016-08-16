@@ -9,9 +9,8 @@ os:
   - osx
 
 julia:
-  - 0.4.4
-  - 0.4.5
   - 0.4.6
+  - 0.5
   - nightly
 
 matrix:
@@ -25,6 +24,10 @@ env:
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get update -qq; fi
+  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get install -qq gcc g++ gfortran; fi
+  #- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+  #- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install ; fi
   # Pull in and build CompilerTools dependency.
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
