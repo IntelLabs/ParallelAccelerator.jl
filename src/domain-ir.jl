@@ -1476,7 +1476,7 @@ function translate_call_copy(state, env, args)
 end
 
 function translate_call_alloc(state, env_, typ, typ_arg, args_in)
-    typExp::Union{QuoteNode,DataType,GlobalRef}
+    local typExp::Union{QuoteNode,DataType,GlobalRef}
     typExp = lookupConstDefForArg(state, typ_arg)
     elemTyp::DataType = getElemTypeFromAllocExp(typExp)
     args = normalize_args(state, env_, args_in)
