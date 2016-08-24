@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -241,7 +241,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "_unsafe_setindex!", ":jl_new_array", "unsafe_getindex", "steprange_last",
             ":jl_array_ptr", "sizeof", "pointer", "pointerref",
             # We also consider type casting here
-            "Float32", "Float64", 
+            "Float32", "Float64",
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
             "convert", "unsafe_convert", "setfield!"
@@ -263,7 +263,7 @@ _Intrinsics = [
         "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
-        "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int", 
+        "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int",
         "checked_smul", "checked_sdiv_int", "checked_udiv_int", "checked_urem_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
         "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm",
         "ashr_int", "lshr_int", "shl_int",
@@ -299,7 +299,7 @@ else
 if NERSC==1
     generated_file_dir =  ENV["SCRATCH"]*"/generated_"*ENV["SLURM_JOBID"]
     if !isdir(generated_file_dir)
-        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0    
+        if !isDistributedMode() || MPI.Comm_rank(MPI.COMM_WORLD)==0
             #println(generated_file_dir)
             mkdir(generated_file_dir)
         end
@@ -367,13 +367,13 @@ function from_includes()
         end
     end
     s = ""
-    if include_rand==true 
+    if include_rand==true
         s *= "#include <random>\n"
     end
     if isDistributedMode()
         s *= "#include <mpi.h>\n"
     end
-    if USE_HDF5==1 
+    if USE_HDF5==1
         s *= "#include \"hdf5.h\"\n"
     end
     if USE_OMP==1 || USE_DAAL==1
@@ -410,7 +410,7 @@ function from_includes()
     end
 
     s *= "unsigned main_count = 0;\n"
-    
+
     return s
 end
 
@@ -544,7 +544,7 @@ function from_lambda(ast)
 end
 
 function from_lambda(linfo :: LambdaVarInfo, body)
-    params = Symbol[ CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
+    params = Symbol[ CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
                      for x in CompilerTools.LambdaHandling.getInputParameters(linfo)]
     vars = CompilerTools.LambdaHandling.getLocalVariablesNoParam(linfo)
 
@@ -622,8 +622,8 @@ function checkGlobalRefName(arg::ANY, name::Symbol)
 end
 
 lookupType(a::RHSVar, linfo) = getType(a, linfo)
-lookupType(a::GlobalRef, linfo) = typeof(getfield(a.mod, a.name)) 
-lookupType(a, linfo) = typeAvailable(a) ? a.typ : typeof(a) 
+lookupType(a::GlobalRef, linfo) = typeof(getfield(a.mod, a.name))
+lookupType(a, linfo) = typeAvailable(a) ? a.typ : typeof(a)
 
 function from_assignment_fix_tuple(lhs, rhs::Expr, linfo)
   # if assignment is var = (...)::tuple, add var to tupleTable to be used for hvcat allocation
@@ -682,7 +682,7 @@ function from_assignment(args::Array{Any,1}, linfo)
 
     lhsO = from_expr(lhs, linfo)
     rhsO = from_expr(rhs, linfo)
-    if lhsO == rhsO # skip x = x due to issue with j2c_array 
+    if lhsO == rhsO # skip x = x due to issue with j2c_array
         return ""
     end
 
@@ -741,7 +741,7 @@ end
 
 
 function toCtype(typ::Type{Union{}})
-    return "void*" 
+    return "void*"
 end
 
 function toCtype(typ::Tuple)
@@ -932,9 +932,9 @@ function from_setindex(args, linfo)
         s *= idxs[i] * (i < length(idxs) ? "," : "")
     end
     if CGEN_RAW_ARRAY_MODE
-        s *= " - 1] = " 
+        s *= " - 1] = "
     else
-        s *= ") = " 
+        s *= ") = "
     end
     s *= from_expr(args[2], linfo)
     s
@@ -1143,7 +1143,7 @@ function get_alloc_shape(args, dims, linfo)
     end
     shp = AbstractString[]
     arg = args[6]
-    if (isa(arg, Expr) && isa(arg.typ, Tuple)) || 
+    if (isa(arg, Expr) && isa(arg.typ, Tuple)) ||
        (isa(arg, RHSVar) && istupletyp(getSymType(arg, linfo))) # in case where the argument is a tuple
         arg_str = from_expr(arg, linfo)
         for i in 0:dims-1
@@ -1152,7 +1152,7 @@ function get_alloc_shape(args, dims, linfo)
     else
         for i in 1:dims
             push!(shp, from_expr(args[6+(i-1)*2], linfo))
-        end 
+        end
     end
     res = foldl((a, b) -> "$a, $b", shp)
     return res
@@ -1249,7 +1249,7 @@ function from_builtins(f, args, linfo)
         return from_arrayalloc(args, linfo)
     elseif tgt == ":jl_array_ptr"
         return from_array_ptr(args, linfo)
-    elseif tgt == "pointer" 
+    elseif tgt == "pointer"
         return from_pointer(args, linfo)
     elseif tgt == "pointerref"
         return from_pointerref(args, linfo)
@@ -1276,13 +1276,13 @@ function from_builtins(f, args, linfo)
     elseif tgt == "min" || tgt == "max"
         arg_x = from_expr(args[1], linfo)
         arg_y = from_expr(args[2], linfo)
-        if tgt == "max" 
+        if tgt == "max"
             cmp_op = ">"
         else
             cmp_op = "<"
         end
         return "(($arg_x $cmp_op $arg_y) ? ($arg_x) : ($arg_y))"
-    elseif isdefined(Base, f) 
+    elseif isdefined(Base, f)
         fval = getfield(Base, f)
         if isa(fval, DataType)
             # handle type casting
@@ -1383,7 +1383,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "cgen_cttz_int" * "(" * from_expr(args[1], linfo) * ")"
     elseif intr == "ashr_int" || intr == "lshr_int"
         return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"
-    elseif intr == "shl_int" 
+    elseif intr == "shl_int"
         return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
     elseif intr == "add_float" || intr == "add_float_fast"
         return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
@@ -1403,7 +1403,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "sqrt(" * from_expr(args[1], linfo) * ")"
     elseif intr == "sub_float" || intr == "sub_float_fast"
         return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
-    elseif intr == "div_float" || intr == "div_float_fast" || 
+    elseif intr == "div_float" || intr == "div_float_fast" ||
            intr == "sdiv_int" || intr == "udiv_int" || intr == "checked_sdiv_int" || intr == "checked_udiv_int"
         return "($(from_expr(args[1], linfo))) / ($(from_expr(args[2], linfo)))"
     elseif intr == "sitofp" || intr == "fptosi" || intr == "checked_fptosi" || intr == "fptrunc" || intr == "fpext" || intr == "uitofp"
@@ -1418,7 +1418,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "round(" * from_expr(args[1], linfo) * ")"
     elseif f == :(===)
         return "(" * from_expr(args[1], linfo) * " == " * from_expr(args[2], linfo) * ")"
-    elseif intr == "pow" || intr == "powi_llvm" 
+    elseif intr == "pow" || intr == "powi_llvm"
         return "pow(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "powf" || intr == "powf_llvm"
         return "powf(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
@@ -1444,9 +1444,9 @@ function from_inlineable(f, args, linfo)
     if has(_operators, string(f))
         if length(args) == 1
           return "(" * string(f) * from_expr(args[1], linfo) * ")"
-        else 
+        else
           s = "(" * mapfoldl(\x->from_expr(x,linfo), (a,b)->"$a"*string(f)*"$b", args) * ")"
-          return s 
+          return s
         end
     elseif has(_builtins, string(f))
 =#
@@ -1463,9 +1463,9 @@ end
 function isInlineable(f, args, linfo)
     #if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
     s = string(f)
-    if has(_primitive_builtins, s) && length(args) > 0 
+    if has(_primitive_builtins, s) && length(args) > 0
         t = lookupType(args[1], linfo)
-        isPrimitiveJuliaType(t) 
+        isPrimitiveJuliaType(t)
     else
         has(_builtins, s) || has(_Intrinsics, s)
     end
@@ -1560,7 +1560,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
     end
     return M, s, t
 end
-    
+
 function resolveCallTarget(f, args::Array{Any, 1},linfo)
     @dprintln(3,"Trying to resolve target from ", f, "::", typeof(f), " with args: ", args)
     M = ""
@@ -1573,7 +1573,7 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo)
         if isa(args[1], Module)
             M = args[1]
         elseif (fname == :im || fname == :re) &&
-               (isa(args[1], RHSVar) && 
+               (isa(args[1], RHSVar) &&
                 (getSymType(args[1], linfo) == Complex64 || getSymType(args[1], linfo) == Complex128))
             func = fname == :re ? "real" : "imag";
             t = func * "(" * from_expr(args[1],linfo) * ")"
@@ -1597,21 +1597,21 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo)
 end
 
 function inSymbolTable(x::RHSVar, linfo)
-    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
     haskey(lstate.symboltable, x)
 end
 
-    
+
 inSymbolTable(x, linfo) = haskey(lstate.symboltable, x)
 
 function lookupSymbolType(x, linfo)
-    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
     lstate.symboltable[x]
 end
 
 function setSymbolType(x, typ, linfo)
     @dprintln(3, "setSymbolType ", x, " typ = ", typ)
-    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo) 
+    x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
     lstate.symboltable[x] = typ
 end
 
@@ -1622,7 +1622,7 @@ function typeToStr(typ)
     else
         "(" * foldl(*, String[typeToStr(t) for t in typ]) * ")"
     end
-  elseif isa(typ, DataType) 
+  elseif isa(typ, DataType)
       if typ <: Array
           "Array{" * typeToStr(eltype(typ)) * "}"
       elseif typ <: Tuple
@@ -1687,7 +1687,7 @@ function from_call(ast::Array{Any, 1},linfo)
         return fs
     end
     @dprintln(3,"Not inlinable")
-    if isa(mod, Module) 
+    if isa(mod, Module)
         funStr = "_" * from_expr(GlobalRef(mod, fun),linfo)
     else
         funStr = "_" * from_expr(fun,linfo)
@@ -1700,7 +1700,7 @@ function from_call(ast::Array{Any, 1},linfo)
         end
         if fun==:println
             s *= "<< std::endl;"
-        else 
+        else
             s *= ";"
         end
         return s
@@ -1864,7 +1864,7 @@ function from_globalref(ast,linfo)
     if isdefined(mod, name) && ccall(:jl_is_const, Int32, (Any, Any), mod, name) == 1
         def = getfield(mod, name)
         if !isa(def, IntrinsicFunction) && !isa(def, Function)
-            if isbits(def) 
+            if isbits(def)
                 return from_expr(def,linfo)
             elseif isa(def, Array)
             # global constant array
@@ -1917,7 +1917,7 @@ function from_parforend(args,linfo)
             rdvar_i = addLocalVariable(gensym(string(rdvar, "_i")), rdvt, 0, linfo)
             rdsepilog *= "$rdvtyp &" * from_expr(rdvar_i, linfo) * " = $(rdvar)_vec[i];\n"
             rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, rdvar_i,linfo) * ";\n"
-            if isPrimitiveJuliaType(rdvt) 
+            if isPrimitiveJuliaType(rdvt)
                 rdscleanup *= "free($(rdvar)_vec);\n";
             end
         end
@@ -1958,7 +1958,7 @@ function from_loopnest(ivs, starts, stops, steps, linfo)
     )
 end
 
-function from_reductionVarInit(reductionVarInit :: ParallelIR.DelayedFunc, a, linfo) 
+function from_reductionVarInit(reductionVarInit :: ParallelIR.DelayedFunc, a, linfo)
     from_exprs(ParallelIR.callDelayedFuncWith(reductionVarInit,a), linfo)
 end
 
@@ -1966,11 +1966,11 @@ function from_reductionVarInit(reductionVarInit :: Any, a, linfo)
     from_expr(a, linfo) * " = " * from_expr(reductionVarInit, linfo) * ";\n"
 end
 
-function from_reductionFunc(reductionFunc :: Symbol, a, b, linfo) 
+function from_reductionFunc(reductionFunc :: Symbol, a, b, linfo)
     from_expr(a, linfo) * " " * string(reductionFunc) * " " * from_expr(b, linfo)
 end
 
-function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b, linfo) 
+function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b, linfo)
     from_exprs(ParallelIR.callDelayedFuncWith(reductionFunc, a, b), linfo)
 end
 
@@ -2082,8 +2082,8 @@ function from_parforstart(args, linfo)
         rdv_tmp = gensym(rdvar)
         addLocalVariable(rdv_tmp, rdvt, 0, linfo)
         rdvar_tmp = from_symbol(rdv_tmp, linfo)
-        if parallel_reduction 
-            if isPrimitiveJuliaType(rdvt) 
+        if parallel_reduction
+            if isPrimitiveJuliaType(rdvt)
                 rdsprolog *= "$rdvtyp *$(rdvar)_vec = ($rdvtyp *)malloc(sizeof($rdvtyp)*$nthreadsvar);\n"
             else
                 rdsprolog *= "std::vector<$rdvtyp> $(rdvar)_vec($nthreadsvar);\n"
@@ -2097,7 +2097,7 @@ function from_parforstart(args, linfo)
             # The init is now handled in pre-statements
             #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv, linfo)
             # parallel IR no longer produces reductionFunc as a symbol
-            #if isa(rd.reductionFunc, Symbol) 
+            #if isa(rd.reductionFunc, Symbol)
             #   rdop = string(rd.reductionFunc)
             #   rdsclause *= "reduction($(rdop) : $(rdvar)) "
             #end
@@ -2141,7 +2141,7 @@ function from_new(args, linfo)
             s = toCtype(typ) * "(" * mapfoldl(x->from_expr(x,linfo), (a, b) -> "$a, $b", args[2:end]) * ")"
         else
             objtyp, ptyps = parseParametricType(typ)
-            if isempty(ptyps) 
+            if isempty(ptyps)
                 s = canonicalize(objtyp) * "{}"
             else
                 ctyp = canonicalize(objtyp) * mapfoldl(canonicalize, (a, b) -> a * b, ptyps)
@@ -2186,11 +2186,11 @@ end
 Helper function to construct a :parallel_loophead node,
 see from_parallel_loophead for a description of the arguments
 """
-function mk_parallel_loophead(loopvars::Vector{Symbol}, 
-                              starts::Vector{Union{Symbol,Int}}, 
-                              stops::Vector{Union{Symbol,Int}}; 
-                              num_threads::Int=0, schedule::AbstractString="") 
-    Expr(:parallel_loophead, loopvars, starts, stops, 
+function mk_parallel_loophead(loopvars::Vector{Symbol},
+                              starts::Vector{Union{Symbol,Int}},
+                              stops::Vector{Union{Symbol,Int}};
+                              num_threads::Int=0, schedule::AbstractString="")
+    Expr(:parallel_loophead, loopvars, starts, stops,
          Set{Union{GenSym, Symbol}}(), num_threads, schedule)
 end
 
@@ -2436,7 +2436,7 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
       "FLT_MAX"
     elseif is(ast, -Inf)
       "DBL_MIN"
-    elseif is(ast, -Inf32) 
+    elseif is(ast, -Inf32)
       "FLT_MIN"
     else
       string(ast)
@@ -2529,7 +2529,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
                 vtyp = varargtyp.types[i]
                 cvtyp = toCtype(vtyp)
                 push!(argtypes, cvtyp)
-                s = isempty(s) ? s : s * ", " 
+                s = isempty(s) ? s : s * ", "
                 s *= cvtyp * ((isArrayType(vtyp) ? "&" : "")
                 * (isArrayType(vtyp) ? " $ql " : " ")
                 * canonicalize(params[p].args[1]) * string(i))
@@ -2542,7 +2542,7 @@ function from_formalargs(params, vararglist, unaliased, linfo)
                 end
             end
         elseif inSymbolTable(params[p], linfo)
-            s = isempty(s) ? s : s * ", " 
+            s = isempty(s) ? s : s * ", "
             typ = lookupSymbolType(params[p], linfo)
             ptyp = toCtype(typ)
             push!(argtypes, ptyp)
@@ -2593,7 +2593,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
     @dprintln(3,"createEntryPointWrapper params = ", params, ", args = (", args, ") jtyp = ", jtyp, " argtypes = ", argtypes)
     assert(length(params) == length(argtypes))
     if length(params) > 0
-        paramstr = mapfoldl(canonicalize, (a,b) -> "$a, $b", params) 
+        paramstr = mapfoldl(canonicalize, (a,b) -> "$a, $b", params)
     else
         paramstr = ""
     end
@@ -2629,7 +2629,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
     if createMain
        genMainParam = ", bool genMain = true"
        genMain *= "if (genMain) {\n"
-       genMain *= "++main_count;\n"  
+       genMain *= "++main_count;\n"
        genMain *= "std::stringstream newMain;\n"
        genMain *= "std::stringstream newMainData;\n"
        genMain *= "std::stringstream newMainSh;\n"
@@ -2638,9 +2638,9 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
        genMain *= "newMainData << \"main\" << main_count << \".data\";\n"
        genMain *= "newMainSh << \"main\" << main_count << \".sh\";\n"
        genMain *= "newMainExe << \"main\" << main_count;\n"
-       genMain *= "std::cout << \"Main will be generated in file \" << newMain.str() << std::endl;\n" 
-       genMain *= "std::cout << \"Data for main will be in file \" << newMainData.str() << std::endl;\n" 
-       genMain *= "std::cout << \"Script to compile is in \" << newMainSh.str() << std::endl;\n" 
+       genMain *= "std::cout << \"Main will be generated in file \" << newMain.str() << std::endl;\n"
+       genMain *= "std::cout << \"Data for main will be in file \" << newMainData.str() << std::endl;\n"
+       genMain *= "std::cout << \"Script to compile is in \" << newMainSh.str() << std::endl;\n"
        # ---------------------------------------------------------------------------------------------
        genMain *= "std::ofstream mainFileData(newMainData.str(), std::ios::out | std::ios::binary);\n"
        genMain *= "mainFileData << run_where << std::endl;\n"
@@ -2747,10 +2747,10 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
                 paramoffstr *= rname * sep
             end
         end
-        if length(outstr) != "" 
+        if length(outstr) != ""
             outstr = "out(" * outstr * ")"
         end
-         unaliased_func_call = 
+         unaliased_func_call =
         "if (run_where >= 0) {
            $declstr
            #pragma offload target(mic:run_where) $outstr
@@ -2759,7 +2759,7 @@ function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, ali
              $unaliased_func($paramoffstr);
            }
            $retstr
-           #pragma offload target(mic:run_where) 
+           #pragma offload target(mic:run_where)
            {
              $memstr
            }
@@ -2804,10 +2804,10 @@ function set_includes(ast)
     if contains(s,"LinAlg.chol") ||  contains(s,"LAPACK")
         set_include_lapack(true)
     end
-    if contains(s,"rand") || contains(s,"randn") 
+    if contains(s,"rand") || contains(s,"randn")
         global include_rand = true
     end
-    if contains(s,"HDF5") 
+    if contains(s,"HDF5")
         global USE_HDF5 = 1
     end
     if contains(s,"__hpat_Kmeans") || contains(s,"__hpat_LinearRegression") || contains(s,"__hpat_NaiveBayes")
@@ -2865,7 +2865,7 @@ function check_params(emitunaliasedroots, params, linfo)
        argunaltypes = []
     end
 
-    vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist, linfo) 
+    vararg_bod = isempty(vararglist) ? "" : from_varargpack(vararglist, linfo)
 
     return vararg_bod, args, argsunal, alias_check, argtypes
 end
@@ -2933,7 +2933,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
     comma = (length(args) > 0 && length(retargs) > 0) ? ", " : ""
     args *= comma * retargs
     argsunal *= comma * retargs
-    
+
     @dprintln(3, "args = (", args, ")")
     s = "$rtyp $functionName($args)\n{\n$bod\n}\n"
     s *= emitunaliasedroots ? "$rtyp $(functionName)_unaliased($argsunal)\n{\n$bod\n}\n" : ""
@@ -2950,7 +2950,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
         gen_j2c_array_new *= "case " * string(value) * ":\na = new " * atyp * "((" * elemtyp * "*)data, ndim, dims);\nbreak;\n"
     end
     gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
-    c *= gen_j2c_array_new   
+    c *= gen_j2c_array_new
     c
 end
 
@@ -3106,7 +3106,7 @@ function getGccName()
         return "x86_64-w64-mingw32-g++"
     else
         return "g++"
-    end    
+    end
 end
 
 function getShellBase(flags=[])
