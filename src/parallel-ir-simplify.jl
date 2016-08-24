@@ -469,25 +469,33 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
             rhs = node.args[2]
             func = getCallFunction(rhs)
             if func==GlobalRef(Base,:transpose!)
-                @dprintln(3,"transpose_propagate transpose found.")
+                @dprintln(3,"transpose_propagate transpose! found.")
                 args = getCallArguments(rhs)
                 original_matrix = toLHSVar(args[2])
                 transpose_var1 = toLHSVar(args[1])
                 transpose_var2 = lhs
                 data.transpose_map[transpose_var1] = original_matrix
                 data.transpose_map[transpose_var2] = original_matrix
+            elseif func==GlobalRef(Base,:transpose)
+                @dprintln(3,"transpose_propagate transpose found.")
+                args = getCallArguments(rhs)
+                original_matrix = toLHSVar(args[1])
+                transpose_var = lhs
+                data.transpose_map[transpose_var] = original_matrix
             elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
-
+                @dprintln(3,"transpose_propagate GEMM found.")
                 args = getCallArguments(rhs)
                 A = toLHSVar(args[4])
                 if haskey(data.transpose_map, A)
                     args[4] = data.transpose_map[A]
                     args[2] = 'T'
+                    @dprintln(3,"transpose_propagate GEMM replace transpose arg 1.")
                 end
                 B = toLHSVar(args[5])
                 if haskey(data.transpose_map, B)
                     args[5] = data.transpose_map[B]
                     args[3] = 'T'
+                    @dprintln(3,"transpose_propagate GEMM replace transpose arg 2.")
                 end
                 rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
             elseif func==GlobalRef(Base.LinAlg,:gemv!)
