@@ -2,26 +2,26 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
-=# 
+=#
 
 #using Debug
 
@@ -29,8 +29,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 Try to hoist allocations outside the loop if possible.
 """
 function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: expr_state)
-    # Only allocations that are not aliased can be safely hoisted. 
-    # Note that we must rule out simple re-assignment in alias analysis to be conservative about object uniqueness 
+    # Only allocations that are not aliased can be safely hoisted.
+    # Note that we must rule out simple re-assignment in alias analysis to be conservative about object uniqueness
     # (instead of just variable uniqueness).
     body = CompilerTools.LambdaHandling.getBody(ast, CompilerTools.LambdaHandling.getReturnType(state.LambdaVarInfo))
     uniqSet = AliasAnalysis.from_lambda(state.LambdaVarInfo, body, lives, pir_alias_cb, nothing; noReAssign = true)
@@ -63,7 +63,7 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
         end
         if length(preBlk.statements)==0 continue end
         preHead = preBlk.statements[end].index
-        
+
         head = headBlk.statements[1].index
         tail = tailBlk.statements[1].index
         @dprintln(3, "HA: line before head is ", ast[preHead-1])
@@ -113,7 +113,7 @@ function isDeadCall(rhs::Expr, live_out)
         if in(fun, CompilerTools.LivenessAnalysis.wellknown_all_unmodified)
             @dprintln(3, rhs)
             return true
-        elseif in(fun, CompilerTools.LivenessAnalysis.wellknown_only_first_modified) && 
+        elseif in(fun, CompilerTools.LivenessAnalysis.wellknown_only_first_modified) &&
                 !in(toLHSVar(args[1]), live_out)
             return true
         end
@@ -284,9 +284,9 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                     dep_only_on_parameter = false
                 end
 
-                if dep_only_on_parameter 
+                if dep_only_on_parameter
                     # If this statement is defined in more than one place then it isn't hoistable.
-                    for i in live_info.def 
+                    for i in live_info.def
                         @dprintln(3,"Checking if ", i, " is multiply defined.")
                         @dprintln(4,"data.lives = ", data.lives)
                         if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
@@ -296,7 +296,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                         end
                     end
 
-                    if dep_only_on_parameter 
+                    if dep_only_on_parameter
                         @dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
                         push!(data.top_level_no_deps, node)
                         # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
@@ -462,12 +462,13 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
 
         if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
             # Only transpose propagate within a basic block.  this is now a new basic block.
-            empty!(data.transpose_map) 
+            empty!(data.transpose_map)
         elseif isAssignmentNode(node)
             @dprintln(3,"Is an assignment node.")
             lhs = toLHSVar(node.args[1])
             rhs = node.args[2]
             if isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base,:transpose!)
+                @dprintln(3,"transpose_propagate transpose!() found.")
                 args = getCallArguments(rhs)
                 original_matrix = toLHSVar(args[2])
                 transpose_var1 = toLHSVar(args[1])
@@ -475,7 +476,7 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                 data.transpose_map[transpose_var1] = original_matrix
                 data.transpose_map[transpose_var2] = original_matrix
             elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemm_wrapper!)
-            #@bp
+
                 args = getCallArguments(rhs)
                 A = toLHSVar(args[4])
                 if haskey(data.transpose_map, A)
@@ -489,7 +490,6 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                 end
                 rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
             elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemv!)
-            #@bp
                 args = getCallArguments(rhs)
                 A = toLHSVar(args[3])
                 if haskey(data.transpose_map, A)
@@ -603,7 +603,7 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
                 lhs = toLHSVar(lhs)
                 rhs = toLHSVarOrNum(rhs)
                 desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
-                if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION 
+                if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION
                     @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
                     # Record that the left-hand side is a copy of the right-hand side.
                     data.copies[lhs] = rhs
@@ -646,7 +646,7 @@ function copy_propagate_helper(node::DomainLambda,
 
     @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
     intersection_dict = Dict{LHSVar,Any}()
-    
+
     # all copies of escaping_defs should be deleted, since there is no guarantee that their values
     # remain the same at when DomainLambda is actually called.
     for v in CompilerTools.LambdaHandling.getEscapingVariables(node.linfo)
@@ -671,7 +671,7 @@ function create_equivalence_classes_assignment(lhs::RHSVar, rhs::RHSVar, state)
     rhs = toLHSVar(rhs)
     lhs = toLHSVar(lhs)
 
-    rhs_corr = getOrAddArrayCorrelation(rhs, state) 
+    rhs_corr = getOrAddArrayCorrelation(rhs, state)
     @dprintln(3,"assignment correlation lhs = ", lhs, " type = ", typeof(lhs))
     # if an array has correlation already, there might be a case of multiple assignments
     # in this case, try to make sure sizes are the same or assign a new negative value otherwise
@@ -687,7 +687,7 @@ function create_equivalence_classes_assignment(lhs::RHSVar, rhs::RHSVar, state)
                 rhs_size = d
             end
         end
-        if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+        if prev_size==[] || rhs_size==[] || prev_size!=rhs_size
             # can't make sure sizes are always equal, assign negative correlation to lhs
             state.array_length_correlation[lhs] = getNegativeCorrelation(state)
             @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
@@ -717,8 +717,8 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         n = length(sizes)
         assert(n >= 1 && n <= 3)
         @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
-        checkAndAddSymbolCorrelation(lhs, state, sizes)            
-    elseif isCall(rhs) 
+        checkAndAddSymbolCorrelation(lhs, state, sizes)
+    elseif isCall(rhs)
         @dprintln(3, "Detected call rhs in from_assignment.")
         @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
         if length(rhs.args) > 1
@@ -731,18 +731,18 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             if args[1] == QuoteNode(:jl_alloc_array_1d)
                 dim1 = args[6]
                 @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                checkAndAddSymbolCorrelation(lhs, state, Any[dim1])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1])
             elseif args[1] == QuoteNode(:jl_alloc_array_2d)
                 dim1 = args[6]
                 dim2 = args[8]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2])
             elseif args[1] == QuoteNode(:jl_alloc_array_3d)
                 dim1 = args[6]
                 dim2 = args[8]
                 dim3 = args[10]
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
-                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])            
+                checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])
             end
         elseif  isBaseFunc(fun, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
@@ -756,7 +756,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             end
         elseif isBaseFunc(fun, :arraysize)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
-            if length(args) == 1 
+            if length(args) == 1
                 array_param = args[1]                  # length takes one param, which is the array
                 assert(isa(array_param, TypedVar))         # should be a TypedVar
                 array_param_type = getType(array_param, state.LambdaVarInfo)  # get its type
@@ -789,7 +789,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 state.tuple_table[lhs]=args[1:end]
             end
         end
-    elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map 
+    elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map
         # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
         rhs_corr = extractArrayEquivalencies(rhs, state)
         @dprintln(3,"lhs = ", lhs, " type = ", typeof(lhs))
@@ -809,7 +809,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                         rhs_size = d
                     end
                 end
-                if prev_size==[] || rhs_size==[] || prev_size!=rhs_size 
+                if prev_size==[] || rhs_size==[] || prev_size!=rhs_size
                     # can't make sure sizes are always equal, assign negative correlation to lhs
                     state.array_length_correlation[lhs] = getNegativeCorrelation(state)
                     @dprintln(3, "multiple assignment detected, negative correlation assigned for ", lhs)
@@ -956,7 +956,7 @@ function merge_correlations(state, unchanging, eliminate)
 end
 
 """
-If we somehow determine that two arrays must be the same length then 
+If we somehow determine that two arrays must be the same length then
 get the equivalence classes for the two arrays and merge those equivalence classes together.
 """
 function add_merge_correlations(old_sym :: LHSVar, new_sym :: LHSVar, state :: expr_state)
@@ -968,7 +968,7 @@ function add_merge_correlations(old_sym :: LHSVar, new_sym :: LHSVar, state :: e
     @dprintln(3, "add_merge_correlations post")
     print_correlations(3, state)
 
-    return ret 
+    return ret
 end
 
 """
@@ -983,7 +983,7 @@ function getOrAddArrayCorrelation(x :: LHSVar, state :: expr_state)
 end
 
 """
-"node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they 
+"node" is a domainIR node.  Take the arrays used in this node, create an array equivalence for them if they
 don't already have one and make sure they all share one equivalence class.
 """
 function extractArrayEquivalencies(node :: Expr, state)
@@ -1113,7 +1113,7 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
                     mask_correlation = getCorrelation(ranges[1].value, state)
 
                     @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
-                    range_corr = merge_correlations(state, mask_correlation, range_corr) 
+                    range_corr = merge_correlations(state, mask_correlation, range_corr)
                 end
             end
         else
@@ -1151,7 +1151,7 @@ end
 """
 Replace arraysize() calls for arrays with known constant sizes.
 Constant size is Int constants, as well as assigned once variables which are
-in symbol_array_correlation. Variables should be assigned before current statement, however. 
+in symbol_array_correlation. Variables should be assigned before current statement, however.
 """
 function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
     @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
@@ -1160,9 +1160,9 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     print_correlations(3, state)
 
     # TODO: handle arraylen similarly
-    
+
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
-    
+
     if isCall(node) && isBaseFunc(getCallFunction(node), :arraysize)
         # replace arraysize calls when size is known and constant
         args = getCallArguments(node)
@@ -1170,9 +1170,9 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
         if isa(args[2],Int) && haskey(state.array_length_correlation, arr)
             arr_class = state.array_length_correlation[arr]
             for (d, v) in state.symbol_array_correlation
-                if v==arr_class 
+                if v==arr_class
                     res = d[args[2]]
-                    # only replace when the size is constant or a valid live variable 
+                    # only replace when the size is constant or a valid live variable
                     # check def since a symbol correlation might be defined with current arraysize() in reverse direction
                     if isIntType(res) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
                         @dprintln(3, "arraysize() replaced: ", node," res ",res)
