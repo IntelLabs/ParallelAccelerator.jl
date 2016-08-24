@@ -27,8 +27,7 @@ using ParallelAccelerator
 using DocOpt
 
 @acc function kmeans(numCenter, iterNum, points)
-    D = size(points,1) # number of features
-    N = size(points,2) # number of instances
+    D,N = size(points) # number of features, instances
     centroids = rand(D, numCenter)
 
     for l in 1:iterNum
