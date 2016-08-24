@@ -463,19 +463,20 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
         if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
             # Only transpose propagate within a basic block.  this is now a new basic block.
             empty!(data.transpose_map)
-        elseif isAssignmentNode(node)
-            @dprintln(3,"Is an assignment node.")
+        elseif isAssignmentNode(node) && isCall(node.args[2])
+            @dprintln(3,"Is an assignment call node.")
             lhs = toLHSVar(node.args[1])
             rhs = node.args[2]
-            if isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base,:transpose!)
-                @dprintln(3,"transpose_propagate transpose!() found.")
+            func = getCallFunction(rhs)
+            if func==GlobalRef(Base,:transpose!)
+                @dprintln(3,"transpose_propagate transpose found.")
                 args = getCallArguments(rhs)
                 original_matrix = toLHSVar(args[2])
                 transpose_var1 = toLHSVar(args[1])
                 transpose_var2 = lhs
                 data.transpose_map[transpose_var1] = original_matrix
                 data.transpose_map[transpose_var2] = original_matrix
-            elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+            elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
 
                 args = getCallArguments(rhs)
                 A = toLHSVar(args[4])
@@ -489,7 +490,7 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                     args[3] = 'T'
                 end
                 rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
-            elseif isCall(rhs) && getCallFunction(rhs)==GlobalRef(Base.LinAlg,:gemv!)
+            elseif func==GlobalRef(Base.LinAlg,:gemv!)
                 args = getCallArguments(rhs)
                 A = toLHSVar(args[3])
                 if haskey(data.transpose_map, A)
@@ -498,7 +499,7 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                 end
                 rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
             # replace arraysize() calls to the transposed matrix with original
-            elseif isCall(rhs) && isBaseFunc(getCallFunction(rhs), :arraysize)
+            elseif isBaseFunc(func, :arraysize)
                 args = getCallArguments(rhs)
                 if haskey(data.transpose_map, args[1])
                     args[1] = data.transpose_map[args[1]]
