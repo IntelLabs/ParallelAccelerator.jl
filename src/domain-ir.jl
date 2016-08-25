@@ -628,6 +628,10 @@ function ismask(state, r::GlobalRef)
     return r.name==:(:)
 end
 
+function ismask(state, r::Colon)
+    return true
+end
+
 function ismask(state, r::Any)
     typ = typeOfOpr(state, r)
     return isrange(typ) || isbitmask(typ)
@@ -713,6 +717,10 @@ function rangeToMask(state, r::GlobalRef, arraysize)
     else
         error("unhandled GlobalRef range object: ", r)
     end
+end
+
+function rangeToMask(state, r::Colon, arraysize)
+    return mk_range(state, 1, 1, arraysize)
 end
 
 function rangeToMask(state, r::ANY, arraysize)

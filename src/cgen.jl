@@ -877,7 +877,7 @@ function from_getslice(args, linfo)
     i = 0
     for a in args[2:end]
         i = i + 1
-        if isa(a, GlobalRef) && a.name == :(:)
+        if (isa(a, GlobalRef) && a.name == :(:)) || isa(a, Colon)
         else
             if isCall(a) && isBaseFunc(getCallFunction(a), :UnitRange)
               args = getCallArguments(a)
@@ -897,7 +897,7 @@ end
 
 function from_getindex(args, linfo)
     # if args has any range indexing, it is slicing
-    if any([isa(a, GlobalRef) && a.name == :(:) for a in args])
+    if any([(isa(a, GlobalRef) && a.name == :(:)) || isa(a, Colon) for a in args])
        return from_getslice(args, linfo)
     end
     s = ""
