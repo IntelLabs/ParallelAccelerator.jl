@@ -1880,31 +1880,32 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     end
     # modify the last return statement if it's a tuple
     if isTupleType(aty)
-        # take a shortcut if the second last statement is the tuple creation
-        #exp = body.args[end-1]
-        #if isa(exp, Expr) && exp.head == :(=) && exp.args[1] == args1 && isa(exp.args[2], Expr) &&
-        #   exp.args[2].head == :call && isBaseFunc(exp.args[2].args[1], :tuple)
-        #    dprintln(env, "second last is tuple assignment, we'll take shortcut")
-        #    pop!(body.args)
-        #    exp.head = :tuple
-        #    exp.args = exp.args[2].args[2:end]
-        #else
-            # create tmp variables to store results
         @assert (ret_var != nothing) "cannot find return value in lastExp = " * string(lastExp)
-        typs::SimpleVector = aty.parameters
-        nvar = length(typs)
-        retNodes = GenSym[ addTempVariable(t, linfo) for t in typs ]
-        retExprs = Array(Expr, length(retNodes))
-        for i in 1:length(retNodes)
-            n = retNodes[i]
-            t = typs[i]
-            retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), ret_var, i))
+        # take a shortcut if the second last statement is the tuple creation
+        exp = body.args[end-1]
+        if length(rtys) == 1 && isa(exp, Expr) && exp.head == :(=) && exp.args[1] == ret_var && isa(exp.args[2], Expr) &&
+           exp.args[2].head == :call && isBaseFunc(exp.args[2].args[1], :tuple)
+            dprintln(env, "second last is tuple assignment, we'll take shortcut")
+            pop!(body.args)
+            exp.head = :tuple
+            exp.args = exp.args[2].args[2:end]
+        else
+            # create tmp variables to store results
+            typs::SimpleVector = aty.parameters
+            nvar = length(typs)
+            retNodes = GenSym[ addTempVariable(t, linfo) for t in typs ]
+            retExprs = Array(Expr, length(retNodes))
+            for i in 1:length(retNodes)
+                n = retNodes[i]
+                t = typs[i]
+                retExprs[i] = mk_expr(t, :(=), n, mk_expr(t, :call, GlobalRef(Base, :getfield), ret_var, i))
+            end
+            body.args[end] = retExprs[1]
+            for i = 2:length(retExprs)
+                push!(body.args, retExprs[i])
+            end
+            push!(body.args, mk_expr(typs, :tuple, retNodes...))
         end
-        body.args[end] = retExprs[1]
-        for i = 2:length(retExprs)
-            push!(body.args, retExprs[i])
-        end
-        push!(body.args, mk_expr(typs, :tuple, retNodes...))
     else
         lastExp.head = :tuple
     end
