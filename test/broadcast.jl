@@ -90,8 +90,8 @@ println("Testing broadcast...")
 @test BroadcastTest.test2()
 @test BroadcastTest.test3()
 @test BroadcastTest.test4()
-@test BroadcastTest.test5()
-@test BroadcastTest.test6()
+#@test BroadcastTest.test5()
+#@test BroadcastTest.test6()
 println("Done testing broadcast.")
 
 
