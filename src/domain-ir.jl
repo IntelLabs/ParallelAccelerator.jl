@@ -1851,7 +1851,7 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     lastExp = body.args[end]
     dprintln(env, "rtys = ", rtys, " lastExp = ", lastExp)
     # Turn multiple return into a single return
-    if length(rtys) > 1
+    if length(rtys) > 1 || !(isa(lastExp, Expr) && (lastExp.head == :return))
         ret_var = addTempVariable(aty, linfo)
         max_label = max_label + 1
         new_body = Any[]
