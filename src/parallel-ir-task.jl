@@ -1858,7 +1858,9 @@ function parforToTask(parfor_index, bb_statements, body, state)
             task_func_ct = task_func_ct[1]
             println("Task func code for ", task_func)
             println(task_func_ct)    
+            println("code = ", code)
             println(CompilerTools.LambdaHandling.getBody(code))   
+            println(newLambdaVarInfo)   
         end
     end
 #throw(string("stop here"))
