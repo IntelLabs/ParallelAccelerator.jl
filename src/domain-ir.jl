@@ -1852,7 +1852,8 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     dprintln(env, "rtys = ", rtys, " lastExp = ", lastExp)
     # Turn multiple return into a single return
     if length(rtys) > 1 || !(isa(lastExp, Expr) && (lastExp.head == :return))
-        ret_var = addTempVariable(aty, linfo)
+        dprintln(env, "Transforming multiple returns into a single return.")
+        ret_var = addTempVariable(aty, linfo) 
         max_label = max_label + 1
         new_body = Any[]
         for expr in body.args
@@ -1868,7 +1869,8 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
         body.args = new_body
         lastExp = body.args[end]
         dprintln(env, "expanded body with one return is ", body)
-    elseif isa(lastExp, Expr) && is(lastExp.head, :return) && length(lastExp.args) > 0
+    elseif isa(lastExp, Expr) && is(lastExp.head, :return) && length(lastExp.args) > 0 
+        dprintln(env, "A single return at the end.")
         if isa(lastExp.args[1], RHSVar)
             ret_var = toLHSVar(lastExp.args[1])
         elseif isa(lastExp.args[1], Expr)
@@ -1877,10 +1879,13 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
             lastExp = mk_expr(aty, :return, ret_var)
             push!(body.args, lastExp)
         end
+        dprintln(env, "cur body with single return is ", body)
     end
+    dprintln(env, "lastExp = ", lastExp)
     # modify the last return statement if it's a tuple
     if isTupleType(aty)
         @assert (ret_var != nothing) "cannot find return value in lastExp = " * string(lastExp)
+        dprintln(env, "isTupleType(aty) is true.")
         # take a shortcut if the second last statement is the tuple creation
         exp = body.args[end-1]
         if length(rtys) == 1 && isa(exp, Expr) && exp.head == :(=) && exp.args[1] == ret_var && isa(exp.args[2], Expr) &&
@@ -1907,10 +1912,12 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
             push!(body.args, mk_expr(typs, :tuple, retNodes...))
         end
     else
+        dprintln(env, "isTupleType(aty) is false.")
         lastExp.head = :tuple
     end
     body.typ = aty
     setReturnType(aty, linfo)
+    dprintln(env, "End of get_ast_for_lambda is ", body)
     return body, linfo
 end
 
