@@ -120,9 +120,10 @@ function top_level_expand_pre(body, state)
     for i = 1:length(body)
         if isParforAssignmentNode(body[i])
             parfor_assignment = body[i]
-            @dprintln(3,"Expanding a parfor assignment node")
+            @dprintln(3,"Expanding a parfor assignment node = ", parfor_assignment)
 
             the_parfor = getParforNode(parfor_assignment)
+            @dprintln(3,"the_parfor = ", the_parfor)
             lhs = getLhsFromAssignment(parfor_assignment)
             rhs = getRhsFromAssignment(parfor_assignment)
 
@@ -973,10 +974,6 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     # TASK GRAPH
 
-    #if polyhedral != 0
-        # Anand: you can insert code here.
-    #end
-
     expand_start = time_ns()
 
     body = top_level_expand_pre(body, state)
@@ -986,6 +983,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
     end
 
     @dprintln(3,"expanded_body = ")
+    @dprintln(3,"lvi = ", state.LambdaVarInfo)
     printBody(3, body)
 
     @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
