@@ -999,8 +999,11 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     @assert length(args[1]) == length(args[2])
     # Create empty arrays to hold pre and post statements.
     pre_statements  = Any[]
-    post_statements = Any[]
+    post_statements = Any[nothing]
     unique_node_id = get_unique_num()
+
+    @dprintln(3,"(mk_parfor_args_from_parallel_for = ", args, " ", unique_node_id)
+
     n_loops = length(args[1])
     loopvars = [ CompilerTools.LambdaHandling.addLocalVariable(gensym(string(x)), Int, ISASSIGNED, state.LambdaVarInfo) for x in args[1] ]
     ranges = args[2]
@@ -1028,6 +1031,10 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
     out_body = nested_body
+    @dprintln(3, "mpafpf 1 out_body[end] = ", out_body[end], " type = ", typeof(out_body[end]))
+    if isa(out_body[end], Expr)
+        @dprintln(3, "head = ", out_body[end].head)
+    end
     # pop the last expr which is (:tuple, ....) since we don't need it
     if isa(out_body[end], Expr) && (out_body[end].head == :tuple)
         pop!(out_body)
@@ -1076,6 +1083,9 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         unique_node_id,
         arrays_written_past_index,
         arrays_read_past_index)
+
+    @dprintln(3,"(Lowered parallel IR = ", parfor, ")) ", unique_node_id)
+
     [parfor]
 end
 
