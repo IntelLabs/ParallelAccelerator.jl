@@ -67,6 +67,11 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
         # x[...] += ...
         lhs = node.args[1].args[1]
         idx = node.args[1].args[2:end]
+        @dprintln(3, "idx before end substitution in process_node = ", idx)
+        for i = 1:length(idx)
+            idx[i] = CompilerTools.AstWalker.AstWalk(idx[i], process_node, process_node_state(lhs, i))
+        end
+        @dprintln(3, "idx after end substitution in process_node = ", idx)
         rhs = node.args[2]
         tmpvar = gensym()
         node.head = :block
@@ -124,6 +129,11 @@ function process_assignment(node, lhs::Expr, rhs::Any)
         # x[...] = ...
         lhs = node.args[1].args[1]
         idx = node.args[1].args[2:end]
+        @dprintln(3, "idx before end substitution in process_assignment = ", idx)
+        for i = 1:length(idx)
+            idx[i] = CompilerTools.AstWalker.AstWalk(idx[i], process_node, process_node_state(lhs, i))
+        end
+        @dprintln(3, "idx after end substitution in process_assignment = ", idx)
         rhs = node.args[2]
         tmpvar = gensym()
         node.head = :block
