@@ -92,6 +92,7 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
     elseif node.head == :ref
         node.head = :call
         @dprintln(3, "ref array = ", node.args[1], " args = ", node.args[2:end])
+        node.args[1] = CompilerTools.AstWalker.AstWalk(node.args[1], process_node, nothing)
         for i = 2:length(node.args)
             node.args[i] = CompilerTools.AstWalker.AstWalk(node.args[i], process_node, process_node_state(node.args[1], i-1))
         end
