@@ -119,6 +119,11 @@ function mk_arrayref1(num_dim_inputs,
             index_to_use += 1
         elseif isa(range[i], SingularSelector)
             push!(indsyms, range[i].value)
+            if VERSION < v"0.5.0-" 
+              # according to julia 0.4 semantics, range_size is always equal to num_dim_inputs, 
+              # and we have to skip indices for sigular selection
+              index_to_use += 1
+            end
         else
             push!(indsyms, augment_sn(i, index_vars[index_to_use], range, state.LambdaVarInfo))
             index_to_use += 1
@@ -1102,7 +1107,7 @@ function generatePreOffsetStatement(range :: RangeData, ret)
 end
 
 function generatePreOffsetStatement(ss :: SingularSelector, ret)
-    @dprintln(3, "generatePreOffsetStatement for SingularSelector ", range)
+    @dprintln(3, "generatePreOffsetStatement for SingularSelector ", ss)
     if !isSingularSelectorOne(ss)
         range_expr = mk_assignment_expr(ss.offset_temp_var, DomainIR.sub_expr(ss.value, 1))
         push!(ret, range_expr)
