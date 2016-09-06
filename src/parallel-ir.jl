@@ -959,17 +959,19 @@ function getPrivateSetInner(x::Expr, state :: PrivateSetData, top_level_number :
         if isa(lhs, GenSym)
             push!(state.privates, lhs)
         else
-            sname = CompilerTools.LambdaHandling.lookupVariableName(lhs, state.linfo)
-            red_var_start = "parallel_ir_reduction_output_"
-            red_var_len = length(red_var_start)
-            sstr = string(sname)
-            if length(sstr) >= red_var_len
-                if sstr[1:red_var_len] == red_var_start
-                    # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
-                    return CompilerTools.AstWalker.ASTWALK_RECURSE
-                end
+            if LambdaHandling.getDesc(lhs, state.linfo) & ISPRIVATEPARFORLOOP != 0
+              push!(state.privates, lhs)
             end
-            push!(state.privates, lhs)
+            #sname = CompilerTools.LambdaHandling.lookupVariableName(lhs, state.linfo)
+            #red_var_start = "parallel_ir_reduction_output_"
+            #red_var_len = length(red_var_start)
+            #sstr = string(sname)
+            #if length(sstr) >= red_var_len
+            #    if sstr[1:red_var_len] == red_var_start
+            #        # Skip this symbol if it begins with "parallel_ir_reduction_output_" signifying a reduction variable.
+            #        return CompilerTools.AstWalker.ASTWALK_RECURSE
+            #    end
+            #end
         end
     elseif isBareParfor(x)
         for ln = x.args[1].loopNests
@@ -1308,7 +1310,7 @@ function mergeLambdaIntoOuterState(state, dl :: DomainLambda, args :: Array{Any,
     params = getInputParameters(dl.linfo)
     @dprintln(3,"parameters = ", params)
     @assert (length(params) == length(args)) "Parameters and arguments do not match: params = " * string(params)
-    repl_dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, dl.linfo)
+    repl_dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(state.LambdaVarInfo, dl.linfo, getLoopPrivateFlags())
     for i = 1:length(params)
         repl_dict[lookupLHSVarByName(params[i], dl.linfo)] = args[i]
     end
