@@ -971,6 +971,13 @@ uint64_t TOTALSIZE(j2c_array< j2c_array<ELEMENT_TYPE> > &array) {
     return ret;
 }
 
+template <typename ELEMENT_TYPE>
+std::ostream & operator<<(std::ostream &out, j2c_array<ELEMENT_TYPE> &a) {
+    out << a.dump();
+    return out;
+}
+
+
 #if 0
 extern "C" // DLLEXPORT
 int j2c_array_bytesize()
