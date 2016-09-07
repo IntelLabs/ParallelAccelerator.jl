@@ -25,21 +25,21 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module TestKmeans
 using ParallelAccelerator
+using CompilerTools
 
+#CompilerTools.OptFramework.set_debug_level(3)
 #ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
 
     
-@acc function kmeans(iterations::Int64)
-    D = 3  # Number of dimensions
-    N = 4
-    numCenter = 2
-    # synthetic but deterministic initial values
-    points = [1. 2. 3. 4.; 4. 3. 2. 1.; 4. 5. 6. 7.]
-    centroids = [1. 3.; 4. 4.; 5. 5.]
+@acc function kmeans(iterations::Int64, points, numCenter)
+    D,N = size(points) # number of features, instances
+    centroids = Float64[convert(Float64,i+j) for i in 1:D, j in 1:numCenter]
+
     for l in 1:iterations
-        dist::Array{Array{Float64,1},1} = [ [sqrt(sum((points[:,i]-centroids[:,j]).^2)) for j in 1:numCenter] for i in 1:N]
+        dist::Array{Array{Float64,1},1} = [ Float64[sqrt(sum((points[:,i]-centroids[:,j]).^2)) for j in 1:numCenter] for i in 1:N]
         labels::Array{Int,1} = [indmin(dist[i]) for i in 1:N]
         centroids::Array{Float64,2} = [ sum(points[j,labels.==i])/sum(labels.==i) for j in 1:D, i in 1:numCenter]
     end 
@@ -49,8 +49,11 @@ end
 end
 
 using Base.Test
+
+points = [1. 2. 3. 4.; 4. 3. 2. 1.; 4. 5. 6. 7.]
+
 println("Testing kmeans...")
-@test_approx_eq TestKmeans.kmeans(10) [1.5  3.5; 3.5  1.5; 4.5  6.5]
+@test_approx_eq TestKmeans.kmeans(10, points, 2) [1.5  3.5; 3.5  1.5; 4.5  6.5]
 println("Done testing kmeans...")
 
 
