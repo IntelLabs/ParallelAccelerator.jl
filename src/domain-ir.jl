@@ -1853,7 +1853,7 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
     # Turn multiple return into a single return
     if length(rtys) > 1 || !(isa(lastExp, Expr) && (lastExp.head == :return))
         dprintln(env, "Transforming multiple returns into a single return.")
-        ret_var = addTempVariable(aty, linfo) 
+        ret_var = addTempVariable(aty, linfo)
         max_label = max_label + 1
         new_body = Any[]
         for expr in body.args
@@ -1869,7 +1869,7 @@ function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar
         body.args = new_body
         lastExp = body.args[end]
         dprintln(env, "expanded body with one return is ", body)
-    elseif isa(lastExp, Expr) && is(lastExp.head, :return) && length(lastExp.args) > 0 
+    elseif isa(lastExp, Expr) && is(lastExp.head, :return) && length(lastExp.args) > 0
         dprintln(env, "A single return at the end.")
         if isa(lastExp.args[1], RHSVar)
             ret_var = toLHSVar(lastExp.args[1])
@@ -2485,6 +2485,12 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
         elseif fun.name==:println || fun.name==:print # fix type for println
             typ = Void
             expr = mk_expr(typ, head, oldfun, oldargs...)
+        elseif fun.name==:typed_hcat
+            # convert typed_hcat to regular hcat
+            new_fun = GlobalRef(Base,:hcat)
+            # ignore 1st arg which is type
+            new_args = normalize_args(state, env, args[2:end])
+            expr = mk_expr(typ, head, new_fun, new_args...)
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
