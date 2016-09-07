@@ -397,7 +397,7 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     elseif typ==Float64
         blas_fun = "domatcopy"
     else
-        return ""
+        blas_fun = ""
     end
 
     #s = "$(from_expr(B,linfo)); "
@@ -409,19 +409,24 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     lda = from_arraysize(A,1,linfo)
     ldb = from_arraysize(A,2,linfo)
 
-    if mkl_lib!=""
+    if mkl_lib!="" && blas_fun!=""
         s *= "mkl_$(blas_fun)('C','T',$m,$n, 1.0,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
-    elseif openblas_lib!="" || sys_blas==1
+    elseif (openblas_lib!="" || sys_blas==1) && blas_fun!=""
         s *= "cblas_$(blas_fun)(CblasColMajor,CblasTrans,$m,$n, 1.0,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
         #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow.
         #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.""")
-        s *= "cgen_$(blas_fun)($m,$n,
-             $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+        #s *= "cgen_$(blas_fun)($m,$n,
+        #     $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
+        s *= "for(int i=0; i<$m; i++) {\n"
+        s *= "    for(int j=0; j<$n; j++) {\n"
+        s *= "     $(from_expr(B,linfo)).data[j+i*$ldb] = $(from_expr(A,linfo)).data[i+j*$lda];\n"
+        s *= "    }\n"
+        s *= "}\n"
     end
-    s = "(" * (fun.name == :transpose ? (from_expr(B,linfo) * " = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $n, $m), "): "") * s * ", " * from_expr(B,linfo) * ")"
+    s = (fun.name == :transpose ? (from_expr(B,linfo) * " = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $n, $m);\n"): "") * s
 
     return s
 end
