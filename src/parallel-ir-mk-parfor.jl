@@ -1357,9 +1357,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         end
         push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state; boxit = box_aset))
         if length(condExprs) > 0
-            # FIXME: the following looks wrong, why writing back to input array? 
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
+            push!(else_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         end
         # keep the sum of the sizes of the individual output array elements
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)
