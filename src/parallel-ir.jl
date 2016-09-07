@@ -1585,7 +1585,7 @@ function sub_cur_body_walk(x::Expr,
                            top_level_number::Int64,
                            is_top_level::Bool,
                            read::Bool)
-    dbglvl = 3
+    dbglvl = 4
     dprintln(dbglvl,"sub_cur_body_walk ", x)
 
     dprintln(dbglvl,"sub_cur_body_walk xtype is Expr")
@@ -1647,7 +1647,7 @@ function sub_cur_body_walk(x::RHSVar,
                            top_level_number::Int64,
                            is_top_level::Bool,
                            read::Bool)
-    dbglvl = 3
+    dbglvl = 4
     dprintln(dbglvl,"sub_cur_body_walk ", x)
     lhsVar = toLHSVar(x)
 
@@ -1670,7 +1670,7 @@ function sub_cur_body_walk(x::ANY,
                            is_top_level::Bool,
                            read::Bool)
 
-    dbglvl = 3
+    dbglvl = 4
     dprintln(dbglvl,"sub_cur_body_walk ", x)
 
     dprintln(dbglvl,"sub_cur_body_walk not substituting")
