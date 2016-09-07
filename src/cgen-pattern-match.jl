@@ -2,26 +2,26 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
-=# 
+=#
 
 
 # math functions
@@ -30,7 +30,7 @@ libm_math_functions = Set([:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log,
 
 function pattern_match_call_math(fun::Symbol, input::AbstractString, typ::Type, linfo)
     s = ""
-    isDouble = typ == Float64 
+    isDouble = typ == Float64
     isFloat = typ == Float32
     isComplex = typ <: Complex
     isInt = typ <: Integer
@@ -55,7 +55,7 @@ end
 
 function pattern_match_call_math(fun::GlobalRef, input, linfo)
     fun = Base.resolve(fun)
-    if fun.mod == Base 
+    if fun.mod == Base
         pattern_match_call_math(fun.name, input,linfo)
     else
         return ""
@@ -101,7 +101,7 @@ end
 function pattern_match_call_rand(linfo, fun, args...)
     @dprintln(3,"pattern_match_call_rand ", fun)
     res = ""
-    if isBaseFunc(fun, :rand) 
+    if isBaseFunc(fun, :rand)
         if USE_OMP==1
             res = "cgen_distribution(cgen_rand_generator[omp_get_thread_num()]);\n"
         else
@@ -109,7 +109,7 @@ function pattern_match_call_rand(linfo, fun, args...)
         end
     end
     @dprintln(3,"pattern_match_call_rand res = ", res)
-    return res 
+    return res
 end
 
 function pattern_match_call_randn(linfo, fun, args...)
@@ -123,7 +123,7 @@ function pattern_match_call_randn(linfo, fun, args...)
         end
     end
     @dprintln(3,"pattern_match_call_randn res = ", res)
-    return res 
+    return res
 end
 
 function pattern_match_call_reshape(fun, inp::Any, shape::RHSVar, linfo)
@@ -139,7 +139,7 @@ function pattern_match_call_reshape(fun, inp::Any, shape::RHSVar, linfo)
             error("call to reshape expects a tuple, but got ", typ)
         end
     end
-    return res 
+    return res
 end
 
 function pattern_match_call_reshape(fun::ANY, inp::ANY, shape::ANY,linfo)
@@ -168,16 +168,16 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
     end
     s = "$(from_expr(C,linfo)); "
     # GEMM wants dimensions after possible transpose
-    m = (tA == 'N') ? from_arraysize(A,1,linfo) : from_arraysize(A,2,linfo) 
-    k = (tA == 'N') ? from_arraysize(A,2,linfo) : from_arraysize(A,1,linfo) 
+    m = (tA == 'N') ? from_arraysize(A,1,linfo) : from_arraysize(A,2,linfo)
+    k = (tA == 'N') ? from_arraysize(A,2,linfo) : from_arraysize(A,1,linfo)
     n = (tB == 'N') ? from_arraysize(B,2,linfo) : from_arraysize(B,1,linfo)
 
     lda = from_arraysize(A,1,linfo)
     ldb = from_arraysize(B,1,linfo)
     ldc = m
 
-    CblasNoTrans = 111 
-    CblasTrans = 112 
+    CblasNoTrans = 111
+    CblasTrans = 112
     _tA = tA == 'N' ? CblasNoTrans : CblasTrans
     _tB = tB == 'N' ? CblasNoTrans : CblasTrans
     CblasColMajor = 102
@@ -187,7 +187,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
         $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, 0.0, $(from_expr(C,linfo)).data, $ldc)"
     else
-        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $(from_expr(tB!='N',linfo)), $m,$n,$k, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, $(from_expr(C,linfo)).data, $ldc)"
     end
@@ -205,7 +205,7 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
     end
     cblas_fun = ""
     typ = eltype(getSymType(A, linfo))
-    
+
     if typ==Float32
         cblas_fun = "cblas_sgemv"
     elseif typ==Float64
@@ -213,17 +213,17 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
     else
         return ""
     end
-    
+
     s = "$(from_expr(y,linfo)); "
 
-    m = from_arraysize(A,1,linfo) 
+    m = from_arraysize(A,1,linfo)
     n = from_arraysize(A,2,linfo)
 
 
     lda = from_arraysize(A,1,linfo)
-    
-    CblasNoTrans = 111 
-    CblasTrans = 112 
+
+    CblasNoTrans = 111
+    CblasTrans = 112
     _tA = tA == 'N' ? CblasNoTrans : CblasTrans
     CblasColMajor = 102
 
@@ -232,7 +232,7 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),$m,$n, 1.0,
         $(from_expr(A,linfo)).data, $lda, $(from_expr(x,linfo)).data, 1, 0.0, $(from_expr(y,linfo)).data, 1)"
     else
-        println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow.
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
     end
@@ -251,7 +251,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
 
     cblas_fun = ""
     typ = eltype(getSymType(A, linfo))
-    
+
     if typ==Float32
         lapack_fun = "LAPACKE_spotrf"
     elseif typ==Float64
@@ -259,14 +259,14 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
     else
         return ""
     end
-    
+
     s = ".data=$(from_expr(A,linfo)); "
- 
+
     n = from_arraysize(A,1,linfo)
 
 
     lda = from_arraysize(A,1,linfo)
-    
+
 
     LAPACK_COL_MAJOR = 102
     uplo = vUL==Val{:U} ? 'U' : 'L'
@@ -275,7 +275,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
         s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', $n, $(from_expr(A,linfo)).data, $lda)"
     else
-        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         error("MKL LAPACK required for cholesky (TODO: support other lapack libraries and include a sequential implementation)")
         #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
@@ -313,7 +313,7 @@ function pattern_match_assignment_transpose(lhs::LHSVar, rhs::Expr, linfo)
     if isCall(rhs) || isInvoke(rhs)
         fun = getCallFunction(rhs)
         args = getCallArguments(rhs)
-        res = pattern_match_call_transpose(linfo, fun, lhs, args...) 
+        res = pattern_match_call_transpose(linfo, fun, lhs, args...)
         return res
     end
     return ""
@@ -330,7 +330,7 @@ function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag:
 
     cblas_fun = ""
     typ = eltype(getSymType(A, linfo))
-    
+
     if typ==Float32
         lapack_fun = "LAPACKE_strtrs"
     elseif typ==Float64
@@ -338,9 +338,9 @@ function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag:
     else
         return ""
     end
-    
+
     s = "$(from_expr(B,linfo)); "
- 
+
     n = from_arraysize(A,1,linfo)
     nrhs = from_arraysize(B,2,linfo)
 
@@ -353,7 +353,7 @@ function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag:
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
         s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', '$trans', '$diag', $n, $nrhs, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
-        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow. 
+        println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         error("MKL LAPACK required for triangular solution (TODO: support other lapack libraries and include a sequential implementation)")
         #s *= "cgen_$(cblas_fun)($(from_expr(tA!='N',linfo)), $m,$n, $(from_expr(A,linfo)).data, $lda, $(from_expr(y,linfo)).data, $(from_expr(x,linfo)).data)"
@@ -368,11 +368,11 @@ end
 
 function pattern_match_call_copy!(linfo, fun, A, i, B, j, n)
     if isBaseFunc(fun, :copy!)
-        "j2c_array_copyto(" * 
-          from_expr(A, linfo) * ", " * 
-          from_expr(i, linfo) * ", " * 
-          from_expr(B, linfo) * ", " * 
-          from_expr(j, linfo) * ", " * 
+        "j2c_array_copyto(" *
+          from_expr(A, linfo) * ", " *
+          from_expr(i, linfo) * ", " *
+          from_expr(B, linfo) * ", " *
+          from_expr(j, linfo) * ", " *
           from_expr(n, linfo) * ")"
     else
         ""
@@ -391,7 +391,7 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     blas_fun = ""
     typ = eltype(getSymType(A, linfo))
     ctyp = toCtype(typ)
-    
+
     if typ==Float32
         blas_fun = "somatcopy"
     elseif typ==Float64
@@ -399,11 +399,11 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     else
         return ""
     end
-    
+
     #s = "$(from_expr(B,linfo)); "
     s = ""
 
-    m = from_arraysize(A,1,linfo) 
+    m = from_arraysize(A,1,linfo)
     n = from_arraysize(A,2,linfo)
 
     lda = from_arraysize(A,1,linfo)
@@ -416,7 +416,7 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
         s *= "cblas_$(blas_fun)(CblasColMajor,CblasTrans,$m,$n, 1.0,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
-        #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        #println("""WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow.
         #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.""")
         s *= "cgen_$(blas_fun)($m,$n,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
@@ -447,7 +447,7 @@ function pattern_match_call_vecnorm(fun::GlobalRef, y::RHSVar, p::Int,linfo)
     end
     cblas_fun = ""
     typ = eltype(getSymType(y, linfo))
-    
+
     if typ==Float32
         cblas_fun = "cblas_s"
     elseif typ==Float64
@@ -455,7 +455,7 @@ function pattern_match_call_vecnorm(fun::GlobalRef, y::RHSVar, p::Int,linfo)
     else
         return ""
     end
-    
+
     if p==1
         cblas_fun *= "asum"
     elseif p==2
@@ -464,16 +464,16 @@ function pattern_match_call_vecnorm(fun::GlobalRef, y::RHSVar, p::Int,linfo)
         println("norm ",p)
         error("vector norm not support")
     end
-    
+
     s = ""
 
     n = from_arraysize(y,1,linfo)
-    
-    
+
+
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
         s *= "$(cblas_fun)( $n, $(from_expr(y,linfo)).data, 1)"
     else
-        #println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow. 
+        #println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow.
         #Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
         s *= "cgen_$(cblas_fun)( $n, $(from_expr(y,linfo)).data)"
     end
@@ -495,7 +495,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
         s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
     end
-    
+
     if s=="" && (length(ast)==3) # randn! call has 3 args
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
@@ -528,7 +528,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
         @dprintln(3,"Found hvcat assignment: ", lhs," ", rhs)
 
         is_typed::Bool = isBaseFunc(getCallFunction(rhs),:typed_hvcat)
-        
+
         rows = Int64[]
         values = Any[]
         typ = "double"
@@ -536,7 +536,7 @@ function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
 
         if is_typed
             atyp = args[1]
-            if isa(atyp, GlobalRef) 
+            if isa(atyp, GlobalRef)
                 atyp = eval(args[1].name)
             end
             @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * args[1])
@@ -582,6 +582,34 @@ function from_assignment_match_cat_t(lhs, rhs::ANY, linfo)
     return ""
 end
 
+function from_assignment_match_hcat(lhs, rhs::Expr, linfo)
+    s = ""
+    if (isCall(rhs) || isInvoke(rhs)) && isBaseFunc(getCallFunction(rhs), :hcat)
+        args = getCallArguments(rhs)
+        for a in args
+            atyp = getType(a, linfo)
+            @assert atyp<:Array && ndims(atyp)==1 "CGen only supports hcat of 1D arrays"
+        end
+        typ = eltype(getType(args[1], linfo))
+        size = length(args)
+        ctyp = toCtype(typ)
+        len = from_arraysize(args[1],1,linfo)
+        clhs = from_expr(lhs,linfo)
+        s *= "$clhs = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $len, $size);\n"
+        s *= "for(int i=0; i<$len; i++) {\n"
+        for j in 1:size
+            arr = from_expr(args[j],linfo)
+            s *= "$clhs.data[i*$size+$(j-1)] = $arr.data[i];\n"
+        end
+        s *= "}\n"
+    end
+    return s
+end
+
+function from_assignment_match_hcat(lhs, rhs::ANY, linfo)
+    return ""
+end
+
 function from_assignment_match_iostream(lhs, rhs::GlobalRef, linfo)
     s = ""
     ltype = getType(lhs, linfo)
@@ -598,5 +626,3 @@ end
 function from_assignment_match_iostream(lhs, rhs::ANY, linfo)
     return ""
 end
-
-
