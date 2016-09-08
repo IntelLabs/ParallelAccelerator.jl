@@ -1861,6 +1861,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
             println("code = ", code)
             println(CompilerTools.LambdaHandling.getBody(code))   
             println(newLambdaVarInfo)   
+
+            ParallelAccelerator.Driver.code_llvm(task_func, all_arg_type)
         end
     end
 #throw(string("stop here"))
