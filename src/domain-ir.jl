@@ -776,6 +776,9 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
             push!(new_inps, old_inps[i])
             push!(new_params, old_params[i])
             idx[j] = i
+        elseif isa(args[i], Number) # constant should be substituted directly
+            repl_dict[toLHSVar(old_params[i], f.linfo)] = args[i]
+            push!(nonarrays, args[i])
         else
             args[i] = makeCaptured(state, args[i], f.linfo)
             if isa(args[i], Union{LHSVar,RHSVar})
