@@ -420,6 +420,14 @@ function code_typed(func, signature)
   end
 end
 
+function code_llvm(func, signature)
+    mod = Base.function_module(func, signature)
+    name = Base.function_name(func)
+    func = eval(CompilerTools.OptFramework.findTargetFunc(mod, name))
+    @dprintln(3, "target func is ", func)
+    Base.code_llvm(func, signature)
+end
+
 # Converts a given function and signature to use domain IR and parallel IR, and
 # remember it so that it won't be translated again.
 function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
