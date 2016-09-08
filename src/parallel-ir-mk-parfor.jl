@@ -1221,7 +1221,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     # First arg is an array of input arrays to the mmap
     len_input_arrays = length(input_arrays)
-    @dprintln(2,"(mk_parfor_args_from_mmap: # input arrays = ", len_input_arrays, " " , unique_node_id)
+    @dprintln(2,"(mk_parfor_args_from_mmap: # input arrays = ", input_arrays, " " , unique_node_id)
     @dprintln(3,"state.LambdaVarInfo: ", state.LambdaVarInfo, " " , unique_node_id)
     @dprintln(2,"input arrays: ", input_arrays, " " , unique_node_id)
     @assert len_input_arrays>0 "mmap should have input arrays"
