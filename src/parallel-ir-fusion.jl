@@ -298,9 +298,8 @@ function fuse(body, body_index, cur::Expr, state)
             return 2;
         end
 
-        if parforArrayInput(prev_parfor)
-            first_arraylen = getFirstArrayLens(prev_parfor, prev_num_dims, state)
-        end
+        first_arraylen = getFirstArrayLens(prev_parfor, prev_num_dims, state)
+        @dprintln(3,"first_arraylen = ", first_arraylen)
 
         # Merge each part of the two parfor nodes.
 
@@ -416,8 +415,10 @@ function fuse(body, body_index, cur::Expr, state)
         # prevParFor where the array is in allocs_to_eliminate.
         removed_allocs = Set{LHSVar}()
         @dprintln(3, "preParFor cur prestatements are array input = ", parforArrayInput(prev_parfor))
+        filtered_cur_pre = filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)
         prev_parfor.preParFor = [ filter(x -> !is_eliminated_allocation_map(x, output_items_with_aliases, removed_allocs), prev_parfor.preParFor);
-                                  parforArrayInput(prev_parfor) ? map(x -> substitute_arraylen(x,first_arraylen) , filter(x -> !is_eliminated_arraylen(x), cur_parfor.preParFor)) : cur_parfor.preParFor]
+                                  map(x -> substitute_arraylen(x, first_arraylen) , filtered_cur_pre)]
+#                                  parforArrayInput(prev_parfor) ? map(x -> substitute_arraylen(x, first_arraylen) , filtered_cur_pre) : cur_parfor.preParFor]
         @dprintln(3,"removed_allocs = ", removed_allocs)
         filter!( x -> !is_eliminated_arraysize(x, removed_allocs, prev_parfor.array_aliases), prev_parfor.preParFor)
         @dprintln(2,"New preParFor = ", prev_parfor.preParFor)

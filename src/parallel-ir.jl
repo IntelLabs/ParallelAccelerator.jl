@@ -1482,7 +1482,7 @@ end
 AstWalk callback that does the work of substitute_arrayset on a node-by-node basis.
 """
 function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
-    use_dbg_level = 3
+    use_dbg_level = 4
     dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
 
     dprintln(use_dbg_level,"sub_arrayset_walk is Expr")
@@ -1513,7 +1513,7 @@ function sub_arrayset_walk(x::Expr, cbd, top_level_number, is_top_level, read)
 end
 
 function sub_arrayset_walk(x::ANY, cbd, top_level_number, is_top_level, read)
-    use_dbg_level = 3
+    use_dbg_level = 4
     dprintln(use_dbg_level,"sub_arrayset_walk ", x, " ", cbd.arrays_set_in_cur_body, " ", cbd.output_items_with_aliases)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
@@ -1537,29 +1537,38 @@ Get the variable which holds the length of the first input array to a parfor.
 function getFirstArrayLens(parfor, num_dims, state)
     ret = Any[]
     prestatements = parfor.preParFor
-    # Scan the prestatements and find the assignment nodes.
-    # If it is an assignment from arraysize.
-    for i = 1:length(prestatements)
-        x = prestatements[i]
-        if (typeof(x) == Expr) && (x.head == :(=))
-            lhs = x.args[1]
-            rhs = x.args[2]
-            if isa(rhs, Expr) && (rhs.head == :call) && isBaseFunc(rhs.args[1],:arraysize)
-                push!(ret, toRHSVar(lhs, state.LambdaVarInfo))
+
+    if parforArrayInput(parfor)
+        @dprintln(3, "getFirstArrayLens using prestatements")
+        # Scan the prestatements and find the assignment nodes.
+        # If it is an assignment from arraysize.
+        for i = 1:length(prestatements)
+            x = prestatements[i]
+            if (typeof(x) == Expr) && (x.head == :(=))
+                lhs = x.args[1]
+                rhs = x.args[2]
+                if isa(rhs, Expr) && (rhs.head == :call) && isBaseFunc(rhs.args[1],:arraysize)
+                    push!(ret, toRHSVar(lhs, state.LambdaVarInfo))
+                end
             end
         end
-    end
-    # if arraysize calls were replaced for constant size array
-    if length(ret)==0
-        # assuming first_input is valid at this point since it is before fusion of this parfor
-        arr = toLHSVar(parfor.first_input.array)
-        arr_class = state.array_length_correlation[arr]
-        for (d, v) in state.symbol_array_correlation
-            if v==arr_class
-                #
-                ret = d
-                break
+        # if arraysize calls were replaced for constant size array
+        if length(ret)==0
+            # assuming first_input is valid at this point since it is before fusion of this parfor
+            arr = toLHSVar(parfor.first_input.array)
+            arr_class = state.array_length_correlation[arr]
+            for (d, v) in state.symbol_array_correlation
+                if v==arr_class
+                    #
+                    ret = d
+                    break
+                end
             end
+        end
+    else
+        @dprintln(3, "getFirstArrayLens using loopNests")
+        for ln in parfor.loopNests
+            push!(ret, ln.upper)
         end
     end
     assert(length(ret) == num_dims)
