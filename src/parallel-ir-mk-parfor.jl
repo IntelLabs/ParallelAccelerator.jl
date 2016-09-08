@@ -1290,10 +1290,12 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     # generates loopnests and updates pre_statements
     loopNests = gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, inputInfo, unique_node_id, parfor_index_syms, state)
+    @dprintln(3,"pre_statements after gen_pir_loopnest = ", pre_statements)
 
     for i in inputInfo
         pre_statements = [i.pre_offsets; pre_statements]
     end
+    @dprintln(3,"pre_statements after adding pre_offsets = ", pre_statements)
 
     # add local vars to state
     #for (v, d) in dl.locals
