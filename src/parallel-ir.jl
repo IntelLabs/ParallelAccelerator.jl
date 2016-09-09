@@ -1093,7 +1093,7 @@ end
     @dprintln(3,"LambdaVarInfo = ", state.LambdaVarInfo)
     @dprintln(3,"new body = ", body)
     # Write the LambdaVarInfo back to the lambda AST node.
-    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body)
+    lambda = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 
     state.LambdaVarInfo = save_LambdaVarInfo
 
