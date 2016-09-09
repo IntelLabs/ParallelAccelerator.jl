@@ -427,7 +427,7 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
         s *= "}\n"
     end
     s = (fun.name == :transpose ? (from_expr(B,linfo) * " = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $n, $m);\n"): "") * s
-
+    s = from_expr(B,linfo)*"; "*s
     return s
 end
 
