@@ -757,13 +757,17 @@ end
 #println("got here! ", x)
 #end
 
+run_nested_task_directly = true
+
 function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_var = string(Base.function_name(cur_task.task_func),"_range_var")
     range_sym = Symbol(range_var)
     range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
     range_lhsvar = toLHSVar(range_rhsvar)
+    
+    run_task_directly = haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY") || (state.in_nested && run_nested_task_directly)
 
-    if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
+    if run_task_directly
         @dprintln(3,"Inserting call to task function directly ", range_sym, " ", range_rhsvar)
     elseif haskey(ENV,"PROSPECT_CALL_ISF")
         @dprintln(3,"Inserting call to isf ", range_sym, " ", range_rhsvar)
@@ -848,7 +852,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
         end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
-        if haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY")
+        if run_task_directly
           if cur_task.ret_types != Void
             insert_task_expr = TypedExpr(Void,
                                          :call,

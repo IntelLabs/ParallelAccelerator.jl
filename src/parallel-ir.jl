@@ -423,6 +423,7 @@ type expr_state
     LambdaVarInfo            :: CompilerTools.LambdaHandling.LambdaVarInfo
     max_label :: Int # holds the max number of all LabelNodes
     multi_correlation::Int # correlation number for arrays with multiple assignment
+    in_nested :: Bool
 
     # Initialize the state for parallel IR translation.
     function expr_state(bl, max_label, input_arrays)
@@ -433,7 +434,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label,0)
+        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label, 0, false)
     end
 end
 
@@ -2753,6 +2754,7 @@ function nested_function_exprs(domain_lambda, out_state)
     eq_start = time_ns()
 
     new_vars = expr_state(lives, max_label, input_arrays)
+    new_vars.in_nested = true
     # import correlations of escaping variables to enable optimizations
     # TODO: fix imported GenSym symbols
     # setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
