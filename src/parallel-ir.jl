@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -72,7 +72,7 @@ const ISPRIVATEPARFORLOOP = 32
 
 
 function getLoopPrivateFlags()
-    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE 
+    if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
         return 0
     else
         return ISPRIVATEPARFORLOOP
@@ -395,7 +395,7 @@ end
 
 """
 After lowering, it is necessary to make the parfor body top-level statements so that basic blocks
-can be correctly identified and labels correctly found.  There is a phase in parallel IR where we 
+can be correctly identified and labels correctly found.  There is a phase in parallel IR where we
 take a PIRParForAst node and split it into a parfor_start node followed by the body as top-level
 statements followed by parfor_end (also a top-level statement).
 """
@@ -523,11 +523,11 @@ Create an assignment expression AST node given a left and right-hand side.
 The left-hand side has to be a symbol node from which we extract the type so as to type the new Expr.
 """
 function mk_assignment_expr(lhs::RHSVar, rhs, linfo :: LambdaVarInfo)
-    expr_typ = CompilerTools.LambdaHandling.getType(lhs, linfo)    
+    expr_typ = CompilerTools.LambdaHandling.getType(lhs, linfo)
     @dprintln(2,"mk_assignment_expr lhs = ", lhs, " type = ", typeof(lhs), " expr_typ = ", expr_typ, " rhs = ", rhs)
     TypedExpr(expr_typ, :(=), toLHSVar(lhs), rhs)
 end
- 
+
 mk_assignment_expr(lhs::RHSVar, rhs, state :: expr_state) = mk_assignment_expr(lhs, rhs, state.LambdaVarInfo)
 
 function mk_assignment_expr(lhs::ANY, rhs, state :: expr_state)
@@ -544,8 +544,8 @@ function mk_untyped_assignment(lhs, rhs)
     Expr(:(=), lhs, rhs)
 end
 
-function isWholeArray(inputInfo :: InputInfo) 
-    return length(inputInfo.range) == 0 
+function isWholeArray(inputInfo :: InputInfo)
+    return length(inputInfo.range) == 0
 end
 
 function isRange(inputInfo :: InputInfo)
@@ -573,7 +573,7 @@ end
 Create an expression whose value is the length of the input array.
 """
 function mk_arraylen_expr(x :: InputInfo, dim :: Int64)
-    if dim <= length(x.range) 
+    if dim <= length(x.range)
         r = x.range[dim]
         if isa(x.range[dim], RangeData)
             # TODO: do something with skip!
@@ -679,7 +679,7 @@ function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
        0,
        get_length_expr(length1),
        0,
-       get_length_expr(length2), 
+       get_length_expr(length2),
        0
        )
 end
@@ -692,7 +692,7 @@ function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
-    
+
     TypedExpr(
        atype,
        :call,
@@ -742,7 +742,7 @@ end
 Create a temporary variable that is parfor private to hold the value of an element of an array.
 """
 function createTempForArray(array_sn :: RHSVar, unique_id :: Int64, state :: expr_state, temp_type = nothing)
-    key = toLHSVar(array_sn) 
+    key = toLHSVar(array_sn)
     if temp_type == nothing
         temp_type = getArrayElemType(array_sn, state)
     end
@@ -1024,7 +1024,7 @@ function count_assignments(x, state :: CountAssignmentsState, top_level_number, 
         end
         state.symbol_assigns[sname] = state.symbol_assigns[sname] + 1
     end
-    return CompilerTools.AstWalker.ASTWALK_RECURSE 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 """
@@ -1267,7 +1267,7 @@ function create_merged_output_from_map(output_map, unique_id, state, sym_to_type
     @dprintln(3,"create_merged_output_from_map, output_map = ", output_map, " sym_to_type = ", sym_to_type)
     # If there are no outputs then return nothing.
     if length(output_map) == 0
-        return (nothing, [], true, nothing, [])    
+        return (nothing, [], true, nothing, [])
     end
 
     # If there is only one output then all we need is the symbol to return.
@@ -1364,7 +1364,7 @@ function create_arrays_assigned_to_by_either_parfor(arrays_assigned_to_by_either
     (createRetTupleType(all_array, unique_id, state), all_array, false)
 end
 
-function getAllAliases(input :: LHSVar, aliases :: Dict{LHSVar, LHSVar}) 
+function getAllAliases(input :: LHSVar, aliases :: Dict{LHSVar, LHSVar})
     return getAllAliases(Set{LHSVar}([input]), aliases)
 end
 
@@ -1388,8 +1388,8 @@ function getAllAliases(input :: Set{LHSVar}, aliases :: Dict{LHSVar, LHSVar})
 end
 
 function isAllocation(expr :: Expr)
-    return expr.head == :call && 
-    isBaseFunc(expr.args[1], :ccall) && 
+    return expr.head == :call &&
+    isBaseFunc(expr.args[1], :ccall) &&
     (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d) || expr.args[2] == QuoteNode(:jl_new_array))
 end
 
@@ -1694,10 +1694,10 @@ temp_map holds array names for which arrayrefs should be converted to a variable
     arrays_set_in_cur_body           # Used as output.  Collects the arrays set in the current body.
     replace_array_name_in_arrayset   # Map from one array to another.  Replace first array with second when used in arrayset context.
 """
-function substitute_cur_body(x, 
-    temp_map :: Dict{LHSVar, RHSVar}, 
-    index_map :: Dict{LHSVar, LHSVar}, 
-    arrays_set_in_cur_body :: Set{LHSVar}, 
+function substitute_cur_body(x,
+    temp_map :: Dict{LHSVar, RHSVar},
+    index_map :: Dict{LHSVar, LHSVar},
+    arrays_set_in_cur_body :: Set{LHSVar},
     replace_array_name_in_arrayset :: Dict{LHSVar, LHSVar},
     state :: expr_state)
     @dprintln(3,"substitute_cur_body ", x)
@@ -1733,7 +1733,7 @@ function is_eliminated_arraysize(x::Expr, removed_allocs :: Set, aliases)
     return false
 end
 
-function is_eliminated_arraysize(x::ANY, removed_allocs :: Set, aliases) 
+function is_eliminated_arraysize(x::ANY, removed_allocs :: Set, aliases)
    return false
 end
 
@@ -1906,7 +1906,7 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
 
     if is_multi
         last_post = the_parfor.postParFor[end]
-        assert(isa(last_post, Array)) 
+        assert(isa(last_post, Array))
         @dprintln(3,"multi postParFor = ", the_parfor.postParFor, " last_post = ", last_post)
 
         # In our special AST node format for assignment to make fusion easier, args[3] is a FusionSentinel node
@@ -1934,7 +1934,7 @@ function createMapLhsToParfor(parfor_assignment, the_parfor, is_multi :: Bool, s
             ast_lhs_pa_typ = typeof(lhs_pa)
             lhs_pa_typ = CompilerTools.LambdaHandling.getType(lhs_pa, state.LambdaVarInfo)
             if isa(lhs_pa, RHSVar)
-                ppftyp = typeof(the_parfor.postParFor[end]) 
+                ppftyp = typeof(the_parfor.postParFor[end])
                 assert(ppftyp <: RHSVar)
                 rememberTypeForSym(sym_to_type, toLHSVar(lhs_pa), lhs_pa_typ)
                 rhs = the_parfor.postParFor[end]
@@ -2047,7 +2047,7 @@ function intermediate_from_exprs(ast::Array{Any,1}, depth, state)
         append!(res, new_exprs)  # Take the result of the recursive processing and add it to the result.
     end
 
-    return res 
+    return res
 end
 
 include("parallel-ir-task.jl")
@@ -2331,7 +2331,7 @@ function hasNoSideEffects(node :: Expr)
                func == QuoteNode(:jl_alloc_array_2d)
                 return true
             end
-        elseif isa(func, TopNode) 
+        elseif isa(func, TopNode)
             @dprintln(3, "Found TopNode in hasNoSideEffects. type = ", typeof(func.name))
             if func.name == :getfield
                 return true
@@ -2534,7 +2534,7 @@ function from_call(ast::Expr, depth, state)
         assert(length(fun) == 1)
         fun = fun[1]
     end
-    # Recursively process the arguments to the call.  
+    # Recursively process the arguments to the call.
     args = from_exprs(args, depth+1, state)
 
     return ast.head == :invoke ? [ast.args[1]; fun; args] : [fun; args]
@@ -2573,11 +2573,11 @@ If set to non-zero, perform the bubble-sort like reordering phase to coalesce mo
 """
 function PIRBbReorder(x)
     global bb_reorder = x
-end 
+end
 
 shortcut_array_assignment = 0
 """
-Enables an experimental mode where if there is a statement a = b and they are arrays and b is not live-out then 
+Enables an experimental mode where if there is a statement a = b and they are arrays and b is not live-out then
 use a special assignment node like a move assignment in C++.
 """
 function PIRShortcutArrayAssignment(x)
@@ -2685,7 +2685,7 @@ end
 A nested lambda may contain labels that conflict with labels in the top-level statements of the function being processed.
 We take the maxLabel or those top-level statements and re-number labels in the nested lambda and update maxLabel.
 """
-function integrateLabels(body, maxLabel) 
+function integrateLabels(body, maxLabel)
   max_label = CompilerTools.OptFramework.updateLabels!(body.args, maxLabel)
   return (body, maxLabel)
 end
@@ -2704,7 +2704,7 @@ function nested_function_exprs(domain_lambda, out_state)
     start_time = time_ns()
 
     @dprintln(2,"nested_function_exprs out_state.max_label = ", out_state.max_label, " " , unique_node_id)
-    (body, max_label) = integrateLabels(body, out_state.max_label) 
+    (body, max_label) = integrateLabels(body, out_state.max_label)
     @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body, " " , unique_node_id)
 
     # Re-create the body minus any dead basic blocks.
@@ -2772,7 +2772,7 @@ function nested_function_exprs(domain_lambda, out_state)
 
     changed = true
     while changed
-        @dprintln(1,"Removing statement with no dependencies from the AST with parameters"), " " , unique_node_id 
+        @dprintln(1,"Removing statement with no dependencies from the AST with parameters"), " " , unique_node_id
         rnd_state = RemoveNoDepsState(lives, non_array_params)
         body = AstWalk(body, remove_no_deps, rnd_state)
         @dprintln(3,"body after no dep stmts removed = ", body, " " , unique_node_id)
@@ -2833,7 +2833,7 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
             if c==corr_class
                 new_vars.symbol_array_correlation[s] = c+input_length+1
                 for v in s
-                    if !in(v, esc_vars) && !isa(v, GenSym) 
+                    if !in(v, esc_vars) && !isa(v, GenSym)
                         if isa(v, RHSVar)
                             v = toLHSVar(v)
                             if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
@@ -2841,7 +2841,7 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
                             end
                             if !isEscapingVariable(v, linfo)
                                 typ = LambdaHandling.getType(v, out_state.LambdaVarInfo)
-                                desc = LambdaHandling.getDesc(v, out_state.LambdaVarInfo) 
+                                desc = LambdaHandling.getDesc(v, out_state.LambdaVarInfo)
                                 @dprintln(3, "setEscCorrelations! addEscapingVariable for ", v)
                                 LambdaHandling.addEscapingVariable(v, typ, desc, linfo)
                             end
@@ -2871,7 +2871,7 @@ FIX ME!!!!!!!!!!!!!!!!!!!
 TO-DO!!!!!!!!!!!!!!!!!!!!
 This code doesn't work because it conflates changing the size of the array with changing its contents.
 Instead of scanning liveness information, we need to do precisely one scan of the AST looking for array
-creation points.  If there are multiple of such then we'll preclude that array from having a useful 
+creation points.  If there are multiple of such then we'll preclude that array from having a useful
 equivalence class.
 """
 function findMultipleArrayAssigns(lives :: CompilerTools.LivenessAnalysis.BlockLiveness, LambdaVarInfo)
@@ -2979,7 +2979,7 @@ end
 =#
 function genEquivalenceClasses(linfo, body, new_vars)
     new_vars.LambdaVarInfo = linfo
-    
+
     # no need to empty them since equivalence class will be overwritten if it needs to be negative
     #empty!(new_vars.array_length_correlation)
     #empty!(new_vars.symbol_array_correlation)
@@ -3038,7 +3038,7 @@ function from_root(function_name, ast)
 
     @dprintln(1,"Starting liveness analysis. function = ", function_name)
     lives = computeLiveness(body, LambdaVarInfo)
-    
+
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
     body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
@@ -3046,7 +3046,7 @@ function from_root(function_name, ast)
     lives = computeLiveness(body, LambdaVarInfo)
     body  = AstWalk(body, transpose_propagate, TransposePropagateState(lives))
     lives = computeLiveness(body, LambdaVarInfo)
-    
+
     #  udinfo = CompilerTools.UDChains.getUDChains(lives)
     @dprintln(3,"lives = ", lives)
     #  @dprintln(3,"udinfo = ", udinfo)
@@ -3300,7 +3300,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         if length(args)>=2
             return rm_allocs_cb_call(state, args[1], args[2], args[3:end])
         end
-        
+
     # remove extra arrays from parfor data structures
     elseif head==:parfor
         rm_allocs_cb_parfor(state, args[1])
@@ -3423,17 +3423,17 @@ function from_expr(ast::QuoteNode, depth, state :: expr_state, top_level)
     value = ast.value
     #TODO: fields: value
     @dprintln(2,"QuoteNode type ",typeof(value))
-    return [ast] 
+    return [ast]
 end
 
 function from_expr(ast::Tuple, depth, state :: expr_state, top_level)
     @assert isbitstuple(ast) "Only bits type tuples allowed in from_expr()"
-    return [ast] 
+    return [ast]
 end
 
 function from_expr(ast::Number, depth, state :: expr_state, top_level)
     @assert isbits(ast) "only bits (plain) types supported in from_expr()"
-    return [ast] 
+    return [ast]
 end
 
 function from_expr(ast::ANY, depth, state :: expr_state, top_level)
@@ -3578,7 +3578,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :type_goto
         # skip
-    elseif head in DomainIR.exprHeadIgnoreList 
+    elseif head in DomainIR.exprHeadIgnoreList
         # other packages like HPAT can generate new nodes like :alloc, :join
     else
         throw(string("ParallelAccelerator.ParallelIR.from_expr: unknown Expr head :", head))
@@ -3680,7 +3680,7 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
         val = cur_parfor.rws.readSet.arrays[sym]
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.readSet.arrays,sym)
-        if isa(o_sym, LHSVar) 
+        if isa(o_sym, LHSVar)
             cur_parfor.rws.readSet.arrays[o_sym] = val
         end
     end
@@ -3689,7 +3689,7 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
         val = cur_parfor.rws.writeSet.arrays[sym]
         o_sym = AstWalk(sym, dw.callback, dw.cbdata)
         delete!(cur_parfor.rws.writeSet.arrays,sym)
-        if isa(o_sym, LHSVar) 
+        if isa(o_sym, LHSVar)
             cur_parfor.rws.writeSet.arrays[o_sym] = val
         end
     end
@@ -3853,9 +3853,9 @@ function pir_alias_cb(ast::Expr, state, cbdata)
 
     elseif head == :call
         if isBaseFunc(args[1], :unsafe_arrayref)
-            return AliasAnalysis.NotArray 
+            return AliasAnalysis.NotArray
         elseif isBaseFunc(args[1], :unsafe_arrayset)
-            return AliasAnalysis.NotArray 
+            return AliasAnalysis.NotArray
         end
     # flattened parfor nodes are ignored
     elseif head == :parfor_start || head == :parfor_end
