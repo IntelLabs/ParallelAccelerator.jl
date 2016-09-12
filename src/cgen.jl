@@ -675,6 +675,11 @@ function from_assignment(args::Array{Any,1}, linfo)
         return match_hcat
     end
 
+    match_vcat = from_assignment_match_vcat(lhs, rhs, linfo)
+    if match_vcat!=""
+        return match_vcat
+    end
+
     match_iostream = from_assignment_match_iostream(lhs, rhs, linfo)
     if match_iostream!=""
         return match_iostream

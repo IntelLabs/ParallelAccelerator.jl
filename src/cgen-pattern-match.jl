@@ -615,6 +615,37 @@ function from_assignment_match_hcat(lhs, rhs::ANY, linfo)
     return ""
 end
 
+function from_assignment_match_vcat(lhs, rhs::Expr, linfo)
+    s = ""
+    if (isCall(rhs) || isInvoke(rhs)) && isBaseFunc(getCallFunction(rhs), :vcat)
+        args = getCallArguments(rhs)
+        for a in args
+            atyp = getType(a, linfo)
+            @assert atyp<:Array && ndims(atyp)==1 "CGen only supports vcat of 1D arrays"
+        end
+        typ = eltype(getType(args[1], linfo))
+        ctyp = toCtype(typ)
+        clhs = from_expr(lhs,linfo)
+        # get total size of array: size(a1)+size(a2)+...
+        csize = "("* mapfoldl(a->from_arraysize(a,1,linfo),(a,b)->"$a+$b",args) *")"
+        s *= "{\n"
+        s *= "$clhs = j2c_array<$ctyp>::new_j2c_array_1d(NULL, $csize);\n"
+        s *= "  int64_t __cgen_curr_ind = 0;\n"
+        for arr in args
+            carr = from_expr(arr, linfo)
+            s *= "for(int64_t i=0; i<$(from_arraysize(arr,1,linfo)); i++){\n"
+            s *= "  $clhs.data[__cgen_curr_ind++] = $carr.data[i];\n"
+            s *= "}\n"
+        end
+        s *= "}\n"
+    end
+    return s
+end
+
+function from_assignment_match_vcat(lhs, rhs::ANY, linfo)
+    return ""
+end
+
 function from_assignment_match_iostream(lhs, rhs::GlobalRef, linfo)
     s = ""
     ltype = getType(lhs, linfo)
