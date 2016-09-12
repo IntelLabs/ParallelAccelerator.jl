@@ -2494,6 +2494,12 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
             # ignore 1st arg which is type
             new_args = normalize_args(state, env, args[2:end])
             expr = mk_expr(typ, head, new_fun, new_args...)
+        elseif fun.name==:typed_vcat
+            # convert typed_hcat to regular hcat
+            new_fun = GlobalRef(Base,:vcat)
+            # ignore 1st arg which is type
+            new_args = normalize_args(state, env, args[2:end])
+            expr = mk_expr(typ, head, new_fun, new_args...)
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
