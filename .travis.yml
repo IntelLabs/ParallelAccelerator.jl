@@ -51,6 +51,7 @@ script:
     julia --code-coverage=user examples/opt-flow/opt-flow.jl;
     julia --code-coverage=user examples/quant/quant.jl;
     julia --code-coverage=user examples/wave-2d/wave-2d.jl;
+    julia --code-coverage=user examples/nengo/nengo-nef.jl;
     fi
 
 after_success:
