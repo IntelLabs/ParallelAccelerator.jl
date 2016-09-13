@@ -45,7 +45,7 @@ implementation of ParallelAccelerator has some other limitations:
    to our API module. This prevents them from being inlined by Julia
    which helps our translation. For unsupported functions such as ``mean``,
    Julia's typed AST for the program
-   that contains ``mean`` becomes a lowered call that is basically the
+   that contains ``mean`` becomes a lowered call that is basically
    the low-level sequential implementation which cannot be
    handled by ParallelAccelerator. Of course, adding support
    for functions like ``mean`` is not a huge effort, and we are still in 
