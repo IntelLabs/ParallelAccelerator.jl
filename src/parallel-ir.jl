@@ -3028,6 +3028,7 @@ function from_root(function_name, ast)
     else
         LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
     end
+    @dprintln(2,"LambdaVarInfo = ", LambdaVarInfo)
     cfg = CompilerTools.CFGs.from_lambda(body)
     #body = CompilerTools.LambdaHandling.getBody(ast)
     # Re-create the body minus any dead basic blocks.
