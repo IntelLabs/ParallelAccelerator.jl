@@ -591,6 +591,12 @@ function from_assignment_match_hcat(lhs, rhs::Expr, linfo)
     s = ""
     if (isCall(rhs) || isInvoke(rhs)) && isBaseFunc(getCallFunction(rhs), :hcat)
         args = getCallArguments(rhs)
+        in_typ = getType(args[1], linfo)
+        # hcat of single values like hcat(1,2,3) => 2D array [1 2 3]
+        # used in quant example
+        if !(in_typ<:Array)
+            return single_value_hcat(lhs, args, linfo)
+        end
         for a in args
             atyp = getType(a, linfo)
             @assert atyp<:Array && ndims(atyp)==1 "CGen only supports hcat of 1D arrays"
@@ -614,6 +620,24 @@ end
 function from_assignment_match_hcat(lhs, rhs::ANY, linfo)
     return ""
 end
+
+function single_value_hcat(lhs, args, linfo)
+    for a in args
+        atyp = getType(a, linfo)
+        @assert !(atyp<:Array) "CGen invalid hcat input (single_value_hcat)"
+    end
+    typ = getType(args[1], linfo)
+    size = length(args)
+    ctyp = toCtype(typ)
+    clhs = from_expr(lhs,linfo)
+    s = "$clhs = j2c_array<$ctyp>::new_j2c_array_2d(NULL, 1, $size);\n"
+    for j in 1:size
+        var = from_expr(args[j],linfo)
+        s *= "$clhs.data[$(j-1)] = $var;\n"
+    end
+    return s
+end
+
 
 function from_assignment_match_vcat(lhs, rhs::Expr, linfo)
     s = ""
