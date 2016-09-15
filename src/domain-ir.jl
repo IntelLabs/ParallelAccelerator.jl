@@ -1733,7 +1733,7 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
             if is(fun, :getindex)
                 expr = mk_select(arr, ranges)
                 # TODO: need to calculate the correct result dimesion
-                typ = arrTyp
+                typ = (typ == Any) ? arrTyp : typ
             else
                 args = Any[inline_select(env, state, e) for e in Any[mk_select(arr, ranges), args[2]]]
                 var = args[2]
