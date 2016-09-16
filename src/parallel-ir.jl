@@ -1052,6 +1052,7 @@ function from_lambda_body(body :: Expr, depth, state)
     CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, cas.symbol_assigns)
 
     body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    @dprintln(3,"After eliminating unused locals = ", state.LambdaVarInfo)
     CompilerTools.LambdaHandling.stripCaptureFlag(state.LambdaVarInfo)
 
     return body
@@ -3197,12 +3198,18 @@ function from_root(function_name, ast)
     #assert(length(ast) == 1)
     #body = body[1]
 
-    @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
+    @dprintln(1,"After from_expr function = ", function_name, " body = ")
     printLambda(1, LambdaVarInfo, body)
 
     body = remove_extra_allocs(LambdaVarInfo, body)
 
     set_pir_stats(body)
+
+    lives = computeLiveness(body, LambdaVarInfo)
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+
+    @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
+    printLambda(1, LambdaVarInfo, body)
 
     #if pir_stop != 0
     #    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
