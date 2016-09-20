@@ -29,6 +29,7 @@ Pkg.add("ParallelAccelerator")
 - **Documentation:** <http://parallelacceleratorjl.readthedocs.org/>
 - **Blog post** with usage examples, performance results, and discussion of package internals: <http://julialang.org/blog/2016/03/parallelaccelerator>
 - **Presentations:**
+  - [Video](https://www.youtube.com/watch?v=Ti9qqAe_NF4) of a talk at [JuliaCon 2016](http://juliacon.org/schedule.html), June 24, 2016.
   - [Slides](http://www.slideshare.net/ChristianPeel/ehsan-parallel-acceleratordec2015) and [audio](https://soundcloud.com/christian-peel/ehsan-totoni-on-parallelacceleratorjl) of a talk at [Bay Area Julia Users](http://www.meetup.com/Bay-Area-Julia-Users/events/226531171/), December 17, 2015.
   - [Video](https://www.youtube.com/watch?v=O6PN-kpbNTw) of a talk at [SPLASH-I](http://2015.splashcon.org/event/splash2015-splash-i-lindsey-kuper-talk), October 29, 2015.
 - **Mailing List:** <http://groups.google.com/group/julia-hps/>
