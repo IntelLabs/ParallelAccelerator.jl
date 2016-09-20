@@ -601,7 +601,7 @@ function from_assignment_match_hcat(lhs, rhs::Expr, linfo)
             atyp = getType(a, linfo)
             @assert atyp<:Array && ndims(atyp)==1 "CGen only supports hcat of 1D arrays"
         end
-        typ = eltype(getType(args[1], linfo))
+        typ = eltype(getType(lhs, linfo))
         size = length(args)
         ctyp = toCtype(typ)
         len = from_arraysize(args[1],1,linfo)
