@@ -1210,14 +1210,14 @@ function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParF
     end
 end
 
-"""
-Returns a Set with all the arrays read by this parfor.
-"""
-function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
-    ret = Set(collect(keys(node.rws.readSet.arrays)))
-    @dprintln(3,"Input set = ", ret)
-    ret
-end
+#"""
+#Returns a Set with all the arrays read by this parfor.
+#"""
+#function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
+#    ret = Set(collect(keys(node.rws.readSet.arrays)))
+#    @dprintln(3,"Input set = ", ret)
+#    ret
+#end
 
 """
 Get the real outputs of an assignment statement.
@@ -3876,6 +3876,67 @@ end
 function pir_alias_cb(ast::ANY, state, cbdata)
     @dprintln(4,"pir_alias_cb")
     return DomainIR.dir_alias_cb(ast, state, cbdata)
+end
+
+function dependenceCB(ast::Expr, cbdata)
+    @dprintln(3, "dependenceCB")
+
+    head = ast.head
+    args = ast.args
+    if head == :parfor
+        @dprintln(3,"dependenceCB for :parfor")
+#        ParallelAccelerator.show_backtrace()
+
+        assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
+        this_parfor = args[1]
+
+        return CompilerTools.TransitiveDependence.CallbackResult(
+                 CompilerTools.TransitiveDependence.mergeDepSet(
+                   CompilerTools.TransitiveDependence.computeDependenciesAST(TypedExpr(nothing, :body, this_parfor.preParFor...), ParallelAccelerator.ParallelIR.dependenceCB, nothing),
+                   CompilerTools.TransitiveDependence.computeDependenciesAST(TypedExpr(nothing, :body, this_parfor.body...), ParallelAccelerator.ParallelIR.dependenceCB, nothing)
+                 ),
+                 Set{LHSVar}(),
+                 Set{LHSVar}(this_parfor.postParFor[end]...),
+                 [], []
+               )
+    elseif head == :call
+        if isBaseFunc(args[1], :unsafe_arrayref)
+            @dprintln(3,"dependenceCB for :unsafe_arrayref")
+#            ParallelAccelerator.show_backtrace()
+            return CompilerTools.TransitiveDependence.CallbackResult(
+                 Dict{LHSVar,Set{LHSVar}}(),
+                 Set{LHSVar}(),
+                 Set{LHSVar}(),
+                 args[2:end], []
+               )
+        elseif isBaseFunc(args[1], :unsafe_arrayset)
+            @dprintln(3,"dependenceCB for :unsafe_arrayset")
+#            ParallelAccelerator.show_backtrace()
+            return CompilerTools.TransitiveDependence.CallbackResult(
+                 Dict{LHSVar,Set{LHSVar}}(),
+                 Set{LHSVar}(),
+                 Set{LHSVar}(),
+                 args[3:end], args[2:2]
+               )
+        end
+    # flattened parfor nodes are ignored
+    elseif head == :parfor_start || head == :parfor_end
+        # FIX FIX FIX...is this right?  Maybe we need to do something for reductions here?
+        @dprintln(3,"dependenceCB for :parfor_start or :parfor_end")
+#        ParallelAccelerator.show_backtrace()
+        return CompilerTools.TransitiveDependence.CallbackResult(
+                 Dict{LHSVar,Set{LHSVar}}(),
+                 Set{LHSVar}(),
+                 Set{LHSVar}(),
+                 [], []
+               )
+    end
+
+    return nothing
+end
+
+function dependenceCB(ast::ANY, cbdata)
+    return nothing
 end
 
 end
