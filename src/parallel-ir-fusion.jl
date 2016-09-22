@@ -135,7 +135,11 @@ function fuse(body, body_index, cur::Expr, state)
     arrays_non_simply_indexed_in_cur_that_access_prev_output = intersect(cur_parfor.arrays_read_past_index, prev_output_arrays)
     @dprintln(3, "arrays_non_simply_indexed_in_cur_that_access_prev_output = ", arrays_non_simply_indexed_in_cur_that_access_prev_output)
     @dprintln(3, "prev_parfor.arrays_written_past_index = ", prev_parfor.arrays_written_past_index)
-    cur_accessed = CompilerTools.ReadWriteSet.getArraysAccessed(cur_parfor.rws)
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    prev_rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    # Compute which scalars and arrays are ever read or written by the body of the parfor
+    cur_rws = CompilerTools.ReadWriteSet.from_exprs(cur_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    cur_accessed = CompilerTools.ReadWriteSet.getArraysAccessed(cur_rws)
     arrays_non_simply_indexed_in_prev_that_are_read_in_cur = intersect(prev_parfor.arrays_written_past_index, cur_accessed)
     @dprintln(3, "arrays_non_simply_indexed_in_prev_that_are_read_in_cur = ", arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
     if !isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output)
@@ -145,10 +149,6 @@ function fuse(body, body_index, cur::Expr, state)
         @dprintln(1, "Fusion won't happen because the first parfor wrote to some array index in a non-simple way that the second parfor needs to access.")
     end
 
-    # Compute which scalars and arrays are ever read or written by the body of the parfor
-    prev_rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
-    # Compute which scalars and arrays are ever read or written by the body of the parfor
-    cur_rws = CompilerTools.ReadWriteSet.from_exprs(cur_parfor.body, pir_rws_cb, state.LambdaVarInfo)
     @dprintln(3, "Fusion prev_rws = ", prev_rws)
     @dprintln(3, "Fusion cur_rws = ", cur_rws)
     prev_write_set_array = Set(collect(keys(prev_rws.writeSet.arrays)))
@@ -443,9 +443,6 @@ function fuse(body, body_index, cur::Expr, state)
 
         # top_level_number - what to do here? is this right?
         push!(prev_parfor.top_level_number, cur_parfor.top_level_number[1])
-
-        # rws
-        prev_parfor.rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
 
         @dprintln(3,"New lhs = ", new_lhs)
         if prev_assignment

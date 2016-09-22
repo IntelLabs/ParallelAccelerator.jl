@@ -343,7 +343,6 @@ type PIRParForAst
 
     original_domain_nodes :: Array{DomainOperation,1}
     top_level_number :: Array{Int,1}
-    rws          :: ReadWriteSet.ReadWriteSetType
 
     unique_id
     array_aliases :: Dict{LHSVar, LHSVar}
@@ -357,12 +356,11 @@ type PIRParForAst
     arrays_read_past_index :: Set{LHSVar}
 
     function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
-        r = CompilerTools.ReadWriteSet.from_exprs(b)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
+        new(fi, b, pre, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, r, unique, wrote_past_index, read_past_index)
-        new(fi, b, pre, nests, red, post, orig, [t], r, unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
+    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
+        new(fi, b, pre, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 end
 
@@ -493,9 +491,6 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         for i = 1:length(pnode.original_domain_nodes)
             println(io,pnode.original_domain_nodes[i])
         end
-    end
-    if DEBUG_LVL >= 3
-        println(io, pnode.rws)
     end
 end
 
@@ -1209,15 +1204,6 @@ function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParF
         return false
     end
 end
-
-#"""
-#Returns a Set with all the arrays read by this parfor.
-#"""
-#function getInputSet(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
-#    ret = Set(collect(keys(node.rws.readSet.arrays)))
-#    @dprintln(3,"Input set = ", ret)
-#    ret
-#end
 
 """
 Get the real outputs of an assignment statement.
@@ -3350,16 +3336,6 @@ function rm_allocs_cb_parfor(state::rm_allocs_state, parfor::PIRParForAst)
     if in(parfor.first_input, keys(state.removed_arrs))
         #TODO parfor.first_input = NoArrayInput
     end
-    for arr in keys(parfor.rws.readSet.arrays)
-        if in(arr, keys(state.removed_arrs))
-            delete!(parfor.rws.readSet.arrays, arr)
-        end
-    end
-    for arr in keys(parfor.rws.writeSet.arrays)
-        if in(arr, keys(state.removed_arrs))
-            delete!(parfor.rws.writeSet.arrays, arr)
-        end
-    end
 end
 
 function rm_allocs_cb(ast :: ANY, cbdata :: ANY, top_level_number, is_top_level, read)
@@ -3670,37 +3646,6 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
     for i = 1:length(cur_parfor.postParFor)
         cur_parfor.postParFor[i] = AstWalk(cur_parfor.postParFor[i], dw.callback, dw.cbdata)
     end
-    # update read write set in case of symbol replacement like unused variable elimination
-    old_set = deepcopy(cur_parfor.rws.readSet.scalars)
-    for sym in old_set
-        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-        delete!(cur_parfor.rws.readSet.scalars,sym)
-        push!(cur_parfor.rws.readSet.scalars,o_sym)
-    end
-    old_set = deepcopy(cur_parfor.rws.writeSet.scalars)
-    for sym in old_set
-        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-        delete!(cur_parfor.rws.writeSet.scalars,sym)
-        push!(cur_parfor.rws.writeSet.scalars,o_sym)
-    end
-    old_set = [k for k in keys(cur_parfor.rws.readSet.arrays)]
-    for sym in old_set
-        val = cur_parfor.rws.readSet.arrays[sym]
-        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-        delete!(cur_parfor.rws.readSet.arrays,sym)
-        if isa(o_sym, LHSVar)
-            cur_parfor.rws.readSet.arrays[o_sym] = val
-        end
-    end
-    old_set = [k for k in keys(cur_parfor.rws.writeSet.arrays)]
-    for sym in old_set
-        val = cur_parfor.rws.writeSet.arrays[sym]
-        o_sym = AstWalk(sym, dw.callback, dw.cbdata)
-        delete!(cur_parfor.rws.writeSet.arrays,sym)
-        if isa(o_sym, LHSVar)
-            cur_parfor.rws.writeSet.arrays[o_sym] = val
-        end
-    end
 
     return cur_parfor
 end
@@ -3889,6 +3834,12 @@ function dependenceCB(ast::Expr, cbdata)
 
         assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
         this_parfor = args[1]
+        postvars = []
+        for pv in this_parfor.postParFor[end]
+            if isa(pv, RHSVar)
+                push!(postvars, toLHSVar(pv))
+            end
+        end
 
         return CompilerTools.TransitiveDependence.CallbackResult(
                  CompilerTools.TransitiveDependence.mergeDepSet(
@@ -3896,7 +3847,7 @@ function dependenceCB(ast::Expr, cbdata)
                    CompilerTools.TransitiveDependence.computeDependenciesAST(TypedExpr(nothing, :body, this_parfor.body...), ParallelAccelerator.ParallelIR.dependenceCB, nothing)
                  ),
                  Set{LHSVar}(),
-                 Set{LHSVar}(this_parfor.postParFor[end]...),
+                 Set{LHSVar}(postvars),
                  [], []
                )
     elseif head == :call

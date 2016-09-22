@@ -527,7 +527,6 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         post_statements,
         [DomainOperation(:reduce, input_args)],
         state.top_level_number,
-        rws,
         unique_node_id,
         arrays_written_past_index,
         arrays_read_past_index)
@@ -975,7 +974,6 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         post_statements,
         domain_oprs,
         state.top_level_number,
-        rws,
         unique_node_id,
         arrays_written_past_index,
         arrays_read_past_index)
@@ -1084,7 +1082,6 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         post_statements,
         [],
         state.top_level_number,
-        rws,
         unique_node_id,
         arrays_written_past_index,
         arrays_read_past_index)
@@ -1392,7 +1389,6 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         post_statements,
         domain_oprs,
         state.top_level_number,
-        rws,
         unique_node_id,
         arrays_written_past_index,
         arrays_read_past_index)

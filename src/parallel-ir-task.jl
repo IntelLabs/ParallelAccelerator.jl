@@ -1590,7 +1590,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3,"out_vars names= ", out_vars_sym)
     @dprintln(3,"local_vars names= ", locals_vars_sym)
     @dprintln(3,"reduction_vars names= ", reduction_vars_sym)
-    @dprintln(3,"the_parfor.rws = ", the_parfor.rws)
+
+    parfor_rws = CompilerTools.ReadWriteSet.from_exprs(the_parfor.body, pir_rws_cb, state.LambdaVarInfo)
 
     # Convert Set to Array
     in_array_names   = LHSVar[]
@@ -1599,8 +1600,8 @@ function parforToTask(parfor_index, bb_statements, body, state)
     for i in in_vars
         assert(isa(i, LHSVar))
         # Determine for each input var whether the variable is just read, just written, or both.
-        swritten = CompilerTools.ReadWriteSet.isWritten(i, the_parfor.rws)
-        sread    = CompilerTools.ReadWriteSet.isRead(i, the_parfor.rws)
+        swritten = CompilerTools.ReadWriteSet.isWritten(i, parfor_rws)
+        sread    = CompilerTools.ReadWriteSet.isRead(i, parfor_rws)
         sio      = swritten & sread
         if in(i, reduction_vars)
             # reduction_vars must be initialized before the parfor and updated during the parfor 
@@ -1846,6 +1847,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     code = CompilerTools.LambdaHandling.LambdaVarInfoToLambda(newLambdaVarInfo, task_body)
 
     @dprintln(3, "New task = ", code)
+#    CompilerTools.Helper.print_by_field(code)
 
     CompilerTools.OptFramework.setCode(task_func, all_arg_type, code)
     precompile(task_func, all_arg_type)
