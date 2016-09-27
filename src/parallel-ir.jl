@@ -358,10 +358,6 @@ type PIRParForAst
     function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
         new(fi, b, pre, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
-
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
-        new(fi, b, pre, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
-    end
 end
 
 function parforArrayInput(parfor :: PIRParForAst)
