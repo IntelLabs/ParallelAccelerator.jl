@@ -42,7 +42,7 @@ script:
   # Run examples.
   - >
     if [ $TEST_SUITE = 'pa-examples' ]; then
-  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then 
+    if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then 
     julia --code-coverage=user examples/black-scholes/black-scholes.jl;
     julia --code-coverage=user examples/boltzmann/boltzmann.jl;
     julia --code-coverage=user examples/quant/quant.jl;
