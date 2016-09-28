@@ -2961,6 +2961,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
     end
     gen_j2c_array_new *= "default:\nfprintf(stderr, \"j2c_array_new called with invalid key %d\", key);\nassert(false);\nbreak;\n}\nreturn a;\n}\n"
     c *= gen_j2c_array_new
+    flush(STDOUT)
     c
 end
 
