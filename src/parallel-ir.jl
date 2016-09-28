@@ -2064,8 +2064,26 @@ function printLambda(dlvl, linfo, body)
     end
 end
 
+function pir_rws_cb(x :: DelayedFunc, cbdata :: ANY)
+    @dprintln(4,"pir_rws_cb for DelayedFunc")
+
+    expr_to_process = Any[]
+    for i = 1:length(x.args)
+        y = x.args[i]
+        if isa(y, Array)
+            for j=1:length(y)
+                push!(expr_to_process, y[j])
+            end
+        else
+            push!(expr_to_process, x.args[i])
+        end
+    end
+
+    return expr_to_process
+end
+
 function pir_rws_cb(ast :: Expr, cbdata :: ANY)
-    @dprintln(4,"pir_rws_cb")
+    @dprintln(4,"pir_rws_cb for Expr")
 
     head = ast.head
     args = ast.args
