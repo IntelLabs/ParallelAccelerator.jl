@@ -47,7 +47,7 @@ script:
     julia --code-coverage=user examples/boltzmann/boltzmann.jl;
     julia --code-coverage=user examples/quant/quant.jl;
     julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl;
-    fi
+    fi;
     julia --code-coverage=user examples/harris/harris.jl;
     julia --code-coverage=user examples/juliaset/juliaset.jl;
     julia --code-coverage=user examples/laplace-3d/laplace-3d.jl;
