@@ -2262,6 +2262,16 @@ function pir_live_cb(ast :: ANY, cbdata :: ANY)
     return DomainIR.dir_live_cb(ast, cbdata)
 end
 
+function isSideEffectFreeAPI(node :: GlobalRef)
+  if node.mod == ParallelAccelerator.API
+    if in(node.name, ParallelAccelerator.API.reduce_operators) ||
+       in(node.name, ParallelAccelerator.API.unary_map_operators)
+      return true
+    end
+  end
+  return false
+end
+
 """
 Sometimes statements we exist in the AST of the form a=Expr where a is a Symbol that isn't live past the assignment
 and we'd like to eliminate the whole assignment statement but we have to know that the right-hand side has no
@@ -2324,22 +2334,27 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :sltint) ||
             isBaseFunc(func, :(===)) ||
             isBaseFunc(func, :<:) ||
-            isBaseFunc(func, :apply_type)
+            isBaseFunc(func, :apply_type) ||
+            isSideEffectFreeAPI(func)
+            @dprintln(3,"hasNoSideEffects returning true")
             return true
         elseif func == :ccall
             func = args[1]
             if func == QuoteNode(:jl_alloc_array_1d) ||
                func == QuoteNode(:jl_alloc_array_2d)
+                @dprintln(3,"hasNoSideEffects returning true")
                 return true
             end
         elseif isa(func, TopNode)
             @dprintln(3, "Found TopNode in hasNoSideEffects. type = ", typeof(func.name))
             if func.name == :getfield
+                @dprintln(3,"hasNoSideEffects returning true")
                 return true
             end
         end
     end
 
+    @dprintln(3,"hasNoSideEffects returning false")
     return false
 end
 
