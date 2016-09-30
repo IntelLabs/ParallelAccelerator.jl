@@ -2272,6 +2272,10 @@ function isSideEffectFreeAPI(node :: GlobalRef)
   return false
 end
 
+function isSideEffectFreeAPI(node :: ANY)
+  return false
+end
+
 """
 Sometimes statements we exist in the AST of the form a=Expr where a is a Symbol that isn't live past the assignment
 and we'd like to eliminate the whole assignment statement but we have to know that the right-hand side has no
