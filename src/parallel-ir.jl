@@ -2339,6 +2339,7 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :(===)) ||
             isBaseFunc(func, :<:) ||
             isBaseFunc(func, :apply_type) ||
+            isBaseFunc(func, :nfields) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
             return true
