@@ -2049,23 +2049,23 @@ function from_parforstart(args, linfo)
     instruction_count_expr = parfor.instruction_count_expr
     if num_threads_mode == 1 && instruction_count_expr != nothing
         insncount = from_expr(instruction_count_expr, linfo)
-        preclause = "$nthreadsvar = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n"
+        preclause *= "$nthreadsvar = computeNumThreads(((unsigned)" * insncount * ") * (" * lcountexpr * "));\n"
         nthreadsclause = "num_threads($nthreadsvar) "
     elseif num_threads_mode == 2
         if instruction_count_expr != nothing
             insncount = from_expr(instruction_count_expr, linfo)
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
+            preclause *= "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr ),computeNumThreads(((unsigned) $insncount ) * ( $lcountexpr ))),__LINE__,__FILE__);\n"
         else
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n"
+            preclause *= "J2cParRegionThreadCount j2c_block_region_thread_count(" * lcountexpr * ",__LINE__,__FILE__);\n"
         end
         preclause *= "$nthreadsvar = j2c_block_region_thread_count.getUsed();\n"
         nthreadsclause = "num_threads($nthreadsvar)"
     elseif num_threads_mode == 3
         if instruction_count_expr != nothing
             insncount = from_expr(instruction_count_expr, linfo)
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n"
+            preclause *= "J2cParRegionThreadCount j2c_block_region_thread_count(std::min(unsigned($lcountexpr),computeNumThreads(((unsigned) $insncount) * ($lcountexpr))),__LINE__,__FILE__, 0, 10);\n"
         else
-            preclause = "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n"
+            preclause *= "J2cParRegionThreadCount j2c_block_region_thread_count($lcountexpr,__LINE__,__FILE__, 0, 10);\n"
         end
         preclause *= "$nthreadsvar = j2c_block_region_thread_count.getUsed();\n"
         nthreadsclause = "if(j2c_block_region_thread_count.runInPar()) num_threads($nthreadsvar) "

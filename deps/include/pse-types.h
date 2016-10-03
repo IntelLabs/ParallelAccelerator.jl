@@ -46,11 +46,11 @@ class J2cParRegionThreadCount {
 protected:
     unsigned num_threads_used;
     unsigned m_line;
-    char *   m_file;
+    const char *   m_file;
     unsigned m_host_min_par;
     unsigned m_phi_min_par;
 public:
-    J2cParRegionThreadCount(unsigned iteration_count, unsigned line, char *file, unsigned host_min = 0, unsigned phi_min = 0) :
+    J2cParRegionThreadCount(unsigned iteration_count, unsigned line, const char *file, unsigned host_min = 0, unsigned phi_min = 0) :
         m_line(line),
         m_file(file),
         m_host_min_par(host_min),
