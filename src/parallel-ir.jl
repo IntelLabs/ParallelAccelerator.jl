@@ -2341,6 +2341,7 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :apply_type) ||
             isBaseFunc(func, :nfields) ||
             isBaseFunc(func, :_apply) || # Core._apply is used for tallking to codegen, e.g. applyting promote_typeof
+            isBaseFunc(func, :promote_type) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
             return true
