@@ -60,6 +60,47 @@ function compareIndex(a :: Any, s :: Any)
     return s1 == s2
 end
 
+function create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
+    @dprintln(3,"create_merged_output_from_map, output_map = ", output_map, " sym_to_type = ", sym_to_type)
+    # If there are no outputs then return nothing.
+    if length(output_map) == 0
+        return (nothing, [], true, nothing, [])
+    end
+
+    # If there is only one output then all we need is the symbol to return.
+    if length(output_map) == 1
+        for i in output_map
+            new_lhs = toRHSVar(i[1], sym_to_type[i[1]], state.LambdaVarInfo)
+            new_rhs = toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type[i[2]], state.LambdaVarInfo)
+            return (new_lhs, [new_lhs], true, [new_rhs])
+        end
+    end
+
+    lhs_order = RHSVar[]
+    rhs_order = RHSVar[]
+    for i in output_map
+        @dprintln(3,"Working on output ", i, " lhs = ", i[1], " rhs = ", i[2])
+        lhs_rhsvar = toRHSVar(i[1], sym_to_type[i[1]], state.LambdaVarInfo)
+        push!(lhs_order, lhs_rhsvar)
+        @dprintln(3,"lhs_rhsvar = ", lhs_rhsvar)
+        rhs_rhsvar = toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type[i[2]], state.LambdaVarInfo)
+        push!(rhs_order, rhs_rhsvar)
+        @dprintln(3,"rhs_rhsvar = ", rhs_rhsvar)
+    end
+    num_map = length(lhs_order)
+
+    # Multiple outputs.
+
+    # First, form the type of the tuple for those multiple outputs.
+    tt = Expr(:tuple)
+    for i = 1:num_map
+        push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.LambdaVarInfo))
+    end
+    temp_type = eval(tt)
+
+    ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
+end
+
 """
 Test whether we can fuse the two most recent parfor statements and if so to perform that fusion.
 """
@@ -434,6 +475,7 @@ function fuse(body, body_index, cur::Expr, state)
         @dprintln(2,"New reductions = ", prev_parfor.reductions)
 
         prev_parfor.postParFor = [ prev_parfor.postParFor[1:end-1]; cur_parfor.postParFor[1:end-1]]
+        @dprintln(2,"New initial postParFor = ", prev_parfor.postParFor)
         push!(prev_parfor.postParFor, oneIfOnly(output_items))
         @dprintln(2,"New postParFor = ", prev_parfor.postParFor, " typeof(postParFor) = ", typeof(prev_parfor.postParFor), " ", typeof(prev_parfor.postParFor[end]))
 

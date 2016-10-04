@@ -1246,42 +1246,6 @@ function getAliasMap(loweredAliasMap, sym)
     end
 end
 
-function create_merged_output_from_map(output_map, unique_id, state, sym_to_type, loweredAliasMap)
-    @dprintln(3,"create_merged_output_from_map, output_map = ", output_map, " sym_to_type = ", sym_to_type)
-    # If there are no outputs then return nothing.
-    if length(output_map) == 0
-        return (nothing, [], true, nothing, [])
-    end
-
-    # If there is only one output then all we need is the symbol to return.
-    if length(output_map) == 1
-        for i in output_map
-            new_lhs = toRHSVar(i[1], sym_to_type, state.LambdaVarInfo)
-            new_rhs = toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo)
-            return (new_lhs, [new_lhs], true, [new_rhs])
-        end
-    end
-
-    lhs_order = RHSVar[]
-    rhs_order = RHSVar[]
-    for i in output_map
-        push!(lhs_order, toRHSVar(i[1], sym_to_type, state.LambdaVarInfo))
-        push!(rhs_order, toRHSVar(getAliasMap(loweredAliasMap, i[2]), sym_to_type, state.LambdaVarInfo))
-    end
-    num_map = length(lhs_order)
-
-    # Multiple outputs.
-
-    # First, form the type of the tuple for those multiple outputs.
-    tt = Expr(:tuple)
-    for i = 1:num_map
-        push!(tt.args, CompilerTools.LambdaHandling.getType(rhs_order[i], state.LambdaVarInfo))
-    end
-    temp_type = eval(tt)
-
-    ( createRetTupleType(lhs_order, unique_id, state), lhs_order, false, rhs_order )
-end
-
 """
 Pull the information from the inner domain lambda into the outer lambda after applying it to a set of arguments.
 Return the body (as an array) after application.
