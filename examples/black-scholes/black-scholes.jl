@@ -28,16 +28,12 @@ using DocOpt
 
 @acc begin
 
-@inline function cndf2(in::Array{Float64,1})
+@inline function cndf2(in)
     out = 0.5 .+ 0.5 .* erf(0.707106781 .* in)
     return out
 end
 
-function blackscholes(sptprice::Array{Float64,1},
-                           strike::Array{Float64,1},
-                           rate::Array{Float64,1},
-                           volatility::Array{Float64,1},
-                           time::Array{Float64,1})
+function blackscholes(sptprice, strike, rate, volatility, time)
     logterm = log10(sptprice ./ strike)
     powterm = .5 .* volatility .* volatility
     den = volatility .* sqrt(time)
