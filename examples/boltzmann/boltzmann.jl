@@ -31,12 +31,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-function computeF(density::Float64,
-                  c_squ::Float64,
-                  u_squ::Float64,
-                  t::Float64,
-                  u::Float64,
-                  v::Float64) 
+function computeF(density, c_squ, u_squ, t, u, v)
     t * density * (1 + u / c_squ + 0.5 * (v / c_squ) * (v / c_squ) - u_squ / (2 * c_squ))
 end
 
@@ -122,9 +117,9 @@ end
     return F
 end
 
-function boltzmann(nx::Int, ny::Int)
+function boltzmann(nx, ny)
     density = 1.0
-    F  = [ fill!(zeros( nx, ny), density/9) for i = 1:9 ]
+    F  = [ fill!(zeros(nx, ny), density/9) for i = 1:9 ]
     G  = deepcopy(F)
     X1 = [ x == 1 ? 1 : 0 for x = 1:nx, y = 1:ny ]
     UX = zeros(nx, ny)
