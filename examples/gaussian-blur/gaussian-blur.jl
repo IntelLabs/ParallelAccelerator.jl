@@ -27,7 +27,7 @@ using ParallelAccelerator
 using DocOpt
 using Images
 
-@acc function blur(img::Array{Float32,2}, iterations::Int)
+@acc function blur(img, iterations)
     buf = Array(Float32, size(img)...) 
     runStencil(buf, img, iterations, :oob_skip) do b, a
        b[0,0] = 
@@ -78,7 +78,7 @@ Options:
     println("output file = ", out_file)
 
     function gaussian_blur(input_fname, output_fname, iterations)
-        local img :: Array{Float32, 2} = convert(Array{Float32, 2}, load(input_fname))
+        local img = convert(Array{Float32, 2}, load(input_fname))
         tic()
         blur(img, 0)    
         println("SELFPRIMED ", toq())
