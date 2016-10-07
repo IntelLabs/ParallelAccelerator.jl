@@ -1259,6 +1259,9 @@ function from_call(state::IRState, env::IREnv, expr::Expr)
     if result == nothing
         # do not normalize :ccall
         args = fun_ == :ccall ? args : normalize_args(state, env, args)
+        if fun_ == GlobalRef(Core.Intrinsics, :box)
+            args[2] = lookupConstDefForArg(state, args[2])
+        end
         expr.args = expr.head == :invoke ? [expr.args[1]; fun; args] : [fun; args]
         expr
     else
