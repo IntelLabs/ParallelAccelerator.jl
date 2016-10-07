@@ -27,7 +27,7 @@ using ParallelAccelerator
 using DocOpt
 using Images
 
-@acc function harrisCornerDetect(Iin::Matrix{Float32})
+@acc function harrisCornerDetect(Iin)
   (w, h) = size(Iin)
 
   Ix  = Array(Float32, w, h)
@@ -93,7 +93,7 @@ Options:
     println("output file = ", out_file)
 
     function harris(input_fname, output_fname)
-        local img :: Matrix{Float32} = convert(Matrix{Float32}, load(input_fname))
+        local img = convert(Matrix{Float32}, load(input_fname))
         tic()
         res = harrisCornerDetect(Matrix{Float32}())
         println("SELFPRIMED ", toq())
