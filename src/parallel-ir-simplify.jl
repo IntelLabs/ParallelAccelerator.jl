@@ -399,13 +399,13 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                     end
                 end
             elseif isInvoke(node)
-                @dprintln(3,"isInvoke. head = ", node.head, " type = ", typeof(node.args[2]), " name = ", node.args[2].name)
+                @dprintln(3,"isInvoke. head = ", node.head, " type = ", typeof(node.args[2]), " name = ", node.args[2])
                 if hasNoSideEffects(node) || isDeadCall(node, live_info.live_out)
                     @dprintln(3,"Eliminating dead call. node = ", node)
                     return CompilerTools.AstWalker.ASTWALK_REMOVE
                 end
             elseif isCall(node)
-                @dprintln(3,"isCall. head = ", node.head, " type = ", typeof(node.args[1]), " name = ", node.args[1].name)
+                @dprintln(3,"isCall. head = ", node.head, " type = ", typeof(node.args[1]), " name = ", node.args[1])
                 if hasNoSideEffects(node) || isDeadCall(node, live_info.live_out)
                     @dprintln(3,"Eliminating dead call. node = ", node)
                     return CompilerTools.AstWalker.ASTWALK_REMOVE
@@ -600,9 +600,9 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
                 return node
             end
             lhs = AstWalk(node.args[1], copy_propagate, data)
-            @dprintln(4,lhs)
+            @dprintln(4,"lhs = ", lhs)
             rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
-            @dprintln(4,rhs)
+            @dprintln(4,"rhs = ", rhs)
             # sometimes lhs can already be replaced with a constant
             if !isa(lhs, RHSVar)
                 return node
