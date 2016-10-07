@@ -26,6 +26,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
+#ParallelAccelerator.DomainIR.set_debug_level(3)
+#ParallelAccelerator.ParallelIR.set_debug_level(4)
+#using CompilerTools
+#CompilerTools.OptFramework.set_debug_level(3)
+
 @acc begin
 
 @inline function cndf2(in)
