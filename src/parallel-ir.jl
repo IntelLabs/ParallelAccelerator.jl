@@ -2695,13 +2695,18 @@ function nested_function_exprs(domain_lambda, out_state)
     @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body, " " , unique_node_id)
 
     # Re-create the body minus any dead basic blocks.
-    cfg = CompilerTools.CFGs.from_lambda(body)
+    cfg = CompilerTools.CFGs.from_lambda(body; opt=false)
+    @dprintln(3, "nested_function_exprs cfg = ", cfg)
     body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
     @dprintln(1,"AST after dead blocks removed, body = ", body, " " , unique_node_id)
 
     @dprintln(1,"Starting liveness analysis.", " " , unique_node_id)
     lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
+
+    body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+    @dprintln(1,"AST after copy propagation, body = ", body, " " , unique_node_id)
+    lives = computeLiveness(body, LambdaVarInfo)
 
     if print_times
     @dprintln(1,"Liveness Analysis time = ", ns_to_sec(time_ns() - start_time), " " , unique_node_id)
