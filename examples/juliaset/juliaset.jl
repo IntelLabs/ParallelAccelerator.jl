@@ -92,9 +92,7 @@ function juliaset(demo::Bool)
 
 end
 
-@acc function iterate(col::Int64,
-                 Z::Array{Complex{Float64},2},
-                 c::Complex{Float64})
+@acc function iterate(col, Z, c)
     for k = 1:col
         Z = Z.*Z .+ c
     end
