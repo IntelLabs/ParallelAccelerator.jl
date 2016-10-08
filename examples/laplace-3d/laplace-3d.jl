@@ -33,7 +33,7 @@ using DocOpt
 #ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
 
-@acc function compute(src::Array{Float32,3}, dst::Array{Float32,3}, N)
+@acc function compute(src, dst, N)
   runStencil(dst, src, N, :oob_skip) do b, a
     b[0,0,0] = (a[0,0,-1] + a[0,0,1] + a[0,-1,0] + a[0,1,0] + a[-1,0,0] + a[1,0,0]) / 6
     return a, b
