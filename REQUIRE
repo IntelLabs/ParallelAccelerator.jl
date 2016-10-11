@@ -2,4 +2,5 @@ julia 0.4
 CompilerTools
 DataStructures
 Compat
+DocOpt
 @windows WinRPM
