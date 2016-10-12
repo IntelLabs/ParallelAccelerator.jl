@@ -82,7 +82,7 @@ if Compat.is_windows()
         btest = open("blas_test.cpp","w")
         println(btest,"#include <cblas.h>\nint main(){return 0;}")
         close(btest)
-        run_result = readall(`$gpp -I $incdir blas_test.cpp`)
+        run(pipeline(`$gpp -I $incdir blas_test.cpp`, stdout=DevNull, stderr=DevNull))
         println(cf, "sys_blas = 1")
     catch some_exception
         println(cf, "sys_blas = 0")
