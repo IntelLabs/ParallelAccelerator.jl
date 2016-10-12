@@ -29,6 +29,9 @@ using ParallelAccelerator
 #ParallelAccelerator.DomainIR.set_debug_level(3)
 #ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
+#using CompilerTools
+#CompilerTools.OptFramework.set_debug_level(3)
+
 @acc function parfor1(n)
  A = Array(Int, n, n)
  @par for i in 1:n, j in 1:n
@@ -50,8 +53,8 @@ end
 end
 
 @acc function parfor3(n)
- A = Array(Int, n, n)
- s::Array{Int, 1} = zeros(n)
+ A::Array{Int,2} = Array(Int, n, n)
+ s::Array{Int,1} = zeros(Int, n)
  m::Int = 0
  @par s(.+) m(+) for i in 1:n
     for j = 1:n
