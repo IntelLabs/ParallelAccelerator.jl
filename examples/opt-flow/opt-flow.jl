@@ -32,6 +32,7 @@ using .Image
 #ParallelAccelerator.ParallelIR.set_debug_level(3)
 #ParallelAccelerator.set_debug_level(3)
 #ParallelAccelerator.CGen.set_debug_level(3)
+ParallelAccelerator.ParallelIR.PIRNumThreadsMode(2)
 
 @acc begin
 # Block Jacobi preconditioner
