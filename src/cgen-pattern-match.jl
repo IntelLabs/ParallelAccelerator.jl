@@ -607,12 +607,12 @@ function from_assignment_match_hcat(lhs, rhs::Expr, linfo)
         len = from_arraysize(args[1],1,linfo)
         clhs = from_expr(lhs,linfo)
         s *= "$clhs = j2c_array<$ctyp>::new_j2c_array_2d(NULL, $len, $size);\n"
-        s *= "for(int i=0; i<$len; i++) {\n"
         for j in 1:size
+            s *= "for(int i=0; i<$len; i++) {\n"
             arr = from_expr(args[j],linfo)
-            s *= "$clhs.data[i*$size+$(j-1)] = $arr.data[i];\n"
+            s *= "$clhs.data[$(j-1)*$len+i] = $arr.data[i];\n"
+            s *= "}\n"
         end
-        s *= "}\n"
     end
     return s
 end

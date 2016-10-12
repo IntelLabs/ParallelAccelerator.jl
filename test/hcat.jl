@@ -45,6 +45,6 @@ end
 
 using Base.Test
 println("Testing hcat...")
-@test_approx_eq HCatTest.test1() [1. 2. 3.; 4. 5. 6.]
+@test_approx_eq HCatTest.test1() hcat([1.,2.,3.],[4.,5.,6.]) 
 println("Done testing hcat.")
 
