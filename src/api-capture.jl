@@ -87,7 +87,7 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
         lhs = node.args[1]
         rhs = node.args[2]
         tmpvar = gensym()
-        node.head = ((string(head)[1] == '.') && VERSION >= v"0.5.0-dev+5381") ? :(.=) : :(=)
+        node.head = ((string(head)[1] == '.') && VERSION >= v"0.5.0-dev+5306") ? :(.=) : :(=)
         node.args = Any[ lhs, Expr(:call, GlobalRef(API, ref_assign_map[head]), lhs, rhs) ]
     elseif node.head == :ref
         node.head = :call

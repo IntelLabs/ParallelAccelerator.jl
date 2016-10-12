@@ -136,7 +136,7 @@ end
   end
 end
 
-if VERSION >= v"0.5.0-dev+5381"
+if VERSION >= v"0.5.0-dev+5306"
 @inline function to_tuple_type(t)
   if t <: Tuple
     t
