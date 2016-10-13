@@ -25,6 +25,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 module MiscTest
 using ParallelAccelerator
+using Compat
 
 #ParallelAccelerator.DomainIR.set_debug_level(4)
 #ParallelAccelerator.ParallelIR.set_debug_level(3)
@@ -181,7 +182,7 @@ println("Testing miscellaneous features...")
 @test MiscTest.mod_rem_test(-7,3) == [2, -1]
 @test MiscTest.mod_rem_test(-7,-3) == [-1, -1]
 @test MiscTest.accum1() == [3,3,3] 
-if VERSION > v"0.5.0-"
+if VERSION > v"0.5.0-" && !Compat.is_windows()
 @test MiscTest.accum2() == [6,6,6]
 else
 @test MiscTest.accum2() == [3,3,3] 
