@@ -68,7 +68,8 @@ if Compat.is_windows()
     conf_file = builddir * "\\generated\\config.jl"
     cf = open(conf_file, "w")
     println(cf, "backend_compiler = USE_MINGW")
-    println(cf, "openblas_lib = \"", Base.Libdl.find_library([string("libopenblas64_")]), "\"")
+    println(cf, "openblas_lib = \"\"")
+    #println(cf, "openblas_lib = \"", Base.Libdl.find_library([string("libopenblas64_")]), "\"")
     println(cf, "mkl_lib = \"", Base.Libdl.find_library([string("libmkl")]), "\"")
     
     try
