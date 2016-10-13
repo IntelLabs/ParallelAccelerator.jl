@@ -47,6 +47,35 @@ function relabel(exprs::Array{Any}, irState)
   return exprs
 end
 
+function simplifyBodyExpr(kernelF, state)
+    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(kernelF)
+    cfg = CompilerTools.CFGs.from_lambda(body)
+    body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
+    non_array_params = Set{LHSVar}()
+    changed = true
+    lives = computeLiveness(body, LambdaVarInfo)
+    while changed
+        @dprintln(1,"Removing statement with no dependencies from the AST with parameters")
+        rnd_state = RemoveNoDepsState(lives, non_array_params)
+        body = AstWalk(body, remove_no_deps, rnd_state)
+        @dprintln(3,"body after no dep stmts removed = ", body)
+
+        @dprintln(3,"top_level_no_deps = ", rnd_state.top_level_no_deps)
+
+        @dprintln(1,"Adding statements with no dependencies to the start of the AST.")
+        body = CompilerTools.LambdaHandling.prependStatements(body, rnd_state.top_level_no_deps)
+        @dprintln(3,"body after no dep stmts re-inserted = ", body)
+
+        @dprintln(1,"Re-starting liveness analysis.")
+        lives = computeLiveness(body, LambdaVarInfo)
+        @dprintln(1,"Finished liveness analysis.")
+
+        changed = rnd_state.change
+    end
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    return LambdaVarInfo, body
+end
+
 function mk_parfor_args_from_stencil(typ, head, args, irState)
   assert(length(args) == 4)
   local stat = args[1]
@@ -102,7 +131,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
       merge_correlations(irState, main_length_correlation, this_correlation)
     end
   end
-  bodyExpr = relabel(DomainIR.stencilGenBody(stat, kernelF, idxNodes, strideNodes, bufs, linfo), irState)
+  @dprintln(3, "before simplifyBodyExpr body=", kernelF.body)
+  bodyLinfo, bodyExpr = simplifyBodyExpr(kernelF, irState)
+  @dprintln(3, "before simplifyBodyExpr body=", bodyExpr)
+  bodyExpr = relabel(DomainIR.stencilGenBody(stat, bodyLinfo, bodyExpr, idxNodes, strideNodes, bufs, linfo, getLoopPrivateFlags()), irState)
   # rotate
   assert(is(bodyExpr[end].head, :tuple))
   @dprintln(3,"bodyExpr = ")

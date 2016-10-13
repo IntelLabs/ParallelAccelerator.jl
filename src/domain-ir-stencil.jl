@@ -244,15 +244,15 @@ function mkStencilLambda(state_, bufs, kernelBody, linfo, borderExp::QuoteNode)
   return stat, DomainLambda(linfo, krnBody)
 end
 
-function stencilGenBody(stat, kernelF, idxSymNodes, strideSymNodes, bufSymNodes, plinfo)
-    dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, kernelF.linfo)
+function stencilGenBody(stat, linfo, body, idxSymNodes, strideSymNodes, bufSymNodes, plinfo, private_flag)
+    dict = CompilerTools.LambdaHandling.mergeLambdaVarInfo(plinfo, linfo, private_flag) 
     @dprintln(3, "in stencilGenBody, dict = ", dict)
     # CompilerTools.LambdaHandling.replaceExprWithDict(krnExpr, dict)
     idxDict = Dict{LHSVar, Any}(zip(stat.idxSym, idxSymNodes))
     strideDict = Dict{LHSVar, Any}(zip(stat.strideSym, strideSymNodes))
     bufDict = Dict{LHSVar, Any}(zip(stat.bufSym, bufSymNodes))
     ldict = merge(dict, bufDict, idxDict, strideDict)
-    krnExpr = kernelF.body.args # body Expr array
+    krnExpr = body.args # body Expr array
     @dprintln(3,"idxDict = ", idxDict)
     @dprintln(3,"strideDict = ", strideDict)
     @dprintln(3,"bufDict = ", bufDict)
