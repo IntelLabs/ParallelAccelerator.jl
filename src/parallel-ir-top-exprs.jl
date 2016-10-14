@@ -55,6 +55,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
                 is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
                 @dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
 
+if false
                 if is_last_parfor && !is_new_parfor
                     simple = false
                     for j = 1:length(new_exprs)
@@ -73,6 +74,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
                         continue
                     end
                 end
+end
 
                 # If both are parfors then try to fuse them.
                 if is_new_parfor && is_last_parfor
@@ -82,7 +84,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
                     if length(pre_next_parfor) > 0
                         @dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
                         new_parfor = getParforNode(new_exprs[1])
-                        new_parfor.preParFor = [ pre_next_parfor, new_parfor.preParFor ]
+                        new_parfor.preParFor = [ pre_next_parfor..., new_parfor.preParFor... ]
                     end
                     fuse_ret = fuse(body, length(body), new_exprs[1], state)
                     if fuse_ret>0
