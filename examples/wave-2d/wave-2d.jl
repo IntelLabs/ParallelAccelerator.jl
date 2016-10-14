@@ -34,15 +34,7 @@ if "--demo" in ARGS
     using Winston
 end
 
-@acc function runWaveStencil(p::Array{Float64,2},
-                             c::Array{Float64,2},
-                             f::Array{Float64,2},
-                             r::Float64,
-                             t::Float64,
-                             n::Int,
-                             s2::Int,
-                             s4::Int,
-                             s::Int)
+@acc function runWaveStencil(p, c, f, r, t, n, s2, s4, s)
     runStencil(p, c, f, 1, :oob_skip) do p, c, f
         f[0, 0] = 2 * c[0, 0] - p[0, 0] + r * r * (c[-1, 0] + c[1, 0] + c[0, -1] + c[0, 1] - 4*c[0, 0])
     end
