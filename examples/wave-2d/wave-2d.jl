@@ -68,7 +68,7 @@ function prime_wave2d()
 
     dt = 0.0001     # Time resolution of the simulation
     dx = 0.01       # Distance between elements
-    r = speed * dt / dx 
+    r = speed * dt / dx
 
     n = 300
 
@@ -103,7 +103,7 @@ function wave2d(demo::Bool)
 
     dt = 0.0001     # Time resolution of the simulation
     dx = 0.01       # Distance between elements
-    r = speed * dt / dx 
+    r = speed * dt / dx
 
     n = 300
 
@@ -158,7 +158,7 @@ Options:
     tic()
     prime_wave2d()
     println("SELFPRIMED ", toq())
-    
+
     tic()
     wave2d(demo)
     println("SELFTIMED ", toq())
