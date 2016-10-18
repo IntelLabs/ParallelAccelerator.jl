@@ -401,7 +401,7 @@ function fuse(body, body_index, cur::Expr, state)
                     array_name = rhs.args[2]
                     assert(isa(array_name, RHSVar))
                     array_var = toLHSVar(array_name)
-                    arrayset_dict[array_var] = lhs
+#                    arrayset_dict[array_var] = lhs
                     if getDesc(array_var, state.LambdaVarInfo) & ISCAPTURED == ISCAPTURED
                         push!(escaping_sets, array_var)
                     end
