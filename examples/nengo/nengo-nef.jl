@@ -118,14 +118,14 @@ gain_B, bias_B = generate_gain_and_bias(N_B, -1, 1, rate_B[1], rate_B[2])
 
 @acc @inline function run_neurons(input,v,ref)
     w = v .+ (input .- v) .* dt ./ t_rc
-    wMask = w .>= 0
+    wMask = w .>= 0.0
     v[wMask] = w[wMask]
-    v[w .< 0] = 0
-    refMask = ref .> 0
-    v[refMask] = 0
+    v[w .< 0.0] = 0.0
+    refMask = ref .> 0.0
+    v[refMask] = 0.0
     ref[refMask] = (ref .- dt)[refMask]
-    spikes = v .> 1
-    v[spikes] = 0
+    spikes = v .> 1.0
+    v[spikes] = 0.0
     ref[spikes] = t_ref
     return spikes
 end
