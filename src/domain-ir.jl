@@ -1748,7 +1748,17 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                     var = makeCaptured(state, var)
                     var = toLHSVar(var)
                     pop!(args)
-                    f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
+                   # f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
+                    (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, vtyp])
+                    lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
+                    params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
+                    lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
+                    rhs = addToEscapingVariable(var, linfo, state.linfo)
+                    CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname], linfo)
+                    body.args = [ mk_expr(Type{etyp}, :(=), params[1], etyp); 
+                                  mk_expr(vtyp, :(=), params[2], rhs);
+                                  body.args...]
+                    f = DomainLambda(linfo, body)
                 end
                 expr = mk_mmap!(args, f)
             end
