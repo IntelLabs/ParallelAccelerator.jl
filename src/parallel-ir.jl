@@ -3895,4 +3895,16 @@ function dependenceCB(ast::ANY, cbdata)
     return nothing
 end
 
+function getType(node :: Expr, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    return node.typ
+end
+
+function getType(node :: RHSVar, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    return CompilerTools.LambdaHandling.getType(node, linfo)
+end
+
+function getType(node :: ANY, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo)
+    throw(string("Don't know how to getType for node of type ", typeof(node)))
+end
+
 end
