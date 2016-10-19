@@ -119,10 +119,10 @@ function wave2d(demo::Bool)
         runWaveStencil(p, c, f, r, t, n, s2, s4, s)
 
         # Transparent corner handling
-        f[1, 1] = (2 * c[1, 1] + (r-1) * p[1, 1] + 2*r*r* (c[2, 1]   + c[1, 2]   - 2*c[1, 1])) / (1+r) # X:1; Y:1
-        f[s, s] = (2 * c[s, s] + (r-1) * p[s, s] + 2*r*r* (c[s-1, s] + c[s, s-1] - 2*c[s, s])) / (1+r) # X:s; Y:s
-        f[1, s] = (2 * c[1, s] + (r-1) * p[1, s] + 2*r*r* (c[2, s]   + c[1, s-1] - 2*c[1, s])) / (1+r) # X:1; Y:s
-        f[s, 1] = (2 * c[s, 1] + (r-1) * p[s, 1] + 2*r*r* (c[s-1, 1] + c[s, 2]   - 2*c[s, 1])) / (1+r) # X:s; Y:1
+        f[1:1, 1:1] = (2 * c[1:1, 1:1] + (r-1) * p[1:1, 1:1] + 2*r*r* (c[2:2, 1:1]   + c[1:1, 2:2]   - 2*c[1:1, 1:1])) / (1+r) # X:1; Y:1
+        f[s:s, s:s] = (2 * c[s:s, s:s] + (r-1) * p[s:s, s:s] + 2*r*r* (c[s-1:s-1, s:s] + c[s:s, s-1:s-1] - 2*c[s, s])) / (1+r) # X:s; Y:s
+        f[1:1, s:s] = (2 * c[1:1, s:s] + (r-1) * p[1:1, s:s] + 2*r*r* (c[2:2, s:s]   + c[1:1, s-1:s-1] - 2*c[1:1, s:s])) / (1+r) # X:1; Y:s
+        f[s:s, 1:1] = (2 * c[s:s, 1:1] + (r-1) * p[s:s, 1:1] + 2*r*r* (c[s-1:s-1, 1:1] + c[s:s, 2:2]   - 2*c[s:s, 1:1])) / (1+r) # X:s; Y:1
 
         # Rotate buffers for next iteration
         tmp = p
