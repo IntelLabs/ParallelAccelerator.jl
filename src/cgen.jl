@@ -345,7 +345,7 @@ include("cgen-pattern-match.jl")
 # Emit declarations and "include" directives
 function from_header(isEntryPoint::Bool, linfo)
     s = from_UDTs(linfo)
-    isEntryPoint ? from_includes() * from_globals() * s : s
+    isEntryPoint ? from_includes() * from_globals(linfo) * s : s
 end
 
 function from_includes()
@@ -414,7 +414,7 @@ function from_includes()
     return s
 end
 
-function from_globals()
+function from_globals(linfo)
     global lstate
     s = ""
     for (name, value) in lstate.globalConstants
@@ -425,7 +425,7 @@ function from_globals()
             shape = mapfoldl(x -> string(x), (a,b) -> a * "," * b, size(value))
             @dprintln(3,"Array alloc shape = ", shape)
             data_name = "_" * name * "_"
-            value_str = "{" * mapfoldl(x -> string(x), (a,b) -> a * "," * b, value) * "}"
+            value_str = "{" * mapfoldl(x -> from_expr(x, linfo), (a,b) -> a * "," * b, value) * "}"
             s *= "static $(eltyp) $(data_name)[$(len)] = " * value_str * ";\n"
             s *= "static j2c_array<$eltyp> $(name) = j2c_array<$eltyp>::new_j2c_array_$(dims)d($(data_name), $shape);\n"
         end
@@ -2448,6 +2448,10 @@ function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,
       "DBL_MIN"
     elseif is(ast, -Inf32)
       "FLT_MIN"
+    elseif isa(ast, Int64) && (ast >= (1<<31) || ast < -(1<<31))
+      string("0x", hex(ast), "LL")
+    elseif isa(ast, UInt64) && (ast >= (1<<32))
+      string("0x", hex(ast), "ULL")
     else
       string(ast)
     end
