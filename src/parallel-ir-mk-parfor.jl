@@ -225,8 +225,10 @@ function mk_arrayset1(num_dim_inputs,
     @dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     arr_typ = CompilerTools.LambdaHandling.getType(array_name, state.LambdaVarInfo)
     elem_typ = getArrayElemType(array_name, state)  # The type of the array reference will be the element type.
+    value_typ = getType(value, state.LambdaVarInfo)
     @dprintln(3,"mk_arrayset1 array type = ", arr_typ)
     @dprintln(3,"mk_arrayset1 element type = ", elem_typ)
+    @dprintln(3,"mk_arrayset1 value type = ", value_typ)
     @dprintln(3,"mk_arrayset1 range = ", range)
 
     # If the access is known to be within the bounds of the array then use unsafe_arrayset to forego the boundscheck.
@@ -256,6 +258,11 @@ function mk_arrayset1(num_dim_inputs,
     end
 
     @dprintln(3,"mk_arrayset1 indsyms = ", indsyms)
+
+    # Some implicit numeric conversion?
+    if value_typ != elem_typ
+        @dprintln(3,"mk_arrayset1 value and element types do not match.")
+    end
 
     if boxit
        te_value = Expr(:call, GlobalRef(Base, :box), elem_typ, :($value))
@@ -927,7 +934,9 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         end
     end
     out_body = out_body[1:oblen-1]
+    @dprintln(3, "out_body after stripping last = ", out_body, " " , unique_node_id)
     for i = 1:length(dl.outputs)
+        @dprintln(3, "Working on dl.outputs index ", i)
         if length(inputInfo[i].range) != 0
             tfa = createTempForRangedArray(inputInfo[i].array, inputInfo[i].range, 2, state)
             tfa_typ = getArrayElemType(inputInfo[i].array, state)
@@ -939,8 +948,10 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         if box_tfa
             push!(out_body, mk_assignment_expr(tfa, Expr(:call, GlobalRef(Base, :box), tfa_typ, lbexpr.args[i]), state))
         else
+            @dprintln(3, "Adding assignment for ", tfa, " and ", lbexpr.args[i])
             push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
         end
+        @dprintln(3, "Adding mk_arrayset1 for ", inputInfo[i].array, " and ", parfor_index_syms, " and ", tfa)
         push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         if length(condExprs) > 0
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
