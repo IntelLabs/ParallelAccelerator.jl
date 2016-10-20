@@ -1451,25 +1451,31 @@ function translate_call_copy!(state, env, args)
     end
     #args = normalize_args(state, env, nargs == 2 ? args : Any[args[2], args[4]])
     dprintln(env,"got copy!, args=", args)
-    argtyp = typeOfOpr(state, args[1])
-    if isArrayType(argtyp)
-        eltyp = eltype(argtyp)
-        if idx_to == nothing
-          expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
-        else # range copy
-          to_range = mk_range(state, idx_to, 1, copy_len)
-          from_range = mk_range(state, idx_from, 1, copy_len)
-          ranges = Any[from_range, to_range]
-          args = Any[inline_select(env, state, mk_select(args[1], mk_ranges(to_range))),
-                     inline_select(env, state, mk_select(args[2], mk_ranges(from_range)))]
-          expr = mk_mmap!(args, DomainLambda(Type[eltyp,eltyp], Type[eltyp], params->Any[Expr(:tuple, params[2])], state.linfo))
+    argtyp1 = typeOfOpr(state, args[1])
+    argtyp2 = typeOfOpr(state, args[2])
+    if isArrayType(argtyp1) && isArrayType(argtyp2)
+        eltyp1 = eltype(argtyp1)
+        eltyp2 = eltype(argtyp2)
+        if eltyp1 == eltyp2 
+            if idx_to == nothing
+              expr = mk_mmap!(args, DomainLambda(Type[eltyp1,eltyp2], Type[eltyp1], params->Any[Expr(:tuple, params[2])], state.linfo))
+            else # range copy
+              to_range = mk_range(state, idx_to, 1, copy_len)
+              from_range = mk_range(state, idx_from, 1, copy_len)
+              ranges = Any[from_range, to_range]
+              args = Any[inline_select(env, state, mk_select(args[1], mk_ranges(to_range))),
+                         inline_select(env, state, mk_select(args[2], mk_ranges(from_range)))]
+              expr = mk_mmap!(args, DomainLambda(Type[eltyp1,eltyp2], Type[eltyp1], params->Any[Expr(:tuple, params[2])], state.linfo))
+            end
+            dprintln(env, "turn copy! into mmap! ", expr)
+        else
+            warn("cannot handle non-matching types ", (eltyp1, eltyp2), " for copy! ", args)
         end
-        dprintln(env, "turn copy! into mmap! ", expr)
     else
         warn("cannot handle copy! with arguments ", args)
         #expr = mk_copy(args[1])
     end
-    expr.typ = argtyp
+    expr.typ = argtyp1
     return expr
 end
 
@@ -1742,17 +1748,25 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                 var = args[2]
                 vtyp = typeOfOpr(state, var)
                 if isArrayType(vtyp) # set to array value
-                    # TODO: assert that vtyp must be equal to etyp here, or do a cast?
-                    f = DomainLambda(Type[etyp, etyp], Type[etyp], params->Any[Expr(:tuple, params[2])], state.linfo)
+                    evtyp = elmTypOf(vtyp)
+                    # f = DomainLambda(Type[etyp, evtyp], Type[etyp], params->Any[Expr(:tuple, params[2])], state.linfo)
+                    (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, evtyp])
+                    lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
+                    lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
+                    params = CompilerTools.LambdaHandling.getInputParameters(linfo)
+                    CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname, params[2]], linfo)
+                    body.args = [ mk_expr(Type{etyp}, :(=), lookupLHSVarByName(params[1], linfo), etyp); 
+                                  body.args...]
+                    f = DomainLambda(linfo, body)
                 else # set to scalar value
                     var = makeCaptured(state, var)
                     var = toLHSVar(var)
                     pop!(args)
-                   # f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
+                    # f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
                     (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, vtyp])
                     lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
-                    params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
                     lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
+                    params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
                     rhs = addToEscapingVariable(var, linfo, state.linfo)
                     CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname], linfo)
                     body.args = [ mk_expr(Type{etyp}, :(=), params[1], etyp); 
@@ -2407,9 +2421,21 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     @assert length(args)==2 "fill! should have 2 arguments"
     arr = args[1]
     ival = args[2]
-    typs = Type[typeOfOpr(state, arr)]
+    atyp = typeOfOpr(state, arr)
+    etyp = elmTypOf(atyp)
     ival = makeCaptured(state, ival)
-    domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
+    ityp = typeOfOpr(state, ival)
+    #domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
+    (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, ityp])
+    lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
+    lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
+    params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
+    rhs = addToEscapingVariable(ival, linfo, state.linfo)
+    CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname], linfo)
+    body.args = [ mk_expr(Type{etyp}, :(=), params[1], etyp); 
+                  mk_expr(ityp, :(=), params[2], rhs);
+                  body.args...]
+    domF = DomainLambda(linfo, body)
     expr = mmapRemoveDupArg!(state, mk_mmap!([arr], domF))
     expr.typ = typ
     return expr
