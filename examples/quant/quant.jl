@@ -188,7 +188,7 @@ Options:
     println("SELFPRIMED ", compiletime)
 
     tic()
-    amerpayoffput, finalputpayoff = model(strike, paths, steps, asset) 
+    amerpayoffput, finalputpayoff = model(strike, paths, steps, asset)
     selftimed = toq()
     println("European Put Option Price: ", finalputpayoff)
     println("American Put Option Price: ", amerpayoffput)
