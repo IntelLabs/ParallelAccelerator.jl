@@ -54,13 +54,13 @@ script:
     julia --code-coverage=user examples/opt-flow/opt-flow.jl;
     julia --code-coverage=user examples/wave-2d/wave-2d.jl;
     julia --code-coverage=user examples/nengo/nengo-nef.jl;
+    julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
     fi
 
 after_success:
   # Run HPAT tests.
   - >
     if [ $TEST_SUITE = 'hpat-tests' ]; then
-    julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
     sudo apt-get install -y nodejs npm;
     npm install travis-ci;
     node trigger-build.js;
