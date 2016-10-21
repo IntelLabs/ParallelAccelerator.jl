@@ -669,16 +669,20 @@ function divide_work(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_
     else
         assert(index <= length(dims))
         total_len = sum(map(x -> x.len, dims[index:end]))
-        percentage = dims[index].len / total_len
-        divisions_for_this_dim = Int(round(num_threads * percentage))
+        if total_len == 0
+            divisions_for_this_dim = num_threads
+        else
+            percentage = dims[index].len / total_len
+            divisions_for_this_dim = Int(round(num_threads * percentage))
+#            @dprintln(3, "total = ", total_len, " percentage = ", percentage, " divisions = ", divisions_for_this_dim)
+        end
 
         chunkstart = full_iteration_space.lower_bounds[dims[index].dim]
-        chunkend   = full_iteration_space.upper_bounds[dims[index].dim] #dims[index].len
+        chunkend   = full_iteration_space.upper_bounds[dims[index].dim]
 
         threadstart = start_thread
         threadend   = end_thread
 
-#        @dprintln(3, "total = ", total_len, " percentage = ", percentage, " divisions = ", divisions_for_this_dim)
         for i = 1:divisions_for_this_dim
             (ls, le, chunkstart)  = chunk(chunkstart,  chunkend,  divisions_for_this_dim - i + 1)
             (ts, te, threadstart) = chunk(threadstart, threadend, divisions_for_this_dim - i + 1)
@@ -783,7 +787,18 @@ function isf(t :: Function,
         try
             assignments = divide_fis(full_iteration_space, nthreads())
         catch something
-            println(STDERR, "Error dividing up work for threads, range = ", full_iteration_space, " num_threads = ", nthreads())
+#            Base.Threads.lock!(println_mutex)
+            msg = string("Error dividing up work for threads, range = ", full_iteration_space, " num_threads = ", nthreads(), " tid = ", tid)
+#            Base.Threads.unlock!(println_mutex)
+            ccall(:puts, Cint, (Cstring,), msg)
+
+            bt = catch_backtrace()
+            s = sprint(io->Base.show_backtrace(io, bt))
+            ccall(:puts, Cint, (Cstring,), string(s))
+
+            msg = string(something)
+            ccall(:puts, Cint, (Cstring,), msg)
+            throw(msg)
         end
 
         try 
