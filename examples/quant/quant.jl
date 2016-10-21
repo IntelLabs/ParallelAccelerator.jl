@@ -36,7 +36,7 @@ function det2x2(a::Array{Float64,2})
   b1 = a[2]
   a2 = a[3]
   b2 = a[4]
-  a1 * b2 - a2 * b1 
+  a1 * b2 - a2 * b1
 end
 
 function det3x3(a::Array{Float64,2})
@@ -51,8 +51,8 @@ function det3x3(a::Array{Float64,2})
   c3 = a[9]
   a1 * b2 * c3 - a1 * b3 * c2 - a2 * b1 * c3 + a2 * b3 * c1 + a3 * b1 * c2 - a3 * b2 * c1
 end
-   
-function inv2x2(a::Array{Float64,2}) 
+
+function inv2x2(a::Array{Float64,2})
   d = det2x2(a)
   Float64[a[4] (-a[3]); (-a[2]) a[1]] ./ d
 end
@@ -68,40 +68,42 @@ function inv3x3(a::Array{Float64,2})
   a13 = a[7]
   a23 = a[8]
   a33 = a[9]
-  Float64[ det2x2(Float64[a22 a23; a32 a33])/d det2x2(Float64[a13 a12; a33 a32])/d det2x2(Float64[a12 a13; a22 a23])/d;
-    det2x2(Float64[a23 a21; a33 a31])/d det2x2(Float64[a11 a13; a31 a33])/d det2x2(Float64[a13 a11; a23 a21])/d;
-    det2x2(Float64[a21 a22; a31 a32])/d det2x2(Float64[a12 a11; a32 a31])/d det2x2(Float64[a11 a12; a21 a22])/d ] 
+  Float64[det2x2(Float64[a22 a23; a32 a33])/d det2x2(Float64[a13 a12; a33 a32])/d det2x2(Float64[a12 a13; a22 a23])/d;
+          det2x2(Float64[a23 a21; a33 a31])/d det2x2(Float64[a11 a13; a31 a33])/d det2x2(Float64[a13 a11; a23 a21])/d;
+          det2x2(Float64[a21 a22; a31 a32])/d det2x2(Float64[a12 a11; a32 a31])/d det2x2(Float64[a11 a12; a21 a22])/d ]
 end
 
-function init( numPaths::Int, numSteps::Int ) 
+function init(numPaths::Int, numSteps::Int)
     # Pre-compute some values
     dt = maturity / numSteps
-    volSqrtdt = vol*sqrt(dt)
-    fwdFactor = vol^2*dt*-0.5
+    volSqrtdt = vol * sqrt(dt)
+    fwdFactor = vol^2 * dt * -0.5
     vsqrtdt_log2e = volSqrtdt * log2(exp(1.0))
-    fwdFactor_log2e = fwdFactor* log2(exp(1.0))
+    fwdFactor_log2e = fwdFactor * log2(exp(1.0))
 
     # Storage
     # Compute all per-path asset values for each time step
     # NOTE: hand-hoisting obscures the basic formula. 
     # Can the compiler do this optimization?
     asset = Array(Array{Float64,1}, numSteps+1)
-    asset[1] = Array(Float64,numPaths)
-    fill!(asset[1],spot)
+    asset[1] = Array(Float64, numPaths)
+    fill!(asset[1], spot)
     for s=2:numSteps+1
-        asset[s] = asset[s-1] .* exp2(fwdFactor_log2e .+ vsqrtdt_log2e .* randn(numPaths)) 
+        asset[s] = asset[s-1] .* exp2(fwdFactor_log2e .+ vsqrtdt_log2e .* randn(numPaths))
     end
     return asset
 end
 
-@acc function dotp(a, b) 
+@acc begin
+
+function dotp(a, b)
   sum(a .* b)
 end
 
-@acc function model(strike::Float64, numPaths::Int, numSteps::Int, asset :: Array{Array{Float64,1},1})
+function model(strike, numPaths, numSteps, asset)
     avgPathFactor = 1.0/numPaths
     putpayoff = max(strike .- asset[numSteps+1], 0.0)
-    cashFlowPut = putpayoff * avgPathFactor 
+    cashFlowPut = putpayoff * avgPathFactor
     # Now go back in time using regression
     for s = numSteps:-1:2
         curasset = asset[s]
@@ -124,14 +126,14 @@ end
         sum2 += ridgecorrect
         sum3 += ridgecorrect
         sum4 += ridgecorrect
-        sqrtest = Float64[sum0 sum1 sum2; 
-                          sum1 sum2 sum3; 
-                          sum2 sum3 sum4] 
+        sqrtest = Float64[sum0 sum1 sum2;
+                          sum1 sum2 sum3;
+                          sum2 sum3 sum4]
         invsqr = inv3x3(sqrtest)
         vp0 = dotp(cashFlowPut, valPut0)
         vp1 = dotp(cashFlowPut, valPut1)
         vp2 = dotp(cashFlowPut, valPut2)
-        (betaPut0,betaPut1,betaPut2) = [vp0 vp1 vp2]*invsqr
+        (betaPut0, betaPut1, betaPut2) = [vp0 vp1 vp2] * invsqr
         regImpliedCashFlow = valPut0 .* betaPut0 .+ valPut1 .* betaPut1 .+ valPut2 .* betaPut2
         payoff = valPut0 .* (strike .- curasset)
         pcond = payoff .> regImpliedCashFlow
@@ -140,7 +142,10 @@ end
 
     amerpayoffput = sum(cashFlowPut)
     finalputpayoff = sum(putpayoff)
+
     return amerpayoffput/numPaths, finalputpayoff/numPaths
+end
+
 end
 
 function main()
@@ -178,9 +183,9 @@ Options:
 
     asset = init(paths, steps)
     tic()
-    model(strike, 1, 1, asset) 
+    model(strike, 1, 1, asset)
     compiletime = toq()
-    println("SELFPRIMED ", compiletime) 
+    println("SELFPRIMED ", compiletime)
 
     tic()
     amerpayoffput, finalputpayoff = model(strike, paths, steps, asset) 
