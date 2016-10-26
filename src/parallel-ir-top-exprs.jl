@@ -762,12 +762,14 @@ end
 run_nested_task_directly = true
 
 function process_cur_task(cur_task::TaskInfo, new_body, state)
+    @dprintln(3,"process_cur_task = ", cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
     range_var = string(Base.function_name(cur_task.task_func),"_range_var")
     range_sym = Symbol(range_var)
     range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
     range_lhsvar = toLHSVar(range_rhsvar)
     
     run_task_directly = haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY") || (state.in_nested && run_nested_task_directly)
+    @dprintln(3,"run_task_directly = ", run_task_directly, " state.in_nested = ", state.in_nested, " run_nested_task_directly = ", run_nested_task_directly)
 
     if run_task_directly
         @dprintln(3,"Inserting call to task function directly ", range_sym, " ", range_rhsvar)
@@ -776,7 +778,6 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
     else
         @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
     end
-    @dprintln(3,cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
     @dprintln(3,"Cur LambdaVarInfo = ", state.LambdaVarInfo)
 
     in_len  = length(cur_task.input_symbols)
@@ -833,11 +834,6 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         #@dprintln(3,"whole_iteration_range = ", whole_iteration_range)
         @dprintln(3,"real_args_build = ", real_args_build)
 
-        tup_var = string(Base.function_name(cur_task.task_func),"_tup_var")
-        tup_sym = Symbol(tup_var)
-        tup_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(tup_sym, SimpleVector, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
-        tup_lhsvar = toLHSVar(tup_rhsvar)
-
         if cur_task.ret_types != Void
             red_array_lhsvar = createVarForTask(cur_task, "_red_array", Array{Any,1}, state)
             push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
@@ -848,11 +844,6 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), TypedExpr(pir_range_actual, :call, cstr_expr, cstr_params...)))
         task_globalref = GlobalRef(ParallelAccelerator.ParallelIR, Base.function_name(cur_task.task_func))
-        if cur_task.ret_types != Void
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
-        else
-            push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
-        end
         #push!(new_body, Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :got_here_1), range_lhsvar))
         if run_task_directly
           if cur_task.ret_types != Void
@@ -887,6 +878,17 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                                          real_args_build...)
           end
         else
+            tup_var = string(Base.function_name(cur_task.task_func),"_tup_var")
+            tup_sym = Symbol(tup_var)
+            tup_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(tup_sym, SimpleVector, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+            tup_lhsvar = toLHSVar(tup_rhsvar)
+
+            if cur_task.ret_types != Void
+                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
+            else
+                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
+            end
+
             svec_args = mk_svec_expr(Any)
             insert_task_expr = TypedExpr(Void,
                                          :call,
@@ -898,43 +900,54 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
         end
         push!(new_body, insert_task_expr)
+
         if cur_task.ret_types != Void
-            red_loop_index_lhsvar = createVarForTask(cur_task, "_reduction_loop_index", Int, state)
-            unique_node_id = get_unique_num()
-            #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole reduction array = ", deepcopy(red_array_lhsvar)))
+            if run_task_directly || haskey(ENV,"PROSPECT_CALL_ISF")
+                for l = 1:red_len
+                    push!(new_body, 
+                      mk_assignment_expr(
+                        deepcopy(cur_task.reduction_vars[l].name), 
+                        TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                            Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), TypedExpr(Int, :call, GlobalRef(Base.Threads,:threadid))), l), cur_task.ret_types[l]), state))
+                end
+            else
+                red_loop_index_lhsvar = createVarForTask(cur_task, "_reduction_loop_index", Int, state)
+                unique_node_id = get_unique_num()
+                #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "whole reduction array = ", deepcopy(red_array_lhsvar)))
 
-            # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
-            for l = 1:red_len
-                push!(new_body, mk_assignment_expr(
-                                   deepcopy(cur_task.reduction_vars[l].name), 
-                                   TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
-                                     Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
-            end
+                # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
+                for l = 1:red_len
+                    push!(new_body, mk_assignment_expr(
+                                       deepcopy(cur_task.reduction_vars[l].name), 
+                                       TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                         Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
+                end
 
-            push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
-            for l = 1:red_len
-                @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
-                reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
-                                                deepcopy(cur_task.reduction_vars[l].name), 
-                                                TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
-                                                  Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l), cur_task.ret_types[l]))
-                @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
+                push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
+                for l = 1:red_len
+                    @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
+                    reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
+                                                    deepcopy(cur_task.reduction_vars[l].name), 
+                                                    TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
+                                                      Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l), cur_task.ret_types[l]))
+                    @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
 
-                for stmt in reduction_code
-                    @dprintln(3, "reduction stmt = ", stmt)
-                    if isBareParfor(stmt) 
-                        @dprintln(3, "reduction stmt is parfor so recreating loops")
-                        recreateLoops(new_body, stmt.args[1], state, state.LambdaVarInfo)
-                    else
-                        @dprintln(3, "reduction stmt is normal")
-                        push!(new_body, stmt)
+                    for stmt in reduction_code
+                        @dprintln(3, "reduction stmt = ", stmt)
+                        if isBareParfor(stmt) 
+                            @dprintln(3, "reduction stmt is parfor so recreating loops")
+                            recreateLoops(new_body, stmt.args[1], state, state.LambdaVarInfo)
+                        else
+                            @dprintln(3, "reduction stmt is normal")
+                            push!(new_body, stmt)
+                        end
                     end
                 end
+
+                push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
+
+                @dprintln(3,"LambdaVarInfo after reduction code = ", state.LambdaVarInfo)
             end
-
-            push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
-
-            @dprintln(3,"LambdaVarInfo after reduction code = ", state.LambdaVarInfo)
         end
     else
         throw(string("insert sequential task not implemented yet"))
