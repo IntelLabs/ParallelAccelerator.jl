@@ -909,6 +909,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                         deepcopy(cur_task.reduction_vars[l].name), 
                         TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
                             Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), TypedExpr(Int, :call, GlobalRef(Base.Threads,:threadid))), l), cur_task.ret_types[l]), state))
+#                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index threadid of red_array = ", deepcopy(cur_task.reduction_vars[l].name)))
                 end
             else
                 red_loop_index_lhsvar = createVarForTask(cur_task, "_reduction_loop_index", Int, state)
@@ -921,6 +922,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                                        deepcopy(cur_task.reduction_vars[l].name), 
                                        TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
                                          Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
+#                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index 1 of red_array = ", deepcopy(cur_task.reduction_vars[l].name)))
                 end
 
                 push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
@@ -942,6 +944,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                             push!(new_body, stmt)
                         end
                     end
+#                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "next reduction from red_array = ", deepcopy(cur_task.reduction_vars[l].name)))
                 end
 
                 push!(new_body, Expr(:loopend, deepcopy(red_loop_index_lhsvar)))
