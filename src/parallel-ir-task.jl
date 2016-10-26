@@ -607,7 +607,21 @@ end
 
 if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
 
-#println_mutex = Mutex()
+println_mutex = Mutex()
+one_at_a_time_mutex = Mutex()
+
+function lock_one()
+    Base.Threads.lock(one_at_a_time_mutex)
+end
+function unlock_one()
+    Base.Threads.unlock(one_at_a_time_mutex)
+end
+
+function ThreadSafePrintln(args...)
+    Base.Threads.lock(println_mutex)
+    println(args...)
+    Base.Threads.unlock(println_mutex)
+end
 
 function tprintln(args...)
   for a in args
@@ -1158,7 +1172,7 @@ DEBUG_TASK_FUNCTIONS = false
 
 function addToBody!(new_body, x, line_num)
     push!(new_body, x) 
-#    push!(new_body, LineNumberNode(line_num))
+    push!(new_body, LineNumberNode(line_num))
     return line_num + 1
 end
 
@@ -1760,7 +1774,17 @@ function parforToTask(parfor_index, bb_statements, body, state)
     task_body = TypedExpr(Int, :body)
     saved_loopNests = deepcopy(the_parfor.loopNests)
 
+    # If the initial value of the reduction variable is not a bits type then it will be passed by reference and when the task function updates
+    # it then this creates a race in multi-threaded mode.  So, here we deepcopy any incoming initial reduction variable back to itself
+    # so that each thread gets its own copy.
+    for dc_red_var in reduction_vars
+        tf_red_var = oldToTaskMap[dc_red_var].value
+        @dprintln(3, "Adding deepcopy of reduction var to task function prolog. reduction_var = ", dc_red_var, " task_func_reduction_var = ", tf_red_var)
+        push!(task_body.args, mk_assignment_expr(deepcopy(tf_red_var), Expr(:call, :deepcopy, deepcopy(tf_red_var)), newLambdaVarInfo))
+    end
+
     if DEBUG_TASK_FUNCTIONS
+#      push!(task_body.args, Expr(:call, ParallelAccelerator.ParallelIR.lock_one))
       for i in all_arg_names
         push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), string(i), " = ", toLHSVar(i, newLambdaVarInfo)))
       end
@@ -1852,6 +1876,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     if DEBUG_TASK_FUNCTIONS
         push!(task_body.args, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ending task function ", task_func_name))
+#        push!(task_body.args, Expr(:call, ParallelAccelerator.ParallelIR.unlock_one))
     end
 
     push!(task_body.args, TypedExpr(Void, :return, nothing))
