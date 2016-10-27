@@ -1,6 +1,6 @@
 julia 0.4
-CompilerTools
-DataStructures
-Compat
+CompilerTools 0.2.0
+DataStructures 0.4.6
+Compat 0.8.0
 DocOpt
 @windows WinRPM
