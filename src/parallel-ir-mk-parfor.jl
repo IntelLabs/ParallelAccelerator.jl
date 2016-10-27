@@ -61,9 +61,9 @@ function augment_sn(dim :: Int64, index_var, range :: Array{DimensionSelector,1}
     xtyp = typeof(index_var)
     @dprintln(3,"augment_sn dim = ", dim, " index_var = ", index_var, " range = ", range, " xtyp = ", xtyp)
 
-    if xtyp == Int64 || xtyp == TypedVar || xtyp == Expr
+    if xtyp == Int64 || xtyp == Expr
         base = index_var
-    elseif xtyp == Symbol
+    else
         base = toRHSVar(index_var,Int64,linfo)
     end
 
