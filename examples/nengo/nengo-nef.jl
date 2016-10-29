@@ -156,17 +156,7 @@ function compute_decoder(encoder, gain, bias, func=x->x)
     return decoder
 end
 
-@acc function simulate(NT::Int,
-                       inputs::Array{Float, 1},
-                       weights::Array{Float, 2},
-                       pstc_scale::Float,
-                       decoder_B::Array{Float,2},
-                       gain_B::Array{Float,1},
-                       bias_B::Array{Float,1},
-                       encoder_A::Array{Int,1},
-                       gain_A::Array{Float,1},
-                       bias_A::Array{Float,1},
-                       N_A, N_B)
+@acc function simulate(NT, inputs, weights, pstc_scale, decoder_B, gain_B, bias_B, encoder_A, gain_A, bias_A, N_A, N_B)
 
     v_A = zeros(Float, N_A)       # voltage for population A
     ref_A = zeros(Float, N_A)     # refractory period for population A
