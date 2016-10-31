@@ -61,6 +61,15 @@ const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
 const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy])
 
+# Binary operators/functions
+const comparison_map_operators = Symbol[ :.>, :.<, :.<=, :.>=, :.== ]
+
+const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :.^, 
+    :div, :mod, :rem, :&, :|, :$, :min, :max])
+
+const binary_operators = binary_map_operators
+
 @inline sum(A::DenseArray{Bool}) = sum(1 .* A)
 @inline sum(A::DenseArray{Bool}, x::Int) = sum(1 .* A, x)
 
@@ -78,8 +87,12 @@ for f in unary_operators
         @noinline function ($f){T<:Number}(A::DenseArray{T})
             (Base.$f)(A)
         end
-        @inline function ($f)(A...)
-            (Base.$f)(A...)
+    end
+    if !(in(f, binary_operators))
+        @eval begin
+            @inline function ($f)(A...)
+                (Base.$f)(A...)
+            end
         end
     end
 end
@@ -92,15 +105,6 @@ for f in unary_map_operators
     end
 end
 
-# Binary operators/functions
-const comparison_map_operators = Symbol[ :.>, :.<, :.<=, :.>=, :.== ]
-
-const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
-    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :.^, 
-    :div, :mod, :rem, :&, :|, :$, :min, :max])
-
-const binary_operators = binary_map_operators
-
 for f in binary_operators
     @eval begin
         @noinline function ($f){T1<:Number,T2<:Number}(A::T1, B::DenseArray{T2})
@@ -111,15 +115,15 @@ for f in binary_operators
         end
     end
     if f != :* && f != :/
-        @eval @noinline function ($f){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
-            (Base.$f)(A, B)
+        @eval begin
+            @noinline function ($f){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
+                (Base.$f)(A, B)
+            end
         end
     end
-    if f != :- && f != :+
-        @eval begin
-            @inline function ($f)(args...)
-                (Base.$f)(args...)
-            end
+    @eval begin
+        @inline function ($f)(args...)
+            (Base.$f)(args...)
         end
     end
 end
