@@ -1745,7 +1745,8 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                 typ = (typ == Any) ? arrTyp : typ
             else
                 args = Any[inline_select(env, state, e) for e in Any[mk_select(arr, ranges), args[2]]]
-                var = args[2]
+                var = lookupConstDefForArg(state, args[2])
+                var = isa(var, Expr) ? args[2] : var
                 vtyp = typeOfOpr(state, var)
                 if isArrayType(vtyp) # set to array value
                     evtyp = elmTypOf(vtyp)
@@ -1759,15 +1760,19 @@ function translate_call_getsetindex(state, env, typ, fun::Symbol, args::Array{An
                                   body.args...]
                     f = DomainLambda(linfo, body)
                 else # set to scalar value
-                    var = makeCaptured(state, var)
-                    var = toLHSVar(var)
                     pop!(args)
                     # f = DomainLambda(Type[etyp], Type[etyp], params->Any[Expr(:tuple, var)], state.linfo)
                     (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, vtyp])
                     lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
                     lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
                     params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
-                    rhs = addToEscapingVariable(var, linfo, state.linfo)
+                    if isa(var, RHSVar) 
+                      var = makeCaptured(state, var)
+                      var = toLHSVar(var)
+                      rhs = addToEscapingVariable(var, linfo, state.linfo)
+                    else
+                      rhs = var
+                    end
                     CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname], linfo)
                     body.args = [ mk_expr(Type{etyp}, :(=), params[1], etyp); 
                                   mk_expr(vtyp, :(=), params[2], rhs);
@@ -2420,17 +2425,22 @@ function translate_call_fill!(state, env, typ, args::Array{Any,1})
     args = normalize_args(state, env, args)
     @assert length(args)==2 "fill! should have 2 arguments"
     arr = args[1]
-    ival = args[2]
+    ival = lookupConstDefForArg(state, args[2])
+    ival = isa(ival, Expr) ? args[2] : ival
+    ityp = typeOfOpr(state, ival)
     atyp = typeOfOpr(state, arr)
     etyp = elmTypOf(atyp)
-    ival = makeCaptured(state, ival)
-    ityp = typeOfOpr(state, ival)
     #domF = DomainLambda(typs, typs, params->Any[Expr(:tuple, ival)], state.linfo)
     (body, linfo) = get_lambda_for_arg(state, env, GlobalRef(Base, :convert), Type[Type{etyp}, ityp])
     lhs = addFreshLocalVariable(string("ignored"), etyp, 0, linfo)
     lhsname = CompilerTools.LambdaHandling.getVarDef(lhs, linfo).name
     params = CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo)
-    rhs = addToEscapingVariable(ival, linfo, state.linfo)
+    if isa(ival, RHSVar)
+        ival = makeCaptured(state, ival)
+        rhs = addToEscapingVariable(ival, linfo, state.linfo)
+    else
+        rhs = ival
+    end
     CompilerTools.LambdaHandling.setInputParameters(Symbol[lhsname], linfo)
     body.args = [ mk_expr(Type{etyp}, :(=), params[1], etyp); 
                   mk_expr(ityp, :(=), params[2], rhs);
