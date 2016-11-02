@@ -1734,7 +1734,7 @@ function from_call(ast::Array{Any, 1},linfo)
             elseif inSymbolTable(args[a], linfo)
                 push!(argTyps, lookupSymbolType(args[a], linfo))
             else
-                throw(string("Could determine type for arg ", a, " to call ", mod, ".", fun, " with name ", args[a]))
+                throw(string("Could not determine type for arg ", a, " to call ", mod, ".", fun, " with name ", args[a]))
             end
         #end
     end
