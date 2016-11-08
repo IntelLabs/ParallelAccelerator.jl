@@ -2250,7 +2250,7 @@ function hasNoSideEffects(node :: Union{Symbol, LHSVar, RHSVar, GlobalRef, DataT
     return true
 end
 
-function hasNoSideEffects(node :: Union{LambdaInfo, Number, Function})
+function hasNoSideEffects(node :: Union{QuoteNode, LambdaInfo, Number, Function})
     return true
 end
 
@@ -2259,7 +2259,7 @@ function hasNoSideEffects(node :: Any)
 end
 
 function hasNoSideEffects(node :: Expr)
-    if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask
+    if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask 
         return all(Bool[hasNoSideEffects(a) for a in node.args])
     elseif node.head == :alloc
         return true
@@ -2273,6 +2273,7 @@ function hasNoSideEffects(node :: Expr)
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
     elseif node.head == :call1 || node.head == :call || node.head == :invoke
         func = CompilerTools.Helper.getCallFunction(node)
+        args = CompilerTools.Helper.getCallArguments(node)
         @dprintln(3,"hasNoSideEffects func=", func, " ", isBaseFunc(func,:<:))
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
@@ -2294,21 +2295,26 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :checked_smul) ||
             isBaseFunc(func, :checked_smul_int) ||
             isBaseFunc(func, :checked_trunc_sint) ||
+            isBaseFunc(func, :neg_float) ||
             isBaseFunc(func, :sub_float) ||
             isBaseFunc(func, :add_float) ||
             isBaseFunc(func, :mul_float) ||
             isBaseFunc(func, :div_float) ||
             isBaseFunc(func, :sitofp) ||
-            isBaseFunc(func, :sltint) ||
+            isBaseFunc(func, :sle_int) ||
+            isBaseFunc(func, :ule_int) ||
+            isBaseFunc(func, :slt_int) ||
+            isBaseFunc(func, :ult_int) ||
             isBaseFunc(func, :(===)) ||
             isBaseFunc(func, :<:) ||
             isBaseFunc(func, :apply_type) ||
             isBaseFunc(func, :nfields) ||
             isBaseFunc(func, :_apply) || # Core._apply is used for tallking to codegen, e.g. applyting promote_typeof
             isBaseFunc(func, :promote_type) ||
+            isBaseFunc(func, :select_value) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
-            return true
+            return all(Bool[hasNoSideEffects(a) for a in args])
         elseif func == :ccall
             func = args[1]
             if func == QuoteNode(:jl_alloc_array_1d) ||
