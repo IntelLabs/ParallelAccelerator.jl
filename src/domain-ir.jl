@@ -1025,8 +1025,11 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
 function from_lambda(state, env, expr, closure = nothing)
     local env_ = nextEnv(env)
     linfo, body = lambdaToLambdaVarInfo(expr)
+    cfg = CompilerTools.CFGs.from_lambda(body) 
+    body = getBody(CompilerTools.CFGs.createFunctionBody(cfg), getReturnType(linfo)) 
     @dprintln(2,"from_lambda typeof(body) = ", typeof(body))
     @dprintln(3,"expr = ", expr)
+
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
     escDict = Dict{Symbol,Any}()
@@ -1608,7 +1611,8 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
     elseif is(fun, :arraysize)
         args = normalize_args(state, env_, args)
         dprintln(env,"got arraysize, args=", args)
-        arr_size_expr::Expr = mk_arraysize(state, args...)
+        arr = lookupConstVarForArg(state, args[1])
+        arr_size_expr::Expr = mk_arraysize(state, arr, args[2:end]...)
         arr_size_expr.typ = typ
         return arr_size_expr
     elseif is(fun, :alloc) || is(fun, :Array)
