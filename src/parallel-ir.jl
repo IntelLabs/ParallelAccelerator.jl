@@ -404,6 +404,7 @@ end
 State passed around while converting an AST from domain to parallel IR.
 """
 type expr_state
+    function_name
     block_lives :: CompilerTools.LivenessAnalysis.BlockLiveness    # holds the output of liveness analysis at the block and top-level statement level
     top_level_number :: Int                          # holds the current top-level statement number...used to correlate with stmt liveness info
     # Arrays created from each other are known to have the same size. Store such correlations here.
@@ -420,7 +421,7 @@ type expr_state
     in_nested :: Bool
 
     # Initialize the state for parallel IR translation.
-    function expr_state(bl, max_label, input_arrays)
+    function expr_state(function_name, bl, max_label, input_arrays)
         init_corr = Dict{LHSVar,Int}()
         init_sym_corr = Dict{Array{Union{RHSVar,Int},1},Int}()
         init_tup_table =  Dict{RHSVar,Array{Union{RHSVar,Int},1}}()
@@ -428,7 +429,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label, 0, false)
+        new(function_name, bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label, 0, false)
     end
 end
 
@@ -2751,7 +2752,7 @@ function nested_function_exprs(domain_lambda, out_state)
 
     eq_start = time_ns()
 
-    new_vars = expr_state(lives, max_label, input_arrays)
+    new_vars = expr_state("nested_function", lives, max_label, input_arrays)
     new_vars.in_nested = true
     # import correlations of escaping variables to enable optimizations
     # TODO: fix imported GenSym symbols
@@ -3135,7 +3136,7 @@ function from_root(function_name, ast)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
 
-        new_vars = expr_state(lives, max_label, input_arrays)
+        new_vars = expr_state(function_name, lives, max_label, input_arrays)
         @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
         genEquivalenceClasses(LambdaVarInfo, body, new_vars)
         @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
@@ -3155,7 +3156,7 @@ function from_root(function_name, ast)
 
     eq_start = time_ns()
 
-    new_vars = expr_state(lives, max_label, input_arrays)
+    new_vars = expr_state(function_name, lives, max_label, input_arrays)
     @dprintln(3,"Creating equivalence classes.", " function = ", function_name)
     genEquivalenceClasses(LambdaVarInfo, body, new_vars)
     @dprintln(3,"Done creating equivalence classes.", " function = ", function_name)
