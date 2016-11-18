@@ -732,6 +732,29 @@ end
 
 else
 
+in_thread_region = false
+
+"""
+This function checks global in_thread_region to see if we are already in a threaded region and if not then it enters one.
+Return true if the code was executed with all threads and false if executed by the current thread.
+"""
+function dynamic_check(
+             t :: Function, 
+             full_iteration_space :: ParallelAccelerator.ParallelIR.pir_range_actual,
+             rest...)
+    if in_thread_region
+        t(full_iteration_space, rest...)
+        return false
+    else
+#        println("Entering threaded region.")
+        global in_thread_region = true
+        ccall("jl_threading_run", Void, (Any,), (Core.svec(isf, t, full_iteration_space, rest...)))
+        global in_thread_region = false
+#        println("Exiting threaded region.")
+        return true
+    end
+end
+
 """
 An intermediate scheduling function for passing to jl_threading_run.
 It takes the task function to run, the full iteration space to run and the normal argument to the task function in "rest..."
