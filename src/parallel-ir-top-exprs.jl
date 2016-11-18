@@ -761,8 +761,12 @@ end
 
 run_nested_task_directly = true
 
+function red_alloc(elem_type, length, value)
+    elem_type[deepcopy(value) for i = 1:length]
+end
+
 function process_cur_task(cur_task::TaskInfo, new_body, state)
-    @dprintln(3,"process_cur_task = ", cur_task.function_sym, " type = ", typeof(cur_task.function_sym))
+    @dprintln(3,"process_cur_task = ", cur_task.function_sym, " type = ", typeof(cur_task.function_sym), " function = ", state.function_name)
     range_var = string(Base.function_name(cur_task.task_func),"_range_var")
     range_sym = Symbol(range_var)
     range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
@@ -775,8 +779,11 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         @dprintln(3,"Inserting call to task function directly ", range_sym, " ", range_rhsvar)
     elseif haskey(ENV,"PROSPECT_CALL_ISF")
         @dprintln(3,"Inserting call to isf ", range_sym, " ", range_rhsvar)
+#    elseif haskey(ENV,"PROSPECT_CALL_DYNAMIC_CHECK")
+#        @dprintln(3,"Inserting call dynamic check ", range_sym, " ", range_rhsvar)
     else
-        @dprintln(3,"Inserting call to jl_threading_run ", range_sym, " ", range_rhsvar)
+        @dprintln(3,"Inserting call dynamic check ", range_sym, " ", range_rhsvar)
+#        @dprintln(3,"Inserting call to jl_threading_run in function ", state.function_name, " ", range_sym, " ", range_rhsvar)
     end
     @dprintln(3,"Cur LambdaVarInfo = ", state.LambdaVarInfo)
 
@@ -808,6 +815,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
         real_args_build = Any[]
         args_type = Expr(:tuple)
+        red_var_rhsvars = Any[]
 
         # Fill in the arg metadata.
         for l = 1:in_len
@@ -826,6 +834,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
             push!(args_type.args,  cur_task.io_symbols[l].typ)
         end
         for l = 1:red_len
+            push!(red_var_rhsvars, cur_task.reduction_vars[l].name)
             push!(real_args_build, cur_task.reduction_vars[l].name)
             push!(args_type.args,  cur_task.reduction_vars[l].typ)
         end
@@ -836,7 +845,11 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 
         if cur_task.ret_types != Void
             red_array_lhsvar = createVarForTask(cur_task, "_red_array", Array{Any,1}, state)
-            push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
+#            if haskey(ENV,"PROSPECT_CALL_DYNAMIC_CHECK")
+                push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :red_alloc), Any, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads)), Expr(:call, GlobalRef(Core, :tuple), red_var_rhsvars...)), state))
+#            else
+#                push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
+#            end
 
             red_output_tuple_typ = Tuple{cur_task.ret_types...}
             red_output_tuple_lhsvar = createVarForTask(cur_task, "_red_output_tuple", red_output_tuple_typ, state)
@@ -872,32 +885,52 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
           else
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         GlobalRef(ParallelAccelerator.ParallelIR, :isf),
+                                         ParallelAccelerator.ParallelIR.isf,
                                          task_globalref,
                                          deepcopy(range_lhsvar),
                                          real_args_build...)
           end
+        #elseif haskey(ENV,"PROSPECT_CALL_DYNAMIC_CHECK")
         else
-            tup_var = string(Base.function_name(cur_task.task_func),"_tup_var")
-            tup_sym = Symbol(tup_var)
-            tup_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(tup_sym, SimpleVector, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
-            tup_lhsvar = toLHSVar(tup_rhsvar)
-
-            if cur_task.ret_types != Void
-                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
-            else
-                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
-            end
-
-            svec_args = mk_svec_expr(Any)
+          if cur_task.ret_types != Void
             insert_task_expr = TypedExpr(Void,
                                          :call,
-                                         GlobalRef(Core, :ccall),
-                                         QuoteNode(:jl_threading_run),
-                                         GlobalRef(Base.Threads,:Void),
-                                         svec_args,
-                                         tup_lhsvar, 0)
-
+                                         ParallelAccelerator.ParallelIR.dynamic_check,
+                                         task_globalref,
+                                         deepcopy(range_lhsvar),
+                                         real_args_build...,
+                                         deepcopy(red_array_lhsvar))
+          else
+            insert_task_expr = TypedExpr(Void,
+                                         :call,
+                                         ParallelAccelerator.ParallelIR.dynamic_check,
+                                         task_globalref,
+                                         deepcopy(range_lhsvar),
+                                         real_args_build...)
+          end
+#############   This code won't prevent nested parallelism.  When nested parallelism works then this code can be re-enabled.
+#############   In the meantime, in the above section, we use a function that uses a global to make sure that only function is
+#############   run in threaded mode at a time.
+#        else
+#            tup_var = string(Base.function_name(cur_task.task_func),"_tup_var")
+#            tup_sym = Symbol(tup_var)
+#            tup_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(tup_sym, SimpleVector, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
+#            tup_lhsvar = toLHSVar(tup_rhsvar)
+#
+#            if cur_task.ret_types != Void
+#                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build..., deepcopy(red_array_lhsvar)), state))
+#            else
+#                push!(new_body, mk_assignment_expr(deepcopy(tup_lhsvar), mk_svec_expr(GlobalRef(ParallelAccelerator.ParallelIR, :isf), task_globalref, deepcopy(range_lhsvar), real_args_build...), state))
+#            end
+#
+#            svec_args = mk_svec_expr(Any)
+#            insert_task_expr = TypedExpr(Void,
+#                                         :call,
+#                                         GlobalRef(Core, :ccall),
+#                                         QuoteNode(:jl_threading_run),
+#                                         GlobalRef(Base.Threads,:Void),
+#                                         svec_args,
+#                                         tup_lhsvar, 0)
         end
         push!(new_body, insert_task_expr)
 
