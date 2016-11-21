@@ -216,6 +216,14 @@ end
     Base.map(f, a, b...)
 end
 
+@noinline function map{T<:Array}(f::Function, a::Array{T})
+    Base.map(f, a)
+end
+
+@noinline function map{T<:Array}(f::Function, a::Array{T}, b...)
+    Base.map(f, a, b...)
+end
+
 @noinline function map(f, a::Range)
     Base.map(f, a)
 end
