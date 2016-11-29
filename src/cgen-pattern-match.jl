@@ -55,7 +55,7 @@ end
 
 function pattern_match_call_math(fun::GlobalRef, input, linfo)
     fun = Base.resolve(fun)
-    if fun.mod == Base
+    if fun.mod==Base || fun.mod==ParallelAccelerator.API
         pattern_match_call_math(fun.name, input,linfo)
     else
         return ""
