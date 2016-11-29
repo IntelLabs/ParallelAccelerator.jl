@@ -198,6 +198,11 @@ function translate_par(args)
         first = GlobalRef(Base, :first)
         step = GlobalRef(Base, :step)
         headers[i] = :($(indices[i]) = $first($(ranges[i])) + ($(params[i]) - 1) * $step($(ranges[i])))
+        # if range is 1:N, generate simple assignment instead of formula
+        # this helps array index analysis (motivated by Kernel score in HPAT)
+        if isa(ranges[i], Expr) && isStart1UnitRange(ranges[i])
+            headers[i] = :($(indices[i]) = $(params[i]))
+        end
     end
     args = Expr(:tuple, params...)
     dims = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
@@ -232,6 +237,13 @@ function translate_par(args)
     #println("ast = ", ast)
     ast
     #args -> esc(loop)
+end
+
+function isStart1UnitRange(node::Expr)
+    if node.head==:(:) && length(node.args)==2 && node.args[1]==1
+        return true
+    end
+    return false
 end
 
 function process_par_macro(node::Expr, state, top_level_number, is_top_level, read)
