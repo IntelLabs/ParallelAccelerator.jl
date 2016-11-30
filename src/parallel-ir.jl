@@ -3351,13 +3351,7 @@ function rm_allocs_cb_call(state::rm_allocs_state, func, arr::RHSVar, rest_args:
         shape = state.removed_arrs[arr]
         dim = length(shape)
         @dprintln(3, "arraylen found")
-        if dim==1
-            ast = shape[1]
-        else
-            mul = foldl((a,b)->"$a*$b", "1", shape)
-            ast = parse(mul)
-        end
-        return ast
+        return mk_mult_int_expr(shape)
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
