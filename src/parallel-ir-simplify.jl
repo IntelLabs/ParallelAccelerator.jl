@@ -325,9 +325,9 @@ function remove_no_deps(node::Union{LabelNode,GotoNode}, data :: RemoveNoDepsSta
 end
 
 
-function remove_no_deps(node :: LineNumberNode, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+function remove_no_deps(node :: Union{LineNumberNode,RHSVar,Number}, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
     if is_top_level
-        # remove line number nodes
+        # remove line number nodes, bare RHSVAr and numeric constants
         return CompilerTools.AstWalker.ASTWALK_REMOVE
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -374,6 +374,13 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
     if is_top_level
         @dprintln(3,"remove_dead is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+
+        if isa(node, RHSVar)
+            return CompilerTools.AstWalker.ASTWALK_REMOVE
+        elseif isa(node, Number)
+            return CompilerTools.AstWalker.ASTWALK_REMOVE
+        end
+
         if live_info != nothing
             @dprintln(3,"remove_dead live_info = ", live_info)
             @dprintln(3,"remove_dead live_info.use = ", live_info.use)
@@ -414,6 +421,7 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                     return CompilerTools.AstWalker.ASTWALK_REMOVE
                 end
             end
+        else
         end
     end
 
