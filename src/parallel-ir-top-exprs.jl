@@ -38,7 +38,8 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
         @dprintln(2,"Processing top-level ast #",i," depth=",depth)
 
         # Convert the current expression.
-        new_exprs = filter(x->!hasNoSideEffects(x), from_expr(ast[i], depth, state, true))
+#        new_exprs = filter(x->!hasNoSideEffects(x), from_expr(ast[i], depth, state, true))
+        new_exprs = from_expr(ast[i], depth, state, true)
         assert(isa(new_exprs,Array))
         # If conversion of current statement resulted in anything.
         if length(new_exprs) != 0
@@ -108,6 +109,8 @@ end
             else
                 append!(body, new_exprs)
             end
+        else
+            @dprintln(3,"This statement was filtered: ", ast[i])
         end
     end
     return body
