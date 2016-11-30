@@ -2262,6 +2262,8 @@ end
 function hasNoSideEffects(node :: Expr)
     if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask 
         return all(Bool[hasNoSideEffects(a) for a in node.args])
+    elseif node.head == :(=)
+        return true
     elseif node.head == :alloc
         return true
     elseif node.head == :lambda
@@ -2275,7 +2277,7 @@ function hasNoSideEffects(node :: Expr)
     elseif node.head == :call1 || node.head == :call || node.head == :invoke
         func = CompilerTools.Helper.getCallFunction(node)
         args = CompilerTools.Helper.getCallArguments(node)
-        @dprintln(3,"hasNoSideEffects func=", func, " ", isBaseFunc(func,:<:))
+        @dprintln(3,"hasNoSideEffects func=", func, " ", typeof(func))
         if isBaseFunc(func, :box) ||
             isBaseFunc(func, :tuple) ||
             isBaseFunc(func, :getindex_bool_1d) ||
@@ -2313,6 +2315,7 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :_apply) || # Core._apply is used for tallking to codegen, e.g. applyting promote_typeof
             isBaseFunc(func, :promote_type) ||
             isBaseFunc(func, :select_value) ||
+            isBaseFunc(func, :powi_llvm) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
             return all(Bool[hasNoSideEffects(a) for a in args])
@@ -2346,6 +2349,7 @@ end
 
 function hasNoSideEffectWalk(node :: ANY, data :: SideEffectWalkState, top_level_number, is_top_level, read)
     if !hasNoSideEffects(node)
+        @dprintln(3,"hasNoSideEffectWalk found side effect for node ", node)
         data.hasSideEffect = true
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
@@ -2692,6 +2696,7 @@ function nested_function_exprs(domain_lambda, out_state)
 
     @dprintln(2,"domain_lambda = ", domain_lambda, " " , unique_node_id)
     LambdaVarInfo = domain_lambda.linfo
+    @dprintln(2,"LambdaVarInfo = ", LambdaVarInfo, " " , unique_node_id)
     body = domain_lambda.body
     @dprintln(1,"(Starting nested_function_exprs. body = ", body, " " , unique_node_id)
 
@@ -2739,12 +2744,14 @@ function nested_function_exprs(domain_lambda, out_state)
     # leaves other non-array operations after that and so prevents fusion.
     input_arrays = getArrayParams(LambdaVarInfo)
     non_array_params = Set{LHSVar}()
-    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
+    params_and_escaping = union(CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo), CompilerTools.LambdaHandling.getEscapingVariables(LambdaVarInfo))
+    for param in params_and_escaping
+#    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
             push!(non_array_params, lookupLHSVarByName(param, LambdaVarInfo))
         end
     end
-    @dprintln(3,"Non-array params = ", non_array_params, " " , unique_node_id)
+    @dprintln(3,"Non-array params and escaping variables = ", non_array_params, " " , unique_node_id)
 
     # Find out max_label.
     assert(isa(body, Expr) && is(body.head, :body))
