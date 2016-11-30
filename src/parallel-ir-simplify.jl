@@ -285,6 +285,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                 end
 
                 if dep_only_on_parameter
+                    @dprintln(3,"Statement does not have any side-effects.")
                     # If this statement is defined in more than one place then it isn't hoistable.
                     for i in live_info.def
                         @dprintln(3,"Checking if ", i, " is multiply defined.")
@@ -305,6 +306,8 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                         end
                         return CompilerTools.AstWalker.ASTWALK_REMOVE
                     end
+                else
+                    @dprintln(3,"Statement DOES have any side-effects.")
                 end
             end
         end
