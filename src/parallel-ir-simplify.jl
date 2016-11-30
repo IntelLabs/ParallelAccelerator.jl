@@ -1191,14 +1191,15 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
         # replace arraysize calls when size is known and constant
         args = getCallArguments(node)
         arr = toLHSVar(args[1])
-        if isa(args[2],Int) && haskey(state.array_length_correlation, arr)
+        dim_ind = args[2] # dimension number
+        if isa(dim_ind,Int) && haskey(state.array_length_correlation, arr)
             arr_class = state.array_length_correlation[arr]
             for (d, v) in state.symbol_array_correlation
                 if v==arr_class
-                    res = d[args[2]]
+                    res = d[dim_ind]
                     # only replace when the size is constant or a valid live variable
                     # check def since a symbol correlation might be defined with current arraysize() in reverse direction
-                    if isIntType(res) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
+                    if isa(res,Int) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
                         @dprintln(3, "arraysize() replaced: ", node," res ",res)
                         return res
                     end
