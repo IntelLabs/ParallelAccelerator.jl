@@ -764,6 +764,10 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])
             end
+        elseif isBaseFunc(fun, :vect)
+            @dprintln(3, "found vect, args: ", args)
+            len = length(args)
+            checkAndAddSymbolCorrelation(lhs, state, Any[len])
         elseif  isBaseFunc(fun, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = args[1]                  # length takes one param, which is the array
