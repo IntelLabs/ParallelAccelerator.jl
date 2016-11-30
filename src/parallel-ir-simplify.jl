@@ -1181,34 +1181,66 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
     @dprintln(4,"node.head: ", node.head)
-    print_correlations(3, state)
+    print_correlations(4, state)
 
-    # TODO: handle arraylen similarly
+    if !isCall(node) return CompilerTools.AstWalker.ASTWALK_RECURSE end
+    func = getCallFunction(node)
+    if !isBaseFunc(func,:arraysize) && !isBaseFunc(func,:arraylen)
+        return CompilerTools.AstWalker.ASTWALK_RECURSE
+    end
 
+    @dprintln(3, "replaceConstArraysizes size call found ", node)
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
+    @dprintln(3, "replaceConstArraysizes live info ", live_info)
+    args = getCallArguments(node)
+    arr = toLHSVar(args[1])
+    # get array sizes if available
+    size_syms = get_array_correlation_symbols(arr, state)
 
-    if isCall(node) && isBaseFunc(getCallFunction(node), :arraysize)
-        # replace arraysize calls when size is known and constant
-        args = getCallArguments(node)
-        arr = toLHSVar(args[1])
+    if length(size_syms)==0
+        @dprintln(3, "replaceConstArraysizes correlation symbol not found ", node)
+        return CompilerTools.AstWalker.ASTWALK_RECURSE
+    end
+
+    if isBaseFunc(getCallFunction(node), :arraysize)
         dim_ind = args[2] # dimension number
-        if isa(dim_ind,Int) && haskey(state.array_length_correlation, arr)
-            arr_class = state.array_length_correlation[arr]
-            for (d, v) in state.symbol_array_correlation
-                if v==arr_class
-                    res = d[dim_ind]
-                    # only replace when the size is constant or a valid live variable
-                    # check def since a symbol correlation might be defined with current arraysize() in reverse direction
-                    if isa(res,Int) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
-                        @dprintln(3, "arraysize() replaced: ", node," res ",res)
-                        return res
-                    end
-                end
-            end
+        if !isa(dim_ind,Int)
+            @dprintln(3, "arraysize() index is not constant ", node)
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        res = size_syms[dim_ind]
+        # only replace when the size is constant or a valid live variable
+        # check def since a symbol correlation might be defined with current arraysize() in reverse direction
+        if isa(res,Int) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
+            @dprintln(3, "arraysize() replaced: ", node," res ", res)
+            return res
         end
     end
 
+    if isBaseFunc(getCallFunction(node), :arraylen) &&
+          # make sure all dimension sizes are either constant or valid symbols (not reverse defined)
+          mapreduce(x-> isa(x,Int) || (live_info!=nothing && in(x, live_info.live_in) && !in(x,live_info.def)), &, size_syms)
+        res = mk_mult_int_expr(size_syms)
+        @dprintln(3, "arraylen() replaced: ", node," res ", res)
+        return res
+    end
+
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+"""
+Find correlation symbols of an array if available. Return empty array otherwise
+"""
+function get_array_correlation_symbols(arr::LHSVar, state)
+    if haskey(state.array_length_correlation, arr)
+        arr_class = state.array_length_correlation[arr]
+        for (d, v) in state.symbol_array_correlation
+            if v==arr_class
+                return d
+            end
+        end
+    end
+    return []
 end
 
 function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)

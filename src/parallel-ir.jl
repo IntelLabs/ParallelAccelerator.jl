@@ -179,6 +179,25 @@ function EquivalenceClassesClear(ec :: EquivalenceClasses)
     empty!(ec.data)
 end
 
+mk_call(fun,args) = Expr(:call, fun, args...)
+
+function mk_mult_int_expr(args::Array)
+    if length(args)==0
+        return 1
+    elseif length(args)==1
+        return args[1]
+    end
+    next = 2
+    prev_expr = args[1]
+
+    while next<=length(args)
+        m_call = mk_call(GlobalRef(Base,:mul_int),[prev_expr,args[next]])
+        prev_expr  = mk_call(GlobalRef(Base,:box),[Int64,m_call])
+        next += 1
+    end
+    return prev_expr
+end
+
 import Base.hash
 import Base.isequal
 
@@ -2260,7 +2279,7 @@ function hasNoSideEffects(node :: Any)
 end
 
 function hasNoSideEffects(node :: Expr)
-    if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask 
+    if node.head == :select || node.head == :ranges || node.head == :range || node.head == :tomask
         return all(Bool[hasNoSideEffects(a) for a in node.args])
     elseif node.head == :(=)
         return true
