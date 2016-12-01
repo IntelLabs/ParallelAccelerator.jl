@@ -2782,7 +2782,7 @@ function nested_function_exprs(domain_lambda, out_state)
     new_vars.in_nested = true
     # import correlations of escaping variables to enable optimizations
     # TODO: fix imported GenSym symbols
-    # setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
+    setEscCorrelations!(new_vars, LambdaVarInfo, out_state, length(input_arrays))
     # meta may have changed, need to update ast
     @dprintln(3,"Creating nested equivalence classes. Imported correlations:", " " , unique_node_id)
     print_correlations(3, new_vars)
@@ -2847,15 +2847,37 @@ to enable further optimizations.
 """
 function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     # intersection of escaping variables and out lambda's correlation variables
-    esc_vars = getEscapingVariables(linfo)
-    @dprintln(3, "escaping variables = ", esc_vars)
+    # esc_vars is Symbol names of escaping variables
+    esc_vars::Vector{Symbol} = getEscapingVariables(linfo)
+    @dprintln(3, "setEscCorrelations escaping variables = ", esc_vars)
     out_length_vars = collect(keys(out_state.array_length_correlation))
-    intersect_vars = intersect(esc_vars, out_length_vars)
-    for arr in intersect_vars
-        corr_class = out_state.array_length_correlation[arr]
-        new_vars.array_length_correlation[arr] = corr_class+input_length+1
+    # convert LHSVar to Symbols (if possible)
+    out_arr_names = map(x->lookupVariableName(x, out_state.LambdaVarInfo), out_length_vars)
+    @dprintln(3, "setEscCorrelations out lambda variables = ", out_length_vars," names: ", out_arr_names)
+    intersect_var_names = intersect(esc_vars, out_arr_names)
+    for arr_name in intersect_var_names
+        out_lhs_var = lookupLHSVarByName(arr_name, out_state.LambdaVarInfo)
+        in_lhs_var = lookupLHSVarByName(arr_name, linfo)
+        corr_class = out_state.array_length_correlation[out_lhs_var]
+        @dprintln(3, "setEscCorrelations correlation found ", out_lhs_var, " ", in_lhs_var, " ", corr_class)
+        # greater than number of arrays to avoid conflict with inside correlations
+        # FIXME: -1 means shouldn't make correlation just in out lambda?
+        if corr_class==-1 continue end
+        new_corr_class = corr_class+input_length+1
+        new_vars.array_length_correlation[in_lhs_var] = new_corr_class
         for (s,c) in out_state.symbol_array_correlation
-            if c==corr_class
+            # add symbol correlations only if all size variables are constants or escaping
+            # TODO: import variables
+            if c==corr_class && mapreduce(x-> isa(x,Int) || (isa(x,RHSVar) &&
+                  isEscapingVariable(x, linfo)), &, s)
+                # convert outer LHSVars (slotnumbers) to inner ones
+                new_syms = map(x->isa(x,Int) ? x :
+                  lookupLHSVarByName(lookupVariableName(x, out_state.LambdaVarInfo), linfo), s)
+                new_vars.symbol_array_correlation[new_syms] = new_corr_class
+                @dprintln(3, "setEscCorrelations symbol correlation found ", s, " -> ", new_syms, " class ", new_corr_class)
+                # TODO: add size symbol variables if not already escaping
+                # and need to add make sure there is not conflict with locals
+                #=
                 new_vars.symbol_array_correlation[s] = c+input_length+1
                 for v in s
                     if !in(v, esc_vars) && !isa(v, GenSym)
@@ -2875,6 +2897,7 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
                         end
                     end
                 end
+                =#
             end
         end
     end
