@@ -1289,3 +1289,101 @@ function from_assertEqShape(node::Expr, state)
         return false
     end
 end
+
+"""
+State for the remove_no_deps and insert_no_deps_beginning phases.
+"""
+type HoistInvariants
+    lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
+    hoisted_stmts     :: Array{Any,1}
+    hoistable_scalars :: Set{LHSVar}
+
+    function HoistInvariants(l, hs)
+        new(l, Any[], hs)
+    end
+end
+
+"""
+# This routine gathers up nodes that do not use
+# any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with
+# insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
+# where they can't prevent fusion.
+"""
+function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_number, is_top_level, read)
+    @dprintln(3,"hoist_invariants starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"hoist_invariants node = ", node, " type = ", typeof(node))
+    @dprintln(3,"node.head: ", node.head)
+    head = node.head
+
+    if is_top_level
+        @dprintln(3,"hoist_invariants is_top_level")
+
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info == nothing
+            @dprintln(3,"hoist_invariants no live_info")
+        else
+            @dprintln(3,"hoist_invariants live_info = ", live_info)
+            @dprintln(3,"hoist_invariants live_info.use = ", live_info.use)
+
+            # Here we try to determine which scalar assigns can be hoisted to the beginning of the function.
+            #
+            # If this statement defines some variable.
+            if !isempty(live_info.def)
+                @dprintln(3, "Checking if the statement is hoistable.")
+                @dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
+                # Assume that hoisting is safe until proven otherwise.
+                dep_only_on_parameter = true
+                # Look at all the variables on which this statement depends.
+                # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
+                for i in live_info.use
+                    if !in(i, data.hoistable_scalars)
+                        @dprintln(3, "Could not hoist because the statement depends on :", i)
+                        dep_only_on_parameter = false
+                        break
+                    end
+                end
+
+                # See if there are any calls with side-effects that could prevent moving.
+                sews = SideEffectWalkState()
+                ParallelAccelerator.ParallelIR.AstWalk(node, hasNoSideEffectWalk, sews)
+                if sews.hasSideEffect
+                    dep_only_on_parameter = false
+                end
+
+                if dep_only_on_parameter
+                    @dprintln(3,"Statement does not have any side-effects.")
+                    # If this statement is defined in more than one place then it isn't hoistable.
+                    for i in live_info.def
+                        @dprintln(3,"Checking if ", i, " is multiply defined.")
+                        @dprintln(4,"data.lives = ", data.lives)
+                        if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                            @dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
+                            dep_only_on_parameter = false
+                            break
+                        end
+                    end
+
+                    if dep_only_on_parameter
+                        @dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
+                        push!(data.hoisted_stmts, node)
+                        # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
+                        for i in live_info.def
+                            push!(data.hoistable_scalars, i)
+                        end
+                        return CompilerTools.AstWalker.ASTWALK_REMOVE
+                    end
+                else
+                    @dprintln(3,"Statement DOES have side-effects.")
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function hoist_invariants(node::ANY, data :: HoistInvariants, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+
