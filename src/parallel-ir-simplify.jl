@@ -1194,13 +1194,16 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     @dprintln(3, "replaceConstArraysizes live info ", live_info)
     args = getCallArguments(node)
     arr = toLHSVar(args[1])
-    # get array sizes if available
-    size_syms = get_array_correlation_symbols(arr, state)
+    # get array sizes if available, there could be multiple
+    size_syms_arr = get_array_correlation_symbols(arr, state)
 
-    if length(size_syms)==0
+    if length(size_syms_arr)==0
         @dprintln(3, "replaceConstArraysizes correlation symbol not found ", node)
         return CompilerTools.AstWalker.ASTWALK_RECURSE
     end
+    @dprintln(3, "replaceConstArraysizes correlation symbols: ", size_syms_arr)
+    # need to make sure size variables are available in this statement to replace
+    available_variables = get_available_variables(top_level_number, state)
 
     if isBaseFunc(getCallFunction(node), :arraysize)
         dim_ind = args[2] # dimension number
@@ -1208,39 +1211,79 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
             @dprintln(3, "arraysize() index is not constant ", node)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
-        res = size_syms[dim_ind]
-        # only replace when the size is constant or a valid live variable
-        # check def since a symbol correlation might be defined with current arraysize() in reverse direction
-        if isa(res,Int) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
-            @dprintln(3, "arraysize() replaced: ", node," res ", res)
-            return res
+        for size_syms in size_syms_arr
+            res = size_syms[dim_ind]
+            # only replace when the size is constant or a valid live variable
+            # the size variable is live by construction
+            # since the array is allocated once, its allocation variables are live (in(res, live_info.live_in) not needed)
+            # check def since a symbol correlation might be defined with current arraysize() in reverse direction
+            if isa(res,Int) || (in(res,available_variables) && live_info!=nothing && !in(res,live_info.def) )
+                @dprintln(3, "arraysize() replaced: ", node," res ", res)
+                return res
+            end
         end
     end
 
-    if isBaseFunc(getCallFunction(node), :arraylen) &&
-          # make sure all dimension sizes are either constant or valid symbols (not reverse defined)
-          mapreduce(x-> isa(x,Int) || (live_info!=nothing && in(x, live_info.live_in) && !in(x,live_info.def)), &, size_syms)
-        res = mk_mult_int_expr(size_syms)
-        @dprintln(3, "arraylen() replaced: ", node," res ", res)
-        return res
+    if isBaseFunc(getCallFunction(node), :arraylen)
+        for size_syms in size_syms_arr
+            # make sure all dimension sizes are either constant or valid symbols (not reverse defined)
+            if mapreduce(x-> isa(x,Int) || (in(x,available_variables) && live_info!=nothing && !in(x,live_info.def)), &, size_syms)
+                res = mk_mult_int_expr(size_syms)
+                @dprintln(3, "arraylen() replaced: ", node," res ", res)
+                return res
+            end
+        end
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+function get_available_variables(top_level_number, state)
+    # get dominant block information
+    dom_dict = CompilerTools.CFGs.compute_dominators(state.block_lives.cfg)
+    bb_index = CompilerTools.LivenessAnalysis.find_bb_for_statement(top_level_number, state.block_lives)
+    @dprintln(3, "get_available_variables dom_dict ", dom_dict, " bb_index ", bb_index)
+    available_variables = Set{LHSVar}()
+    # input parameters are also available
+    available_variables = union(getInputParametersAsLHSVar(state.LambdaVarInfo), available_variables)
+    if bb_index==nothing
+        return available_variables
+    end
+    dom_bbs = dom_dict[bb_index]
+    available_variables = Set{LHSVar}()
+    # find def variables for dominant blocks except current one
+    for i in dom_bbs
+        if i==bb_index continue end
+        bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(i, state.block_lives)
+        available_variables = union(bb.def, available_variables)
+    end
+    bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(bb_index, state.block_lives)
+    # find def variables for previous statements of same block
+    for stmts in bb.statements
+      if stmts.tls.index < top_level_number
+          available_variables = union(stmts.def, available_variables)
+      end
+    end
+    #live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
+    #available_variables = union(live_info.live_in, available_variables)
+    @dprintln(3, "get_available_variables returns ", available_variables)
+    return available_variables
+end
+
 """
-Find correlation symbols of an array if available. Return empty array otherwise
+Find correlation symbols of an array if available. Return empty array otherwise.
 """
 function get_array_correlation_symbols(arr::LHSVar, state)
+    out = []
     if haskey(state.array_length_correlation, arr)
         arr_class = state.array_length_correlation[arr]
         for (d, v) in state.symbol_array_correlation
             if v==arr_class
-                return d
+                push!(out, d)
             end
         end
     end
-    return []
+    return out
 end
 
 function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
