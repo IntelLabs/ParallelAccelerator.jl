@@ -59,11 +59,11 @@ function singleScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::F
   # This is basically two stencils, one for x and one for y
   # The stencil is [1 8 0 -8 -1]/12 and leave zeros in the boundary
   Ix = Array(Float32, w, h)
-  runStencil(Ix, i1, 1, :oob_dst_zero) do b, a 
+  runStencil(Ix, i1, 1, :oob_dst_zero) do b, a
     b[0,0] = (a[-2,0] + 8.0f0 * a[-1,0] - 8.0f0 * a[1,0] - a[2,0])/12.0f0
   end
   Iy = Array(Float32, w, h)
-  runStencil(Iy, i1, :oob_dst_zero) do b, a 
+  runStencil(Iy, i1, :oob_dst_zero) do b, a
     b[0,0] = (a[0,-2] + 8.0f0 * a[0,-1] - 8.0f0 * a[0,1] - a[0,2])/12.0f0
   end
   # Compute the time partial derivative
@@ -122,7 +122,7 @@ end
   scale = Float32((Float64(w)/50.0)^(-1.0/Float32(ns)))
   local u::Array{Float32,2}, v::Array{Float32,2} # initialised in the first iteration of the loop
   i = ns
-  while i >= 0 
+  while i >= 0
     cw = round(Int, Float32(w)*scale^Float32(i))
     ch = round(Int, Float32(h)*scale^Float32(i))
     # println("cw,ch=",cw,",",ch)

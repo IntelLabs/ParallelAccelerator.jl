@@ -33,7 +33,7 @@ export downSample, interpolateFlow, warpMotion, readImage, writeFlo
 @acc begin
 
 function downsample_inner(x, y, sx, sy, a)
-  x0 = sx * Float32(x - 1) 
+  x0 = sx * Float32(x - 1)
   y0 = sy * Float32(y - 1)
   x1 = sx * Float32(x) - 1f-3
   y1 = sy * Float32(y) - 1f-3
@@ -44,7 +44,7 @@ function downsample_inner(x, y, sx, sy, a)
       jj = Float32(j)
       p = ii < x0 ? (ii + 1f0 - x0) : (ii > x1 - 1f0 ? (x1 - ii) : 1f0)
       q = jj < y0 ? (jj + 1f0 - y0) : (jj > y1 - 1f0 ? (y1 - jj) : 1f0)
-      c += p * q * a[i + 1, j + 1] 
+      c += p * q * a[i + 1, j + 1]
     end
   end
   c / (sx * sy)
@@ -95,7 +95,7 @@ end
 function warpMotion_inner(u,v,i,ii,w,h,x,y)
   nx = Float32(x)+u[x,y]
   ny = Float32(y)+v[x,y]
-  (nx<1f0 || nx>=float(w) || ny<1f0 || ny>=float(h)) ? ii[x,y] : interpolate(i, nx, ny) 
+  (nx<1f0 || nx>=float(w) || ny<1f0 || ny>=float(h)) ? ii[x,y] : interpolate(i, nx, ny)
 end
 
 # Given a flow and an image, move the image according to the flow
