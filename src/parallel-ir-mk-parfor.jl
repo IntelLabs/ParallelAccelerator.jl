@@ -23,6 +23,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+hoist_parfors = false
+"""
+Controls whether loop invariant statements are moved from parfor bodies to pre-statements.
+If true, such loop invariant statements are moved.  If false, they are not.
+"""
+function PIRHoistParfors(x :: Bool)
+    global hoist_parfors = x
+end
+
 """
 Look at the arrays that are accessed and see if they use a forward index, i.e.,
 an index that could be greater than 1.
@@ -903,6 +912,18 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
+
+    if hoist_parfors
+        lives = computeLiveness(nested_body, state.LambdaVarInfo)
+        @dprintln(3, "lives = ", lives, " " , unique_node_id)
+        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
+        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
+        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
+        append!(pre_statements, hi_state.hoisted_stmts)
+        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+    end
+
     body_lives = computeLiveness(nested_body, state.LambdaVarInfo)
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
@@ -1044,6 +1065,18 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     dl_inputs = Any[toRHSVar(s, Int, state.LambdaVarInfo) for s in loopvars]
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
+
+    if hoist_parfors
+        lives = computeLiveness(nested_body, state.LambdaVarInfo)
+        @dprintln(3, "lives = ", lives, " " , unique_node_id)
+        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
+        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
+        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
+        append!(pre_statements, hi_state.hoisted_stmts)
+        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+    end
+
     out_body = nested_body
     @dprintln(3, "mpafpf 1 out_body[end] = ", out_body[end], " type = ", typeof(out_body[end]))
     if isa(out_body[end], Expr)
@@ -1312,6 +1345,18 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
+
+    if hoist_parfors
+        lives = computeLiveness(nested_body, state.LambdaVarInfo)
+        @dprintln(3, "lives = ", lives, " " , unique_node_id)
+        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
+        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
+        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
+        append!(pre_statements, hi_state.hoisted_stmts)
+        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+    end
+
     out_body = [out_body; nested_body...]
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " " , unique_node_id)
     assert(isa(out_body,Array))
