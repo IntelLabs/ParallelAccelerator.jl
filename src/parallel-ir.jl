@@ -2763,14 +2763,19 @@ function nested_function_exprs(domain_lambda, out_state)
     # leaves other non-array operations after that and so prevents fusion.
     input_arrays = getArrayParams(LambdaVarInfo)
     non_array_params = Set{LHSVar}()
-    params_and_escaping = union(CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo), CompilerTools.LambdaHandling.getEscapingVariables(LambdaVarInfo))
-    for param in params_and_escaping
-#    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
+    non_array_escaping = Set{LHSVar}()
+    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
             push!(non_array_params, lookupLHSVarByName(param, LambdaVarInfo))
         end
     end
-    @dprintln(3,"Non-array params and escaping variables = ", non_array_params, " " , unique_node_id)
+    for param in CompilerTools.LambdaHandling.getEscapingVariables(LambdaVarInfo)
+        if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
+            push!(non_array_escaping, lookupLHSVarByName(param, LambdaVarInfo))
+        end
+    end
+    @dprintln(3,"Non-array params = ", non_array_params, " " , unique_node_id)
+    @dprintln(3,"Non-array escaping = ", non_array_escaping, " " , unique_node_id)
 
     # Find out max_label.
     assert(isa(body, Expr) && is(body.head, :body))
@@ -2798,7 +2803,8 @@ function nested_function_exprs(domain_lambda, out_state)
     changed = true
     while changed
         @dprintln(1,"Removing statement with no dependencies from the AST with parameters"), " " , unique_node_id
-        rnd_state = RemoveNoDepsState(lives, non_array_params)
+#        rnd_state = RemoveNoDepsState(lives, non_array_params)
+        rnd_state = RemoveNoDepsState(lives, union(non_array_params, non_array_escaping))
         body = AstWalk(body, remove_no_deps, rnd_state)
         @dprintln(3,"body after no dep stmts removed = ", body, " " , unique_node_id)
 
