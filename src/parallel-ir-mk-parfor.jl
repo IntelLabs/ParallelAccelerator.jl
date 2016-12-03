@@ -917,7 +917,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         lives = computeLiveness(nested_body, state.LambdaVarInfo)
         @dprintln(3, "lives = ", lives, " " , unique_node_id)
         @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
         nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
         @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
         append!(pre_statements, hi_state.hoisted_stmts)
@@ -1070,7 +1070,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         lives = computeLiveness(nested_body, state.LambdaVarInfo)
         @dprintln(3, "lives = ", lives, " " , unique_node_id)
         @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
         nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
         @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
         append!(pre_statements, hi_state.hoisted_stmts)
@@ -1350,7 +1350,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         lives = computeLiveness(nested_body, state.LambdaVarInfo)
         @dprintln(3, "lives = ", lives, " " , unique_node_id)
         @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}(CompilerTools.LambdaHandling.getEscapingVariablesAsLHSVar(dl.linfo)))
+        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
         nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
         @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
         append!(pre_statements, hi_state.hoisted_stmts)

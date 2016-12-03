@@ -1340,9 +1340,10 @@ type HoistInvariants
     lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
     hoisted_stmts     :: Array{Any,1}
     hoistable_scalars :: Set{LHSVar}
+    LambdaVarInfo
 
-    function HoistInvariants(l, hs)
-        new(l, Any[], hs)
+    function HoistInvariants(l, hs, lvi)
+        new(l, Any[], hs, lvi)
     end
 end
 
@@ -1374,6 +1375,9 @@ function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_numbe
             if !isempty(live_info.def)
                 @dprintln(3, "Checking if the statement is hoistable.")
                 @dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
+                hoistable_names = [lookupVariableName(x, data.LambdaVarInfo) for x in data.hoistable_scalars]
+                @dprintln(3, "Previous hoistable names = ", hoistable_names)
+
                 # Assume that hoisting is safe until proven otherwise.
                 dep_only_on_parameter = true
                 # Look at all the variables on which this statement depends.
@@ -1407,7 +1411,7 @@ function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_numbe
                     end
 
                     if dep_only_on_parameter
-                        @dprintln(3,"remove_no_deps removing ", node, " because it only depends on hoistable scalars.")
+                        @dprintln(3,"hoist_invariants removing ", node, " because it only depends on hoistable scalars.")
                         push!(data.hoisted_stmts, node)
                         # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
                         for i in live_info.def
