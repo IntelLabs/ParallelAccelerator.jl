@@ -1250,7 +1250,7 @@ function get_available_variables(top_level_number, state)
         return available_variables
     end
     dom_bbs = dom_dict[bb_index]
-    available_variables = Set{LHSVar}()
+
     # find def variables for dominant blocks except current one
     for i in dom_bbs
         if i==bb_index continue end
@@ -1432,5 +1432,3 @@ end
 function hoist_invariants(node::ANY, data :: HoistInvariants, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
-
-
