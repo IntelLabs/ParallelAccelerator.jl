@@ -565,10 +565,7 @@ and if it is then it must be removed from copies.
 function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
     @dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        @dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    @dprintln(3,"copy_propagate data = ", data.copies, " safe: ", data.safe_copies)
 
     if is_top_level
         @dprintln(3,"copy_propagate is_top_level")
@@ -598,8 +595,18 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
                 end
             end
         end
+    end
+    return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
+end
 
-        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
+function copy_propagate_helper(node::Expr,
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
+    @dprintln(3,"node.head = ", node.head)
+    if is_top_level
+        if node.head==:gotoifnot
             # Only copy propagate within a basic block.  this is now a new basic block.
             # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
             data.copies = copy(data.safe_copies)
@@ -638,8 +645,16 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
             return node
         end
     end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
-    return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
+function copy_propagate_helper(node::Union{LabelNode,GotoNode}, data::CopyPropagateState, top_level_number, is_top_level, read)
+    if is_top_level
+        # Only copy propagate within a basic block.  this is now a new basic block.
+        # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
+        data.copies = copy(data.safe_copies)
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function copy_propagate_helper(node::Union{Symbol,RHSVar},
