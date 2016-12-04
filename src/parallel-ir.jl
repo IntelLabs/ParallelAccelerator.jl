@@ -2873,38 +2873,13 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
         new_vars.array_length_correlation[in_lhs_var] = new_corr_class
         for (s,c) in out_state.symbol_array_correlation
             # add symbol correlations only if all size variables are constants or escaping
-            # TODO: import variables
-            if c==corr_class
+            # TODO: import GenSym, resolve name conflicts with params and local variables
+            if c==corr_class && mapreduce(x-> isValidInnerVariable(x,linfo,out_state.LambdaVarInfo), &, s)
                 # convert outer LHSVars (slotnumbers) to inner ones
                 new_syms = map(x->isa(x,Int) ? x : lookupVariableName(x, out_state.LambdaVarInfo), s)
-                if !mapreduce(x-> isa(x,Int) || in(x,esc_vars), &, new_syms) continue end
-                new_syms = map(x->isa(x,Int) ? x :
-                  lookupLHSVarByName(x, linfo), new_syms)
+                new_syms = map(x->isa(x,Int) ? x : lookupLHSVarByName(x, linfo), new_syms)
                 new_vars.symbol_array_correlation[new_syms] = new_corr_class
                 @dprintln(3, "setEscCorrelations symbol correlation found ", s, " -> ", new_syms, " class ", new_corr_class)
-                # TODO: add size symbol variables if not already escaping
-                # and need to add make sure there is not conflict with locals
-                #=
-                new_vars.symbol_array_correlation[s] = c+input_length+1
-                for v in s
-                    if !in(v, esc_vars) && !isa(v, GenSym)
-                        if isa(v, RHSVar)
-                            v = toLHSVar(v)
-                            if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
-                                error("Correlation variable ", v, " is a conflict with local variables")
-                            end
-                            if !isEscapingVariable(v, linfo)
-                                typ = LambdaHandling.getType(v, out_state.LambdaVarInfo)
-                                desc = LambdaHandling.getDesc(v, out_state.LambdaVarInfo)
-                                @dprintln(3, "setEscCorrelations! addEscapingVariable for ", v)
-                                LambdaHandling.addEscapingVariable(v, typ, desc, linfo)
-                            end
-                        else
-                            @dprintln(3, "setEscCorrelations! cannot addEscapingVariable for ", v)
-                        end
-                    end
-                end
-                =#
             end
         end
     end
@@ -2914,7 +2889,26 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     nothing
 end
 
+# integers are always valid to import
+isValidInnerVariable(x::Int, linfo, out_linfo) = true
+isValidInnerVariable(x::TypedVar, linfo, out_linfo) = isValidInnerVariable(toLHSVar(x), linfo)
+# GenSyms are not valid to import
+isValidInnerVariable(x::GenSym, linfo, out_linfo) = false
 
+function isValidInnerVariable(x::LHSRealVar, linfo, out_linfo)
+    name = lookupVariableName(x, out_linfo)
+    # TODO: import GenSym, resolve name conflicts with params and local variables
+    if isInputParameter(name, linfo) || isLocalVariable(name, linfo)
+        return false
+    end
+    if !isEscapingVariable(name, linfo)
+        typ = LambdaHandling.getType(x, out_linfo)
+        desc = LambdaHandling.getDesc(x, out_linfo)
+        @dprintln(3, "setEscCorrelations addEscapingVariable for ", x, " ",name)
+        addEscapingVariable(name, typ, desc, linfo)
+    end
+    return true
+end
 
 doRemoveAssertEqShape = true
 generalSimplification = true
