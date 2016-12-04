@@ -2874,11 +2874,12 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
         for (s,c) in out_state.symbol_array_correlation
             # add symbol correlations only if all size variables are constants or escaping
             # TODO: import variables
-            if c==corr_class && mapreduce(x-> isa(x,Int) || (isa(x,RHSVar) &&
-                  isEscapingVariable(x, linfo)), &, s)
+            if c==corr_class
                 # convert outer LHSVars (slotnumbers) to inner ones
+                new_syms = map(x->isa(x,Int) ? x : lookupVariableName(x, out_state.LambdaVarInfo), s)
+                if !mapreduce(x-> isa(x,Int) || in(x,esc_vars), &, new_syms) continue end
                 new_syms = map(x->isa(x,Int) ? x :
-                  lookupLHSVarByName(lookupVariableName(x, out_state.LambdaVarInfo), linfo), s)
+                  lookupLHSVarByName(x, linfo), new_syms)
                 new_vars.symbol_array_correlation[new_syms] = new_corr_class
                 @dprintln(3, "setEscCorrelations symbol correlation found ", s, " -> ", new_syms, " class ", new_corr_class)
                 # TODO: add size symbol variables if not already escaping
