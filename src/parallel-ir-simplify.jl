@@ -549,10 +549,12 @@ type CopyPropagateState
     copies :: Dict{LHSVar, Union{LHSVar,Number}}
     # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
     safe_copies :: Dict{LHSVar, Union{LHSVar,Number}}
+    # variables that shouldn't be copied (e.g. parfor reduction Variables)
+    no_copy::Vector{LHSVar}
     linfo
 
     function CopyPropagateState(l, c,s,li)
-        new(l,c,s,li)
+        new(l,c,s,LHSVar[],li)
     end
 end
 
@@ -568,6 +570,7 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     @dprintln(3,"copy_propagate data = ", data.copies, " safe: ", data.safe_copies)
     @dprintln(3,"copy_propagate is_top_level ", is_top_level)
     live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+    if live_info==nothing @dprintln(3,"copy_propagate no live_info! ") end
 
     if live_info != nothing
         # Remove elements from data.copies if the original RHS is modified by this statement.
@@ -623,7 +626,7 @@ function copy_propagate_helper(node::Expr,
             return node
         end
         node.args[1] = lhs
-        if isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
+        if !in(lhs,data.no_copy) && (isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex))) # TODO: fix complex number case
             lhs = toLHSVar(lhs)
             rhs = toLHSVarOrNum(rhs)
             desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
@@ -643,6 +646,33 @@ function copy_propagate_helper(node::Expr,
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function copy_propagate_helper(node::PIRParForAst, data::CopyPropagateState, top_level_number, is_top_level, read)
+    # remove loopnest and reduction vars from data, then recurse
+    loopnest_vars = map(x->toLHSVar(x.indexVariable), node.loopNests)
+    reduction_vars = map(x->toLHSVar(x.reductionVar), node.reductions)
+    rem_vars = [loopnest_vars; reduction_vars]
+    @dprintln(3,"copy_propagate parfor loop and reduce vars to remove: ", rem_vars)
+    map(x->delete!(data.copies,x) ,rem_vars)
+    map(x->delete!(data.safe_copies,x) ,rem_vars)
+    append!(data.no_copy, reduction_vars)
+    @dprintln(3,"copy_propagate new data = ", data.copies, " safe: ", data.safe_copies)
+
+    old_lives = data.lives
+    body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, node.body, pir_live_cb, data.linfo)
+    data.lives = body_lives
+    @dprintln(3,"copy_propagate parfor body lives = ", data.lives)
+    new_body = AstWalk(TypedExpr(nothing, :body, node.body...), copy_propagate, data)
+    node.body = new_body.args
+    data.lives = old_lives
+    return node
+end
+
+function copy_propagate_helper(node::DelayedFunc, data::CopyPropagateState, top_level_number, is_top_level, read)
+    # don't touch DelayedFunc for now
+    # TODO: hanlde DelayedFunc (push/pop copy values around them? reduction vars?)
+    return node
 end
 
 function copy_propagate_helper(node::Union{LabelNode,GotoNode}, data::CopyPropagateState, top_level_number, is_top_level, read)

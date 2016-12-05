@@ -3251,14 +3251,19 @@ function from_root(function_name, ast)
 
     body = remove_extra_allocs(LambdaVarInfo, body)
 
-    set_pir_stats(body)
-
     lives = computeLiveness(body, LambdaVarInfo)
     body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+
+    #@dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
+    #printLambda(3, LambdaVarInfo, body)
+    #lives = computeLiveness(body, LambdaVarInfo)
+    #body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+    #lives = computeLiveness(body, LambdaVarInfo)
 
     @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
     printLambda(1, LambdaVarInfo, body)
 
+    set_pir_stats(body)
     #if pir_stop != 0
     #    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     #end
