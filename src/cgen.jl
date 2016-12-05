@@ -1910,7 +1910,7 @@ function from_parforend(args,linfo)
     for i in 1:length(lpNests)
         s *= "}\n"
     end
-    rdsinit = rdsepilog = ""
+    rdsinit = rdsepilog = rdscopy = ""
     rds = parfor.reductions
     parallel_reduction = USE_OMP==1 && lstate.ompdepth <= 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     if parallel_reduction && length(rds) > 0
@@ -1930,11 +1930,12 @@ function from_parforend(args,linfo)
             if isPrimitiveJuliaType(rdvt)
                 rdscleanup *= "free($(rdvar)_vec);\n";
             end
+            rdscopy *= "shared_$(rdvar) = $(rdvar);\n"
         end
         rdsepilog *= "}\n" * rdscleanup
 
     end
-    s *= USE_OMP==1 && lstate.ompdepth <=1 ? "}\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
+    s *= USE_OMP==1 && lstate.ompdepth <=1 ? "$rdscopy }\n$rdsinit $rdsepilog }/*parforend*/\n" : "" # end block introduced by private list
     @dprintln(3,"Parforend = ", s)
     lstate.ompdepth -= 1
     s
@@ -2102,7 +2103,8 @@ function from_parforstart(args, linfo)
             rdsprolog *= "$rdvtyp &$rdvar_tmp = $(rdvar)_vec[rds_init_loop_var];\n"
             rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv_tmp, linfo) * "}\n"
             #push!(private_vars, rdv)
-            rdsextra *= "$rdvtyp &$rdvar = $(rdvar)_vec[omp_get_thread_num()];\n"
+            rdsextra *= "$rdvtyp &shared_$(rdvar) = $(rdvar)_vec[omp_get_thread_num()];\n"
+            rdsextra *= "$rdvtyp $(rdvar) = shared_$(rdvar);\n"
         else
             # The init is now handled in pre-statements
             #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv, linfo)
