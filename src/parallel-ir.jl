@@ -510,7 +510,18 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
     end
 end
 
-export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRTaskGraphMode, PIRPolyhedral, PIRHoistParfors
+export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit,
+       PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks,
+       PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment,
+       PIRTaskGraphMode, PIRPolyhedral, PIRHoistParfors, PIRLateSimplify
+
+late_simplify = false
+"""
+Controls whether copy propagation and other simplifications are performed after Parallel-IR translation.
+"""
+function PIRLateSimplify(x :: Bool)
+   global late_simplify = x
+end
 
 """
 Given an array of outputs in "outs", form a return expression.
@@ -3250,15 +3261,18 @@ function from_root(function_name, ast)
     printLambda(1, LambdaVarInfo, body)
 
     body = remove_extra_allocs(LambdaVarInfo, body)
-
     lives = computeLiveness(body, LambdaVarInfo)
     body = AstWalk(body, remove_dead, RemoveDeadState(lives))
 
-    #@dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
-    #printLambda(3, LambdaVarInfo, body)
-    #lives = computeLiveness(body, LambdaVarInfo)
-    #body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
-    #lives = computeLiveness(body, LambdaVarInfo)
+    if late_simplify
+        @dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    end
+
 
     @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
     printLambda(1, LambdaVarInfo, body)
