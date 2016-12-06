@@ -2346,14 +2346,17 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :promote_type) ||
             isBaseFunc(func, :select_value) ||
             isBaseFunc(func, :powi_llvm) ||
+            isBaseFunc(func, :svec) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
             return all(Bool[hasNoSideEffects(a) for a in args])
-        elseif func == :ccall
+        elseif isBaseFunc(func, :ccall)
+            @dprintln(3,"hasNoSideEffects found ccall")
             func = args[1]
             if func == QuoteNode(:jl_alloc_array_1d) ||
-               func == QuoteNode(:jl_alloc_array_2d)
-                @dprintln(3,"hasNoSideEffects returning true")
+               func == QuoteNode(:jl_alloc_array_2d) ||
+               func == QuoteNode(:jl_alloc_array_3d)
+                @dprintln(3,"hasNoSideEffects found allocation returning true")
                 return true
             end
         elseif isa(func, TopNode)
