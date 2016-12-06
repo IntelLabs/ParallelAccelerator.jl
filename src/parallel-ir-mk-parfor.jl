@@ -303,24 +303,12 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     #neutral_val_flatten_body = Any[]
     #flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
     #@dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
-    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), AstWalk)
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(
+                                deepcopy(body), 
+                                Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), 
+                                state.LambdaVarInfo, 
+                                AstWalk)
     return DelayedFunc(f, Any[deepcopy(neutral_val_body), init_var])
-end
-
-function reductionReplaceDict(body, snode, atm, var, val) 
-    @dprintln(3, "reductionReplaceDict")
-    @dprintln(3, "body = ")
-    printBody(3, body)
-    @dprintln(3, "snode = ", snode)
-    @dprintln(3, "atm = ", atm)
-    @dprintln(3, "var = ", var)
-    @dprintln(3, "val = ", val)
-
-    res = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
-    @dprintln(3, "res = ")
-    printBody(3, res)
-
-    res
 end
 
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
@@ -345,7 +333,12 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     #reduce_flatten_body = Any[]
     #flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     #@dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    reduce_func = DelayedFunc(reductionReplaceDict, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
+    f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict!(
+                                        deepcopy(body), 
+                                        Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), 
+                                        state.LambdaVarInfo, 
+                                        AstWalk)
+    reduce_func = DelayedFunc(f, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
     @dprintln(3, "reduce_func = ", reduce_func)
     return temp_body, reduce_func 
 end

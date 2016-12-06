@@ -392,18 +392,18 @@ end
 Not currently used but might need it at some point.
 Search a whole PIRParForAst object and replace one RHSVar with another.
 """
-function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
-    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map)
-    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map)
+function replaceParforWithDict(parfor :: PIRParForAst, gensym_map, linfo :: LambdaVarInfo)
+    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map, linfo)
+    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map, linfo)
     for i = 1:length(parfor.loopNests)
-        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map)
-        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map)
-        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].step, gensym_map)
+        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map, linfo)
+        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map, linfo)
+        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].step, gensym_map, linfo)
     end
     for i = 1:length(parfor.reductions)
-        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.reductions[i].reductionVarInit, gensym_map)
+        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.reductions[i].reductionVarInit, gensym_map, linfo)
     end
-    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map)
+    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map, linfo)
 end
 
 """
@@ -1294,7 +1294,7 @@ function mergeLambdaIntoOuterState(state, dl :: DomainLambda, args :: Array{Any,
         repl_dict[lookupLHSVarByName(params[i], dl.linfo)] = args[i]
     end
     @dprintln(3, "repl_dict = ", repl_dict)
-    body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, AstWalk)
+    body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, dl.linfo, AstWalk)
     @dprintln(3, "after replacement, body = ")
     printBody(3, body)
     return body

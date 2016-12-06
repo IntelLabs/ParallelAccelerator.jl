@@ -794,7 +794,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     #body = vcat(pre_body, f.lambda.args[3].args)
     body = f.body
     if !isempty(repl_dict)
-        body = replaceExprWithDict!(body, repl_dict)
+        body = replaceExprWithDict!(body, repl_dict, f.linfo)
     end
     #body_expr = Expr(:body)
     #body_expr.args = body
@@ -2254,7 +2254,7 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
         redvarname = lookupVariableName(redvar, state.linfo)
         dprintln(env, "redvarname = ", redvarname)
         nvar = addToEscapingVariable(redvarname, rvtyp, nlinfo, state.linfo)
-        nval = replaceExprWithDict!(translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)]), Dict{LHSVar,Any}(Pair(redvar, nvar)), AstWalk)
+        nval = replaceExprWithDict!(translate_call_copy(state, env, Any[toRHSVar(redvar, rvtyp, state.linfo)]), Dict{LHSVar,Any}(Pair(redvar, nvar)), state.linfo, AstWalk)
         redparam = gensym(redvarname)
         redparamvar = addLocalVariable(redparam, rvtyp, ISASSIGNED | ISASSIGNEDONCE, nlinfo)
         setInputParameters(Symbol[redparam], nlinfo)
