@@ -705,18 +705,24 @@ function copy_propagate_helper(node::DomainLambda,
                                read)
 
     @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-    intersection_dict = Dict{LHSVar,Any}()
 
+    #dict = filter( (k,v)->!(), data.safe_copies)
     # all copies of escaping_defs should be deleted, since there is no guarantee that their values
     # remain the same at when DomainLambda is actually called.
-    for v in CompilerTools.LambdaHandling.getEscapingVariables(node.linfo)
-        if haskey(data.copies, v) && !haskey(data.safe_copies, v)
-            @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
-            delete!(data.copies, v)
-            @dprintln(3, "data.copies = ", data.copies)
-        end
-    end
-    return CompilerTools.AstWalker.ASTWALK_RECURSE
+    #for v in CompilerTools.LambdaHandling.getEscapingVariables(node.linfo)
+    #    if haskey(data.copies, v) && !haskey(data.safe_copies, v)
+    #        @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
+    #        delete!(data.copies, v)
+    #        @dprintln(3, "data.copies = ", data.copies)
+    #    end
+    #end
+    # TODO: replace body variables in data.safe_copies using replaceExprWithDict
+    inner_linfo = node.linfo
+    inner_body = node.body
+    inner_lives = computeLiveness(inner_body, inner_linfo)
+    node.body = AstWalk(inner_body, copy_propagate, CopyPropagateState(inner_lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),inner_linfo))
+
+    return node
 end
 
 function copy_propagate_helper(node::ANY,
