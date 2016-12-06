@@ -3210,7 +3210,7 @@ function from_root(function_name, ast)
         printLambda(3, LambdaVarInfo, body)
     end
 
-    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(3,"AST after remove_dead = ", " function = ", function_name)
     printLambda(3, LambdaVarInfo, body)
@@ -3262,7 +3262,7 @@ function from_root(function_name, ast)
 
     body = remove_extra_allocs(LambdaVarInfo, body)
     lives = computeLiveness(body, LambdaVarInfo)
-    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
 
     if late_simplify
         @dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
@@ -3270,7 +3270,7 @@ function from_root(function_name, ast)
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
-        body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+        body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     end
 
 

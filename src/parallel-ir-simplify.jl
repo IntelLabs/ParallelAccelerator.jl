@@ -357,7 +357,8 @@ end
 Holds liveness information for the remove_dead AstWalk phase.
 """
 type RemoveDeadState
-    lives :: CompilerTools.LivenessAnalysis.BlockLiveness
+    lives::CompilerTools.LivenessAnalysis.BlockLiveness
+    linfo
 end
 
 """
@@ -425,6 +426,32 @@ function remove_dead(node::Union{RHSVar,Number}, data :: RemoveDeadState, top_le
         return CompilerTools.AstWalker.ASTWALK_REMOVE
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_dead(node::PIRParForAst, data::RemoveDeadState, top_level_number, is_top_level, read)
+    if is_top_level
+        @dprintln(3,"remove_dead is_top_level parfor")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info != nothing
+            # live_out variables of the parfor are added to live_out of all
+            # basic blocks and statements so remove_dead doesn't remove them
+            parfor_live_out = live_info.live_out
+            @dprintln(3,"remove_dead parfor live_out = ", parfor_live_out)
+            body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, node.body, pir_live_cb, data.linfo)
+            @dprintln(3,"remove_dead parfor body lives = ", body_lives)
+            for bb in body_lives.basic_blocks
+                bb[2].live_out = union(parfor_live_out, bb[2].live_out)
+                stmts = bb[2].statements
+                for j = 1:length(stmts)
+                    stmts[j].live_out = union(parfor_live_out, stmts[j].live_out)
+                end
+            end
+            # body can now be traversed using exteneded liveness info
+            new_body = AstWalk(TypedExpr(nothing, :body, node.body...), remove_dead, RemoveDeadState(body_lives,data.linfo))
+            node.body = new_body.args
+            return node
+        end
+    end
 end
 
 function remove_dead(node::ANY, data :: RemoveDeadState, top_level_number, is_top_level, read)
