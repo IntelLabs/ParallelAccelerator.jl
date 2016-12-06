@@ -25,6 +25,44 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #using Debug
 
+type findAllocationsState
+    allocs :: Dict{LHSVar, Int} 
+    arrays_stored_in_arrays :: Set{LHSVar}
+    LambdaVarInfo
+
+    function findAllocationsState(lvi)
+        return new(Dict{LHSVar, Int}(), Set{LHSVar}(), lvi)
+    end
+end
+
+function findAllocations(x :: Expr, state :: findAllocationsState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    if is_top_level
+        @dprintln(3, "findAllocations is_top_level")
+        if isAssignmentNode(x) && isAllocation(x.args[2])
+           lhs = toLHSVar(x.args[1])
+           @dprintln(3, "findAllocations found allocation ", lhs)
+           if !haskey(state.allocs, lhs)
+               state.allocs[lhs] = 0
+           end
+           state.allocs[lhs] = state.allocs[lhs] + 1
+        end
+    end
+    if isArraysetCall(x)
+        value = x.args[3]   # the value written into the array
+        vtyp  = CompilerTools.LambdaHandling.getType(value, state.LambdaVarInfo)
+        @dprintln(3, "findAllocations found arrayset with value ", value, " of type ", vtyp)
+        if isArrayType(vtyp) && isa(value, LHSVar)
+            @dprintln(3, "findAllocations added ", value, " to set")
+            push!(state.arrays_stored_in_arrays, value)
+        end
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function findAllocations(x :: ANY, state :: findAllocationsState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 """
 Try to hoist allocations outside the loop if possible.
 """
@@ -1421,9 +1459,10 @@ type HoistInvariants
     hoisted_stmts     :: Array{Any,1}
     hoistable_scalars :: Set{LHSVar}
     LambdaVarInfo
+    fas               :: findAllocationsState
 
-    function HoistInvariants(l, hs, lvi)
-        new(l, Any[], hs, lvi)
+    function HoistInvariants(l, hs, lvi, fas)
+        new(l, Any[], hs, lvi, fas)
     end
 end
 
@@ -1483,10 +1522,37 @@ function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_numbe
                     for i in live_info.def
                         @dprintln(3,"Checking if ", i, " is multiply defined.")
                         @dprintln(4,"data.lives = ", data.lives)
-                        if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
-                            @dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
-                            dep_only_on_parameter = false
-                            break
+                        def_type = CompilerTools.LambdaHandling.getType(i, data.LambdaVarInfo)
+                        # Two strategies here.  If the type of the def is a bits type then we can simply check for multiple definition.
+                        # If it is a non-bits type (which can alias) then we need to do a scan of allocations and get all the aliases
+                        # for those allocations and see if any of those allocations survive the parfor.  There are two possibilities for
+                        # arrays allocated in a parfor: 1) either things are put into an array and then some reduction is run across the
+                        # array to summarize it to a scalar or 2) the array is allocated per iteration and stored into an array of arrays.
+                        if isbits(def_type)
+                            if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                                @dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
+                                dep_only_on_parameter = false
+                                break
+                            end
+                        else
+                            if !haskey(data.fas.allocs, i)
+                                @dprintln(3, "Non-bits type def is not in alloc set in findAllocationStats. ", i)
+                                dep_only_on_parameter = false
+                                break
+                            end
+                            if data.fas.allocs[i] != 1
+                                @dprintln(3, i, " was allocated ", data.fas.allocs[i], " times in the parfor body.")
+                                dep_only_on_parameter = false
+                                break
+                            end
+                            if length(data.fas.arrays_stored_in_arrays != 0)
+                                # TODO Implement alias analysis and also an array could be put in 
+                                # an object and then that stored in the array and we should catch that
+                                # as well.
+                                @dprintln(3, i, " was allocated but there are arrays stored in arrays in this parfor and we haven't implemented the alias analysis yet to know if the allocated array is escaping the parfor.")
+                                dep_only_on_parameter = false
+                                break
+                            end
                         end
                     end
 

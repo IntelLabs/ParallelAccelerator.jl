@@ -844,6 +844,29 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     return loopNests
 end
 
+function doHoistParfor(nested_body, state, unique_node_id, dl)
+    lives = computeLiveness(nested_body, state.LambdaVarInfo)
+    @dprintln(3, "lives = ", lives, " " , unique_node_id)
+    @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
+
+    # Find the allocations in the nested_body and the assignments of arrays into arrays.
+    fas = findAllocationsState(state.LambdaVarInfo) 
+    ParallelAccelerator.ParallelIR.AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), findAllocations, fas)
+    @dprintln(3, "fas = ", fas)
+
+    hi_state = HoistInvariants(
+        lives, 
+        Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) 
+            for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), 
+        state.LambdaVarInfo,
+        fas)
+    nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
+
+    @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
+    @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+    return (nested_body, hi_state.hoisted_stmts)
+end
+
 box_tfa = false
 box_aset = false
 
@@ -907,14 +930,8 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
 
     if hoist_parfors
-        lives = computeLiveness(nested_body, state.LambdaVarInfo)
-        @dprintln(3, "lives = ", lives, " " , unique_node_id)
-        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
-        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
-        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
-        append!(pre_statements, hi_state.hoisted_stmts)
-        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
     end
 
     body_lives = computeLiveness(nested_body, state.LambdaVarInfo)
@@ -1060,14 +1077,8 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
 
     if hoist_parfors
-        lives = computeLiveness(nested_body, state.LambdaVarInfo)
-        @dprintln(3, "lives = ", lives, " " , unique_node_id)
-        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
-        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
-        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
-        append!(pre_statements, hi_state.hoisted_stmts)
-        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
     end
 
     out_body = nested_body
@@ -1340,14 +1351,8 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
 
     if hoist_parfors
-        lives = computeLiveness(nested_body, state.LambdaVarInfo)
-        @dprintln(3, "lives = ", lives, " " , unique_node_id)
-        @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
-        hi_state = HoistInvariants(lives, Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), state.LambdaVarInfo)
-        nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
-        @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
-        append!(pre_statements, hi_state.hoisted_stmts)
-        @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
     end
 
     out_body = [out_body; nested_body...]
