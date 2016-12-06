@@ -569,31 +569,35 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
     @dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
     @dprintln(3,"copy_propagate data = ", data.copies, " safe: ", data.safe_copies)
     @dprintln(3,"copy_propagate is_top_level ", is_top_level)
-    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-    if live_info==nothing @dprintln(3,"copy_propagate no live_info! ") end
 
-    if live_info != nothing
-        # Remove elements from data.copies if the original RHS is modified by this statement.
-        # For each symbol modified by this statement...
-        for def in live_info.def
-            @dprintln(4,"Symbol ", def, " is modifed by current statement.")
-            # For each copy we currently have recorded.
-            for copy in data.copies
-                @dprintln(4,"Current entry in data.copies = ", copy)
-                # If the rhs of the copy is modified by the statement.
-                if def == copy[2]
-                    @dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
-                    # Then remove the lhs = rhs entry from copies.
-                    delete!(data.copies, copy[1])
-                elseif def == copy[1]
-                    # LHS is def.  We can maintain the mapping if RHS is dead.
-                    if in(copy[2], live_info.live_out)
-                        @dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
+    # liveness information of top-level nodes is enough for finding defs
+    if is_top_level
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info!=nothing
+            # Remove elements from data.copies if the original RHS is modified by this statement.
+            # For each symbol modified by this statement...
+            for def in live_info.def
+                @dprintln(4,"Symbol ", def, " is modifed by current statement.")
+                # For each copy we currently have recorded.
+                for copy in data.copies
+                    @dprintln(4,"Current entry in data.copies = ", copy)
+                    # If the rhs of the copy is modified by the statement.
+                    if def == copy[2]
+                        @dprintln(3,"RHS of data.copies is modified so removing ", copy," from data.copies.")
                         # Then remove the lhs = rhs entry from copies.
                         delete!(data.copies, copy[1])
+                    elseif def == copy[1]
+                        # LHS is def.  We can maintain the mapping if RHS is dead.
+                        if in(copy[2], live_info.live_out)
+                            @dprintln(3,"LHS of data.copies is modified and RHS is live so removing ", copy," from data.copies.")
+                            # Then remove the lhs = rhs entry from copies.
+                            delete!(data.copies, copy[1])
+                        end
                     end
                 end
             end
+        else
+            @dprintln(3,"copy_propagate no live_info! ")
         end
     end
     return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
