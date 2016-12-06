@@ -515,7 +515,7 @@ export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseL
        PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment,
        PIRTaskGraphMode, PIRPolyhedral, PIRHoistParfors, PIRLateSimplify
 
-late_simplify = false
+late_simplify = true
 """
 Controls whether copy propagation and other simplifications are performed after Parallel-IR translation.
 """
