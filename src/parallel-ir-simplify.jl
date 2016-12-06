@@ -363,24 +363,14 @@ end
 """
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
-function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_level, read)
+function remove_dead(node::Expr, data::RemoveDeadState, top_level_number, is_top_level, read)
     @dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        @dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    @dprintln(3,"node.head = ", node.head)
 
     if is_top_level
         @dprintln(3,"remove_dead is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-
-        if isa(node, RHSVar)
-            return CompilerTools.AstWalker.ASTWALK_REMOVE
-        elseif isa(node, Number)
-            return CompilerTools.AstWalker.ASTWALK_REMOVE
-        end
-
         if live_info != nothing
             @dprintln(3,"remove_dead live_info = ", live_info)
             @dprintln(3,"remove_dead live_info.use = ", live_info.use)
@@ -422,9 +412,22 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                 end
             end
         else
+            @dprintln(3,"remove_dead no live_info!")
         end
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_dead(node::Union{RHSVar,Number}, data :: RemoveDeadState, top_level_number, is_top_level, read)
+    if is_top_level
+        @dprintln(3,"remove_dead is_top_level removing ", node)
+        return CompilerTools.AstWalker.ASTWALK_REMOVE
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_dead(node::ANY, data :: RemoveDeadState, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
