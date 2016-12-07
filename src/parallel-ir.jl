@@ -3277,6 +3277,9 @@ function from_root(function_name, ast)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+        body = AstWalk(body, unroll_const_parfors, nothing)
+        # flatten body since unroll can return :block nodes
+        body = AstWalk(body, flatten_blocks, nothing)
     end
 
 

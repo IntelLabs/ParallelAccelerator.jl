@@ -607,7 +607,83 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+const max_unroll_size = 12
 
+function is_small_loop(lower::Int, upper::Int, step::Int)
+    return (upper-lower)/step <= max_unroll_size
+end
+
+is_small_loop(lower::ANY, upper::ANY, step::ANY) = false
+
+function unroll_const_parfors(node::Expr, data, top_level_number, is_top_level, read)
+    if node.head==:parfor
+        parfor = node.args[1]
+        # TODO: extend for multi dimensional case
+        if length(parfor.loopNests)>1
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        indexVariable = parfor.loopNests[1].indexVariable
+        lower = parfor.loopNests[1].lower
+        upper = parfor.loopNests[1].upper
+        step = parfor.loopNests[1].step
+        if !is_small_loop(lower, upper, step)
+            return CompilerTools.AstWalker.ASTWALK_RECURSE
+        end
+        @dprintln(3,"unroll_const_parfors unrolling parfor ", node)
+        out = deepcopy(parfor.preParFor)
+        for i in lower:step:upper
+            body = deepcopy(parfor.body)
+            replaceExprWithDict!(body, Dict{LHSVar,Any}(toLHSVar(indexVariable)=>i), nothing, AstWalk)
+            append!(out,body)
+        end
+        append!(out, parfor.postParFor)
+        return Expr(:block, out...)
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+function unroll_const_parfors(node::ANY, data, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+"""
+unroll returns :block exprs that need to be flattened
+"""
+function flatten_blocks(node::Expr, data, top_level_number, is_top_level, read)
+    if node.head==:body
+        #@dprintln(3,"flatten_blocks body found ", node)
+        node.args = flatten_blocks_args(node.args)
+        return node
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function flatten_blocks(node::PIRParForAst, data, top_level_number, is_top_level, read)
+    node.body = flatten_blocks_args(node.body)
+    return node
+end
+
+function flatten_blocks_args(args::Vector{Any})
+    out = Any[]
+    for arg in args
+        #println("flatten_blocks body arg ", arg)
+        if isa(arg,Expr) && arg.head==:block
+            @dprintln(3,"flatten_blocks block found ", arg)
+            for b_arg in arg.args
+                bo_arg = AstWalk(b_arg, flatten_blocks, nothing)
+                push!(out, bo_arg)
+            end
+            continue
+        end
+        o_arg = AstWalk(arg, flatten_blocks, nothing)
+        push!(out, o_arg)
+    end
+    return out
+end
+
+
+function flatten_blocks(node::ANY, data, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 """
 State to aide in the copy propagation phase.
