@@ -31,9 +31,9 @@ using DocOpt
     centroids = rand(D, numCenter)
 
     for l in 1:iterNum
-        dist = [ Float64[sqrt(sum((points[:,i].-centroids[:,j]).^2)) for j in 1:numCenter] for i in 1:N]
-        labels = [indmin(dist[i]) for i in 1:N]
-        centroids = [ sum(points[j,labels.==i])/sum(labels.==i) for j in 1:D, i in 1:numCenter]
+        dist :: Array{Array{Float64,1},1} = [ Float64[sqrt(sum((points[:,i].-centroids[:,j]).^2)) for j in 1:numCenter] for i in 1:N]
+        labels :: Array{Int, 1} = [indmin(dist[i]) for i in 1:N]
+        centroids :: Array{Float64,2} = [ sum(points[j,labels.==i])/sum(labels.==i) for j in 1:D, i in 1:numCenter]
     end 
     return centroids
 end
