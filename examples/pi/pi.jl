@@ -47,16 +47,13 @@ Usage:
   pi.jl [--points=<points>]
 
 Options:
-  -h --help                  Show this screen.
-  --points=<points>  Specify number of generated random points; defaults to 10^7.
+  -h --help          Show this screen.
+  --points=<points>  Specify number of generated random points [default: 10000000].
 """
     arguments = docopt(doc)
 
-    if (arguments["--points"] != nothing)
-        points = parse(Int, arguments["--points"])
-    else
-        points = 10^7
-    end
+    points = parse(Int, arguments["--points"])
+
     println("points = ", points)
 
     tic()

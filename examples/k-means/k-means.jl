@@ -47,31 +47,16 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --size=<size>              Specify number of points; defaults to 50000.
-  --iterations=<iterations>  Specify number of iterations; defaults to 30.
-  --centers=<centers>        Specify number of centers; defaults to 5.
+  --size=<size>              Specify number of points [default: 50000].
+  --iterations=<iterations>  Specify number of iterations [default: 30].
+  --centers=<centers>        Specify number of centers [default: 5].
 
 """
     arguments = docopt(doc)
 
-    if (arguments["--size"] != nothing)
-        size = parse(Int, arguments["--size"])
-    else
-        size = 50000
-    end
-
-
-    if (arguments["--iterations"] != nothing)
-        iterations = parse(Int, arguments["--iterations"])
-    else
-        iterations = 30
-    end
-
-    if (arguments["--centers"] != nothing)
-        numCenter = parse(Int, arguments["--centers"])
-    else
-        numCenter = 5
-    end
+    size = parse(Int, arguments["--size"])
+    iterations = parse(Int, arguments["--iterations"])
+    numCenter = parse(Int, arguments["--centers"])
 
     D = 20
     srand(0)

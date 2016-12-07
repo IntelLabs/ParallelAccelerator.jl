@@ -159,22 +159,13 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --assets=<assets>          Specify the number of assets to simulate; defaults to 524288.
-  --iterations=<iterations>  Specify a number of iterations; defaults to 256.
+  --assets=<assets>          Specify the number of assets to simulate [default: 524288].
+  --iterations=<iterations>  Specify a number of iterations [default: 256].
 """
     arguments = docopt(doc)
 
-    if (arguments["--assets"] != nothing)
-        paths = parse(Int, arguments["--assets"])
-    else
-        paths = 524288
-    end
-
-    if (arguments["--iterations"] != nothing)
-        steps = parse(Int, arguments["--iterations"])
-    else
-        steps = 256
-    end
+    paths = parse(Int, arguments["--assets"])
+    steps = parse(Int, arguments["--iterations"])
 
     srand(0)
 

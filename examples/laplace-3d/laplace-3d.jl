@@ -65,22 +65,13 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --size=<size>              Specify a 3d array size (<size> x <size> x <size>); defaults to 300.
-  --iterations=<iterations>  Specify a number of iterations; defaults to 100.
+  --size=<size>              Specify a 3d array size (<size> x <size> x <size>) [default: 300].
+  --iterations=<iterations>  Specify a number of iterations [default: 100].
 """
     arguments = docopt(doc)
 
-    if (arguments["--size"] != nothing)
-        size = parse(Int, arguments["--size"])
-    else
-        size = 300
-    end
-
-    if (arguments["--iterations"] != nothing)
-        iterations = parse(Int, arguments["--iterations"])
-    else
-        iterations = 100
-    end
+    size = parse(Int, arguments["--size"])
+    iterations = parse(Int, arguments["--iterations"])
 
     srand(0)
 

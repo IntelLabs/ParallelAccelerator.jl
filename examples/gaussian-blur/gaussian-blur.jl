@@ -52,23 +52,14 @@ Usage:
 
 Options:
   -h --help                  Show this screen.
-  --img-file=<img-file>      Specify a path to an input image file; defaults to 'examples/example.jpg'.
-  --iterations=<iterations>  Specify a number of iterations; defaults to 100.
+  --img-file=<img-file>      Specify a path to an input image file [default: ../example.jpg].
+  --iterations=<iterations>  Specify a number of iterations [default: 100].
 """
     arguments = docopt(doc)
 
-    if (arguments["--img-file"] != nothing)
-        img_file = arguments["--img-file"]
-    else
-        dir = dirname(@__FILE__)
-        img_file = joinpath(dir, "..", "example.jpg")
-    end
-
-    if (arguments["--iterations"] != nothing)
-        iterations = parse(Int, arguments["--iterations"])
-    else
-        iterations = 100
-    end
+    dir = dirname(@__FILE__)
+    img_file = joinpath(dir, arguments["--img-file"])
+    iterations = parse(Int, arguments["--iterations"])
 
     (fname, ext) = splitext(img_file)
     out_file = string(fname, "-blur", ".jpg") 

@@ -170,31 +170,17 @@ Usage:
 
 Options:
   -h --help                     Show this screen.
-  --image-name-prefix=<image-name-prefix>  Specify an image filename prefix; defaults to "small_0".
-  --image-name-suffix=<image-name-suffix>  Specify an image filename prefix; defaults to ".dat".
-  --num-frames=<num-frames>                Specify a number of frames (at least 2); defaults to 2.
+  --image-name-prefix=<image-name-prefix>  Specify an image filename prefix [default: small_0].
+  --image-name-suffix=<image-name-suffix>  Specify an image filename prefix [default: .dat].
+  --num-frames=<num-frames>                Specify a number of frames (at least 2) [default: 2].
 
 Assumes that image files are in the same directory as opt-flow.jl.
 """
     arguments = docopt(doc)
 
-    if (arguments["--image-name-prefix"] != nothing)
-        fname_prefix = arguments["--image-name-prefix"]
-    else
-        fname_prefix = "small_0"
-    end
-
-    if (arguments["--image-name-suffix"] != nothing)
-        fname_suffix = arguments["--image-name-suffix"]
-    else
-        fname_suffix = ".dat"
-    end
-
-    if (arguments["--num-frames"] != nothing)
-        nframes = parse(Int, arguments["--num-frames"])
-    else
-        nframes = 2
-    end
+    fname_prefix = arguments["--image-name-prefix"]
+    fname_suffix = arguments["--image-name-suffix"]
+    nframes = parse(Int, arguments["--num-frames"])
 
     images_dir = dirname(@__FILE__)
 

@@ -75,16 +75,12 @@ Usage:
 
 Options:
   -h --help              Show this screen.
-  --img-file=<img-file>  Specify a path to an input (grayscale) image file; defaults to 'examples/example.jpg'.
+  --img-file=<img-file>  Specify a path to an input (grayscale) image file [default: ../example.jpg].
 """
     arguments = docopt(doc)
 
-    if (arguments["--img-file"] != nothing)
-        img_file = arguments["--img-file"]
-    else
-        dir = dirname(@__FILE__)
-        img_file = joinpath(dir, "..", "example.jpg")
-    end
+    dir = dirname(@__FILE__)
+    img_file = joinpath(dir, arguments["--img-file"])
 
     (fname, ext) = splitext(img_file)
     out_file = string(fname, "-corners", ".jpg")
