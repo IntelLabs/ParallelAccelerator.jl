@@ -1997,6 +1997,21 @@ end
 # mode = 2 does all of the above
 # mode = 3 in addition to 2, also uses host minimum (0) and Phi minimum (10)
 
+function pattern_match_reduce_sum(reductionFunc::DelayedFunc,linfo)
+    reduce_box = reductionFunc.args[1][1].args[2]
+    @assert reduce_box.args[1]==GlobalRef(Core.Intrinsics,:box) "invalid reduction function"
+    if reduce_box.args[3].args[1].name==:add_float || reduce_box.args[3].args[1].name==:add_int
+        return true
+    end
+    return false
+end
+
+function pattern_match_reduce_sum(reductionFunc::GlobalRef,linfo)
+    if reductionFunc.name==:add_float || reductionFunc.name==:add_int
+        return true
+    end
+    return false
+end
 
 function from_parforstart(args, linfo)
     global lstate
@@ -2106,6 +2121,11 @@ function from_parforstart(args, linfo)
             rdsextra *= "$rdvtyp &shared_$(rdvar) = $(rdvar)_vec[omp_get_thread_num()];\n"
             rdsextra *= "$rdvtyp $(rdvar) = shared_$(rdvar);\n"
         else
+            if isDistributedMode() && lstate.ompdepth == 1
+                if pattern_match_reduce_sum(rd.reductionFunc, linfo)
+                    rdsclause *= "reduction(+: $(rdvar)) "
+                end
+            end
             # The init is now handled in pre-statements
             #rdsprolog *= from_reductionVarInit(rd.reductionVarInit, rdv, linfo)
             # parallel IR no longer produces reductionFunc as a symbol
@@ -2117,6 +2137,12 @@ function from_parforstart(args, linfo)
     end
     @dprintln(3, "rdsprolog = ", rdsprolog)
     @dprintln(3, "rdsclause = ", rdsclause)
+
+    if isDistributedMode() && lstate.ompdepth == 1 && rdsclause != ""
+        s *= "$rdsprolog #pragma simd $rdsclause\n"
+        s *= loopheaders
+        return s
+    end
 
     # Don't put openmp pragmas on nested parfors.
     if USE_OMP==0 || lstate.ompdepth > 1
