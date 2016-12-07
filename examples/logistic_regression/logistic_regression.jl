@@ -26,7 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-@acc function logistic_regression(iterations::Int64)
+@acc function logistic_regression(iterations)
     D = 10  # Number of features
     N = 10000 # number of instances
 
