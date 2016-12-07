@@ -1536,7 +1536,7 @@ function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_numbe
                                 dep_only_on_parameter = false
                                 break
                             end
-                            if length(data.fas.arrays_stored_in_arrays != 0)
+                            if length(data.fas.arrays_stored_in_arrays) != 0
                                 # TODO Implement alias analysis and also an array could be put in 
                                 # an object and then that stored in the array and we should catch that
                                 # as well.
