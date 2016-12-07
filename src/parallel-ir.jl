@@ -523,6 +523,14 @@ function PIRLateSimplify(x :: Bool)
    global late_simplify = x
 end
 
+unroll_small_parfors = false
+"""
+Controls whether copy propagation and other simplifications are performed after Parallel-IR translation.
+"""
+function PIRUnrollSmallParfors(x :: Bool)
+   global unroll_small_parfors = x
+end
+
 """
 Given an array of outputs in "outs", form a return expression.
 If there is only one out then the args of :return is just that expression.
@@ -3277,11 +3285,18 @@ function from_root(function_name, ast)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+    end
+
+    if unroll_small_parfors
         body = AstWalk(body, unroll_const_parfors, nothing)
         # flatten body since unroll can return :block nodes
         body = AstWalk(body, flatten_blocks, nothing)
+        # TODO: replace small arrays with variables
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     end
-
 
     @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
     printLambda(1, LambdaVarInfo, body)
