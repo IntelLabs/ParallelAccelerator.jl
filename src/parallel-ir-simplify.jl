@@ -26,7 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #using Debug
 
 type findAllocationsState
-    allocs :: Dict{LHSVar, Int} 
+    allocs :: Dict{LHSVar, Int}
     arrays_stored_in_arrays :: Set{LHSVar}
     LambdaVarInfo
 
@@ -730,7 +730,12 @@ function copy_propagate_helper(node::PIRParForAst, data::CopyPropagateState, top
     map(x->delete!(data.safe_copies,x) ,rem_vars)
     append!(data.no_copy, reduction_vars)
     @dprintln(3,"copy_propagate new data = ", data.copies, " safe: ", data.safe_copies)
-
+    # update loopnest variables
+    for ln in node.loopNests
+        ln.lower = AstWalk(ln.lower, copy_propagate, data)
+        ln.upper = AstWalk(ln.upper, copy_propagate, data)
+        ln.step = AstWalk(ln.step, copy_propagate, data)
+    end
     old_lives = data.lives
     body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, node.body, pir_live_cb, data.linfo)
     data.lives = body_lives
@@ -1537,7 +1542,7 @@ function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_numbe
                                 break
                             end
                             if length(data.fas.arrays_stored_in_arrays) != 0
-                                # TODO Implement alias analysis and also an array could be put in 
+                                # TODO Implement alias analysis and also an array could be put in
                                 # an object and then that stored in the array and we should catch that
                                 # as well.
                                 @dprintln(3, i, " was allocated but there are arrays stored in arrays in this parfor and we haven't implemented the alias analysis yet to know if the allocated array is escaping the parfor.")
