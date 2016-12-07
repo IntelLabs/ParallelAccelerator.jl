@@ -490,6 +490,25 @@ function pattern_match_call_vecnorm(fun::ANY, C::ANY, tA::ANY,linfo)
     return ""
 end
 
+function pattern_match_call_reduce_oprs(fun::GlobalRef, x, y,linfo)
+    if fun.name in [:+, :*, :max, :min, :|, :&]
+        cx = from_expr(x,linfo)
+        cy = from_expr(y,linfo)
+        if fun.name in [:min,:max]
+            # std::min/max are picky about types
+            tx = toCtype(getType(x,linfo))
+            ty = toCtype(getType(y,linfo))
+            return "std::$(fun.name)(($tx)$cx,($ty)$cy)"
+        else
+            return "($cx$(fun.name)$cy)"
+        end
+    end
+    return ""
+end
+
+function pattern_match_call_reduce_oprs(fun::ANY, x::ANY, y::ANY,linfo)
+    return ""
+end
 
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
@@ -506,6 +525,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_transpose(linfo, ast...)
         s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
+        s *= pattern_match_call_reduce_oprs(ast[1],ast[2],ast[3],linfo)
     end
     if s=="" && (length(ast)>=1) # rand can have 1 or more arg
         s *= pattern_match_call_transpose(linfo, ast...)
