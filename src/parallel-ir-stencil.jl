@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -72,7 +72,7 @@ function simplifyBodyExpr(kernelF, state)
 
         changed = rnd_state.change
     end
-    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     return LambdaVarInfo, body
 end
 
@@ -93,7 +93,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local iterations = args[2]
   # convert all TypedVar in bufs to just Symbol
   local bufs = args[3]
-  local kernelF :: DomainLambda = args[4] 
+  local kernelF :: DomainLambda = args[4]
   local linfo = irState.LambdaVarInfo
   # println(stat)
   local buf = bufs[1] # assumes that first buffer has the same dimension as all other buffers
@@ -202,11 +202,11 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
         lhs = expr.args[1]
         rhs = expr.args[2]
         if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
-          indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value), 
+          indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value),
                             DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), deepcopy(rhs.args[2+i]), 0)),
                             DomainIR.add_expr(deepcopy(rhs.args[2+i]), sizeNodes[i]),
                             TypedExpr(Int, :call, GlobalRef(Base, :select_value),
-                              DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), 
+                              DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int),
                                 DomainIR.add_expr(sizeNodes[i], 1), deepcopy(rhs.args[2+i]))),
                               DomainIR.sub_expr(deepcopy(rhs.args[2+i]), sizeNodes[i]),
                               deepcopy(rhs.args[2+i]))) for i = 1:n ]
@@ -247,8 +247,8 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
     Any[ length(bufs) > 2 ? tuple(bufs...) : bufs[1] ],
     DomainOperation[ DomainOperation(:stencil!, args) ],
     irState.top_level_number,
-    get_unique_num(), 
-    Set{LHSVar}(), 
+    get_unique_num(),
+    Set{LHSVar}(),
     Set{LHSVar}([toLHSVar(x) for x in bufs]))
   return vcat(preExpr, TypedExpr(typ, head, expr), postExpr)
 end

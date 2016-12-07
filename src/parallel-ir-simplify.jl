@@ -25,6 +25,44 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #using Debug
 
+type findAllocationsState
+    allocs :: Dict{LHSVar, Int} 
+    arrays_stored_in_arrays :: Set{LHSVar}
+    LambdaVarInfo
+
+    function findAllocationsState(lvi)
+        return new(Dict{LHSVar, Int}(), Set{LHSVar}(), lvi)
+    end
+end
+
+function findAllocations(x :: Expr, state :: findAllocationsState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    if is_top_level
+        @dprintln(3, "findAllocations is_top_level")
+        if isAssignmentNode(x) && isAllocation(x.args[2])
+           lhs = toLHSVar(x.args[1])
+           @dprintln(3, "findAllocations found allocation ", lhs)
+           if !haskey(state.allocs, lhs)
+               state.allocs[lhs] = 0
+           end
+           state.allocs[lhs] = state.allocs[lhs] + 1
+        end
+    end
+    if isArraysetCall(x)
+        value = x.args[3]   # the value written into the array
+        vtyp  = CompilerTools.LambdaHandling.getType(value, state.LambdaVarInfo)
+        @dprintln(3, "findAllocations found arrayset with value ", value, " of type ", vtyp)
+        if isArrayType(vtyp) && isa(value, LHSVar)
+            @dprintln(3, "findAllocations added ", value, " to set")
+            push!(state.arrays_stored_in_arrays, value)
+        end
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function findAllocations(x :: ANY, state :: findAllocationsState, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 """
 Try to hoist allocations outside the loop if possible.
 """
@@ -357,30 +395,21 @@ end
 Holds liveness information for the remove_dead AstWalk phase.
 """
 type RemoveDeadState
-    lives :: CompilerTools.LivenessAnalysis.BlockLiveness
+    lives::CompilerTools.LivenessAnalysis.BlockLiveness
+    linfo
 end
 
 """
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
-function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_level, read)
+function remove_dead(node::Expr, data::RemoveDeadState, top_level_number, is_top_level, read)
     @dprintln(3,"remove_dead starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"remove_dead node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        @dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    @dprintln(3,"node.head = ", node.head)
 
     if is_top_level
         @dprintln(3,"remove_dead is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-
-        if isa(node, RHSVar)
-            return CompilerTools.AstWalker.ASTWALK_REMOVE
-        elseif isa(node, Number)
-            return CompilerTools.AstWalker.ASTWALK_REMOVE
-        end
-
         if live_info != nothing
             @dprintln(3,"remove_dead live_info = ", live_info)
             @dprintln(3,"remove_dead live_info.use = ", live_info.use)
@@ -422,9 +451,48 @@ function remove_dead(node, data :: RemoveDeadState, top_level_number, is_top_lev
                 end
             end
         else
+            @dprintln(3,"remove_dead no live_info!")
         end
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_dead(node::Union{RHSVar,Number}, data :: RemoveDeadState, top_level_number, is_top_level, read)
+    if is_top_level
+        @dprintln(3,"remove_dead is_top_level removing ", node)
+        return CompilerTools.AstWalker.ASTWALK_REMOVE
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function remove_dead(node::PIRParForAst, data::RemoveDeadState, top_level_number, is_top_level, read)
+    if is_top_level
+        @dprintln(3,"remove_dead is_top_level parfor")
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info != nothing
+            # live_out variables of the parfor are added to live_out of all
+            # basic blocks and statements so remove_dead doesn't remove them
+            parfor_live_out = live_info.live_out
+            @dprintln(3,"remove_dead parfor live_out = ", parfor_live_out)
+            body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, node.body, pir_live_cb, data.linfo)
+            @dprintln(3,"remove_dead parfor body lives = ", body_lives)
+            for bb in body_lives.basic_blocks
+                bb[2].live_out = union(parfor_live_out, bb[2].live_out)
+                stmts = bb[2].statements
+                for j = 1:length(stmts)
+                    stmts[j].live_out = union(parfor_live_out, stmts[j].live_out)
+                end
+            end
+            # body can now be traversed using exteneded liveness info
+            new_body = AstWalk(TypedExpr(nothing, :body, node.body...), remove_dead, RemoveDeadState(body_lives,data.linfo))
+            node.body = new_body.args
+            return node
+        end
+    end
+end
+
+function remove_dead(node::ANY, data :: RemoveDeadState, top_level_number, is_top_level, read)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
@@ -549,10 +617,12 @@ type CopyPropagateState
     copies :: Dict{LHSVar, Union{LHSVar,Number}}
     # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
     safe_copies :: Dict{LHSVar, Union{LHSVar,Number}}
+    # variables that shouldn't be copied (e.g. parfor reduction Variables)
+    no_copy::Vector{LHSVar}
     linfo
 
     function CopyPropagateState(l, c,s,li)
-        new(l,c,s,li)
+        new(l,c,s,LHSVar[],li)
     end
 end
 
@@ -565,16 +635,13 @@ and if it is then it must be removed from copies.
 function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
     @dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        @dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    @dprintln(3,"copy_propagate data = ", data.copies, " safe: ", data.safe_copies)
+    @dprintln(3,"copy_propagate is_top_level ", is_top_level)
 
+    # liveness information of top-level nodes is enough for finding defs
     if is_top_level
-        @dprintln(3,"copy_propagate is_top_level")
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
-
-        if live_info != nothing
+        if live_info!=nothing
             # Remove elements from data.copies if the original RHS is modified by this statement.
             # For each symbol modified by this statement...
             for def in live_info.def
@@ -597,49 +664,94 @@ function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_numbe
                     end
                 end
             end
-        end
-
-        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-            # Only copy propagate within a basic block.  this is now a new basic block.
-            # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
-            data.copies = copy(data.safe_copies)
-        elseif isAssignmentNode(node)
-            @dprintln(3,"Is an assignment node.")
-            # ignore LambdaInfo nodes generated by domain-ir that are essentially dead nodes here
-            # TODO: should these nodes be traversed here recursively?
-            if isa(node.args[2],LambdaInfo)
-                return node
-            end
-            lhs = AstWalk(node.args[1], copy_propagate, data)
-            @dprintln(4,"lhs = ", lhs)
-            rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
-            @dprintln(4,"rhs = ", rhs)
-            # sometimes lhs can already be replaced with a constant
-            if !isa(lhs, RHSVar)
-                return node
-            end
-            node.args[1] = lhs
-            if isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex)) # TODO: fix complex number case
-                lhs = toLHSVar(lhs)
-                rhs = toLHSVarOrNum(rhs)
-                desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
-                if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION
-                    @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
-                    # Record that the left-hand side is a copy of the right-hand side.
-                    data.copies[lhs] = rhs
-                    if (desc & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
-                        (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
-                        @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
-                        #@bp
-                        data.safe_copies[lhs] = rhs
-                    end
-                end
-            end
-            return node
+        else
+            @dprintln(3,"copy_propagate no live_info! ")
         end
     end
-
     return copy_propagate_helper(node, data, top_level_number, is_top_level, read)
+end
+
+function copy_propagate_helper(node::Expr,
+                               data::CopyPropagateState,
+                               top_level_number,
+                               is_top_level,
+                               read)
+    @dprintln(3,"node.head = ", node.head)
+
+    if node.head==:gotoifnot
+        # Only copy propagate within a basic block.  this is now a new basic block.
+        # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
+        data.copies = copy(data.safe_copies)
+    elseif isAssignmentNode(node)
+        @dprintln(3,"Is an assignment node.")
+        # ignore LambdaInfo nodes generated by domain-ir that are essentially dead nodes here
+        # TODO: should these nodes be traversed here recursively?
+        if isa(node.args[2],LambdaInfo)
+            return node
+        end
+        lhs = AstWalk(node.args[1], copy_propagate, data)
+        @dprintln(4,"lhs = ", lhs)
+        rhs = node.args[2] = AstWalk(node.args[2], copy_propagate, data)
+        @dprintln(4,"rhs = ", rhs)
+        # sometimes lhs can already be replaced with a constant
+        if !isa(lhs, RHSVar)
+            return node
+        end
+        node.args[1] = lhs
+        if !in(lhs,data.no_copy) && (isa(rhs, RHSVar) || (isa(rhs, Number) && !isa(rhs,Complex))) # TODO: fix complex number case
+            lhs = toLHSVar(lhs)
+            rhs = toLHSVarOrNum(rhs)
+            desc = CompilerTools.LambdaHandling.getDesc(lhs, data.linfo)
+            if desc & ISASSIGNEDBYINNERFUNCTION != ISASSIGNEDBYINNERFUNCTION
+                @dprintln(3,"Creating copy, lhs = ", lhs, " rhs = ", rhs)
+                # Record that the left-hand side is a copy of the right-hand side.
+                data.copies[lhs] = rhs
+                if (desc & ISASSIGNEDONCE == ISASSIGNEDONCE) &&
+                    (isa(rhs, Number) || CompilerTools.LambdaHandling.getDesc(rhs, data.linfo) & ISASSIGNEDONCE == ISASSIGNEDONCE)
+                    @dprintln(3,"Creating safe copy, lhs = ", lhs, " rhs = ", rhs)
+                    #@bp
+                    data.safe_copies[lhs] = rhs
+                end
+            end
+        end
+        return node
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function copy_propagate_helper(node::PIRParForAst, data::CopyPropagateState, top_level_number, is_top_level, read)
+    # remove loopnest and reduction vars from data, then recurse
+    loopnest_vars = map(x->toLHSVar(x.indexVariable), node.loopNests)
+    reduction_vars = map(x->toLHSVar(x.reductionVar), node.reductions)
+    rem_vars = [loopnest_vars; reduction_vars]
+    @dprintln(3,"copy_propagate parfor loop and reduce vars to remove: ", rem_vars)
+    map(x->delete!(data.copies,x) ,rem_vars)
+    map(x->delete!(data.safe_copies,x) ,rem_vars)
+    append!(data.no_copy, reduction_vars)
+    @dprintln(3,"copy_propagate new data = ", data.copies, " safe: ", data.safe_copies)
+
+    old_lives = data.lives
+    body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, node.body, pir_live_cb, data.linfo)
+    data.lives = body_lives
+    @dprintln(3,"copy_propagate parfor body lives = ", data.lives)
+    new_body = AstWalk(TypedExpr(nothing, :body, node.body...), copy_propagate, data)
+    node.body = new_body.args
+    data.lives = old_lives
+    return node
+end
+
+function copy_propagate_helper(node::DelayedFunc, data::CopyPropagateState, top_level_number, is_top_level, read)
+    # don't touch DelayedFunc for now
+    # TODO: hanlde DelayedFunc (push/pop copy values around them? reduction vars?)
+    return node
+end
+
+function copy_propagate_helper(node::Union{LabelNode,GotoNode}, data::CopyPropagateState, top_level_number, is_top_level, read)
+    # Only copy propagate within a basic block.  this is now a new basic block.
+    # if ISASSIGNEDONCE flag is set for a variable, its safe to keep it across block boundaries
+    data.copies = copy(data.safe_copies)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
 function copy_propagate_helper(node::Union{Symbol,RHSVar},
@@ -665,18 +777,15 @@ function copy_propagate_helper(node::DomainLambda,
                                read)
 
     @dprintln(3,"Found DomainLambda in copy_propagate, dl = ", node)
-    intersection_dict = Dict{LHSVar,Any}()
+    inner_linfo = node.linfo
+    inner_body = node.body
+    # replaceExprWithDict!() expects values to be valid variables to import (no SSAValue, no name clashes with local variables etc.)
+    dict = filter( (k,v)->!(isa(v,RHSVar) && (isa(v,GenSym) || isLocalVariable(v,inner_linfo))), data.safe_copies)
+    replaceExprWithDict!(node, convert(Dict{LHSVar,Any},dict), data.linfo, AstWalk)
+    inner_lives = computeLiveness(inner_body, inner_linfo)
+    node.body = AstWalk(inner_body, copy_propagate, CopyPropagateState(inner_lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),inner_linfo))
 
-    # all copies of escaping_defs should be deleted, since there is no guarantee that their values
-    # remain the same at when DomainLambda is actually called.
-    for v in CompilerTools.LambdaHandling.getEscapingVariables(node.linfo)
-        if haskey(data.copies, v) && !haskey(data.safe_copies, v)
-            @dprintln(3, "Found escaping_defs for ", v, " remove it from data.copies")
-            delete!(data.copies, v)
-            @dprintln(3, "data.copies = ", data.copies)
-        end
-    end
-    return CompilerTools.AstWalker.ASTWALK_RECURSE
+    return node
 end
 
 function copy_propagate_helper(node::ANY,
@@ -1194,13 +1303,16 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     @dprintln(3, "replaceConstArraysizes live info ", live_info)
     args = getCallArguments(node)
     arr = toLHSVar(args[1])
-    # get array sizes if available
-    size_syms = get_array_correlation_symbols(arr, state)
+    # get array sizes if available, there could be multiple
+    size_syms_arr = get_array_correlation_symbols(arr, state)
 
-    if length(size_syms)==0
+    if length(size_syms_arr)==0
         @dprintln(3, "replaceConstArraysizes correlation symbol not found ", node)
         return CompilerTools.AstWalker.ASTWALK_RECURSE
     end
+    @dprintln(3, "replaceConstArraysizes correlation symbols: ", size_syms_arr)
+    # need to make sure size variables are available in this statement to replace
+    available_variables = get_available_variables(top_level_number, state)
 
     if isBaseFunc(getCallFunction(node), :arraysize)
         dim_ind = args[2] # dimension number
@@ -1208,39 +1320,79 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
             @dprintln(3, "arraysize() index is not constant ", node)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
-        res = size_syms[dim_ind]
-        # only replace when the size is constant or a valid live variable
-        # check def since a symbol correlation might be defined with current arraysize() in reverse direction
-        if isa(res,Int) || ( live_info!=nothing && in(res, live_info.live_in) && !in(res,live_info.def) )
-            @dprintln(3, "arraysize() replaced: ", node," res ", res)
-            return res
+        for size_syms in size_syms_arr
+            res = size_syms[dim_ind]
+            # only replace when the size is constant or a valid live variable
+            # the size variable is live by construction
+            # since the array is allocated once, its allocation variables are live (in(res, live_info.live_in) not needed)
+            # check def since a symbol correlation might be defined with current arraysize() in reverse direction
+            if isa(res,Int) || (in(res,available_variables) && live_info!=nothing && !in(res,live_info.def) )
+                @dprintln(3, "arraysize() replaced: ", node," res ", res)
+                return res
+            end
         end
     end
 
-    if isBaseFunc(getCallFunction(node), :arraylen) &&
-          # make sure all dimension sizes are either constant or valid symbols (not reverse defined)
-          mapreduce(x-> isa(x,Int) || (live_info!=nothing && in(x, live_info.live_in) && !in(x,live_info.def)), &, size_syms)
-        res = mk_mult_int_expr(size_syms)
-        @dprintln(3, "arraylen() replaced: ", node," res ", res)
-        return res
+    if isBaseFunc(getCallFunction(node), :arraylen)
+        for size_syms in size_syms_arr
+            # make sure all dimension sizes are either constant or valid symbols (not reverse defined)
+            if mapreduce(x-> isa(x,Int) || (in(x,available_variables) && live_info!=nothing && !in(x,live_info.def)), &, size_syms)
+                res = mk_mult_int_expr(size_syms)
+                @dprintln(3, "arraylen() replaced: ", node," res ", res)
+                return res
+            end
+        end
     end
 
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+function get_available_variables(top_level_number, state)
+    # get dominant block information
+    dom_dict = CompilerTools.CFGs.compute_dominators(state.block_lives.cfg)
+    bb_index = CompilerTools.LivenessAnalysis.find_bb_for_statement(top_level_number, state.block_lives)
+    @dprintln(3, "get_available_variables dom_dict ", dom_dict, " bb_index ", bb_index)
+    available_variables = Set{LHSVar}()
+    # input parameters are also available
+    available_variables = union(getInputParametersAsLHSVar(state.LambdaVarInfo), available_variables)
+    if bb_index==nothing
+        return available_variables
+    end
+    dom_bbs = dom_dict[bb_index]
+
+    # find def variables for dominant blocks except current one
+    for i in dom_bbs
+        if i==bb_index continue end
+        bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(i, state.block_lives)
+        available_variables = union(bb.def, available_variables)
+    end
+    bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(bb_index, state.block_lives)
+    # find def variables for previous statements of same block
+    for stmts in bb.statements
+      if stmts.tls.index < top_level_number
+          available_variables = union(stmts.def, available_variables)
+      end
+    end
+    #live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
+    #available_variables = union(live_info.live_in, available_variables)
+    @dprintln(3, "get_available_variables returns ", available_variables)
+    return available_variables
+end
+
 """
-Find correlation symbols of an array if available. Return empty array otherwise
+Find correlation symbols of an array if available. Return empty array otherwise.
 """
 function get_array_correlation_symbols(arr::LHSVar, state)
+    out = []
     if haskey(state.array_length_correlation, arr)
         arr_class = state.array_length_correlation[arr]
         for (d, v) in state.symbol_array_correlation
             if v==arr_class
-                return d
+                push!(out, d)
             end
         end
     end
-    return []
+    return out
 end
 
 function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
@@ -1288,4 +1440,132 @@ function from_assertEqShape(node::Expr, state)
         print_correlations(3, state)
         return false
     end
+end
+
+"""
+State for the remove_no_deps and insert_no_deps_beginning phases.
+"""
+type HoistInvariants
+    lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
+    hoisted_stmts     :: Array{Any,1}
+    hoistable_scalars :: Set{LHSVar}
+    LambdaVarInfo
+    fas               :: findAllocationsState
+
+    function HoistInvariants(l, hs, lvi, fas)
+        new(l, Any[], hs, lvi, fas)
+    end
+end
+
+"""
+# This routine gathers up nodes that do not use
+# any variable and removes them from the AST into top_level_no_deps.  This works in conjunction with
+# insert_no_deps_beginning above to move these statements with no dependencies to the beginning of the AST
+# where they can't prevent fusion.
+"""
+function hoist_invariants(node :: Expr, data :: HoistInvariants, top_level_number, is_top_level, read)
+    @dprintln(3,"hoist_invariants starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
+    @dprintln(3,"hoist_invariants node = ", node, " type = ", typeof(node))
+    @dprintln(3,"node.head: ", node.head)
+    head = node.head
+
+    if is_top_level
+        @dprintln(3,"hoist_invariants is_top_level")
+
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info == nothing
+            @dprintln(3,"hoist_invariants no live_info")
+        else
+            @dprintln(3,"hoist_invariants live_info = ", live_info)
+            @dprintln(3,"hoist_invariants live_info.use = ", live_info.use)
+
+            # Here we try to determine which scalar assigns can be hoisted to the beginning of the function.
+            #
+            # If this statement defines some variable.
+            if !isempty(live_info.def)
+                @dprintln(3, "Checking if the statement is hoistable.")
+                @dprintln(3, "Previous hoistables = ", data.hoistable_scalars)
+                hoistable_names = [lookupVariableName(x, data.LambdaVarInfo) for x in data.hoistable_scalars]
+                @dprintln(3, "Previous hoistable names = ", hoistable_names)
+
+                # Assume that hoisting is safe until proven otherwise.
+                dep_only_on_parameter = true
+                # Look at all the variables on which this statement depends.
+                # If any of them are not a hoistable scalar then we can't hoist the current scalar definition.
+                for i in live_info.use
+                    if !in(i, data.hoistable_scalars)
+                        @dprintln(3, "Could not hoist because the statement depends on :", i)
+                        dep_only_on_parameter = false
+                        break
+                    end
+                end
+
+                # See if there are any calls with side-effects that could prevent moving.
+                sews = SideEffectWalkState()
+                ParallelAccelerator.ParallelIR.AstWalk(node, hasNoSideEffectWalk, sews)
+                if sews.hasSideEffect
+                    dep_only_on_parameter = false
+                end
+
+                if dep_only_on_parameter
+                    @dprintln(3,"Statement does not have any side-effects.")
+                    # If this statement is defined in more than one place then it isn't hoistable.
+                    for i in live_info.def
+                        @dprintln(3,"Checking if ", i, " is multiply defined.")
+                        @dprintln(4,"data.lives = ", data.lives)
+                        def_type = CompilerTools.LambdaHandling.getType(i, data.LambdaVarInfo)
+                        # Two strategies here.  If the type of the def is a bits type then we can simply check for multiple definition.
+                        # If it is a non-bits type (which can alias) then we need to do a scan of allocations and get all the aliases
+                        # for those allocations and see if any of those allocations survive the parfor.  There are two possibilities for
+                        # arrays allocated in a parfor: 1) either things are put into an array and then some reduction is run across the
+                        # array to summarize it to a scalar or 2) the array is allocated per iteration and stored into an array of arrays.
+                        if isbits(def_type)
+                            if CompilerTools.LivenessAnalysis.countSymbolDefs(i, data.lives) > 1
+                                @dprintln(3, "Could not hoist because the function has multiple definitions of: ", i)
+                                dep_only_on_parameter = false
+                                break
+                            end
+                        else
+                            if !haskey(data.fas.allocs, i)
+                                @dprintln(3, "Non-bits type def is not in alloc set in findAllocationStats. ", i)
+                                dep_only_on_parameter = false
+                                break
+                            end
+                            if data.fas.allocs[i] != 1
+                                @dprintln(3, i, " was allocated ", data.fas.allocs[i], " times in the parfor body.")
+                                dep_only_on_parameter = false
+                                break
+                            end
+                            if length(data.fas.arrays_stored_in_arrays != 0)
+                                # TODO Implement alias analysis and also an array could be put in 
+                                # an object and then that stored in the array and we should catch that
+                                # as well.
+                                @dprintln(3, i, " was allocated but there are arrays stored in arrays in this parfor and we haven't implemented the alias analysis yet to know if the allocated array is escaping the parfor.")
+                                dep_only_on_parameter = false
+                                break
+                            end
+                        end
+                    end
+
+                    if dep_only_on_parameter
+                        @dprintln(3,"hoist_invariants removing ", node, " because it only depends on hoistable scalars.")
+                        push!(data.hoisted_stmts, node)
+                        # If the defs in this statement are hoistable then other statements which depend on them may also be hoistable.
+                        for i in live_info.def
+                            push!(data.hoistable_scalars, i)
+                        end
+                        return CompilerTools.AstWalker.ASTWALK_REMOVE
+                    end
+                else
+                    @dprintln(3,"Statement DOES have side-effects.")
+                end
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function hoist_invariants(node::ANY, data :: HoistInvariants, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
 end

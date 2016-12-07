@@ -259,5 +259,5 @@ function stencilGenBody(stat, linfo, body, idxSymNodes, strideSymNodes, bufSymNo
     @dprintln(3,"ldict = ", ldict)
     @dprintln(3,"krnExpr = ", krnExpr)
     # warn(string("\nreplaceWithDict ", idxDict, strideDict, bufDict))
-    CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(krnExpr), ldict)
+    CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(krnExpr), ldict, plinfo)
 end

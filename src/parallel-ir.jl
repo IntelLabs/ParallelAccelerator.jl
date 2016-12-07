@@ -392,18 +392,18 @@ end
 Not currently used but might need it at some point.
 Search a whole PIRParForAst object and replace one RHSVar with another.
 """
-function replaceParforWithDict(parfor :: PIRParForAst, gensym_map)
-    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map)
-    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map)
+function replaceParforWithDict(parfor :: PIRParForAst, gensym_map, linfo :: LambdaVarInfo)
+    parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map, linfo)
+    parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map, linfo)
     for i = 1:length(parfor.loopNests)
-        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map)
-        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map)
-        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].step, gensym_map)
+        parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map, linfo)
+        parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map, linfo)
+        parfor.loopNests[i].step = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].step, gensym_map, linfo)
     end
     for i = 1:length(parfor.reductions)
-        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.reductions[i].reductionVarInit, gensym_map)
+        parfor.reductions[i].reductionVarInit = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.reductions[i].reductionVarInit, gensym_map, linfo)
     end
-    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map)
+    parfor.postParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.postParFor, gensym_map, linfo)
 end
 
 """
@@ -510,7 +510,18 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
     end
 end
 
-export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit, PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks, PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment, PIRTaskGraphMode, PIRPolyhedral
+export PIRLoopNest, PIRReduction, from_exprs, PIRParForAst, AstWalk, PIRSetFuseLimit,
+       PIRNumSimplify, PIRInplace, PIRRunAsTasks, PIRLimitTask, PIRReduceTasks,
+       PIRStencilTasks, PIRFlatParfor, PIRNumThreadsMode, PIRShortcutArrayAssignment,
+       PIRTaskGraphMode, PIRPolyhedral, PIRHoistParfors, PIRLateSimplify
+
+late_simplify = true
+"""
+Controls whether copy propagation and other simplifications are performed after Parallel-IR translation.
+"""
+function PIRLateSimplify(x :: Bool)
+   global late_simplify = x
+end
 
 """
 Given an array of outputs in "outs", form a return expression.
@@ -1283,7 +1294,7 @@ function mergeLambdaIntoOuterState(state, dl :: DomainLambda, args :: Array{Any,
         repl_dict[lookupLHSVarByName(params[i], dl.linfo)] = args[i]
     end
     @dprintln(3, "repl_dict = ", repl_dict)
-    body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, AstWalk)
+    body = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(dl.body.args), repl_dict, dl.linfo, AstWalk)
     @dprintln(3, "after replacement, body = ")
     printBody(3, body)
     return body
@@ -2335,14 +2346,17 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :promote_type) ||
             isBaseFunc(func, :select_value) ||
             isBaseFunc(func, :powi_llvm) ||
+            isBaseFunc(func, :svec) ||
             isSideEffectFreeAPI(func)
             @dprintln(3,"hasNoSideEffects returning true")
             return all(Bool[hasNoSideEffects(a) for a in args])
-        elseif func == :ccall
+        elseif isBaseFunc(func, :ccall)
+            @dprintln(3,"hasNoSideEffects found ccall")
             func = args[1]
             if func == QuoteNode(:jl_alloc_array_1d) ||
-               func == QuoteNode(:jl_alloc_array_2d)
-                @dprintln(3,"hasNoSideEffects returning true")
+               func == QuoteNode(:jl_alloc_array_2d) ||
+               func == QuoteNode(:jl_alloc_array_3d)
+                @dprintln(3,"hasNoSideEffects found allocation returning true")
                 return true
             end
         elseif isa(func, TopNode)
@@ -2763,14 +2777,19 @@ function nested_function_exprs(domain_lambda, out_state)
     # leaves other non-array operations after that and so prevents fusion.
     input_arrays = getArrayParams(LambdaVarInfo)
     non_array_params = Set{LHSVar}()
-    params_and_escaping = union(CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo), CompilerTools.LambdaHandling.getEscapingVariables(LambdaVarInfo))
-    for param in params_and_escaping
-#    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
+    non_array_escaping = Set{LHSVar}()
+    for param in CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
         if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
             push!(non_array_params, lookupLHSVarByName(param, LambdaVarInfo))
         end
     end
-    @dprintln(3,"Non-array params and escaping variables = ", non_array_params, " " , unique_node_id)
+    for param in CompilerTools.LambdaHandling.getEscapingVariables(LambdaVarInfo)
+        if !in(param, input_arrays) && CompilerTools.LivenessAnalysis.countSymbolDefs(param, lives) == 0
+            push!(non_array_escaping, lookupLHSVarByName(param, LambdaVarInfo))
+        end
+    end
+    @dprintln(3,"Non-array params = ", non_array_params, " " , unique_node_id)
+    @dprintln(3,"Non-array escaping = ", non_array_escaping, " " , unique_node_id)
 
     # Find out max_label.
     assert(isa(body, Expr) && is(body.head, :body))
@@ -2798,7 +2817,8 @@ function nested_function_exprs(domain_lambda, out_state)
     changed = true
     while changed
         @dprintln(1,"Removing statement with no dependencies from the AST with parameters"), " " , unique_node_id
-        rnd_state = RemoveNoDepsState(lives, non_array_params)
+#        rnd_state = RemoveNoDepsState(lives, non_array_params)
+        rnd_state = RemoveNoDepsState(lives, union(non_array_params, non_array_escaping))
         body = AstWalk(body, remove_no_deps, rnd_state)
         @dprintln(3,"body after no dep stmts removed = ", body, " " , unique_node_id)
 
@@ -2867,37 +2887,13 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
         new_vars.array_length_correlation[in_lhs_var] = new_corr_class
         for (s,c) in out_state.symbol_array_correlation
             # add symbol correlations only if all size variables are constants or escaping
-            # TODO: import variables
-            if c==corr_class && mapreduce(x-> isa(x,Int) || (isa(x,RHSVar) &&
-                  isEscapingVariable(x, linfo)), &, s)
+            # TODO: import GenSym, resolve name conflicts with params and local variables
+            if c==corr_class && mapreduce(x-> isValidInnerVariable(x,linfo,out_state.LambdaVarInfo), &, s)
                 # convert outer LHSVars (slotnumbers) to inner ones
-                new_syms = map(x->isa(x,Int) ? x :
-                  lookupLHSVarByName(lookupVariableName(x, out_state.LambdaVarInfo), linfo), s)
+                new_syms = map(x->isa(x,Int) ? x : lookupVariableName(x, out_state.LambdaVarInfo), s)
+                new_syms = map(x->isa(x,Int) ? x : lookupLHSVarByName(x, linfo), new_syms)
                 new_vars.symbol_array_correlation[new_syms] = new_corr_class
                 @dprintln(3, "setEscCorrelations symbol correlation found ", s, " -> ", new_syms, " class ", new_corr_class)
-                # TODO: add size symbol variables if not already escaping
-                # and need to add make sure there is not conflict with locals
-                #=
-                new_vars.symbol_array_correlation[s] = c+input_length+1
-                for v in s
-                    if !in(v, esc_vars) && !isa(v, GenSym)
-                        if isa(v, RHSVar)
-                            v = toLHSVar(v)
-                            if isInputParameter(v, linfo) || isLocalVariable(v, linfo)
-                                error("Correlation variable ", v, " is a conflict with local variables")
-                            end
-                            if !isEscapingVariable(v, linfo)
-                                typ = LambdaHandling.getType(v, out_state.LambdaVarInfo)
-                                desc = LambdaHandling.getDesc(v, out_state.LambdaVarInfo)
-                                @dprintln(3, "setEscCorrelations! addEscapingVariable for ", v)
-                                LambdaHandling.addEscapingVariable(v, typ, desc, linfo)
-                            end
-                        else
-                            @dprintln(3, "setEscCorrelations! cannot addEscapingVariable for ", v)
-                        end
-                    end
-                end
-                =#
             end
         end
     end
@@ -2907,7 +2903,26 @@ function setEscCorrelations!(new_vars, linfo, out_state, input_length)
     nothing
 end
 
+# integers are always valid to import
+isValidInnerVariable(x::Int, linfo, out_linfo) = true
+isValidInnerVariable(x::TypedVar, linfo, out_linfo) = isValidInnerVariable(toLHSVar(x), linfo)
+# GenSyms are not valid to import
+isValidInnerVariable(x::GenSym, linfo, out_linfo) = false
 
+function isValidInnerVariable(x::LHSRealVar, linfo, out_linfo)
+    name = lookupVariableName(x, out_linfo)
+    # TODO: import GenSym, resolve name conflicts with params and local variables
+    if isInputParameter(name, linfo) || isLocalVariable(name, linfo)
+        return false
+    end
+    if !isEscapingVariable(name, linfo)
+        typ = LambdaHandling.getType(x, out_linfo)
+        desc = LambdaHandling.getDesc(x, out_linfo)
+        @dprintln(3, "setEscCorrelations addEscapingVariable for ", x, " ",name)
+        addEscapingVariable(name, typ, desc, linfo)
+    end
+    return true
+end
 
 doRemoveAssertEqShape = true
 generalSimplification = true
@@ -3198,7 +3213,7 @@ function from_root(function_name, ast)
         printLambda(3, LambdaVarInfo, body)
     end
 
-    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(3,"AST after remove_dead = ", " function = ", function_name)
     printLambda(3, LambdaVarInfo, body)
@@ -3249,15 +3264,23 @@ function from_root(function_name, ast)
     printLambda(1, LambdaVarInfo, body)
 
     body = remove_extra_allocs(LambdaVarInfo, body)
-
-    set_pir_stats(body)
-
     lives = computeLiveness(body, LambdaVarInfo)
-    body = AstWalk(body, remove_dead, RemoveDeadState(lives))
+    body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+
+    if late_simplify
+        @dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        lives = computeLiveness(body, LambdaVarInfo)
+        body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+    end
+
 
     @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
     printLambda(1, LambdaVarInfo, body)
 
+    set_pir_stats(body)
     #if pir_stop != 0
     #    throw(string("STOPPING AFTER PARALLEL IR CONVERSION"))
     #end

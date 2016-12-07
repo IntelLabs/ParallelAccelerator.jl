@@ -1825,7 +1825,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3, "Before LHSVar replacement in parfor")
     @dprintln(3, the_parfor)
 
-    CompilerTools.LambdaHandling.replaceExprWithDict!(the_parfor, oldToNewMap, ParallelAccelerator.ParallelIR.AstWalk)
+    CompilerTools.LambdaHandling.replaceExprWithDict!(the_parfor, oldToNewMap, state.LambdaVarInfo, ParallelAccelerator.ParallelIR.AstWalk)
 
     @dprintln(3, "Before ParforBoxify")
     @dprintln(3, the_parfor)

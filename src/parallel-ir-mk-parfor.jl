@@ -23,6 +23,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
+hoist_parfors = false
+"""
+Controls whether loop invariant statements are moved from parfor bodies to pre-statements.
+If true, such loop invariant statements are moved.  If false, they are not.
+"""
+function PIRHoistParfors(x :: Bool)
+    global hoist_parfors = x
+end
+
 """
 Look at the arrays that are accessed and see if they use a forward index, i.e.,
 an index that could be greater than 1.
@@ -294,24 +303,12 @@ function translate_reduction_neutral_value(neutral_val::DomainIR.DomainLambda, s
     #neutral_val_flatten_body = Any[]
     #flattenParfors(neutral_val_flatten_body, neutral_val_body, state.LambdaVarInfo)
     #@dprintln(3, "neutral_val_flatten_body = ", neutral_val_flatten_body)
-    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), AstWalk)
+    f(body, init_var, var) = CompilerTools.LambdaHandling.replaceExprWithDict!(
+                                deepcopy(body), 
+                                Dict{LHSVar,Any}(Pair(toLHSVar(init_var, state.LambdaVarInfo), var)), 
+                                state.LambdaVarInfo, 
+                                AstWalk)
     return DelayedFunc(f, Any[deepcopy(neutral_val_body), init_var])
-end
-
-function reductionReplaceDict(body, snode, atm, var, val) 
-    @dprintln(3, "reductionReplaceDict")
-    @dprintln(3, "body = ")
-    printBody(3, body)
-    @dprintln(3, "snode = ", snode)
-    @dprintln(3, "atm = ", atm)
-    @dprintln(3, "var = ", var)
-    @dprintln(3, "val = ", val)
-
-    res = CompilerTools.LambdaHandling.replaceExprWithDict!(deepcopy(body), Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), AstWalk)
-    @dprintln(3, "res = ")
-    printBody(3, res)
-
-    res
 end
 
 function translate_reduction_function(reduction_var, delta_var, reduction_func::DomainIR.DomainLambda, state)
@@ -336,7 +333,12 @@ function translate_reduction_function(reduction_var, delta_var, reduction_func::
     #reduce_flatten_body = Any[]
     #flattenParfors(reduce_flatten_body, deepcopy(temp_body), state.LambdaVarInfo)
     #@dprintln(3, "reduce_flatten_body = ", reduce_flatten_body)
-    reduce_func = DelayedFunc(reductionReplaceDict, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
+    f(body, snode, atm, var, val) = CompilerTools.LambdaHandling.replaceExprWithDict!(
+                                        deepcopy(body), 
+                                        Dict{LHSVar,Any}(Pair(snode, var), Pair(atm, val)), 
+                                        state.LambdaVarInfo, 
+                                        AstWalk)
+    reduce_func = DelayedFunc(f, Any[deepcopy(temp_body), toLHSVar(reduction_var, state.LambdaVarInfo), toLHSVar(delta_var, state.LambdaVarInfo)])
     @dprintln(3, "reduce_func = ", reduce_func)
     return temp_body, reduce_func 
 end
@@ -842,6 +844,29 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
     return loopNests
 end
 
+function doHoistParfor(nested_body, state, unique_node_id, dl)
+    lives = computeLiveness(nested_body, state.LambdaVarInfo)
+    @dprintln(3, "lives = ", lives, " " , unique_node_id)
+    @dprintln(3, "nested_body before hoist invariants = ", nested_body, " " , unique_node_id)
+
+    # Find the allocations in the nested_body and the assignments of arrays into arrays.
+    fas = findAllocationsState(state.LambdaVarInfo) 
+    ParallelAccelerator.ParallelIR.AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), findAllocations, fas)
+    @dprintln(3, "fas = ", fas)
+
+    hi_state = HoistInvariants(
+        lives, 
+        Set{LHSVar}([CompilerTools.LambdaHandling.lookupLHSVarByName(x, state.LambdaVarInfo) 
+            for x in CompilerTools.LambdaHandling.getEscapingVariables(dl.linfo)]), 
+        state.LambdaVarInfo,
+        fas)
+    nested_body = AstWalk(CompilerTools.LambdaHandling.getBody(nested_body), hoist_invariants, hi_state).args
+
+    @dprintln(3, "hoisted_stmts = ", hi_state.hoisted_stmts, " " , unique_node_id)
+    @dprintln(3, "nested_body after hoist invariants = ", nested_body, " " , unique_node_id)
+    return (nested_body, hi_state.hoisted_stmts)
+end
+
 box_tfa = false
 box_aset = false
 
@@ -903,6 +928,12 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
+
+    if hoist_parfors
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
+    end
+
     body_lives = computeLiveness(nested_body, state.LambdaVarInfo)
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
@@ -1044,6 +1075,12 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     dl_inputs = Any[toRHSVar(s, Int, state.LambdaVarInfo) for s in loopvars]
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
+
+    if hoist_parfors
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
+    end
+
     out_body = nested_body
     @dprintln(3, "mpafpf 1 out_body[end] = ", out_body[end], " type = ", typeof(out_body[end]))
     if isa(out_body[end], Expr)
@@ -1312,6 +1349,12 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     # Call Domain IR to generate most of the body of the function (except for saving the output)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
+
+    if hoist_parfors
+        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
+    end
+
     out_body = [out_body; nested_body...]
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " " , unique_node_id)
     assert(isa(out_body,Array))
