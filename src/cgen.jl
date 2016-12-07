@@ -3252,6 +3252,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
         else
             comp = "mpiicpc"
         end
+        push!(Opts, "-qopenmp-simd") # No parallelization, just vectorization.
     end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
     if USE_OMP == 1 || USE_DAAL==1
