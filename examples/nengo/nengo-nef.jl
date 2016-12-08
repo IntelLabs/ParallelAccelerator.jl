@@ -61,7 +61,7 @@ function generate_gain_and_bias(count, intercept_low, intercept_high, rate_low, 
         intercept = uniform(intercept_low, intercept_high)
         # desired maximum rate (firing rate when x is maximum)
         rate = uniform(rate_low, rate_high)
-        
+
         # this algorithm is specific to LIF neurons, but should
         #  generate gain and bias values to produce the desired
         #  intercept and rate
@@ -74,7 +74,7 @@ function generate_gain_and_bias(count, intercept_low, intercept_high, rate_low, 
     return gain, bias
 end
 
-# a simple leaky integrate-and-fire model, scaled so that v=0 is resting 
+# a simple leaky integrate-and-fire model, scaled so that v=0 is resting
 #  voltage and v=1 is the firing threshold
 @acc @inline function run_neurons(input, v, ref)
     w = v .+ (input .- v) .* dt ./ t_rc
@@ -89,22 +89,22 @@ end
     ref[spikes] = t_ref
     return spikes
 end
- 
-# measure the spike rate of a whole population for a given represented value x        
+
+# measure the spike rate of a whole population for a given represented value x
 function compute_response(x, encoder, gain, bias, time_limit=0.5)
     N = length(encoder)          # number of neurons
     v = zeros(Float, N)          # voltage
     ref = zeros(Float, N)        # refractory period
-    
+
     # compute input corresponding to x
     input = Array(Float, N)
     for i in 1:N
         input[i] = x*encoder[i]*gain[i]+bias[i]
         v[i]=uniform(0,1)  # randomize the initial voltage level
     end
-    
+
     count = zeros(Int, N)    # spike count for each neuron
-    
+
     # feed the input into the population for a given amount of time
     t = 0
     while t<time_limit
@@ -112,12 +112,12 @@ function compute_response(x, encoder, gain, bias, time_limit=0.5)
         for i in 1:length(spikes)
             if spikes[i] count[i]+=1 end
         end
-        t += dt    
+        t += dt
     end
     return [convert(Float, c)/time_limit for c in count]  # return the spike rate (in Hz)
 end
-    
-# compute the tuning curves for a population    
+
+# compute the tuning curves for a population
 function compute_tuning_curves(encoder, gain, bias)
     N = length(encoder)
     # generate a set of x values to sample at
@@ -130,14 +130,14 @@ function compute_tuning_curves(encoder, gain, bias)
         response = compute_response(x, encoder, gain, bias)
         A[:, i] = response
     end
-    return x_values, A    
+    return x_values, A
 end
 
 # compute decoders
 function compute_decoder(encoder, gain, bias, func=x->x)
     # get the tuning curves
     x_values, A = compute_tuning_curves(encoder, gain, bias)
-    
+
     # get the desired decoded value for each sample point
     # result is N_samples * 1
     value = Float[ func(x) for x in x_values, i in 1:1 ]
@@ -179,16 +179,16 @@ end
         #  of all the neurons it is connected to by the synaptic
         #  connection weight
         for j = 1:N_A
-            if spikes_A[j] 
+            if spikes_A[j]
                 input_B += weights[:,j] .* pstc_scale
             end
         end
-        
+
         # compute the total input into each neuron in population B
-        #  (taking into account gain and bias)    
+        #  (taking into account gain and bias)
         total_B = gain_B .* input_B .+ bias_B
         input_B = input_B .* (1.0 - pstc_scale)
-        
+
         # run population B and determine which neurons spike
         spikes_B=run_neurons(total_B, v_B, ref_B)
         # for each neuron in B that spikes, update our decoded value

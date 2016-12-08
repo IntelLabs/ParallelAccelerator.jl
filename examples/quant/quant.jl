@@ -83,7 +83,7 @@ function init(numPaths::Int, numSteps::Int)
 
     # Storage
     # Compute all per-path asset values for each time step
-    # NOTE: hand-hoisting obscures the basic formula. 
+    # NOTE: hand-hoisting obscures the basic formula.
     # Can the compiler do this optimization?
     asset = Array(Array{Float64,1}, numSteps+1)
     asset[1] = Array(Float64, numPaths)

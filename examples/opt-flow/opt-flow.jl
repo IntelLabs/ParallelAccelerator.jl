@@ -50,7 +50,7 @@ end
 
 # Solve optical flow problem at one scale
 # Flow problem is formulated as the solution of a linear system where matrix is sparse
-# Use an iterative method to 
+# Use an iterative method to
 # Pre: size(i1)==size(i2)
 function singleScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::Float32, ni::Int)
 # Returns two Matrix{Float32} size=size(i1)

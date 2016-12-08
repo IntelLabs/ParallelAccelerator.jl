@@ -59,7 +59,7 @@ function generate_gain_and_bias(count, intercept_low, intercept_high, rate_low, 
         intercept = uniform(intercept_low, intercept_high)
         # desired maximum rate (firing rate when x is maximum)
         rate = uniform(rate_low, rate_high)
-        
+
         # this algorithm is specific to LIF neurons, but should
         #  generate gain and bias values to produce the desired
         #  intercept and rate
