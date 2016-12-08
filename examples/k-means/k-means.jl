@@ -23,7 +23,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-using ParallelAccelerator 
+using ParallelAccelerator
 using DocOpt
 
 @acc function kmeans(numCenter, iterNum, points)
@@ -34,7 +34,7 @@ using DocOpt
         dist :: Array{Array{Float64,1},1} = [ Float64[sqrt(sum((points[:,i].-centroids[:,j]).^2)) for j in 1:numCenter] for i in 1:N]
         labels :: Array{Int, 1} = [indmin(dist[i]) for i in 1:N]
         centroids :: Array{Float64,2} = [ sum(points[j,labels.==i])/sum(labels.==i) for j in 1:D, i in 1:numCenter]
-    end 
+    end
     return centroids
 end
 
@@ -62,8 +62,8 @@ Options:
     srand(0)
 
     println("iterations = ", iterations)
-    println("centers = ", numCenter) 
-    println("number of points = ", size) 
+    println("centers = ", numCenter)
+    println("number of points = ", size)
     points = rand(D,size)
 
     tic()
