@@ -861,7 +861,8 @@ function copy_propagate_helper(node::DomainLambda,
     inner_linfo = node.linfo
     inner_body = node.body
     # replaceExprWithDict!() expects values to be valid variables to import (no SSAValue, no name clashes with local variables etc.)
-    dict = filter( (k,v)->!(isa(v,RHSVar) && (isa(v,GenSym) || isLocalVariable(v,inner_linfo))), data.safe_copies)
+    dict = filter( (k,v)->!(isa(v,RHSVar) && (isa(v,GenSym) ||
+       isLocalVariable(lookupVariableName(v,data.linfo),inner_linfo))), data.safe_copies)
     replaceExprWithDict!(node, convert(Dict{LHSVar,Any},dict), data.linfo, AstWalk)
     inner_lives = computeLiveness(inner_body, inner_linfo)
     node.body = AstWalk(inner_body, copy_propagate, CopyPropagateState(inner_lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),inner_linfo))
