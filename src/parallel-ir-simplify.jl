@@ -697,8 +697,8 @@ type CopyPropagateState
     no_copy::Vector{LHSVar}
     linfo
 
-    function CopyPropagateState(l, c,s,li)
-        new(l,c,s,LHSVar[],li)
+    function CopyPropagateState(l,li)
+        new(l,Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LHSVar[],li)
     end
 end
 
@@ -708,7 +708,7 @@ that in copies as copies[a] = b.  Then, later in the basic block if you see the 
 "a" then replace it with "b".  Note that this is not SSA so "a" may be written again
 and if it is then it must be removed from copies.
 """
-function copy_propagate(node :: ANY, data :: CopyPropagateState, top_level_number, is_top_level, read)
+function copy_propagate(node::ANY, data::CopyPropagateState, top_level_number, is_top_level, read)
     @dprintln(3,"copy_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"copy_propagate node = ", node, " type = ", typeof(node))
     @dprintln(3,"copy_propagate data = ", data.copies, " safe: ", data.safe_copies)
@@ -865,7 +865,7 @@ function copy_propagate_helper(node::DomainLambda,
        isLocalVariable(lookupVariableName(v,data.linfo),inner_linfo))), data.safe_copies)
     replaceExprWithDict!(node, convert(Dict{LHSVar,Any},dict), data.linfo, AstWalk)
     inner_lives = computeLiveness(inner_body, inner_linfo)
-    node.body = AstWalk(inner_body, copy_propagate, CopyPropagateState(inner_lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),inner_linfo))
+    node.body = AstWalk(inner_body, copy_propagate, CopyPropagateState(inner_lives,inner_linfo))
 
     return node
 end

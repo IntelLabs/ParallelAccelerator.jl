@@ -2757,7 +2757,7 @@ function nested_function_exprs(domain_lambda, out_state)
     lives = computeLiveness(body, LambdaVarInfo)
     @dprintln(1,"Finished liveness analysis.", " " , unique_node_id)
 
-    body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+    body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
     @dprintln(1,"AST after copy propagation, body = ", body, " " , unique_node_id)
     lives = computeLiveness(body, LambdaVarInfo)
 
@@ -3113,7 +3113,7 @@ function from_root(function_name, ast)
 
     # propagate transpose() calls to gemm() calls
     # copy propagation is need so that the output of transpose is directly used in gemm()
-    body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+    body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
     @dprintln(1,"body after copy_propagate = ", function_name, " body = ", body)
     lives = computeLiveness(body, LambdaVarInfo)
     body  = AstWalk(body, transpose_propagate, TransposePropagateState(lives))
@@ -3205,7 +3205,7 @@ function from_root(function_name, ast)
         # initial round of size analysis (create_equivalence_classes) so arraysize() calls are replaced
         # main copy propagation round after arraysize() replacement
         # main size analysis after all size variables are propagated
-        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(),Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
 
         new_vars = expr_state(function_name, lives, max_label, input_arrays)
@@ -3215,7 +3215,7 @@ function from_root(function_name, ast)
         print_correlations(3, new_vars)
 
         lives = computeLiveness(body, LambdaVarInfo)
-        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         @dprintln(3,"AST after copy_propagate = ", " function = ", function_name)
         printLambda(3, LambdaVarInfo, body)
@@ -3282,7 +3282,7 @@ function from_root(function_name, ast)
         new_vars.block_lives = lives
         AstWalk(body, replaceConstArraysizes, new_vars)
         lives = computeLiveness(body, LambdaVarInfo)
-        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     end
@@ -3293,7 +3293,7 @@ function from_root(function_name, ast)
         body = AstWalk(body, flatten_blocks, nothing)
         # TODO: replace small arrays with variables
         lives = computeLiveness(body, LambdaVarInfo)
-        body = AstWalk(body, copy_propagate, CopyPropagateState(lives, Dict{LHSVar, Union{LHSVar,Number}}(), Dict{LHSVar, Union{LHSVar,Number}}(),LambdaVarInfo))
+        body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
     end
