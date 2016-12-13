@@ -60,7 +60,7 @@ function downSample(a::Array{Float32, 2}, nw::Int, nh::Int)
   (w, h) = size(a)
   sx::Float32 = Float32(w) / Float32(nw)
   sy::Float32 = Float32(h) / Float32(nh)
-  na::Array{Float32,2} = Float32[ downsample_inner(x, y, sx, sy, a) for x = 1:nw, y = 1:nh ]
+  na = Float32[ downsample_inner(x, y, sx, sy, a) for x = 1:nw, y = 1:nh ]
   return na
 end
 
@@ -87,8 +87,8 @@ function interpolateFlow(ou::Matrix{Float32}, ov::Matrix{Float32}, nw::Int, nh::
   end
   sx::Float32 = Float32(ow-1) / Float32(nw)
   sy::Float32 = Float32(oh-1) / Float32(nh)
-  nu::Array{Float32,2} = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
-  nv::Array{Float32,2} = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
+  nu = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
+  nv = Float32[ interpolate(ou, Float32(x-1)*sx+1f0, Float32(y-1)*sy+1f0)*sx for x = 1:nw, y = 1:nh ]
   return nu, nv
 end
 
