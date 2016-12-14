@@ -21,6 +21,8 @@ env:
     - PROSPECT_DEV_MODE=1 TEST_SUITE=pa-tests
     - PROSPECT_DEV_MODE=1 TEST_SUITE=pa-examples
     - PROSPECT_DEV_MODE=1 TEST_SUITE=hpat-tests
+    - JULIA_NUM_THREADS=1 PROSPECT_MODE=THREADS PROSPECT_DEV_MODE=1 TEST_SUITE=pa-tests-native
+    - JULIA_NUM_THREADS=1 PROSPECT_MODE=THREADS PROSPECT_DEV_MODE=1 TEST_SUITE=pa-examples-native
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
@@ -42,8 +44,18 @@ script:
     julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
     fi
 
+  # Run tests.
+  - if [ $TEST_SUITE = 'pa-tests-native' ]; then 
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then 
+    if [[ "$TRAVIS_JULIA_VERSION" == "0.5" ]]; then 
+    julia --code-coverage=user test/runtests.jl;
+    julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
+    fi;
+    fi;
+    fi
+
   # Run examples.
-  - >
+  - 
     if [ $TEST_SUITE = 'pa-examples' ]; then
     if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then 
     julia --code-coverage=user examples/black-scholes/black-scholes.jl;
@@ -58,6 +70,26 @@ script:
     julia --code-coverage=user examples/wave-2d/wave-2d.jl;
     julia --code-coverage=user examples/nengo/nengo-nef.jl;
     julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
+    fi
+
+  # Run native mode.
+  - >
+    if [ $TEST_SUITE = 'pa-examples-native' ]; then
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then 
+    if [[ "$TRAVIS_JULIA_VERSION" == "0.5" ]]; then 
+    julia --code-coverage=user examples/black-scholes/black-scholes.jl;
+    julia --code-coverage=user examples/boltzmann/boltzmann.jl;
+    julia --code-coverage=user examples/quant/quant.jl;
+    julia --code-coverage=user examples/gaussian-blur/gaussian-blur.jl;
+    julia --code-coverage=user examples/harris/harris.jl;
+    julia --code-coverage=user examples/juliaset/juliaset.jl;
+    julia --code-coverage=user examples/laplace-3d/laplace-3d.jl;
+    julia --code-coverage=user examples/opt-flow/opt-flow.jl;
+    julia --code-coverage=user examples/wave-2d/wave-2d.jl;
+    julia --code-coverage=user examples/nengo/nengo-nef.jl;
+    julia -e 'cd(Pkg.dir("ParallelAccelerator")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';
+    fi;
+    fi;
     fi
 
 after_success:
