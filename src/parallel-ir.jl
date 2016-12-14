@@ -2090,10 +2090,11 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
 
     head = ast.head
     args = ast.args
+    expr_to_process = Any[]
+
     if head == :parfor
         @dprintln(4,"pir_rws_cb for :parfor")
         @dprintln(4,"ast = ", ast)
-        expr_to_process = Any[]
 
         assert(typeof(args[1]) == ParallelAccelerator.ParallelIR.PIRParForAst)
         this_parfor = args[1]
@@ -2112,6 +2113,27 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
         push!(expr_to_process, body_rws)
         append!(expr_to_process, this_parfor.postParFor)
         return expr_to_process
+    elseif head == :call || head == :call1
+        cfun  = getCallFunction(ast)
+        cargs = getCallArguments(ast)
+
+        if cfun == GlobalRef(ParallelAccelerator.API, :getindex)
+            @dprintln(3,"pir_rws_cb for :getindex call")
+            @dprintln(3,"ast = ", ast)
+
+            tcopy = deepcopy(ast)
+            tcopy.args[1] = GlobalRef(Base, :arrayref)           
+            push!(expr_to_process, tcopy)
+            return expr_to_process
+        elseif cfun == GlobalRef(ParallelAccelerator.API, :setindex)
+            @dprintln(3,"pir_rws_cb for :setindex call")
+            @dprintln(3,"ast = ", ast)
+
+            tcopy = deepcopy(ast)
+            tcopy.args[1] = GlobalRef(Base, :arrayset)           
+            push!(expr_to_process, tcopy)
+            return expr_to_process
+        end
     end
 
     # Aside from parfor nodes, the ReadWriteSet callback is the same as the liveness callback.
