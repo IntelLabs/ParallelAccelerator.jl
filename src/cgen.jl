@@ -2009,6 +2009,13 @@ function pattern_match_reduce_sum(reductionFunc::DelayedFunc,linfo)
     return false
 end
 
+function pattern_match_reduce_sum(reductionFunc::GlobalRef,linfo)
+    if reductionFunc.name==:add_float || reductionFunc.name==:add_int
+        return true
+    end
+    return false
+end
+
 function from_parforstart(args, linfo)
     global lstate
     num_threads_mode = ParallelIR.num_threads_mode
