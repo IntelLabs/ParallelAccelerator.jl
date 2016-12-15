@@ -1155,6 +1155,22 @@ function boxArraysetValue(stmt, linfo :: LambdaVarInfo)
     return AstWalk(stmt, boxArraysetValueWalk, linfo)
 end
 
+function removeInputArgNewvarnode(x::NewvarNode, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo, top_level_number, is_top_level, read)
+    @dprintln(3,"removeInputArgNewvarnode = ", x)
+    @dprintln(3,x.slot, " ", typeof(x.slot), " ", linfo.input_params)
+    if isa(x.slot, Symbol) && in(x.slot, linfo.input_params)
+        return CompilerTools.AstWalker.ASTWALK_REMOVE
+    elseif isa(x.slot, LHSVar) && in(x.slot, CompilerTools.LambdaHandling.getInputParametersAsLHSVar(linfo))
+        return CompilerTools.AstWalker.ASTWALK_REMOVE
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function removeInputArgNewvarnode(x::ANY, linfo :: CompilerTools.LambdaHandling.LambdaVarInfo, top_level_number, is_top_level, read)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 function first_unless(gs0 :: StepRange{Int64,Int64}, pound :: Int64)
     res = 
      !(
@@ -1904,6 +1920,10 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     push!(task_body.args, TypedExpr(Void, :return, nothing))
     newLambdaVarInfo.return_type = Void
+
+    # Remove Newvarnode in the task function for input arguments to the task.
+    task_body = AstWalk(task_body, removeInputArgNewvarnode, newLambdaVarInfo)
+    @dprintln(3,"Body after Newvarnode removed for input args = ", task_body)
 
     # Create the new :lambda Expr for the task function.
     newLambdaVarInfo, task_body = CompilerTools.OptFramework.cleanupFunction(newLambdaVarInfo, task_body)

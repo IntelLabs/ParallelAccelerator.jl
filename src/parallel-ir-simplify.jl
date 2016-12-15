@@ -193,6 +193,18 @@ function insert_no_deps_beginning(node, data :: RemoveNoDepsState, top_level_num
     nothing
 end
 
+function remove_no_deps(node :: NewvarNode, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+    if is_top_level
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info != nothing
+            if !in(node.slot, live_info.live_out)
+                return CompilerTools.AstWalker.ASTWALK_REMOVE
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
 
 """
 # This routine gathers up nodes that do not use
@@ -399,6 +411,19 @@ type RemoveDeadState
     linfo
 end
 
+function remove_dead(node :: NewvarNode, data :: RemoveNoDepsState, top_level_number, is_top_level, read)
+    if is_top_level
+        live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
+        if live_info != nothing
+            if !in(node.slot, live_info.live_out)
+                return CompilerTools.AstWalker.ASTWALK_REMOVE
+            end
+        end
+    end
+
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
 """
 An AstWalk callback that uses liveness information in "data" to remove dead stores.
 """
@@ -414,7 +439,10 @@ function remove_dead(node::Expr, data::RemoveDeadState, top_level_number, is_top
             @dprintln(3,"remove_dead live_info = ", live_info)
             @dprintln(3,"remove_dead live_info.use = ", live_info.use)
 
-            if isAssignmentNode(node)
+            if isa(node, Number) || isa(node, RHSVar)
+                @dprintln(3,"Eliminating dead node: ", node)
+                return CompilerTools.AstWalker.ASTWALK_REMOVE
+            elseif isAssignmentNode(node)
                 @dprintln(3,"Is an assignment node.")
                 lhs = node.args[1]
                 @dprintln(4,lhs)
