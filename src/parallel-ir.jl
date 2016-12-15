@@ -1072,19 +1072,22 @@ function from_lambda_body(body :: Expr, depth, state)
     @dprintln(3,"After processing lambda body = ", state.LambdaVarInfo)
     @dprintln(3,"from_lambda: after body = ")
     printBody(3, body)
+    body = update_lambda_vars(state.LambdaVarInfo, body)
+    return body
+end
 
+function update_lambda_vars(LambdaVarInfo, body)
     # Count the number of static assignments per var.
-    cas = CountAssignmentsState(Dict{Symbol, Int}(), state.LambdaVarInfo)
+    cas = CountAssignmentsState(Dict{Symbol, Int}(), LambdaVarInfo)
     AstWalk(body, count_assignments, cas)
 
     # After counting static assignments, update the LambdaVarInfo for those vars
     # to say whether the var is assigned once or multiple times.
-    CompilerTools.LambdaHandling.updateAssignedDesc(state.LambdaVarInfo, cas.symbol_assigns)
+    CompilerTools.LambdaHandling.updateAssignedDesc(LambdaVarInfo, cas.symbol_assigns)
 
-    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(state.LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
-    @dprintln(3,"After eliminating unused locals = ", state.LambdaVarInfo)
-    CompilerTools.LambdaHandling.stripCaptureFlag(state.LambdaVarInfo)
-
+    body = CompilerTools.LambdaHandling.eliminateUnusedLocals!(LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    @dprintln(3,"After eliminating unused locals = ", LambdaVarInfo)
+    CompilerTools.LambdaHandling.stripCaptureFlag(LambdaVarInfo)
     return body
 end
 
@@ -2122,7 +2125,7 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
             @dprintln(3,"ast = ", ast)
 
             tcopy = deepcopy(ast)
-            tcopy.args[1] = GlobalRef(Base, :arrayref)           
+            tcopy.args[1] = GlobalRef(Base, :arrayref)
             push!(expr_to_process, tcopy)
             return expr_to_process
         elseif cfun == GlobalRef(ParallelAccelerator.API, :setindex)
@@ -2130,7 +2133,7 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
             @dprintln(3,"ast = ", ast)
 
             tcopy = deepcopy(ast)
-            tcopy.args[1] = GlobalRef(Base, :arrayset)           
+            tcopy.args[1] = GlobalRef(Base, :arrayset)
             push!(expr_to_process, tcopy)
             return expr_to_process
         end
@@ -3307,6 +3310,7 @@ function from_root(function_name, ast)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+        body = update_lambda_vars(LambdaVarInfo, body)
     end
 
     if unroll_small_parfors
