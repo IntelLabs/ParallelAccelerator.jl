@@ -1999,15 +1999,11 @@ end
 
 function pattern_match_reduce_sum(reductionFunc::DelayedFunc,linfo)
     reduce_box = reductionFunc.args[1][1].args[2]
-    @assert reduce_box.args[1]==GlobalRef(Core.Intrinsics,:box) "invalid reduction function"
-    if reduce_box.args[3].args[1].name==:add_float || reduce_box.args[3].args[1].name==:add_int
-        return true
-    end
-    return false
-end
-
-function pattern_match_reduce_sum(reductionFunc::GlobalRef,linfo)
-    if reductionFunc.name==:add_float || reductionFunc.name==:add_int
+    if reduce_box.args[1]==GlobalRef(Core.Intrinsics,:box)
+        if reduce_box.args[3].args[1].name==:add_float || reduce_box.args[3].args[1].name==:add_int
+            return true
+        end
+    elseif reduce_box.args[1]==GlobalRef(Base,:+)
         return true
     end
     return false
