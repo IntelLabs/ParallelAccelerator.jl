@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -45,14 +45,14 @@ end
 
 @inline function indmin{T<:Number}(A::DenseArray{T})
   m = MT(A[1], 1)
-  cartesianmapreduce((length(A),), 
-    (x -> begin 
-            if m.val > x.val 
+  cartesianmapreduce((length(A),),
+    (x -> begin
+            if m.val > x.val
               m.val = x.val
               m.idx = x.idx
             end
             return m
-          end, 
+          end,
      m)) do i
     if A[i] < m.val
       m.val = A[i]
@@ -65,14 +65,14 @@ end
 
 @inline function indmax{T<:Number}(A::DenseArray{T})
   m = MT(A[1], 1)
-  cartesianmapreduce((length(A),), 
-    (x -> begin 
-            if m.val < x.val 
+  cartesianmapreduce((length(A),),
+    (x -> begin
+            if m.val < x.val
               m.val = x.val
               m.idx = x.idx
             end
             return m
-          end, 
+          end,
      m)) do i
     if A[i] > m.val
       m.val = A[i]
@@ -116,7 +116,7 @@ end
 @inline function scale(b::DenseVector, A::DenseMatrix)
   m::Int, n::Int = size(A)
   cartesianarray(Tuple{eltype(A)}, (m, n)) do i, j
-    b[i] * A[i,j] 
+    b[i] * A[i,j]
   end
 end
 
@@ -181,7 +181,7 @@ end
   repmat(A, m, 1)
 end
 
-baremodule NoInline 
+baremodule NoInline
 
 using Base
 import Base: call, (==)
@@ -206,73 +206,73 @@ end
 import .NoInline
 
 @inline function rand(dims::Int...)
-  arr = Array(Float64, dims...)
-  map!(x -> NoInline.rand(Float64)::Float64, arr)
-  return arr
+  _pa_rand_gen_arr = Array(Float64, dims...)
+  map!(x -> NoInline.rand(Float64)::Float64, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 @inline function randn(dims::Int...)
-  arr = Array(Float64, dims...)
-  map!(x -> NoInline.randn()::Float64, arr)
-  return arr
+  _pa_rand_gen_arr = Array(Float64, dims...)
+  map!(x -> NoInline.randn()::Float64, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 @inline function rand(t::Tuple)
-  arr = Array(Float64, t)
-  map!(x -> NoInline.rand(Float64)::Float64, arr)
-  return arr
+  _pa_rand_gen_arr = Array(Float64, t)
+  map!(x -> NoInline.rand(Float64)::Float64, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 @inline function randn(t::Tuple)
-  arr = Array(Float64, t)
-  map!(x -> NoInline.randn()::Float64, arr)
-  return arr
+  _pa_rand_gen_arr = Array(Float64, t)
+  map!(x -> NoInline.randn()::Float64, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 @inline function rand(T::Type{Float32}, d::Int, dims::Int...)
-  arr = Array(Float32, d, dims...)
-  map!(x -> NoInline.rand(Float32)::Float32, arr)
-  return arr
+  _pa_rand_gen_arr = Array(Float32, d, dims...)
+  map!(x -> NoInline.rand(Float32)::Float32, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 @inline function rand(T::Type, d::Int, dims::Int...)
-  arr = Array(T, d, dims...)
-  map!(x -> NoInline.rand(T)::T, arr)
-  return arr
+  _pa_rand_gen_arr = Array(T, d, dims...)
+  map!(x -> NoInline.rand(T)::T, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 #@inline function randn(T::Type, d::Int, dims::Int...)
-#  arr = Array(T, d, dims...)
-#  map!(x -> NoInline.randn(T)::T, arr)
-#  return arr
+#  _pa_rand_gen_arr = Array(T, d, dims...)
+#  map!(x -> NoInline.randn(T)::T, _pa_rand_gen_arr)
+#  return _pa_rand_gen_arr
 #end
 
 @inline function rand(r::AbstractRNG, T::Type, d::Int, dims::Int...)
-  arr = Array(T, d, dims...)
-  map!(x -> NoInline.rand(r, T)::T, arr)
-  return arr
+  _pa_rand_gen_arr = Array(T, d, dims...)
+  map!(x -> NoInline.rand(r, T)::T, _pa_rand_gen_arr)
+  return _pa_rand_gen_arr
 end
 
 #@inline function randn(r::AbstractRNG, T::Type, d::Int, dims::Int...)
-#  arr = Array(T, d, dims...)
-#  map!(x -> NoInline.randn(r, T)::T, arr)
-#  return arr
+#  _pa_rand_gen_arr = Array(T, d, dims...)
+#  map!(x -> NoInline.randn(r, T)::T, _pa_rand_gen_arr)
+#  return _pa_rand_gen_arr
 #end
 
-@inline function rand!{T}(arr::DenseArray{T})
-  map!(x -> NoInline.rand(T)::T, arr)
+@inline function rand!{T}(_pa_rand_gen_arr::DenseArray{T})
+  map!(x -> NoInline.rand(T)::T, _pa_rand_gen_arr)
 end
 
-#@inline function randn!{T}(arr::DenseArray{T})
-#  map!(x -> NoInline.randn(T)::T, arr)
+#@inline function randn!{T}(_pa_rand_gen_arr::DenseArray{T})
+#  map!(x -> NoInline.randn(T)::T, _pa_rand_gen_arr)
 #end
 
-@inline function rand!{T}(r::AbstractRNG, arr::DenseArray{T})
-  map!(x -> NoInline.rand(r, T)::T, arr)
+@inline function rand!{T}(r::AbstractRNG, _pa_rand_gen_arr::DenseArray{T})
+  map!(x -> NoInline.rand(r, T)::T, _pa_rand_gen_arr)
 end
 
-#@inline function randn!{T}(r::AbstractRNG, arr::DenseArray{T})
-#  map!(x -> NoInline.randn(r, T)::T, arr)
+#@inline function randn!{T}(r::AbstractRNG, _pa_rand_gen_arr::DenseArray{T})
+#  map!(x -> NoInline.randn(r, T)::T, _pa_rand_gen_arr)
 #end
 
 @inline function rand(args...)
@@ -295,4 +295,3 @@ export indmin, indmax, sumabs2
 export diag, diagm, trace, scale, eye, repmat, rand, randn, rand!, randn!
 
 end
-
