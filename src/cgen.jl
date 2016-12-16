@@ -2951,6 +2951,8 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
     end
 
     vararg_bod, args, argsunal, alias_check, argtypes = check_params(emitunaliasedroots, params, linfo)
+    # don't generate unaliased versions if there are no array inputs or alias check is not possible
+    if alias_check==nothing emitunaliasedroots=false end
     bod = vararg_bod * bod
 
     @dprintln(3,"returnType = ", returnType)
