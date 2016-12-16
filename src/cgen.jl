@@ -3283,7 +3283,10 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
         else
             comp = "mpiicpc"
         end
+        # wd2593 turns simd errors to warnings
+        # needed since #simd loops may have gotos
         push!(Opts, "-qopenmp-simd") # No parallelization, just vectorization.
+        push!(Opts, "-wd2593")
     end
     vecOpts = (vectorizationlevel == VECDISABLE ? "-no-vec" : [])
     if USE_OMP == 1 || USE_DAAL==1
