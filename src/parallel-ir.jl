@@ -2773,7 +2773,7 @@ function nested_function_exprs(domain_lambda, out_state)
     @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body, " " , unique_node_id)
 
     # Re-create the body minus any dead basic blocks.
-    cfg = CompilerTools.CFGs.from_lambda(body; opt=false)
+    cfg = CompilerTools.CFGs.from_lambda(body; opt=true)
     @dprintln(3, "nested_function_exprs cfg = ", cfg)
     body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
     @dprintln(1,"AST after dead blocks removed, body = ", body, " " , unique_node_id)
