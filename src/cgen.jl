@@ -63,6 +63,13 @@ type LambdaGlobalData
     worklist::Array{Any, 1}
     jtypes::Dict{Type, AbstractString}
     ompdepth::Int64
+    head_loop_set::Set{Int}
+    back_loop_set::Set{Int}
+    exit_loop_set::Set{Int}
+    all_loop_exits::Set{Int}
+    follow_set::Dict{Int,Int}
+    cond_jump_targets::Set{Int}
+     
     function LambdaGlobalData()
         _j = Dict(
             Int8    =>  "int8_t",
@@ -84,7 +91,7 @@ type LambdaGlobalData
     )
 
         #new(ASTDispatcher(), [], Dict(), Dict(), [], [])
-        new([], Dict(), Dict(), [], Dict(), Dict(), [], [], _j, 0)
+        new([], Dict(), Dict(), [], Dict(), Dict(), [], [], _j, 0, Set{Int}(), Set{Int}(), Set{Int}(), Set{Int}(), Dict{Int,Int}(), Set{Int}())
     end
 end
 
@@ -225,6 +232,12 @@ function resetLambdaState(l::LambdaGlobalData)
     empty!(l.worklist)
     inEntryPoint = false
     l.ompdepth = 0
+    empty!(l.head_loop_set)
+    empty!(l.back_loop_set)
+    empty!(l.exit_loop_set)
+    empty!(l.all_loop_exits)
+    empty!(l.follow_set)
+    empty!(l.cond_jump_targets)
 end
 
 
@@ -543,6 +556,157 @@ function from_lambda(ast)
     from_lambda(linfo, body)
 end
 
+type Conditional
+    head :: Int
+    follow :: Int
+    hasElse :: Bool
+end
+
+function hasElse(head, follow, bbs)
+    succs = [x.label for x in bbs[head].succs]
+    !in(follow, succs)
+end
+
+function addConditional(conditionals, head, follow, bbs, follow_set, cond_jump_targets)
+    with_else = hasElse(head, follow, bbs) 
+    push!(conditionals, Conditional(head, follow, with_else))
+    if !haskey(follow_set, follow)
+        follow_set[follow] = 0
+    end
+    follow_set[follow] = follow_set[follow] + 1
+    union!(cond_jump_targets, Set{Int}([x.label for x in bbs[head].succs]))
+end
+
+function getLoopInfo(body)
+    if !recreateLoops
+        return
+    end
+
+    @dprintln(3, "getLoopInfo body = ", body)
+    cfg = CompilerTools.CFGs.from_lambda(body) 
+
+#    intervals = CompilerTools.CFGs.computeIntervals(cfg)
+#    @dprintln(3, "intervals = ", intervals)
+
+    blockCategories = [Set{Int}() for x = 1:3]
+    for bbentry in cfg.basic_blocks
+        push!(blockCategories[CompilerTools.CFGs.classifyBlock(bbentry[2])], bbentry[1])
+    end
+    @dprintln(3, "blockCategories = ", blockCategories)
+    unaccounted = deepcopy(blockCategories[CompilerTools.CFGs.BLOCK_GOTOIFNOT])
+
+    inv_dom = CompilerTools.CFGs.compute_inverse_dominators(cfg)
+    @dprintln(3, "inverse dominators = ", inv_dom)
+
+    loop_info = CompilerTools.Loops.compute_dom_loops(cfg)
+    im_doms = CompilerTools.CFGs.compute_immediate_dominators(loop_info.dom_dict)
+    @dprintln(3, "immediate_dominators = ", im_doms)
+
+    for li in loop_info.loops
+        @dprintln(3, "Loop Info = ", li)
+        head_bb = cfg.basic_blocks[li.head]
+        back_bb = cfg.basic_blocks[li.back_edge]
+        union!(lstate.all_loop_exits, li.exits)
+        unaccounted = setdiff(unaccounted, li.blocks_that_exit)
+
+        if length(li.exits) > 1
+            @dprintln(3, "Couldn't recreate loop since loop has more than one exit block.")
+            continue
+        end
+
+        exit_bb = cfg.basic_blocks[first(li.exits)]
+        
+        # If the exit node has more than one predecessor then we can't eliminate the label.
+        if length(exit_bb.preds) > 1
+            @dprintln(3, "Couldn't recreate loop since exit block has more than one predecessor.")
+            continue
+        end
+        # If the head node has a non-back edge predecessor that doesn't fallthrough to head then we can't eliminate the label.
+        okay = true
+        for hp in head_bb.preds
+            if hp == back_bb
+                continue
+            end
+            if hp.fallthrough_succ == nothing
+                okay = false
+                break
+            end
+        end
+        if !okay
+            @dprintln(3, "Couldn't recreate loop since head non-back edge predecessor doesn't fallthrough to head.")
+            continue
+        end
+
+        @dprintln(3, "Adding loop to set to recreate.")
+        push!(lstate.head_loop_set, li.head)
+        push!(lstate.back_loop_set, li.back_edge)
+        push!(lstate.exit_loop_set, exit_bb.label)
+    end
+    @dprintln(3, "Unaccounted gotoifnot blocks = ", unaccounted)
+
+    unresolved = Set{Int}()
+    conditionals = Conditional[]
+    follow_set = Dict{Int,Int}()
+    cond_jump_targets = Set{Int}()
+
+    # For blocks in reverse order.
+    for i = length(cfg.depth_first_numbering):-1:1
+        to_check = cfg.depth_first_numbering[i]
+        @dprintln(3, "2-way conditional processing ", to_check, " unaccounted = ", unaccounted)
+        # If this block is a gotoifnot node that isn't part of a loop then it is a conditional.
+        if in(to_check, unaccounted)
+            @dprintln(3, "2-way conditional in unaccounted")
+            found = false
+            best_follow = CompilerTools.CFGs.CFG_EXIT_BLOCK
+            for j = length(cfg.depth_first_numbering):-1:1
+                potential_follow = cfg.depth_first_numbering[j]
+                @dprintln(3, "2-way conditional checking potential follow ", potential_follow)
+if false
+                if im_doms[potential_follow] == to_check
+                    @dprintln(3, "2-way conditional to_check is immediate dominator of potential_follow")
+                    pfbb = cfg.basic_blocks[potential_follow]
+                    if length(pfbb.preds) >= 2
+                        @dprintln(3, "2-way conditional found follow")
+                        addConditional(conditionals, to_check, potential_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
+                        for unr in unresolved
+                            @dprintln(3, "2-way conditional adding unresolved head ", unr)
+                            addConditional(conditionals, unr, potential_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
+                        end
+                        unresolved = Set{Int}()
+                    end
+                    found = true
+                    break
+                end
+else
+                if potential_follow == to_check
+                    @dprintln(5,"Found follow == to_check.")
+                    break
+                end
+                if in(potential_follow, inv_dom[to_check])
+                    @dprintln(3,"Found new best_follow.")
+                    best_follow = potential_follow
+                end
+end
+            end
+            if best_follow != CompilerTools.CFGs.CFG_EXIT_BLOCK
+                addConditional(conditionals, to_check, best_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
+                found = true
+            end
+            if !found
+                @dprintln(3, "2-way conditional couldn't find follow....adding unresolved ", to_check)
+                push!(unresolved, to_check)
+            end
+        end
+    end
+
+    @dprintln(3, "conditionals = ", conditionals)
+    @dprintln(3, "follow_set = ", follow_set)
+    @dprintln(3, "cond_jump_targets = ", cond_jump_targets)
+
+    lstate.follow_set = follow_set
+    lstate.cond_jump_targets = cond_jump_targets
+end
+
 function from_lambda(linfo :: LambdaVarInfo, body)
     params = Symbol[ CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
                      for x in CompilerTools.LambdaHandling.getInputParameters(linfo)]
@@ -566,6 +730,8 @@ function from_lambda(linfo :: LambdaVarInfo, body)
             push!(lstate.globalUDTsOrder, t)
         end
     end
+
+    getLoopInfo(body)
 
     bod = from_expr(body, linfo)
     @dprintln(3,"lambda params = ", params)
@@ -1497,6 +1663,27 @@ function from_linenumbernode(ast, linfo)
 end
 
 function from_labelnode(ast, linfo)
+    if recreateLoops 
+        if in(ast.label, lstate.exit_loop_set)
+            return ""
+        end
+        if in(ast.label, lstate.head_loop_set)
+            return "while (1) {"
+        end
+    end
+    if recreateConds
+        if haskey(lstate.follow_set, ast.label)
+            s = ""
+            for i = 1:lstate.follow_set[ast.label]
+                s *= "}\n"
+            end
+            return s
+        end
+        if in(ast.label, lstate.cond_jump_targets)
+            return ""
+        end
+    end
+
     "label" * string(ast.label) * " : "
 end
 
@@ -1813,7 +2000,13 @@ function from_gotonode(ast, linfo)
     if isa(exp, Expr) || isa(exp, RHSVar)
         s *= "if (!(" * from_expr(exp,linfo) * ")) "
     end
-    s *= "goto " * "label" * string(labelId)
+    if recreateLoops && in(labelId, lstate.head_loop_set)
+        s *= "}\n"
+    elseif recreateConds && haskey(lstate.follow_set, labelId)
+        s *= "}\nelse {"
+    else
+        s *= "goto " * "label" * string(labelId)
+    end  
     s
 end
 
@@ -1823,8 +2016,14 @@ function from_gotoifnot(args,linfo)
     s = ""
     @dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
     if isa(exp, Expr) || isa(exp, RHSVar)
-        s *= "if (!(" * from_expr(exp,linfo) * ")) "
-        s *= "goto " * "label" * string(labelId)
+        if recreateLoops && in(labelId, lstate.exit_loop_set)
+            s *= "if (!(" * from_expr(exp,linfo) * ")) break"
+        elseif recreateConds && in(labelId, lstate.cond_jump_targets)
+            s *= "if (" * from_expr(exp,linfo) * ") {"
+        else
+            s *= "if (!(" * from_expr(exp,linfo) * ")) "
+            s *= "goto " * "label" * string(labelId)
+        end
     elseif exp == true
     elseif exp == false
         s *= "goto " * "label" * string(labelId)
@@ -2632,6 +2831,16 @@ function setCreateMain(val)
     global createMain = val
 end
 
+recreateLoops = false
+function setRecreateLoops(val)
+    global recreateLoops = val
+end
+
+recreateConds = false
+function setRecreateConds(val)
+    global recreateConds = val
+end
+
 # Creates an entrypoint that dispatches onto host or MIC.
 # For now, emit host path only
 function createEntryPointWrapper(functionName, params, args, jtyp, argtypes, alias_check = nothing)
@@ -2940,6 +3149,7 @@ function from_root_entry(ast, functionName::AbstractString, argtyps, array_types
     end
     @dprintln(3, "LambdaVarInfo = ", linfo)
     @dprintln(3, "body = ", body)
+
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
@@ -3018,6 +3228,7 @@ function from_root_nonentry(ast, functionName::AbstractString, argtyps, array_ty
     end
     @dprintln(3,"linfo = ", linfo)
     @dprintln(3,"body = ", body)
+
     params = CompilerTools.LambdaHandling.getInputParametersAsExpr(linfo)
     returnType = CompilerTools.LambdaHandling.getReturnType(linfo)
     # Translate the body
