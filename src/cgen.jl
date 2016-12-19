@@ -224,6 +224,7 @@ end
 # Reset and reuse the LambdaGlobalData object across function
 # frames
 function resetLambdaState(l::LambdaGlobalData)
+    @dprintln(3, "resetLambdaState")
     empty!(l.ompprivatelist)
     empty!(l.globalConstants)
     empty!(l.globalUDTs)
@@ -578,6 +579,13 @@ function addConditional(conditionals, head, follow, bbs, follow_set, cond_jump_t
 end
 
 function getLoopInfo(body)
+    empty!(lstate.head_loop_set)
+    empty!(lstate.back_loop_set)
+    empty!(lstate.exit_loop_set)
+    empty!(lstate.all_loop_exits)
+    empty!(lstate.follow_set)
+    empty!(lstate.cond_jump_targets)
+
     if !recreateLoops
         return
     end
@@ -705,6 +713,13 @@ end
 
     lstate.follow_set = follow_set
     lstate.cond_jump_targets = cond_jump_targets
+
+    @dprintln(3, "head_loop_set = ", lstate.head_loop_set)
+    @dprintln(3, "back_loop_set = ", lstate.back_loop_set)
+    @dprintln(3, "exit_loop_set = ", lstate.exit_loop_set)
+    @dprintln(3, "all_loop_exits = ", lstate.all_loop_exits)
+    @dprintln(3, "follow_set = ", lstate.follow_set)
+    @dprintln(3, "cond_jump_targets = ", lstate.cond_jump_targets)
 end
 
 function from_lambda(linfo :: LambdaVarInfo, body)
@@ -2831,12 +2846,12 @@ function setCreateMain(val)
     global createMain = val
 end
 
-recreateLoops = false
+recreateLoops = true
 function setRecreateLoops(val)
     global recreateLoops = val
 end
 
-recreateConds = false
+recreateConds = true
 function setRecreateConds(val)
     global recreateConds = val
 end
