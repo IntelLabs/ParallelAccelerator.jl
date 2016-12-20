@@ -1876,11 +1876,11 @@ function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
     if isRange(inputInfo)
         assert(length(inputInfo.indexed_dims) == length(inputInfo.range))
         canonical_range = DimensionSelector[
-            if inputInfo.indexed_dims[i] 
-                inputInfo.range[i] 
-            else 
+            if inputInfo.indexed_dims[i]
+                inputInfo.range[i]
+            else
                 SingularSelector(0,SlotNumber(0))
-            end 
+            end
             for i = 1:length(inputInfo.indexed_dims)]
         return getCorrelation(inputInfo.array, canonical_range, state)
         #return getCorrelation(inputInfo.array, inputInfo.range[inputInfo.indexed_dims], state)
@@ -2145,6 +2145,25 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
 
             tcopy = deepcopy(ast)
             tcopy.args[1] = GlobalRef(Base, :arrayset)
+            push!(expr_to_process, tcopy)
+            return expr_to_process
+        elseif cfun == GlobalRef(ParallelAccelerator.API, :SubArrayLastDimRead)
+            @dprintln(3,"pir_rws_cb for :SubArrayLastDimRead call")
+            @dprintln(3,"ast = ", ast)
+            tcopy = deepcopy(ast)
+            tcopy.args[1] = GlobalRef(Base, :arrayref)
+            tcopy.args[3] = Colon()
+            push!(tcopy.args, deepcopy(cargs[2]))
+            push!(expr_to_process, tcopy)
+            return expr_to_process
+        elseif cfun == GlobalRef(ParallelAccelerator.API, :SubArrayLastDimWrite)
+            @dprintln(3,"pir_rws_cb for :SubArrayLastDimWrite call")
+            @dprintln(3,"ast = ", ast)
+            tcopy = deepcopy(ast)
+            tcopy.args[1] = GlobalRef(Base, :arrayset)
+            tcopy.args[3] = 1
+            push!(tcopy.args, Colon())
+            push!(tcopy.args, deepcopy(cargs[2]))
             push!(expr_to_process, tcopy)
             return expr_to_process
         end
