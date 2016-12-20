@@ -29,7 +29,6 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
     len  = length(ast)
     body = Any[]
     fuse_number = 1
-    pre_next_parfor = Any[]
     
     # Process the top-level expressions of a function and do fusion and useless assignment elimination.
     for i = 1:len
@@ -38,79 +37,61 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
         @dprintln(2,"Processing top-level ast #",i," depth=",depth)
 
         # Convert the current expression.
-#        new_exprs = filter(x->!hasNoSideEffects(x), from_expr(ast[i], depth, state, true))
         new_exprs = from_expr(ast[i], depth, state, true)
         assert(isa(new_exprs,Array))
         # If conversion of current statement resulted in anything.
         if length(new_exprs) != 0
-            # If this isn't the first statement processed that created something.
-            if length(body) != 0
-                last_node = body[end]
-                @dprintln(3, "Should fuse?")
-                @dprintln(3, "new = ", new_exprs[1])
-                @dprintln(3, "last = ", last_node)
-
-                # See if the previous expression is a parfor.
-                is_last_parfor = isParforAssignmentNode(last_node)    || isBareParfor(last_node)
-                # See if the new expression is a parfor.
-                is_new_parfor  = isParforAssignmentNode(new_exprs[1]) || isBareParfor(new_exprs[1])
-                @dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
-
-if false
-                if is_last_parfor && !is_new_parfor
-                    simple = false
-                    for j = 1:length(new_exprs)
-                        e = new_exprs[j]
-                        if isa(e, Expr) && is(e.head, :(=)) && isa(e.args[2], Expr) && (isBaseFunc(e.args[2].args[1], :box))
-                            @dprintln(3, "box operation detected")
-                            simple = true
-                        else
-                            simple = false
-                            break
-                        end
-                    end
-                    if simple
-                        @dprintln(3, "insert into pre_next_parfor")
-                        append!(pre_next_parfor, new_exprs)
-                        continue
-                    end
-                end
-end
-
-                # If both are parfors then try to fuse them.
-                if is_new_parfor && is_last_parfor
-                    @dprintln(3,"Starting fusion ", fuse_number)
-                    new_exprs[1]
-                    fuse_number = fuse_number + 1
-                    if length(pre_next_parfor) > 0
-                        @dprintln(3, "prepend statements to new parfor: ", pre_next_parfor)
-                        new_parfor = getParforNode(new_exprs[1])
-                        new_parfor.preParFor = [ pre_next_parfor..., new_parfor.preParFor... ]
-                    end
-                    fuse_ret = fuse(body, length(body), new_exprs[1], state)
-                    if fuse_ret>0
-                        # 2 means combination of old and new parfors has no output and both are dead
-                        if fuse_ret==2
-                            # remove last parfor and don't add anything new
-                            pop!(body)
-                        end
-                        pre_next_parfor = Any[]
-                        # If fused then the new node is consumed and no new node is added to the body.
-                        continue
-                    end
-                end
-
-                new_exprs = [ pre_next_parfor; new_exprs ]
-                pre_next_parfor = Any[]
-                for expr in new_exprs
-                    push!(body, expr)
-                    last_node = expr
-                end
-            else
-                append!(body, new_exprs)
-            end
+            append!(body, new_exprs)
         else
             @dprintln(3,"This statement was filtered: ", ast[i])
+        end
+    end
+    return body
+end
+
+function fusion_pass(ast::Array{Any,1}, depth, state)
+    len  = length(ast)
+    body = Any[]
+    fuse_number = 1
+    
+    # Process the top-level expressions of a function and do fusion and useless assignment elimination.
+    for i = 1:len
+        # Record the top-level statement number in the processing state.
+        state.top_level_number = i
+        @dprintln(2,"Processing top-level ast #",i," depth=",depth)
+
+        # If this isn't the first statement...
+        if length(body) != 0
+            last_node = body[end]  # Get the last statement inserted.
+            @dprintln(3, "Should fuse?")
+            @dprintln(3, "new = ", ast[i])
+            @dprintln(3, "last = ", last_node)
+
+            # See if the previous expression is a parfor.
+            is_last_parfor = isParforAssignmentNode(last_node) || isBareParfor(last_node)
+            # See if the new expression is a parfor.
+            is_new_parfor  = isParforAssignmentNode(ast[i])    || isBareParfor(ast[i])
+            @dprintln(3,"is_new_parfor = ", is_new_parfor, " is_last_parfor = ", is_last_parfor)
+
+            # If both are parfors then try to fuse them.
+            if is_new_parfor && is_last_parfor
+                @dprintln(3,"Starting fusion ", fuse_number)
+                fuse_number = fuse_number + 1
+                fuse_ret = fuse(body, length(body), ast[i], state)
+                if fuse_ret>0
+                    # 2 means combination of old and new parfors has no output and both are dead
+                    if fuse_ret==2
+                        # remove last parfor and don't add anything new
+                        pop!(body)
+                    end
+                    # If fused then the new node is consumed and no new node is added to the body.
+                    continue
+                end
+            end
+
+            push!(body, ast[i])
+        else
+            push!(body, ast[i])
         end
     end
     return body
@@ -1017,17 +998,22 @@ end
 # sequence of expressions
 # ast = [ expr, ... ]
 function top_level_from_exprs(ast::Array{Any,1}, depth, state)
+    # Perform lowering from domain nodes to parfors.
     main_proc_start = time_ns()
-    
     body = top_level_mk_body(ast, depth, state)
-
+    @dprintln(3,"Body after lowering but before fusion.")
+    printBody(3, body)
     if print_times
-    @dprintln(1,"Main parallel conversion loop time = ", ns_to_sec(time_ns() - main_proc_start))
+    @dprintln(1,"Lowering time = ", ns_to_sec(time_ns() - main_proc_start))
     end
 
+    # Perform fusion.
+    fusion_start = time_ns()
+    body = fusion_pass(body, depth, state)
     @dprintln(3,"Body after first pass before task graph creation.")
-    for j = 1:length(body)
-        @dprintln(3, body[j])
+    printBody(3, body)
+    if print_times
+    @dprintln(1,"Fusion time = ", ns_to_sec(time_ns() - fusion_start))
     end
 
     # TASK GRAPH
