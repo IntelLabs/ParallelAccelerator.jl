@@ -510,6 +510,25 @@ function pattern_match_call_reduce_oprs(fun::ANY, x::ANY, y::ANY,linfo)
     return ""
 end
 
+
+function pattern_match_call_subarray_lastdim(func::GlobalRef, arr::RHSVar, index::Union{Int,RHSVar}, linfo)
+    if func==GlobalRef(ParallelAccelerator.API,:SubArrayLastDimRead) || func==GlobalRef(ParallelAccelerator.API,:SubArrayLastDimWrite)
+        arr_typ = getType(arr, linfo)
+        typ = eltype(arr_typ)
+        ctyp = ParallelAccelerator.CGen.toCtype(typ)
+        dims = ndims(arr_typ)
+        carr = ParallelAccelerator.CGen.from_expr(toLHSVar(arr), linfo)
+        cindex = ParallelAccelerator.CGen.from_expr(toLHSVarOrNum(index), linfo)
+        shape = mapfoldl(i->from_arraysize(arr,i,linfo), (a,b)->a *","*b, 1:dims-1)
+        low_dims_size = mapfoldl(i->from_arraysize(arr,i,linfo), (a,b)->a *"*"*b, 1:dims-1)
+        pointer = "&($carr.data[$low_dims_size*($cindex-1)])"
+        return "j2c_array<$ctyp>::new_j2c_array_$(dims-1)d($pointer, $shape)"
+    end
+    return ""
+end
+
+pattern_match_call_subarray_lastdim(func::ANY, arr, index, linfo) = ""
+
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
     s = ""
@@ -526,6 +545,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_transpose(linfo, ast...)
         s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_reduce_oprs(ast[1],ast[2],ast[3],linfo)
+        s *= pattern_match_call_subarray_lastdim(ast[1],ast[2],ast[3], linfo)
     end
     if s=="" && (length(ast)>=1) # rand can have 1 or more arg
         s *= pattern_match_call_transpose(linfo, ast...)
