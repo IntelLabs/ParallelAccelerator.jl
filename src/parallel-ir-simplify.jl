@@ -1330,11 +1330,25 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
     end
     print_correlations(3, state)
 
+    num_dims = length(ranges)
+    num_range = 0
+    num_mask = 0
+    num_single = 0
+    masks = MaskSelector[]
+
     # We can't match on array of RangeExprs so we flatten to Array of Any
-    all_mask = true
     for i = 1:length(ranges)
-        all_mask = all_mask & isa(ranges[i], MaskSelector)
+        if isa(ranges[i], MaskSelector)
+            num_mask += 1
+            push!(masks, ranges[i])
+        elseif isa(ranges[i], SingularSelector)
+            num_single += 1
+        else
+            num_range += 1
+        end
     end
+    all_mask = (num_mask == num_dims)
+    @dprintln(3, "Selector Types: ", num_range, " ", num_mask, " ", num_single, " ", all_mask)
 
     if !haskey(state.range_correlation, ranges)
         @dprintln(3,"Exact match for correlation for range not found = ", ranges)
@@ -1342,21 +1356,33 @@ function getOrAddRangeCorrelation(array, ranges :: Array{DimensionSelector,1}, s
         nonExactCorrelation = nonExactRangeSearch(ranges, state.range_correlation)
         if nonExactCorrelation == nothing
             @dprintln(3, "No non-exact match so adding new range")
-            range_corr = addUnknownRange(ranges, state)
-            # If all the dimensions are selected based on masks then the iteration space
-            # is that of the entire array and so we can establish a correlation between the
-            # DimensionSelector and the whole array.
-            if all_mask
-                masked_array_corr = getOrAddArrayCorrelation(toLHSVar(array), state)
-                @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
-                range_corr = merge_correlations(state, masked_array_corr, range_corr)
 
-                if length(ranges) == 1
-                    print_correlations(3, state)
-                    mask_correlation = getCorrelation(ranges[1].value, state)
+            if num_mask == 1 && num_range == 0 # one mask'ed dimension and all rest singular
+                # If there is only one mask used and all the rest of the dimensions are singular then the
+                # iteration space is equivalent to the mask dimension.  So, we get the mask array and find
+                # out the correlation for that array and make this range have the same correlation.
+                mask_array = masks[1].value
+                mask_correlation = getCorrelation(mask_array, state)
+                state.range_correlation[ranges] = mask_correlation
+                @dprintln(3, "Only one mask dimension and rest singular to correlating this range with mask's correlation.")
+            else
+                range_corr = addUnknownRange(ranges, state)
 
-                    @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
-                    range_corr = merge_correlations(state, mask_correlation, range_corr)
+                # If all the dimensions are selected based on masks then the iteration space
+                # is that of the entire array and so we can establish a correlation between the
+                # DimensionSelector and the whole array.
+                if all_mask
+                    masked_array_corr = getOrAddArrayCorrelation(toLHSVar(array), state)
+                    @dprintln(3, "All dimension selectors are masks so establishing correlation to main array ", masked_array_corr)
+                    range_corr = merge_correlations(state, masked_array_corr, range_corr)
+
+                    if length(ranges) == 1
+                        print_correlations(3, state)
+                        mask_correlation = getCorrelation(ranges[1].value, state)
+
+                        @dprintln(3, "Range length is 1 so establishing correlation between range ", range_corr, " and the mask ", ranges[1].value, " with correlation ", mask_correlation)
+                        range_corr = merge_correlations(state, mask_correlation, range_corr)
+                    end
                 end
             end
         else

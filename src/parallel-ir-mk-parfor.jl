@@ -423,7 +423,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     next_index_to_use = 1
     for i = 1:length(inputInfo.indexed_dims)
         @dprintln(3, "loop over inputInfo. indexed_dims = ", inputInfo.indexed_dims, " i = ", i, " next_index_to_use = ", next_index_to_use)
-        if inputInfo.indexed_dims[i] == 0
+        if inputInfo.indexed_dims[i] == false
             continue
         end 
         save_array_len   = Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id))
@@ -646,7 +646,7 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
     end
 
     @dprintln(3,"range_array = ", range_array)
-    used_dims = ones(Int64, length(range_array))
+    used_dims = Bool[true for i = 1:length(range_array)]
 
     if VERSION >= v"0.5.0-dev+3875"
         @dprintln(3, "Version 0.5 singular dimension section.")
@@ -656,7 +656,7 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
             if isa(rd, SingularSelector)
                 @dprintln(3, "Found singular ending dimension at index ", rindex, " so eliminated this dimension.")
                 cur -= 1
-                used_dims[rindex] = 0
+                used_dims[rindex] = false
             else
                 addRangePreoffsets(range_array[rindex], pre_offsets, state)
             end 
@@ -672,7 +672,7 @@ function selectToRangeData(select :: Expr, pre_offsets :: Array{Expr,1}, state)
             if isa(rd, SingularSelector)
                 @dprintln(3, "Found singular ending dimension so eliminated this dimension.")
                 cur -= 1
-                used_dims[rindex] = 0
+                used_dims[rindex] = false
             else
                 # Once we find one trailing dimension that isn't eliminated then dimension shrinking has to stop.
                 break
@@ -695,7 +695,7 @@ function get_mmap_input_info(input_array :: Expr, state)
     if is(input_array.head, :select)
         thisInfo.array = input_array.args[1]
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
-        thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
+        thisInfo.indexed_dims = Bool[true for i = 1:thisInfo.dim]
         thisInfo.out_dim = thisInfo.dim
         argtyp = typeof(thisInfo.array)
         @dprintln(3,"get_mmap_input_info :select thisInfo.array = ", thisInfo.array, " type = ", argtyp, " isa = ", argtyp <: RHSVar)
@@ -734,7 +734,7 @@ function get_mmap_input_info(input_array :: Expr, state)
     else
         thisInfo.array = input_array
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
-        thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
+        thisInfo.indexed_dims = Bool[true for i = 1:thisInfo.dim]
         thisInfo.out_dim = thisInfo.dim
         thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
     end
@@ -745,7 +745,7 @@ function get_mmap_input_info(input_array :: RHSVar, state)
     thisInfo = InputInfo()
     thisInfo.array = input_array
     thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
-    thisInfo.indexed_dims = ones(Int64, thisInfo.dim)
+    thisInfo.indexed_dims = Bool[true for i = 1:thisInfo.dim]
     thisInfo.out_dim = thisInfo.dim
     thisInfo.elementTemp = createTempForArray(thisInfo.array, 1, state)
     return thisInfo
@@ -805,7 +805,7 @@ function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, input
         cur_loopnest = num_dim_inputs
         cur_sym = 1
         for i = 1:length(inputInfo[1].indexed_dims)
-            if inputInfo[1].indexed_dims[i] != 0
+            if inputInfo[1].indexed_dims[i] == true
                 save_array_len = CompilerTools.LambdaHandling.addLocalVariable(Symbol(string("parallel_ir_save_array_len_", i, "_", unique_node_id)), Int, ISASSIGNED, state.LambdaVarInfo)
                 @dprintln(3, "Creating expr for ", save_array_len)
                 

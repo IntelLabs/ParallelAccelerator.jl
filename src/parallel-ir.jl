@@ -321,17 +321,17 @@ type InputInfo
     array                                # The name of the array.
     dim                                  # The number of dimensions.
     out_dim                              # The number of indexed (non-const) dimensions.
-    indexed_dims                         # Length of dim where 1 means we index that dimension and 0 means we don't (it is singular).
+    indexed_dims :: Array{Bool,1}        # Length of dim where true means we index that dimension and false means we don't (it is singular).
     range :: Array{DimensionSelector,1}  # Empty if whole array, else one RangeData or BitArray mask per dimension.
     elementTemp                          # New temp variable to hold the value of this array/range at the current point in iteration space.
     pre_offsets :: Array{Expr,1}         # Assignments that go in the pre-statements that hold range offsets for each dimension.
     rangeconds :: Array{Expr,1}          # If selecting based on bitarrays, conditional for selecting elements
 
     function InputInfo()
-        new(nothing, 0, 0, nothing, DimensionSelector[], nothing, Expr[], Expr[])
+        new(nothing, 0, 0, Bool[], DimensionSelector[], nothing, Expr[], Expr[])
     end
     function InputInfo(arr)
-        new(arr, 0, 0, nothing, DimensionSelector[], nothing, Expr[], Expr[])
+        new(arr, 0, 0, Bool[], DimensionSelector[], nothing, Expr[], Expr[])
     end
 end
 
@@ -1869,11 +1869,22 @@ function getCorrelation(array :: RHSVar, are :: Array{DimensionSelector,1}, stat
 end
 
 function getCorrelation(inputInfo :: InputInfo, state :: expr_state)
+    @dprintln(3, "getCorrelation for inputInfo = ", inputInfo)
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
-    @dprintln(3, "getCorrelation for inputInfo num_dim_inputs = ", num_dim_inputs)
+    @dprintln(3, "num_dim_inputs = ", num_dim_inputs)
     if num_dim_inputs == 0 return nothing end
     if isRange(inputInfo)
-        return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
+        assert(length(inputInfo.indexed_dims) == length(inputInfo.range))
+        canonical_range = DimensionSelector[
+            if inputInfo.indexed_dims[i] 
+                inputInfo.range[i] 
+            else 
+                SingularSelector(0,SlotNumber(0))
+            end 
+            for i = 1:length(inputInfo.indexed_dims)]
+        return getCorrelation(inputInfo.array, canonical_range, state)
+        #return getCorrelation(inputInfo.array, inputInfo.range[inputInfo.indexed_dims], state)
+        #return getCorrelation(inputInfo.array, inputInfo.range[1:num_dim_inputs], state)
     else
         return getCorrelation(inputInfo.array, state)
     end
