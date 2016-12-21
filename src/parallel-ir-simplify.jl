@@ -993,7 +993,10 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             @dprintln(3, "found vect, args: ", args)
             len = length(args)
             checkAndAddSymbolCorrelation(lhs, state, Any[len])
-        elseif  isBaseFunc(fun, :arraylen)
+        # first arg of gemm/v are assigned to output
+        elseif isBaseFunc(fun, :gemm_wrapper!) || isBaseFunc(fun, :gemv!)
+            return create_equivalence_classes_assignment(lhs, args[1], state)
+        elseif isBaseFunc(fun, :arraylen)
             # This is the other direction.  Takes an array and extract dimensional information that maps to the array's equivalence class.
             array_param = args[1]                  # length takes one param, which is the array
             assert(isa(array_param, RHSVar))
