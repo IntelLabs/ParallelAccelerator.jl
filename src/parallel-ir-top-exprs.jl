@@ -24,7 +24,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
 
-# Process the top-level expressions of a function and do fusion and useless assignment elimination.
+"""
+top_level_mk_body: lower domain nodes in the AST to parfor nodes.
+"""
 function top_level_mk_body(ast::Array{Any,1}, depth, state)
     len  = length(ast)
     body = Any[]
@@ -49,6 +51,9 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
     return body
 end
 
+"""
+fusion_pass: perform fusion of adjacent parfor nodes in the AST.
+"""
 function fusion_pass(ast::Array{Any,1}, depth, state)
     len  = length(ast)
     body = Any[]
@@ -95,7 +100,20 @@ function fusion_pass(ast::Array{Any,1}, depth, state)
         end
     end
     return body
-    
+end
+
+"""
+fusion_pass: perform fusion on the AST but callable as an external pass.  Just takes the
+function name and function lambda.
+"""
+function fusion_pass(function_name, ast)
+    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    assert(isa(body, Expr) && is(body.head, :body))
+    max_label = getMaxLabel(0, body.args)
+    lives = computeLiveness(body, LambdaVarInfo)
+    input_arrays = getArrayParams(LambdaVarInfo)
+    body = fusion_pass(ast, 1, expr_state(function_name, lives, max_label, input_arrays))
+    return CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
 end
 
 # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
