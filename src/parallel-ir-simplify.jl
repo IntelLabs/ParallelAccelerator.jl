@@ -1088,10 +1088,16 @@ end
 
 function print_correlations(level, state)
     if !isempty(state.array_length_correlation)
-        dprintln(level,"array_length_correlations = ", state.array_length_correlation)
+        dprintln(level,"array_length_correlations = ")
+        for (k,v) in state.array_length_correlation
+            dprintln(level, "    ", k," => ",v)
+        end
     end
     if !isempty(state.symbol_array_correlation)
-        dprintln(level,"symbol_array_correlations = ", state.symbol_array_correlation)
+        dprintln(level,"symbol_array_correlations = ")
+        for (k,v) in state.symbol_array_correlation
+            dprintln(level, "    ", k," => ",v)
+        end
     end
     if !isempty(state.range_correlation)
         dprintln(level,"range_correlations = ")
@@ -1453,6 +1459,7 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
 
     if length(size_syms_arr)==0
         @dprintln(3, "replaceConstArraysizes correlation symbol not found ", node)
+        print_correlations(3, state)
         return CompilerTools.AstWalker.ASTWALK_RECURSE
     end
     @dprintln(3, "replaceConstArraysizes correlation symbols: ", size_syms_arr)
