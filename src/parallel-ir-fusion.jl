@@ -2,26 +2,26 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
-=# 
+=#
 
 
 
@@ -56,7 +56,7 @@ function compareIndex(sn1 :: RHSVar, sn2 :: RHSVar)
     return toLHSVar(sn1) == toLHSVar(sn2)
 end
 
-function compareIndex(a :: Any, s :: Any)
+function compareIndex(s1::ANY, s2::ANY)
     return s1 == s2
 end
 
@@ -222,7 +222,7 @@ function fuse(body, body_index, cur::Expr, state)
                 if !compareIndex(good_index, index_expr[index])
                     @dprintln(3, "Found index expression not just using this dimension's loop index variable")
                     found_array_access_problem = true
-                end 
+                end
             end
         end
     end
@@ -243,7 +243,7 @@ function fuse(body, body_index, cur::Expr, state)
         isempty(arrays_non_simply_indexed_in_cur_that_access_prev_output) &&
         isempty(arrays_non_simply_indexed_in_prev_that_are_read_in_cur) &&
         (prev_num_dims == cur_num_dims) &&
-        !found_array_access_problem        
+        !found_array_access_problem
 
         @dprintln(3, "Fusion will happen here.")
 
@@ -265,7 +265,7 @@ function fuse(body, body_index, cur::Expr, state)
         live_in_prev = prev_stmt_live_first.live_in
         # def_prev     = prev_stmt_live_first.def
         def_prev = Set{LHSVar}()
-        # The "def" for a fused parfor is to a first approximation the union of the "def" of each statement in the parfor.  
+        # The "def" for a fused parfor is to a first approximation the union of the "def" of each statement in the parfor.
         # Some variables will be eliminated by fusion so we follow this first approximation up by an intersection with the
         # live_out of the last statement of the previous parfor.
         for prev_parfor_stmt in prev_parfor.top_level_number
@@ -273,7 +273,7 @@ function fuse(body, body_index, cur::Expr, state)
             def_prev = union(def_prev, constituent_stmt_live.def)
         end
         def_prev = intersect(def_prev, prev_stmt_live_last.live_out)
- 
+
         @dprintln(2,"live_in_prev = ", live_in_prev, " def_prev = ", def_prev)
 
         # Get the variables live after the previous parfor.
@@ -555,7 +555,7 @@ function mmapToMmap!(LambdaVarInfo, body::Expr, lives, uniqSet)
             rhs = expr.args[2]
             # right now assume all
             assert(isa(lhs, RHSVar))
-            lhsTyp = CompilerTools.LambdaHandling.getType(lhs, LambdaVarInfo) 
+            lhsTyp = CompilerTools.LambdaHandling.getType(lhs, LambdaVarInfo)
             # If the right-hand side is an mmap.
             if isa(rhs, Expr) && is(rhs.head, :mmap)
                 args = rhs.args[1]
@@ -603,7 +603,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
     for bb in collect(values(bl.basic_blocks))
         if false
             # One approach to this problem is to create a dependency graph and then use that to calculate valid reorderings
-            # that maximize fusion.  We may still want to switch to this at some point but it is more complicated and the 
+            # that maximize fusion.  We may still want to switch to this at some point but it is more complicated and the
             # simpler approach works for now.
 
             # Start with a pseudo-statement corresponding to the variables live-in to this basic block.
@@ -661,12 +661,12 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                     @dprintln(3,"maxFusion cur = ", cur.tls.expr)
                     @dprintln(3,"maxFusion next = ", next.tls.expr)
                     @dprintln(3,"maxFusion next.use = ", next.use)
-                    cur_domain_node  = isDomainNode(cur.tls.expr)  
-                    next_domain_node = isDomainNode(next.tls.expr) 
+                    cur_domain_node  = isDomainNode(cur.tls.expr)
+                    next_domain_node = isDomainNode(next.tls.expr)
                     intersection     = intersect(cur.def, next.use)
                     @dprintln(3,"cur_domain_node = ", cur_domain_node, " next_domain_node = ", next_domain_node, " intersection = ", intersection)
                     if cur_domain_node && !cannot_move_next
-                        if !next_domain_node 
+                        if !next_domain_node
                           if isempty(intersection)
                             # If the current statement is a domain node and the next staterment isn't and we are allowed to move the next node
                             # in the block and the next statement doesn't use anything produced by this statement then we can switch the order of
@@ -677,11 +677,11 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                             (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
                             found_change = true
                           else # intersection is not empty, but let's check if it is no longer live
-                            if length(intersection) == 1 && isAssignmentNode(cur.tls.expr) && isAssignmentNode(next.tls.expr) 
+                            if length(intersection) == 1 && isAssignmentNode(cur.tls.expr) && isAssignmentNode(next.tls.expr)
                                 lhsvar = toLHSVar(cur.tls.expr.args[1])
                                 tmpvar = toLHSVar(next.tls.expr.args[2])
                                 if lhsvar == tmpvar && in(tmpvar, intersection) && !in(tmpvar, next.live_out)
-                                    @dprintln(3, "next is assignment, and RHS is not live afterwards") 
+                                    @dprintln(3, "next is assignment, and RHS is not live afterwards")
                                     (bb.statements[i], bb.statements[i+1]) = (bb.statements[i+1], bb.statements[i])
                                     (bb.cfgbb.statements[i], bb.cfgbb.statements[i+1]) = (bb.cfgbb.statements[i+1], bb.cfgbb.statements[i])
                                     (bb.cfgbb.statements[i].index, bb.cfgbb.statements[i+1].index) = (bb.cfgbb.statements[i+1].index, bb.cfgbb.statements[i].index)
@@ -701,9 +701,7 @@ function maxFusion(bl :: CompilerTools.LivenessAnalysis.BlockLiveness)
                     end
                     i += 1
                 end
-            end 
+            end
         end
     end
 end
-
-
