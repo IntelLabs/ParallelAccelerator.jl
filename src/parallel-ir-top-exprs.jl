@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -31,7 +31,7 @@ function top_level_mk_body(ast::Array{Any,1}, depth, state)
     len  = length(ast)
     body = Any[]
     fuse_number = 1
-    
+
     # Process the top-level expressions of a function and do fusion and useless assignment elimination.
     for i = 1:len
         # Record the top-level statement number in the processing state.
@@ -58,7 +58,7 @@ function fusion_pass(ast::Array{Any,1}, depth, state)
     len  = length(ast)
     body = Any[]
     fuse_number = 1
-    
+
     # Process the top-level expressions of a function and do fusion and useless assignment elimination.
     for i = 1:len
         # Record the top-level statement number in the processing state.
@@ -106,21 +106,23 @@ end
 fusion_pass: perform fusion on the AST but callable as an external pass.  Just takes the
 function name and function lambda.
 """
-function fusion_pass(function_name, ast)
-    LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
-    assert(isa(body, Expr) && is(body.head, :body))
+function fusion_pass(function_name::String, LambdaVarInfo, body::Expr)
+    #LambdaVarInfo, body = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(ast)
+    @assert body.head==:body "invalid body expr head"
     max_label = getMaxLabel(0, body.args)
     lives = computeLiveness(body, LambdaVarInfo)
     input_arrays = getArrayParams(LambdaVarInfo)
-    body = fusion_pass(ast, 1, expr_state(function_name, lives, max_label, input_arrays))
-    return CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    body = fusion_pass(body.args, 1, expr_state(function_name, lives, max_label, input_arrays))
+    body = Expr(:body, body...)
+    # return CompilerTools.LambdaHandling.LambdaVarInfoToLambda(LambdaVarInfo, body, ParallelAccelerator.ParallelIR.AstWalk)
+    return LambdaVarInfo, body
 end
 
 # Remove the pre-statements from parfor nodes and expand them into the top-level expression array.
 function top_level_expand_pre(body, state)
 
     expanded_body = Any[]
-    
+
     for i = 1:length(body)
         if isParforAssignmentNode(body[i])
             parfor_assignment = body[i]
@@ -343,7 +345,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                             cur_start = cur_end = body_indices[j]
                         else
                             cur_end = body_indices[j]
-                        end 
+                        end
                         push!(stmts_in_batch, body_indices[j])
                     else
                         if cur_start != nothing
@@ -517,7 +519,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
 
                         @dprintln(3,"InsertTaskNode = ", itn)
 
-                        insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn) 
+                        insert_task_expr = TypedExpr(Int, :insert_divisible_task, itn)
                         push!(new_body, insert_task_expr)
                     else
                         throw(string("insert sequential task not implemented yet"))
@@ -636,14 +638,14 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         recreate_temp_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_temp_var   , Int64, ISASSIGNED, newLambdaVarInfo)
         recreate_ssa5_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa5_var   , Int64, ISASSIGNED, newLambdaVarInfo)
         recreate_ssa6_rhsvar   = CompilerTools.LambdaHandling.addLocalVariable(recreate_ssa6_var   , Int64, ISASSIGNED, newLambdaVarInfo)
-        
+
         steprange_last_lhsvar  = toLHSVar(steprange_last_rhsvar)
         steprange_first_lhsvar = toLHSVar(steprange_first_rhsvar)
         steprange_step_lhsvar  = toLHSVar(steprange_step_rhsvar)
         recreate_temp_lhsvar   = toLHSVar(recreate_temp_rhsvar)
         recreate_ssa5_lhsvar   = toLHSVar(recreate_ssa5_rhsvar)
         recreate_ssa6_lhsvar   = toLHSVar(recreate_ssa6_rhsvar)
-          
+
         push!(new_body, mk_assignment_expr(deepcopy(steprange_last_lhsvar), Expr(:call, GlobalRef(Base,:steprange_last), deepcopy(loop_start), 1, deepcopy(loop_end)), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(steprange_first_lhsvar), deepcopy(loop_start), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(steprange_step_lhsvar), 1, newLambdaVarInfo))
@@ -658,12 +660,12 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
 #        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"))
 
         push!(new_body, mk_gotoifnot_expr(
-               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool), 
+               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
                    Expr(:call, GlobalRef(Base, :not_int),
-                           Expr(:call, GlobalRef(Base, :or_int), 
-                                   Expr(:call, GlobalRef(Base, :and_int), 
-                                           Expr(:call, GlobalRef(Base, :not_int), 
-                                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar)) 
+                           Expr(:call, GlobalRef(Base, :or_int),
+                                   Expr(:call, GlobalRef(Base, :and_int),
+                                           Expr(:call, GlobalRef(Base, :not_int),
+                                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(steprange_first_rhsvar), deepcopy(steprange_last_rhsvar))
                                            ),
                                            Expr(:call, GlobalRef(Base, :not_int),
                                                Expr(:call, GlobalRef(Base, :(===)),
@@ -678,8 +680,8 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
                                                )
                                            )
                                        ),
-                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar), 
-                                   Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar))) 
+                               Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar),
+                                   Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar)))
                                )
                            )
                    )
@@ -696,7 +698,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         push!(for_loop_end, GotoNode(label_head))
         push!(for_loop_end, LabelNode(label_end))
 
-        LoopEndDict[loop_id] = for_loop_end    
+        LoopEndDict[loop_id] = for_loop_end
     else
 
         label_after_first_unless   = next_label(state)
@@ -720,11 +722,11 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         gensym3_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym3_sym, Int64, ISASSIGNED, newLambdaVarInfo)
         gensym4_rhsvar  = CompilerTools.LambdaHandling.addLocalVariable(gensym4_sym, Int64, ISASSIGNED, newLambdaVarInfo)
 
-        gensym2_lhsvar  = toLHSVar(gensym2_rhsvar) 
-        gensym0_lhsvar  = toLHSVar(gensym0_rhsvar) 
+        gensym2_lhsvar  = toLHSVar(gensym2_rhsvar)
+        gensym0_lhsvar  = toLHSVar(gensym0_rhsvar)
         pound_s1_lhsvar = toLHSVar(pound_s1_rhsvar)
-        gensym3_lhsvar  = toLHSVar(gensym3_rhsvar) 
-        gensym4_lhsvar  = toLHSVar(gensym4_rhsvar) 
+        gensym3_lhsvar  = toLHSVar(gensym3_rhsvar)
+        gensym4_lhsvar  = toLHSVar(gensym4_rhsvar)
 
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "ranges = ", toRHSVar(:ranges, pir_range_actual, state.LambdaVarInfo)))
         #push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "this_nest.lower = ", this_nest.lower))
@@ -751,7 +753,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
         push!(for_loop_end, LabelNode(label_after_second_unless))
     #    push!(for_loop_end, LabelNode(label_last))
 
-        LoopEndDict[loop_id] = for_loop_end    
+        LoopEndDict[loop_id] = for_loop_end
     end
 
     return nothing
@@ -773,7 +775,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
     range_sym = Symbol(range_var)
     range_rhsvar = CompilerTools.LambdaHandling.addLocalVariable(range_sym, pir_range_actual, CompilerTools.LambdaHandling.ISASSIGNED, state.LambdaVarInfo)
     range_lhsvar = toLHSVar(range_rhsvar)
-    
+
     run_task_directly = haskey(ENV,"PROSPECT_RUN_TASK_DIRECTLY") || (state.in_nested && run_nested_task_directly)
     @dprintln(3,"run_task_directly = ", run_task_directly, " state.in_nested = ", state.in_nested, " run_nested_task_directly = ", run_nested_task_directly)
 
@@ -939,9 +941,9 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
         if cur_task.ret_types != Void
             if run_task_directly || haskey(ENV,"PROSPECT_CALL_ISF")
                 for l = 1:red_len
-                    push!(new_body, 
+                    push!(new_body,
                       mk_assignment_expr(
-                        deepcopy(cur_task.reduction_vars[l].name), 
+                        deepcopy(cur_task.reduction_vars[l].name),
                         TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
                             Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), TypedExpr(Int, :call, GlobalRef(Base.Threads,:threadid))), l), cur_task.ret_types[l]), state))
 #                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index threadid of red_array = ", deepcopy(cur_task.reduction_vars[l].name)))
@@ -954,7 +956,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                 # After the jl_threading_run call, we store the first element of the reduction array into their destinations.
                 for l = 1:red_len
                     push!(new_body, mk_assignment_expr(
-                                       deepcopy(cur_task.reduction_vars[l].name), 
+                                       deepcopy(cur_task.reduction_vars[l].name),
                                        TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
                                          Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), 1), l), cur_task.ret_types[l]), state))
 #                    push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "index 1 of red_array = ", deepcopy(cur_task.reduction_vars[l].name)))
@@ -963,15 +965,15 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
                 push!(new_body, Expr(:loophead, deepcopy(red_loop_index_lhsvar), 2, TypedExpr(Int, :call, GlobalRef(Base, :arraylen), deepcopy(red_array_lhsvar))))
                 for l = 1:red_len
                     @dprintln(3, "reduction_vars[l] = ", cur_task.reduction_vars[l])
-                    reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc, 
-                                                    deepcopy(cur_task.reduction_vars[l].name), 
+                    reduction_code = callDelayedFuncWith(cur_task.join_func[l].reductionFunc,
+                                                    deepcopy(cur_task.reduction_vars[l].name),
                                                     TypedExpr(cur_task.ret_types[l], :call, GlobalRef(Core, :typeassert),
                                                       Expr(:call, GlobalRef(Base, :getfield), TypedExpr(red_output_tuple_typ, :call, GlobalRef(Base, :arrayref), deepcopy(red_array_lhsvar), deepcopy(red_loop_index_lhsvar)), l), cur_task.ret_types[l]))
                     @dprintln(3, "Adding reduction code for reduction variable ", l, " with ", length(reduction_code), " statements.")
 
                     for stmt in reduction_code
                         @dprintln(3, "reduction stmt = ", stmt)
-                        if isBareParfor(stmt) 
+                        if isBareParfor(stmt)
                             @dprintln(3, "reduction stmt is parfor so recreating loops")
                             recreateLoops(new_body, stmt.args[1], state, state.LambdaVarInfo)
                         else
@@ -1072,9 +1074,9 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
 
     @dprintln(3,"body after mk_task_graph = ")
     printBody(3, body)
-    
+
     expanded_body = Any[]
-    
+
     max_label   = getMaxLabel(0, body)
     LoopEndDict = Dict{LHSVar,Array{Any,1}}()
 
@@ -1082,7 +1084,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         @dprintln(3,"Flatten index ", i, " ", body[i], " type = ", typeof(body[i]))
             # Convert loophead and loopend into Julia loops.
         if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE &&
-            typeof(body[i]) == Expr && 
+            typeof(body[i]) == Expr &&
             (body[i].head == :loophead || body[i].head == :loopend)
             recreateFromLoophead(expanded_body, body[i], LoopEndDict, state, state.LambdaVarInfo)
         else
@@ -1090,7 +1092,7 @@ function top_level_from_exprs(ast::Array{Any,1}, depth, state)
         end
     end
 
-    body = expanded_body 
+    body = expanded_body
     # CompilerTools.OptFramework.cleanupBodyLabels(expanded_body)
     return body
 end

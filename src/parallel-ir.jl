@@ -1226,7 +1226,7 @@ Returns true if the domain operation mapped to this parfor has the property that
 is identical to the dimenions of the inputs.
 """
 function iterations_equals_inputs(node :: ParallelAccelerator.ParallelIR.PIRParForAst)
-    assert(length(node.original_domain_nodes) > 0)
+    @assert length(node.original_domain_nodes)>0 "parfor original_domain_nodes is empty"
 
     first_domain_node = node.original_domain_nodes[1]
     first_type = first_domain_node.operation
