@@ -128,8 +128,8 @@ function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
     flattenParfors(new_body, the_parfor.body, linfo)
     # Output to the new body that this is the end of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_end, PIRParForStartEnd(deepcopy(the_parfor.loopNests), deepcopy(the_parfor.reductions), deepcopy(the_parfor.instruction_count_expr), deepcopy(private_array))))
-    append!(new_body, the_parfor.postParFor)
-    #if length(the_parfor.postParFor)!=0
+    append!(new_body, the_parfor.postParFor[1:end-1])
+    #if length(the_parfor.postParFor)!=1
     #    println("POSTPARFOR ",the_parfor.postParFor)
     #end
     nothing
