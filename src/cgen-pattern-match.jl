@@ -155,13 +155,19 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
         return ""
     end
     cblas_fun = ""
-    typ = getSymType(A, linfo)
-    if getSymType(B, linfo) != typ || getSymType(C, linfo) != typ
+    a_typ = getSymType(A, linfo)
+    b_typ = getSymType(B, linfo)
+    c_typ = getSymType(C, linfo)
+    if !isArrayType(a_typ) || !isArrayType(b_typ) || !isArrayType(c_typ)
         return ""
     end
-    if typ==Array{Float32,2}
+    typ = eltype(a_typ)
+    if eltype(b_typ) != typ || eltype(c_typ) != typ
+        return ""
+    end
+    if typ==Float32
         cblas_fun = "cblas_sgemm"
-    elseif typ==Array{Float64,2}
+    elseif typ==Float64
         cblas_fun = "cblas_dgemm"
     else
         return ""
