@@ -535,6 +535,17 @@ end
 
 pattern_match_call_subarray_lastdim(func::ANY, arr, index, linfo) = ""
 
+function pattern_match_call_set_zeros(func::GlobalRef, arr::RHSVar, linfo)
+    if func==GlobalRef(ParallelAccelerator.API,:set_zeros)
+        carr = from_expr(toLHSVar(arr), linfo)
+        ctyp = toCtype(eltype(getSymType(arr,linfo)))
+        return "memset($carr.data, 0, sizeof($ctyp)*$carr.ARRAYLEN())"
+    end
+    return ""
+end
+
+pattern_match_call_set_zeros(func::ANY, arr::ANY, linfo) = ""
+
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
     s = ""
@@ -543,6 +554,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s = pattern_match_call_throw(ast[1],ast[2],linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
         s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
+        s *= pattern_match_call_set_zeros(ast[1],ast[2],linfo)
     end
 
     if s=="" && (length(ast)==3) # randn! call has 3 args
