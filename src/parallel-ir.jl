@@ -656,7 +656,7 @@ end
 Return an expression that allocates and initializes a 1D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and a "length".
 """
-function mk_alloc_array_1d_expr(elem_type, atype, length)
+function mk_alloc_array_expr(elem_type, atype, length)
     @dprintln(2,"mk_alloc_array_1d_expr atype = ", atype, " elem_type = ", elem_type, " length = ", length, " typeof(length) = ", typeof(length))
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 1)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int))
@@ -692,7 +692,7 @@ end
 Return an expression that allocates and initializes a 2D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2".
 """
-function mk_alloc_array_2d_expr(elem_type, atype, length1, length2)
+function mk_alloc_array_expr(elem_type, atype, length1, length2)
     @dprintln(2,"mk_alloc_array_2d_expr atype = ", atype)
 
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 2)
@@ -718,7 +718,7 @@ end
 Return an expression that allocates and initializes a 3D Julia array that has an element type specified by
 "elem_type", an array type of "atype" and two dimensions of length in "length1" and "length2" and "length3".
 """
-function mk_alloc_array_3d_expr(elem_type, atype, length1, length2, length3)
+function mk_alloc_array_expr(elem_type, atype, length1, length2, length3)
     @dprintln(2,"mk_alloc_array_3d_expr atype = ", atype)
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
@@ -2384,6 +2384,8 @@ function hasNoSideEffects(node :: Expr)
             isBaseFunc(func, :add_int) ||
             isBaseFunc(func, :mul_int) ||
             isBaseFunc(func, :neg_int) ||
+            isBaseFunc(func, :xor_int) ||
+            isBaseFunc(func, :flipsign_int) ||
             isBaseFunc(func, :checked_sadd) ||
             isBaseFunc(func, :checked_sadd_int) ||
             isBaseFunc(func, :checked_ssub) ||
@@ -2803,7 +2805,7 @@ function nested_function_exprs(domain_lambda, out_state)
     @dprintln(2,"nested_function_exprs max_label = ", max_label, " body = ", body, " " , unique_node_id)
 
     # Re-create the body minus any dead basic blocks.
-    cfg = CompilerTools.CFGs.from_lambda(body; opt=true)
+    cfg = CompilerTools.CFGs.from_lambda(body; opt=false)
     @dprintln(3, "nested_function_exprs cfg = ", cfg)
     body = CompilerTools.LambdaHandling.getBody(CompilerTools.CFGs.createFunctionBody(cfg), CompilerTools.LambdaHandling.getReturnType(LambdaVarInfo))
     @dprintln(1,"AST after dead blocks removed, body = ", body, " " , unique_node_id)

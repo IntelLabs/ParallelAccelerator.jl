@@ -568,7 +568,7 @@ function top_level_mk_task_graph(body, state, new_lives, loop_info)
                     atype = Array{getType(this_param, state.LambdaVarInfo), 1}
                     temp_param_array = createStateVar(state, string(this_param.name, "_out_array"), atype, ISASSIGNED)
                     push!(real_out_params, temp_param_array)
-                    new_temp_array = mk_alloc_array_1d_expr(this_param.typ, atype, 1)
+                    new_temp_array = mk_alloc_array_expr(this_param.typ, atype, 1)
                     push!(new_body, mk_assignment_expr(temp_param_array, new_temp_array, state))
                 end
 
@@ -858,7 +858,7 @@ function process_cur_task(cur_task::TaskInfo, new_body, state)
 #            if haskey(ENV,"PROSPECT_CALL_DYNAMIC_CHECK")
                 push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), Expr(:call, GlobalRef(ParallelAccelerator.ParallelIR, :red_alloc), Any, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads)), Expr(:call, GlobalRef(Core, :tuple), red_var_rhsvars...)), state))
 #            else
-#                push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_1d_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
+#                push!(new_body, mk_assignment_expr(deepcopy(red_array_lhsvar), mk_alloc_array_expr(Any, Array{Any,1}, TypedExpr(Int, :call, GlobalRef(Base.Threads, :nthreads))), state))
 #            end
 
             red_output_tuple_typ = Tuple{cur_task.ret_types...}
