@@ -2846,12 +2846,12 @@ function setCreateMain(val)
     global createMain = val
 end
 
-recreateLoops = true
+recreateLoops = false
 function setRecreateLoops(val)
     global recreateLoops = val
 end
 
-recreateConds = true
+recreateConds = false
 function setRecreateConds(val)
     global recreateConds = val
 end
