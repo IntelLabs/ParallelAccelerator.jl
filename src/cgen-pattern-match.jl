@@ -150,10 +150,12 @@ function getSymType(a, linfo)
     return lstate.symboltable[lookupVariableName(a, linfo)]
 end
 
-function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar,linfo)
+function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, A::RHSVar, B::RHSVar, alpha, beta, linfo)
     if fun.mod!=Base.LinAlg || fun.name!=:gemm_wrapper!
         return ""
     end
+    calpha = from_expr(alpha,linfo)
+    cbeta = from_expr(beta,linfo)
     cblas_fun = ""
     a_typ = getSymType(A, linfo)
     b_typ = getSymType(B, linfo)
@@ -190,8 +192,8 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
 
 
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
-        s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,1.0,
-        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, 0.0, $(from_expr(C,linfo)).data, $ldc)"
+        s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,$calpha,
+        $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, $cbeta, $(from_expr(C,linfo)).data, $ldc)"
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
         Please install MKL or OpenBLAS and rebuild ParallelAccelerator for better performance.")
@@ -201,7 +203,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
     return s
 end
 
-function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY,linfo)
+function pattern_match_call_gemm(fun::ANY, C::ANY, tA::ANY, tB::ANY, A::ANY, B::ANY,alpha::ANY,beta::ANY,linfo)
     return ""
 end
 
@@ -577,8 +579,11 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
     # gemm calls have 6 args
     if s=="" && (length(ast)==6)
         s *= pattern_match_call_copy!(linfo, ast...)
-        s *= pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
+        s *= pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6], 1.0, 0.0, linfo)
         s *= pattern_match_call_trtrs(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6],linfo)
+    end
+    if s=="" && (length(ast)==8)
+        s *= pattern_match_call_gemm(ast[1],ast[2],ast[3],ast[4],ast[5],ast[6], ast[7], ast[8], linfo)
     end
     return s
 end
