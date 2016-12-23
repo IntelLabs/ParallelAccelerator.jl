@@ -1386,11 +1386,11 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         @dprintln(2,"new_array_name = ", new_array_name, " element type = ", dl.outputs[i], " " , unique_node_id)
         # create the expression that create a new array and assigns it to a variable whose name is in new_array_name
         if num_dim_inputs == 1
-            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_1d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1]), state)
         elseif num_dim_inputs == 2
-            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_2d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2]), state)
         elseif num_dim_inputs == 3
-            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_3d_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2], save_array_lens[3]), state)
+            new_ass_expr = mk_assignment_expr(toRHSVar(new_array_name, Array{dl.outputs[i],num_dim_inputs}, state.LambdaVarInfo), mk_alloc_array_expr(dl.outputs[i], Array{dl.outputs[i], num_dim_inputs}, save_array_lens[1], save_array_lens[2], save_array_lens[3]), state)
         else
             throw(string("Only arrays up to 3 dimensions supported in parallel IR."))
         end
