@@ -1133,8 +1133,11 @@ function create_equivalence_classes(node :: Expr, state :: expr_state, top_level
         return node
     end
 
+    # FIXME: why?
     # We can only extract array equivalences from top-level statements.
-    if is_top_level
+    # get equivalences from non-top-level also
+    # use case: pre statements of parfors in HPAT matrix multiply optimization
+    if true #is_top_level
         @dprintln(3,"create_equivalence_classes is_top_level")
 
         if isAssignmentNode(node)
@@ -1157,6 +1160,13 @@ function create_equivalence_classes(node :: ANY, state :: expr_state, top_level_
     @dprintln(3,"create_equivalence_classes node = ", node, " type = ", typeof(node))
     @dprintln(3,"Not an assignment or expr node.")
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+"""
+do not recurse into domain lambdas since there could be variable name conflicts
+"""
+function create_equivalence_classes(node::DomainLambda, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+    return node
 end
 
 """
