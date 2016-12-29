@@ -23,13 +23,30 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
-hoist_parfors = false
+hoist_parfors = 0
 """
 Controls whether loop invariant statements are moved from parfor bodies to pre-statements.
 If true, such loop invariant statements are moved.  If false, they are not.
 """
-function PIRHoistParfors(x :: Bool)
+function PIRHoistParfors(x :: Int)
     global hoist_parfors = x
+    @dprintln(3, "PIRHoistParfors new value = ", hoist_parfors)
+end
+
+function hoistNextParfor()
+    @dprintln(3, "hoistNextParfor = ", hoist_parfors)
+    if hoist_parfors < 0
+        @dprintln(3, "always")
+        return true
+    end
+    if hoist_parfors > 0
+        @dprintln(3, "decrement")
+        global hoist_parfors = hoist_parfors - 1
+        return true
+    end
+
+    @dprintln(3, "zero")
+    return false 
 end
 
 """
@@ -929,11 +946,6 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
 
-    if hoist_parfors
-        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
-    end
-
     body_lives = computeLiveness(nested_body, state.LambdaVarInfo)
     # Make sure each input array is a TypedVar
     # Also, create indexed versions of those symbols for the loop body
@@ -988,6 +1000,11 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
             push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
         end
+    end
+
+    if hoistNextParfor()
+        (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
     end
 
     # add conditional expressions to body if array elements are selected by bit arrays
@@ -1076,11 +1093,6 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, dl_inputs)
 
-    if hoist_parfors
-        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
-    end
-
     out_body = nested_body
     @dprintln(3, "mpafpf 1 out_body[end] = ", out_body[end], " type = ", typeof(out_body[end]))
     if isa(out_body[end], Expr)
@@ -1115,6 +1127,12 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
             push!(rearray, RangeExprs(1,1,:(length($range_name))))
         end
     end
+
+    if hoistNextParfor()
+        (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
+    end
+
     inputInfo = InputInfo()
     @dprintln(3, "rearray = ", rearray)
     inputInfo.range = DimensionSelector[RangeData(i) for i in rearray]
@@ -1350,11 +1368,6 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     nested_function_exprs(dl, state)
     nested_body = mergeLambdaIntoOuterState(state, dl, indexed_arrays)
 
-    if hoist_parfors
-        (nested_body, hoisted_stmts) = doHoistParfor(nested_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
-    end
-
     out_body = [out_body; nested_body...]
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " " , unique_node_id)
     assert(isa(out_body,Array))
@@ -1417,6 +1430,11 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)
     end
     @dprintln(3,"out_body = ", out_body, " " , unique_node_id)
+
+    if hoistNextParfor()
+        (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
+        append!(pre_statements, hoisted_stmts)
+    end
 
     # add conditional expressions to body if array elements are selected by bit arrays
     fallthroughLabel = next_label(state)
