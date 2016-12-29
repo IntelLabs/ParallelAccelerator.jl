@@ -1540,6 +1540,9 @@ function getFirstArrayLens(parfor, num_dims, state)
                 if isa(rhs, Expr) && (rhs.head == :call) && isBaseFunc(rhs.args[1],:arraysize)
                     push!(ret, toRHSVar(lhs, state.LambdaVarInfo))
                 end
+                if length(ret) == num_dims
+                    return ret
+                end
             end
         end
         # if arraysize calls were replaced for constant size array
