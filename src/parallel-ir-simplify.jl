@@ -1442,16 +1442,34 @@ function getOrAddSymbolCorrelation(array :: LHSVar, state :: expr_state, dims ::
     end
 end
 
+type ReplaceConstArraysizesData
+    lives             :: CompilerTools.LivenessAnalysis.BlockLiveness
+    linfo
+    array_length_correlation
+    symbol_array_correlation
+    saved_available_variables::Vector{LHSVar}
+    # empty for now
+    range_correlation        :: Dict{Array{DimensionSelector,1},Int}
+    function ReplaceConstArraysizesData(lv,li,al,sa)
+        new(lv,li,al,sa,Vector{LHSVar}(),Dict{Array{DimensionSelector,1},Int}())
+    end
+end
+
 """
 Replace arraysize() calls for arrays with known constant sizes.
 Constant size is Int constants, as well as assigned once variables which are
 in symbol_array_correlation. Variables should be assigned before current statement, however.
 """
-function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function replaceConstArraysizes(node::Expr, data::ReplaceConstArraysizesData, top_level_number::Int64, is_top_level::Bool, read::Bool)
     @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
     @dprintln(4,"node.head: ", node.head)
-    print_correlations(4, state)
+    print_correlations(4, data)
+
+    if node.head==:parfor
+        replaceConstArraysizes_parfor(node.args[1], data, top_level_number)
+        return node
+    end
 
     if !isCall(node) return CompilerTools.AstWalker.ASTWALK_RECURSE end
     func = getCallFunction(node)
@@ -1460,21 +1478,21 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     end
 
     @dprintln(3, "replaceConstArraysizes size call found ", node)
-    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, state.block_lives)
+    live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
     @dprintln(3, "replaceConstArraysizes live info ", live_info)
     args = getCallArguments(node)
     arr = toLHSVar(args[1])
     # get array sizes if available, there could be multiple
-    size_syms_arr = get_array_correlation_symbols(arr, state)
+    size_syms_arr = get_array_correlation_symbols(arr, data)
 
     if length(size_syms_arr)==0
         @dprintln(3, "replaceConstArraysizes correlation symbol not found ", node)
-        print_correlations(3, state)
+        print_correlations(3, data)
         return CompilerTools.AstWalker.ASTWALK_RECURSE
     end
     @dprintln(3, "replaceConstArraysizes correlation symbols: ", size_syms_arr)
     # need to make sure size variables are available in this statement to replace
-    available_variables = get_available_variables(top_level_number, state)
+    available_variables = get_available_variables(top_level_number, data)
 
     if isBaseFunc(getCallFunction(node), :arraysize)
         dim_ind = args[2] # dimension number
@@ -1509,14 +1527,26 @@ function replaceConstArraysizes(node :: Expr, state::expr_state, top_level_numbe
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
-function get_available_variables(top_level_number, state)
+function replaceConstArraysizes_parfor(parfor::PIRParForAst, data, top_level_number)
+    body_lives = CompilerTools.LivenessAnalysis.from_lambda(data.linfo, parfor.body, pir_live_cb, data.linfo)
+    available_variables = get_available_variables(top_level_number, data)
+    new_data = ReplaceConstArraysizesData(body_lives, data.linfo,
+       data.array_length_correlation, data.symbol_array_correlation)
+    new_data.saved_available_variables = union(available_variables, data.saved_available_variables)
+    @dprintln(3,"replaceConstArraysizes parfor body lives = ", data.lives)
+    new_body = AstWalk(TypedExpr(nothing, :body, parfor.body...), replaceConstArraysizes, new_data)
+    parfor.body = new_body.args
+end
+
+function get_available_variables(top_level_number, data)
     # get dominant block information
-    dom_dict = CompilerTools.CFGs.compute_dominators(state.block_lives.cfg)
-    bb_index = CompilerTools.LivenessAnalysis.find_bb_for_statement(top_level_number, state.block_lives)
+    dom_dict = CompilerTools.CFGs.compute_dominators(data.lives.cfg)
+    bb_index = CompilerTools.LivenessAnalysis.find_bb_for_statement(top_level_number, data.lives)
     @dprintln(3, "get_available_variables dom_dict ", dom_dict, " bb_index ", bb_index)
     available_variables = Set{LHSVar}()
+    available_variables = union(data.saved_available_variables, available_variables)
     # input parameters are also available
-    available_variables = union(getInputParametersAsLHSVar(state.LambdaVarInfo), available_variables)
+    available_variables = union(getInputParametersAsLHSVar(data.linfo), available_variables)
     if bb_index==nothing
         return available_variables
     end
@@ -1525,10 +1555,10 @@ function get_available_variables(top_level_number, state)
     # find def variables for dominant blocks except current one
     for i in dom_bbs
         if i==bb_index continue end
-        bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(i, state.block_lives)
+        bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(i, data.lives)
         available_variables = union(bb.def, available_variables)
     end
-    bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(bb_index, state.block_lives)
+    bb = CompilerTools.LivenessAnalysis.getBasicBlockFromBlockNumber(bb_index, data.lives)
     # find def variables for previous statements of same block
     for stmts in bb.statements
       if stmts.tls.index < top_level_number
@@ -1557,7 +1587,7 @@ function get_array_correlation_symbols(arr::LHSVar, state)
     return out
 end
 
-function replaceConstArraysizes(node :: ANY, state :: expr_state, top_level_number :: Int64, is_top_level :: Bool, read :: Bool)
+function replaceConstArraysizes(node::ANY, state::ReplaceConstArraysizesData, top_level_number::Int64, is_top_level::Bool, read::Bool)
     @dprintln(4,"replaceConstArraysizes starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(4,"replaceConstArraysizes node = ", node, " type = ", typeof(node))
     @dprintln(4,"Not an expr node.")
