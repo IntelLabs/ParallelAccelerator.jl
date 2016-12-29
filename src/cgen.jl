@@ -2339,7 +2339,7 @@ function from_parforstart(args, linfo)
             rdsextra *= "$rdvtyp $(rdvar) = shared_$(rdvar);\n"
         else
             if isDistributedMode() && lstate.ompdepth == 1
-                if pattern_match_reduce_sum(rd.reductionFunc, linfo)
+                if pattern_match_reduce_sum(rd.reductionFunc, linfo) && !isArrayType(rdvt)
                     rdsclause *= "reduction(+: $(rdvar)) "
                 end
             end
