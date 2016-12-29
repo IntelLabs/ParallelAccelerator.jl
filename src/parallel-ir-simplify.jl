@@ -50,10 +50,10 @@ function findAllocations(x :: Expr, state :: findAllocationsState, top_level_num
     if isArraysetCall(x)
         value = x.args[3]   # the value written into the array
         vtyp  = CompilerTools.LambdaHandling.getType(value, state.LambdaVarInfo)
-        @dprintln(3, "findAllocations found arrayset with value ", value, " of type ", vtyp)
-        if isArrayType(vtyp) && isa(value, LHSVar)
+        @dprintln(3, "findAllocations found arrayset with value ", value, " of type ", vtyp, " ", isArrayType(vtyp), " ", typeof(value))
+        if isArrayType(vtyp) && isa(value, RHSVar)
             @dprintln(3, "findAllocations added ", value, " to set")
-            push!(state.arrays_stored_in_arrays, value)
+            push!(state.arrays_stored_in_arrays, toLHSVar(value))
         end
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
