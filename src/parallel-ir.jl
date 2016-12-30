@@ -3341,7 +3341,7 @@ function from_root(function_name, ast)
         @dprintln(3,"AST before last copy_propagate = ", " function = ", function_name)
         printLambda(3, LambdaVarInfo, body)
         lives = computeLiveness(body, LambdaVarInfo)
-        new_vars.block_lives = lives
+        new_vars = expr_state(function_name, lives, new_vars.max_label, input_arrays)
         genEquivalenceClasses(LambdaVarInfo, body, new_vars)
         print_correlations(3, new_vars)
         #AstWalk(body, replaceConstArraysizes, new_vars)
