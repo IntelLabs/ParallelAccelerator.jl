@@ -825,8 +825,27 @@ function copy_propagate_helper(node::Expr,
             end
         end
         return node
+    elseif isCall(node)
+        return evaluate_constant_calls(node)
     end
 
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function evaluate_constant_calls(node::Expr)
+    @assert isCall(node) "call Expr expected"
+    func = getCallFunction(node)
+    args = getCallArguments(node)
+    if func==GlobalRef(Core.Intrinsics,:xor_int) && isa(args[1],Int) && isa(args[2],Int)
+        @dprintln(3,"copy_propagate replacing constant call Core.Intrinsics.xor_int = ", node)
+        return eval(quote Core.Intrinsics.xor_int($(args[1]), $(args[2])) end )
+    elseif func==GlobalRef(Core.Intrinsics,:flipsign_int) && isa(args[1],Int) && isa(args[2],Int)
+        @dprintln(3,"copy_propagate replacing constant call Core.Intrinsics.flipsign_int = ", node)
+        return eval(quote Core.Intrinsics.flipsign_int($(args[1]), $(args[2])) end )
+    elseif func==GlobalRef(Core.Intrinsics,:box) && isa(args[2],Number) && typeof(args[2])==args[1]
+        @dprintln(3,"copy_propagate replacing constant call Core.Intrinsics.box = ", node)
+        return args[2]
+    end
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
