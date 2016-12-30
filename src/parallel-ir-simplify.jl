@@ -1047,18 +1047,22 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         elseif isBaseFunc(fun, :reshape)
             # rhs.args[2] is the array to be reshaped, lhs is the result, rhs.args[3] is a tuple with new shape
             if haskey(state.tuple_table, args[2])
+                @dprintln(3,"reshape tuple found in tuple_table = ", state.tuple_table[args[2]])
                 checkAndAddSymbolCorrelation(lhs, state, state.tuple_table[args[2]])
             end
         elseif isBaseFunc(fun, :tuple)
-            ok = true
-            for s in args
-                if !(isa(s,TypedVar) || isa(s,Int))
-                    ok = false
-                end
-            end
-            if ok
-                state.tuple_table[lhs]=args[1:end]
-            end
+            @dprintln(3,"tuple added to tuple_table = ", args)
+            # no need to check since checkAndAddSymbolCorrelation already checks symbols
+            state.tuple_table[lhs]=args
+            #ok = true
+            #for s in args
+            #    if !(isa(s,TypedVar) || isa(s,Int))
+            #        ok = false
+            #    end
+            #end
+            #if ok
+            #    state.tuple_table[lhs]=args[1:end]
+            #end
         end
     elseif rhs.head == :mmap! || rhs.head == :mmap || rhs.head == :map! || rhs.head == :map
         # Arguments to these domain operations implicit assert that equality of sizes so add/merge equivalence classes for the arrays to this operation.
