@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -66,17 +66,17 @@ function comprehension_to_cartesianarray(ast)
     end
   end
   args = Expr(:tuple, params...)
-  dims = [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]
+  dims = [ get_range_length(r) for r in ranges ]
   dimsExpr = Expr(:tuple, [ Expr(:call, GlobalRef(Base, :length), r) for r in ranges ]...)
   tmpret = gensym("tmp")
   tmpinits = [ :($idx = 1) for idx in params ]
   typetest = :(local $tmpret; if 1<0 let $(tmpinits...); $(headers...); $tmpret=$body end end)
   if VERSION < v"0.5.0-dev+5306"
-      ast = Expr(:call, GlobalRef(API, :cartesianarray), 
+      ast = Expr(:call, GlobalRef(API, :cartesianarray),
                     :($args -> let $(headers...); $body end), Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(Base, :Tuple), Expr(:static_typeof, tmpret)), :($dimsExpr))
-      ast = Expr(:block, typetest, ast) 
+      ast = Expr(:block, typetest, ast)
   else
-      ast = Expr(:call,  GlobalRef(API, :cartesianarray), 
+      ast = Expr(:call,  GlobalRef(API, :cartesianarray),
                     :($args -> let $(headers...); $body end), dims...)
   end
   ast
@@ -87,6 +87,17 @@ function isStart1UnitRange(node::Expr)
         return true
     end
     return false
+end
+
+function get_range_length(r::Expr)
+    if isStart1UnitRange(r)
+        return r.args[2]
+    end
+    return Expr(:call, GlobalRef(Base, :length), r)
+end
+
+function get_range_length(r::ANY)
+    return Expr(:call, GlobalRef(Base, :length), r)
 end
 
 """
@@ -116,5 +127,3 @@ macro comprehend(ast)
 end
 
 end
-
-
