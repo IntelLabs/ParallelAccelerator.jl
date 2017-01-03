@@ -226,6 +226,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
         PIRParForAst(InputInfo(toLHSVar(buf)),
             vcat(lowerGotos, upperGotos, borderExpr),
             [],
+            [],
             [ PIRLoopNest(idxNodes[i], 1, sizeNodes[i], 1) for i = n:-1:1 ],
             PIRReduction[],
             [], [], irState.top_level_number, get_unique_num(), Set{LHSVar}(), Set{LHSVar}([toLHSVar(x) for x in bufs])))]
@@ -241,6 +242,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   expr = PIRParForAst(
     InputInfo(buf),
     bodyExpr,
+    [],
     [],
     loopNest,
     PIRReduction[],

@@ -356,6 +356,7 @@ type PIRParForAst
     first_input  :: InputInfo
     body                                      # holds the body of the innermost loop (outer loops can't have anything in them except inner loops)
     preParFor    :: Array{Any,1}              # do these statements before the parfor
+    hoisted      :: Array{Any,1}              # statements hoisted from inside the body (do these statements before the parfor)
     loopNests    :: Array{PIRLoopNest,1}      # holds information about the loop nests
     reductions   :: Array{PIRReduction,1}     # holds information about the reductions
     postParFor   :: Array{Any,1}              # do these statements after the parfor
@@ -374,8 +375,8 @@ type PIRParForAst
     arrays_written_past_index :: Set{LHSVar}
     arrays_read_past_index :: Set{LHSVar}
 
-    function PIRParForAst(fi, b, pre, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
-        new(fi, b, pre, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
+    function PIRParForAst(fi, b, pre, hoisted, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
+        new(fi, b, pre, hoisted, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
     end
 end
 
@@ -395,6 +396,7 @@ Search a whole PIRParForAst object and replace one RHSVar with another.
 function replaceParforWithDict(parfor :: PIRParForAst, gensym_map, linfo :: LambdaVarInfo)
     parfor.body = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.body, gensym_map, linfo)
     parfor.preParFor = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.preParFor, gensym_map, linfo)
+    parfor.hoisted = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.hoisted, gensym_map, linfo)
     for i = 1:length(parfor.loopNests)
         parfor.loopNests[i].lower = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].lower, gensym_map, linfo)
         parfor.loopNests[i].upper = CompilerTools.LambdaHandling.replaceExprWithDict!(parfor.loopNests[i].upper, gensym_map, linfo)
@@ -468,6 +470,15 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
             println(io,"    ", pnode.preParFor[i])
             if DEBUG_LVL >= 4
                 dump(pnode.preParFor[i])
+            end
+        end
+    end
+    if length(pnode.hoisted) > 0
+        println(io,"Prestatements: ")
+        for i = 1:length(pnode.hoisted)
+            println(io,"    ", pnode.hoisted[i])
+            if DEBUG_LVL >= 4
+                dump(pnode.hoisted[i])
             end
         end
     end
@@ -2117,6 +2128,7 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
         this_parfor = args[1]
 
         append!(expr_to_process, this_parfor.preParFor)
+        append!(expr_to_process, this_parfor.hoisted)
         for i = 1:length(this_parfor.loopNests)
             # force the indexVariable to be treated as an rvalue
             push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
@@ -2126,7 +2138,7 @@ function pir_rws_cb(ast :: Expr, cbdata :: ANY)
         end
         assert(typeof(cbdata) == CompilerTools.LambdaHandling.LambdaVarInfo)
         body = CompilerTools.LambdaHandling.getBody(this_parfor.body, CompilerTools.LambdaHandling.getReturnType(cbdata))
-        body_rws = CompilerTools.ReadWriteSet.from_expr(body, pir_rws_cb, cbdata)
+        body_rws = CompilerTools.ReadWriteSet.from_expr(body, pir_rws_cb, cbdata, cbdata)
         push!(expr_to_process, body_rws)
         append!(expr_to_process, this_parfor.postParFor)
         return expr_to_process
@@ -2203,6 +2215,7 @@ function pir_live_cb(ast :: Expr, cbdata :: ANY)
         this_parfor = args[1]
 
         append!(expr_to_process, this_parfor.preParFor)
+        append!(expr_to_process, this_parfor.hoisted)
         for i = 1:length(this_parfor.loopNests)
             # force the indexVariable to be treated as an rvalue
             push!(expr_to_process, mk_untyped_assignment(this_parfor.loopNests[i].indexVariable, 1))
@@ -3791,6 +3804,9 @@ function AstWalkCallback(cur_parfor :: PIRParForAst, dw :: DirWalk, top_level_nu
     for i = 1:length(cur_parfor.preParFor)
         cur_parfor.preParFor[i] = AstWalk(cur_parfor.preParFor[i], dw.callback, dw.cbdata)
     end
+    for i = 1:length(cur_parfor.hoisted)
+        cur_parfor.hoisted[i] = AstWalk(cur_parfor.hoisted[i], dw.callback, dw.cbdata)
+    end
     for i = 1:length(cur_parfor.loopNests)
         cur_parfor.loopNests[i].indexVariable = AstWalk(cur_parfor.loopNests[i].indexVariable, dw.callback, dw.cbdata)
         # There must be some reason that I was faking an assignment expression although this really shouldn't happen in an AstWalk. In liveness callback yes, but not here.
@@ -3962,6 +3978,7 @@ function pir_alias_cb(ast::Expr, state, cbdata)
 
         AliasAnalysis.increaseNestLevel(state);
         AliasAnalysis.from_exprs(state, this_parfor.preParFor, pir_alias_cb, cbdata)
+        AliasAnalysis.from_exprs(state, this_parfor.hoisted, pir_alias_cb, cbdata)
         AliasAnalysis.from_exprs(state, this_parfor.body, pir_alias_cb, cbdata)
         ret = AliasAnalysis.from_exprs(state, this_parfor.postParFor, pir_alias_cb, cbdata)
         AliasAnalysis.decreaseNestLevel(state);
@@ -4006,7 +4023,7 @@ function dependenceCB(ast::Expr, cbdata)
         end
 
         return CompilerTools.TransitiveDependence.CallbackResult(
-                 CompilerTools.TransitiveDependence.mergeDepSet(
+                 CompilerTools.TransitiveDependence.mergeDepSet(   # FIX FIX FIX...do something here with hoisted???
                    CompilerTools.TransitiveDependence.computeDependenciesAST(TypedExpr(nothing, :body, this_parfor.preParFor...), ParallelAccelerator.ParallelIR.dependenceCB, nothing),
                    CompilerTools.TransitiveDependence.computeDependenciesAST(TypedExpr(nothing, :body, this_parfor.body...), ParallelAccelerator.ParallelIR.dependenceCB, nothing)
                  ),

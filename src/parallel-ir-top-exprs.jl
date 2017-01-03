@@ -141,7 +141,9 @@ function top_level_expand_pre(body, state)
 
             # Add all the pre-parfor statements to the expanded body.
             append!(expanded_body, the_parfor.preParFor)
+            append!(expanded_body, the_parfor.hoisted)
             the_parfor.preParFor = Any[]
+            the_parfor.hoisted = Any[]
 
             # Add just the parfor to the expanded body.  The post-parfor part removed below.
             assert(typeof(rhs) == Expr)
@@ -169,7 +171,9 @@ function top_level_expand_pre(body, state)
 
             # Add all the pre-parfor statements to the expanded body.
             append!(expanded_body, the_parfor.preParFor)
+            append!(expanded_body, the_parfor.hoisted)
             the_parfor.preParFor = Any[]
+            the_parfor.hoisted= Any[]
 
             # Add just the parfor to the expanded body.  The post-parfor part removed below.
             assert(typeof(rhs) == Expr)

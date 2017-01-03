@@ -177,9 +177,9 @@ function fuse(body, body_index, cur::Expr, state)
     @dprintln(3, "arrays_non_simply_indexed_in_cur_that_access_prev_output = ", arrays_non_simply_indexed_in_cur_that_access_prev_output)
     @dprintln(3, "prev_parfor.arrays_written_past_index = ", prev_parfor.arrays_written_past_index)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    prev_rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    prev_rws = CompilerTools.ReadWriteSet.from_exprs(prev_parfor.body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    cur_rws = CompilerTools.ReadWriteSet.from_exprs(cur_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    cur_rws = CompilerTools.ReadWriteSet.from_exprs(cur_parfor.body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
     cur_accessed = CompilerTools.ReadWriteSet.getArraysAccessed(cur_rws)
     arrays_non_simply_indexed_in_prev_that_are_read_in_cur = intersect(prev_parfor.arrays_written_past_index, cur_accessed)
     @dprintln(3, "arrays_non_simply_indexed_in_prev_that_are_read_in_cur = ", arrays_non_simply_indexed_in_prev_that_are_read_in_cur)
@@ -463,6 +463,9 @@ function fuse(body, body_index, cur::Expr, state)
         @dprintln(3,"removed_allocs = ", removed_allocs)
         filter!( x -> !is_eliminated_arraysize(x, removed_allocs, prev_parfor.array_aliases), prev_parfor.preParFor)
         @dprintln(2,"New preParFor = ", prev_parfor.preParFor)
+
+        append!(prev_parfor.hoisted, cur_parfor.hoisted)
+        @dprintln(2,"New hoisted = ", prev_parfor.hoisted)
 
         # if allocation of an array is removed, arrayset should be removed as well since the array doesn't exist anymore
         @dprintln(4,"prev_parfor.body before removing dead arrayset: ", prev_parfor.body)

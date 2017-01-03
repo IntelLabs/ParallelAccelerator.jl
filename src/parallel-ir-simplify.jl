@@ -502,6 +502,7 @@ function remove_dead(node::PIRParForAst, data::RemoveDeadState, top_level_number
             parfor_live_out = live_info.live_out
             @dprintln(3,"remove_dead parfor live_out = ", parfor_live_out)
             # node.preParFor = remove_dead_recursive_body(node.preParFor, data.linfo, parfor_live_out)
+            # node.hoisted = remove_dead_recursive_body(node.hoisted, data.linfo, parfor_live_out)
             node.body = remove_dead_recursive_body(node.body, data.linfo, parfor_live_out)
             # node.postParFor = remove_dead_recursive_body(node.postParFor, data.linfo, parfor_live_out)
             return node
@@ -665,12 +666,13 @@ function unroll_const_parfors(node::Expr, data, top_level_number, is_top_level, 
         end
         @dprintln(3,"unroll_const_parfors unrolling parfor ", node)
         out = deepcopy(parfor.preParFor)
+        append!(out, deepcopy(parfor.hoisted))
         for i in lower:step:upper
             body = deepcopy(parfor.body)
             replaceExprWithDict!(body, Dict{LHSVar,Any}(toLHSVar(indexVariable)=>i), nothing, AstWalk)
             append!(out,body)
         end
-        append!(out, parfor.postParFor)
+        append!(out, deepcopy(parfor.postParFor))
         return Expr(:block, out...)
     end
     return CompilerTools.AstWalker.ASTWALK_RECURSE

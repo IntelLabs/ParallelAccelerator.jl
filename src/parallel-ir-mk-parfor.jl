@@ -528,13 +528,19 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         push!(condExprs, Expr(:gotoifnot, iarange, fallthroughLabel))
     end
 
+    hoisted_stmts = Any[]
+    if hoistNextParfor()
+        (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
+#        append!(pre_statements, hoisted_stmts)
+    end
+
     if length(condExprs) > 0
         out_body = [ condExprs; out_body; LabelNode(fallthroughLabel) ]
     end
     @dprintln(2,"typeof(out_body) = ",typeof(out_body), " out_body = ", out_body, " ", unique_node_id)
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
 
     # Make sure that for reduce that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
@@ -548,6 +554,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
         inputInfo,
         out_body,
         pre_statements,
+        hoisted_stmts,
         loopNests,
         [PIRReduction(reduction_output_snode, zero_val, reduce_func)],
         post_statements,
@@ -1002,9 +1009,10 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         end
     end
 
+    hoisted_stmts = Any[]
     if hoistNextParfor()
         (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
+#        append!(pre_statements, hoisted_stmts)
     end
 
     # add conditional expressions to body if array elements are selected by bit arrays
@@ -1015,7 +1023,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
 
     @dprintln(3, "out_body = ", out_body, " " , unique_node_id)
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
 
     # Make sure that for mmap! that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
@@ -1028,6 +1036,7 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
         inputInfo[1],
         out_body,
         pre_statements,
+        hoisted_stmts,
         loopNests,
         PIRReduction[],
         post_statements,
@@ -1128,21 +1137,23 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
         end
     end
 
+    hoisted_stmts = Any[]
     if hoistNextParfor()
         (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
+#        append!(pre_statements, hoisted_stmts)
     end
 
     inputInfo = InputInfo()
     @dprintln(3, "rearray = ", rearray)
     inputInfo.range = DimensionSelector[RangeData(i) for i in rearray]
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
     arrays_read_past_index = getPastIndex(rws.readSet.arrays)
     parfor = ParallelAccelerator.ParallelIR.PIRParForAst(
         inputInfo,
         out_body,
         pre_statements,
+        hoisted_stmts,
         loopNests,
         reductions,
         post_statements,
@@ -1431,9 +1442,10 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     end
     @dprintln(3,"out_body = ", out_body, " " , unique_node_id)
 
+    hoisted_stmts = Any[]
     if hoistNextParfor()
         (out_body, hoisted_stmts) = doHoistParfor(out_body, state, unique_node_id, dl)
-        append!(pre_statements, hoisted_stmts)
+#        append!(pre_statements, hoisted_stmts)
     end
 
     # add conditional expressions to body if array elements are selected by bit arrays
@@ -1443,7 +1455,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
     end
 
     # Compute which scalars and arrays are ever read or written by the body of the parfor
-    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo)
+    rws = CompilerTools.ReadWriteSet.from_exprs(out_body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
 
     # Make sure that for mmap that the array indices are all of the simple variety
     arrays_written_past_index = getPastIndex(rws.writeSet.arrays)
@@ -1456,6 +1468,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
         inputInfo[1],
         out_body,
         pre_statements,
+        hoisted_stmts,
         loopNests,
         PIRReduction[],
         post_statements,

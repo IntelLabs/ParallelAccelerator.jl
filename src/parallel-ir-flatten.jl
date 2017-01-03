@@ -119,9 +119,7 @@ function flattenParfor(new_body, the_parfor :: ParallelAccelerator.ParallelIR.PI
     private_array = collect(private_set)
     # append pre-statements
     append!(new_body, the_parfor.preParFor)
-    #if length(the_parfor.preParFor)!=0
-    #    println("PREPARFOR ",the_parfor.preParFor)
-    #end
+    append!(new_body, the_parfor.hoisted)
     # Output to the new body that this is the start of a parfor.
     push!(new_body, TypedExpr(Int64, :parfor_start, PIRParForStartEnd(the_parfor.loopNests, the_parfor.reductions, the_parfor.instruction_count_expr, private_array)))
     # Output the body of the parfor as top-level statements in the new function body and convert any other parfors we may find.
