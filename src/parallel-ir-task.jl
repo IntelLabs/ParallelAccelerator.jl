@@ -1659,7 +1659,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3,"local_vars names= ", locals_vars_sym)
     @dprintln(3,"reduction_vars names= ", reduction_vars_sym)
 
-    parfor_rws = CompilerTools.ReadWriteSet.from_exprs(the_parfor.body, pir_rws_cb, state.LambdaVarInfo)
+    parfor_rws = CompilerTools.ReadWriteSet.from_exprs(the_parfor.body, pir_rws_cb, state.LambdaVarInfo, state.LambdaVarInfo)
 
     # Convert Set to Array
     in_array_names   = LHSVar[]
