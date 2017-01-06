@@ -543,13 +543,9 @@ type TransposePropagateState
     end
 end
 
-function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_level_number, is_top_level, read)
+function transpose_propagate(node::ANY, data :: TransposePropagateState, top_level_number, is_top_level, read)
     @dprintln(3,"transpose_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
-    @dprintln(3,"transpose_propagate node = ", node, " type = ", typeof(node))
-    if typeof(node) == Expr
-        @dprintln(3,"node.head = ", node.head)
-    end
-    ntype = typeof(node)
+    @dprintln(3,"transpose_propagate node = ", node)
 
     if is_top_level
         @dprintln(3,"transpose_propagate is_top_level")
@@ -573,72 +569,85 @@ function transpose_propagate(node :: ANY, data :: TransposePropagateState, top_l
                 end
             end
         end
-
-        if isa(node, LabelNode) || isa(node, GotoNode) || (isa(node, Expr) && is(node.head, :gotoifnot))
-            # Only transpose propagate within a basic block.  this is now a new basic block.
-            empty!(data.transpose_map)
-        elseif isAssignmentNode(node) && isCall(node.args[2])
-            @dprintln(3,"Is an assignment call node.")
-            lhs = toLHSVar(node.args[1])
-            rhs = node.args[2]
-            func = getCallFunction(rhs)
-            if func==GlobalRef(Base,:transpose!)
-                @dprintln(3,"transpose_propagate transpose! found.")
-                args = getCallArguments(rhs)
-                original_matrix = toLHSVar(args[2])
-                transpose_var1 = toLHSVar(args[1])
-                transpose_var2 = lhs
-                data.transpose_map[transpose_var1] = original_matrix
-                data.transpose_map[transpose_var2] = original_matrix
-            elseif func==GlobalRef(Base,:transpose)
-                @dprintln(3,"transpose_propagate transpose found.")
-                args = getCallArguments(rhs)
-                original_matrix = toLHSVar(args[1])
-                transpose_var = lhs
-                data.transpose_map[transpose_var] = original_matrix
-            elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
-                @dprintln(3,"transpose_propagate GEMM found.")
-                args = getCallArguments(rhs)
-                A = toLHSVar(args[4])
-                if haskey(data.transpose_map, A)
-                    args[4] = data.transpose_map[A]
-                    args[2] = 'T'
-                    @dprintln(3,"transpose_propagate GEMM replace transpose arg 1.")
-                end
-                B = toLHSVar(args[5])
-                if haskey(data.transpose_map, B)
-                    args[5] = data.transpose_map[B]
-                    args[3] = 'T'
-                    @dprintln(3,"transpose_propagate GEMM replace transpose arg 2.")
-                end
-                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
-            elseif func==GlobalRef(Base.LinAlg,:gemv!)
-                args = getCallArguments(rhs)
-                A = toLHSVar(args[3])
-                if haskey(data.transpose_map, A)
-                    args[3] = data.transpose_map[A]
-                    args[2] = 'T'
-                end
-                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
-            # replace arraysize() calls to the transposed matrix with original
-            elseif isBaseFunc(func, :arraysize)
-                args = getCallArguments(rhs)
-                if haskey(data.transpose_map, args[1])
-                    args[1] = data.transpose_map[args[1]]
-                    if args[2] ==1
-                        args[2] = 2
-                    elseif args[2] ==2
-                        args[2] = 1
-                    else
-                        throw("transpose_propagate matrix dim error")
-                    end
-                end
-                rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
-            end
-            return node
-        end
     end
+    return transpose_propagate_helper(node, data)
+end
 
+function transpose_propagate_helper(node::Expr, data::TransposePropagateState)
+
+    if is(node.head, :gotoifnot)
+        # Only transpose propagate within a basic block.  this is now a new basic block.
+        empty!(data.transpose_map)
+    elseif isAssignmentNode(node) && isCall(node.args[2])
+        @dprintln(3,"Is an assignment call node.")
+        lhs = toLHSVar(node.args[1])
+        rhs = node.args[2]
+        func = getCallFunction(rhs)
+        if func==GlobalRef(Base,:transpose!)
+            @dprintln(3,"transpose_propagate transpose! found.")
+            args = getCallArguments(rhs)
+            original_matrix = toLHSVar(args[2])
+            transpose_var1 = toLHSVar(args[1])
+            transpose_var2 = lhs
+            data.transpose_map[transpose_var1] = original_matrix
+            data.transpose_map[transpose_var2] = original_matrix
+        elseif func==GlobalRef(Base,:transpose)
+            @dprintln(3,"transpose_propagate transpose found.")
+            args = getCallArguments(rhs)
+            original_matrix = toLHSVar(args[1])
+            transpose_var = lhs
+            data.transpose_map[transpose_var] = original_matrix
+        elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+            @dprintln(3,"transpose_propagate GEMM found.")
+            args = getCallArguments(rhs)
+            A = toLHSVar(args[4])
+            if haskey(data.transpose_map, A)
+                args[4] = data.transpose_map[A]
+                args[2] = 'T'
+                @dprintln(3,"transpose_propagate GEMM replace transpose arg 1.")
+            end
+            B = toLHSVar(args[5])
+            if haskey(data.transpose_map, B)
+                args[5] = data.transpose_map[B]
+                args[3] = 'T'
+                @dprintln(3,"transpose_propagate GEMM replace transpose arg 2.")
+            end
+            rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
+        elseif func==GlobalRef(Base.LinAlg,:gemv!)
+            args = getCallArguments(rhs)
+            A = toLHSVar(args[3])
+            if haskey(data.transpose_map, A)
+                args[3] = data.transpose_map[A]
+                args[2] = 'T'
+            end
+            rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
+        # replace arraysize() calls to the transposed matrix with original
+        elseif isBaseFunc(func, :arraysize)
+            args = getCallArguments(rhs)
+            if haskey(data.transpose_map, args[1])
+                args[1] = data.transpose_map[args[1]]
+                if args[2] ==1
+                    args[2] = 2
+                elseif args[2] ==2
+                    args[2] = 1
+                else
+                    throw("transpose_propagate matrix dim error")
+                end
+            end
+            rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
+        end
+        return node
+    end
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function transpose_propagate_helper(node::Union{LabelNode,GotoNode}, data::TransposePropagateState)
+    # Only transpose propagate within a basic block.  this is now a new basic block.
+    empty!(data.transpose_map)
+    return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+function transpose_propagate_helper(node::ANY, data::TransposePropagateState)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
