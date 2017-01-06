@@ -2579,6 +2579,13 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
             # ignore 1st arg which is type
             new_args = normalize_args(state, env, args[2:end])
             expr = mk_expr(typ, head, new_fun, new_args...)
+        elseif fun.name==:ctranspose && !(typ.parameters[1]<:Complex)
+            # Julia doesn't translate ctranspose to regular transpose for
+            # UpperTriangular type so we fix it here
+            new_fun = GlobalRef(Base,:transpose)
+            new_args = normalize_args(state, env, args)
+            dprintln(env, "ctranspose replaced with transpose ")
+            expr = mk_expr(typ, head, new_fun, new_args...)
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
