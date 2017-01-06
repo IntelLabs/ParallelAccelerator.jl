@@ -1629,6 +1629,14 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
     elseif is(fun, :getindex) || is(fun, :setindex!)
         expr = translate_call_getsetindex(state,env_,typ,fun,args)
     elseif is(fun, :getfield) && length(args) == 2
+        # convert UpperTriangular variable coming from chol to regular matrix to simplify analysis (lasso example)
+        # UpperTriangular has extra index bounds checks but we don't fully check bounds now
+        if isa(args[1],LHSVar) && args[2]==QuoteNode(:data) && getType(args[1],state.linfo)<:UpperTriangular
+            new_type = getType(args[1],state.linfo).parameters[2]
+            updateTyp(state, args[1], new_type)
+            dprintln(env, "UpperTriangular replaced with ", new_type)
+            return args[1]
+        end
         # Shortcut range object access
         range_out::Union{RHSVar,Expr,Int} = translate_call_rangeshortcut(state, args[1],args[2])
         if range_out!=Expr(:null)
