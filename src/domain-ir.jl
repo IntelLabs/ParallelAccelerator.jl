@@ -1637,6 +1637,11 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             dprintln(env, "UpperTriangular replaced with ", new_type)
             return args[1]
         end
+        # fix checksquare (lasso example)
+        if args[1]==GlobalRef(Base,:LinAlg) && args[2]==QuoteNode(:checksquare)
+            dprintln(env, "fixing checksquare")
+            return GlobalRef(Base,:checksquare)
+        end
         # Shortcut range object access
         range_out::Union{RHSVar,Expr,Int} = translate_call_rangeshortcut(state, args[1],args[2])
         if range_out!=Expr(:null)
@@ -2586,6 +2591,9 @@ function translate_call_globalref(state, env, typ, head, oldfun::ANY, oldargs, f
             new_args = normalize_args(state, env, args)
             dprintln(env, "ctranspose replaced with transpose ")
             expr = mk_expr(typ, head, new_fun, new_args...)
+        elseif fun.name==:checksquare
+            # remove checksquare (lasso example)
+            return Expr(:meta)
         end
     elseif is(fun.mod, Base.Broadcast)
         if is(fun.name, :broadcast_shape)
