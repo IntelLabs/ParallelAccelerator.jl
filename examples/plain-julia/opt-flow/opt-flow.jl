@@ -192,7 +192,7 @@ Options:
         exit(-1)
     end
 
-    println("filenames = ", img_file_1, , " ", img_file_2)
+    println("filenames = ", img_file_1, " ", img_file_2)
     println("Image size: ", size(i1, 1), "x", size(i1, 2))
 
     tic()
