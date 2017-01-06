@@ -543,7 +543,7 @@ type TransposePropagateState
     end
 end
 
-function transpose_propagate(node::ANY, data :: TransposePropagateState, top_level_number, is_top_level, read)
+function transpose_propagate(node::ANY, data::TransposePropagateState, top_level_number, is_top_level, read)
     @dprintln(3,"transpose_propagate starting top_level_number = ", top_level_number, " is_top = ", is_top_level)
     @dprintln(3,"transpose_propagate node = ", node)
 
@@ -583,7 +583,7 @@ function transpose_propagate_helper(node::Expr, data::TransposePropagateState)
         lhs = toLHSVar(node.args[1])
         rhs = node.args[2]
         func = getCallFunction(rhs)
-        if func==GlobalRef(Base,:transpose!)
+        if isBaseFunc(func,:transpose!)
             @dprintln(3,"transpose_propagate transpose! found.")
             args = getCallArguments(rhs)
             original_matrix = toLHSVar(args[2])
@@ -591,13 +591,13 @@ function transpose_propagate_helper(node::Expr, data::TransposePropagateState)
             transpose_var2 = lhs
             data.transpose_map[transpose_var1] = original_matrix
             data.transpose_map[transpose_var2] = original_matrix
-        elseif func==GlobalRef(Base,:transpose)
+        elseif isBaseFunc(func,:transpose)
             @dprintln(3,"transpose_propagate transpose found.")
             args = getCallArguments(rhs)
             original_matrix = toLHSVar(args[1])
             transpose_var = lhs
             data.transpose_map[transpose_var] = original_matrix
-        elseif func==GlobalRef(Base.LinAlg,:gemm_wrapper!)
+        elseif isBaseFunc(func,:gemm_wrapper!)
             @dprintln(3,"transpose_propagate GEMM found.")
             args = getCallArguments(rhs)
             A = toLHSVar(args[4])
@@ -613,7 +613,7 @@ function transpose_propagate_helper(node::Expr, data::TransposePropagateState)
                 @dprintln(3,"transpose_propagate GEMM replace transpose arg 2.")
             end
             rhs.args = rhs.head == :invoke ? [ rhs.args[1:2]; args ] : [ rhs.args[1]; args ]
-        elseif func==GlobalRef(Base.LinAlg,:gemv!)
+        elseif isBaseFunc(func,:gemv!)
             args = getCallArguments(rhs)
             A = toLHSVar(args[3])
             if haskey(data.transpose_map, A)
@@ -649,6 +649,11 @@ end
 
 function transpose_propagate_helper(node::ANY, data::TransposePropagateState)
     return CompilerTools.AstWalker.ASTWALK_RECURSE
+end
+
+# don't recurse inside DomainLambda
+function transpose_propagate_helper(node::DomainLambda, data::TransposePropagateState)
+    return node
 end
 
 const max_unroll_size = 12
