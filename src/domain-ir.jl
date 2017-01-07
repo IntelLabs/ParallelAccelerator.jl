@@ -1635,6 +1635,9 @@ function translate_call_symbol(state, env, typ, head, oldfun::ANY, oldargs, fun:
             new_type = getType(args[1],state.linfo).parameters[2]
             updateTyp(state, args[1], new_type)
             dprintln(env, "UpperTriangular replaced with ", new_type)
+        end
+        if isa(args[1],LHSVar) && args[2]==QuoteNode(:data) && getType(args[1],state.linfo)<:Array
+            dprintln(env, "replacing getfield :data")
             return args[1]
         end
         # fix checksquare (lasso example)
