@@ -69,7 +69,7 @@ type LambdaGlobalData
     all_loop_exits::Set{Int}
     follow_set::Dict{Int,Int}
     cond_jump_targets::Set{Int}
-     
+
     function LambdaGlobalData()
         _j = Dict(
             Int8    =>  "int8_t",
@@ -569,7 +569,7 @@ function hasElse(head, follow, bbs)
 end
 
 function addConditional(conditionals, head, follow, bbs, follow_set, cond_jump_targets)
-    with_else = hasElse(head, follow, bbs) 
+    with_else = hasElse(head, follow, bbs)
     push!(conditionals, Conditional(head, follow, with_else))
     if !haskey(follow_set, follow)
         follow_set[follow] = 0
@@ -591,7 +591,7 @@ function getLoopInfo(body)
     end
 
     @dprintln(3, "getLoopInfo body = ", body)
-    cfg = CompilerTools.CFGs.from_lambda(body) 
+    cfg = CompilerTools.CFGs.from_lambda(body)
 
 #    intervals = CompilerTools.CFGs.computeIntervals(cfg)
 #    @dprintln(3, "intervals = ", intervals)
@@ -623,7 +623,7 @@ function getLoopInfo(body)
         end
 
         exit_bb = cfg.basic_blocks[first(li.exits)]
-        
+
         # If the exit node has more than one predecessor then we can't eliminate the label.
         if length(exit_bb.preds) > 1
             @dprintln(3, "Couldn't recreate loop since exit block has more than one predecessor.")
@@ -835,11 +835,12 @@ function from_assignment(args::Array{Any,1}, linfo)
 
     @dprintln(3,"external pattern match returned nothing")
 
+    # 0.4 legacy code not needed anymore
     # hack to convert triangular matrix output of cholesky
-    chol_match = pattern_match_assignment_chol(lhs, rhs, linfo)
-    if chol_match!=""
-        return chol_match
-    end
+    #chol_match = pattern_match_assignment_chol(lhs, rhs, linfo)
+    #if chol_match!=""
+    #    return chol_match
+    #end
 
     match_hvcat = from_assignment_match_hvcat(lhs, rhs, linfo)
     if match_hvcat!=""
@@ -1678,7 +1679,7 @@ function from_linenumbernode(ast, linfo)
 end
 
 function from_labelnode(ast, linfo)
-    if recreateLoops 
+    if recreateLoops
         if in(ast.label, lstate.exit_loop_set)
             return ""
         end
@@ -2021,7 +2022,7 @@ function from_gotonode(ast, linfo)
         s *= "}\nelse {"
     else
         s *= "goto " * "label" * string(labelId)
-    end  
+    end
     s
 end
 

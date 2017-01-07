@@ -252,8 +252,8 @@ function pattern_match_call_gemv(fun::ANY, C::ANY, tA::ANY, A::ANY, B::ANY,linfo
     return ""
 end
 
-function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
-    if fun.mod!=Base.LinAlg || fun.name!=:chol!
+function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, linfo)
+    if fun.mod!=Base.LinAlg || fun.name!=:chol
         return ""
     end
 
@@ -268,7 +268,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
         return ""
     end
 
-    s = ".data=$(from_expr(A,linfo)); "
+    s = "$(from_expr(A,linfo)); "
 
     n = from_arraysize(A,1,linfo)
 
@@ -277,7 +277,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
 
 
     LAPACK_COL_MAJOR = 102
-    uplo = vUL==Val{:U} ? 'U' : 'L'
+    uplo = 'U' #vUL==Val{:U} ? 'U' : 'L'
 
 
     if mkl_lib!="" || openblas_lib!="" || sys_blas==1
@@ -292,28 +292,29 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, vUL::Type, linfo)
     return s
 end
 
-function pattern_match_call_chol(fun::ANY, C::ANY, tA::ANY, linfo)
+function pattern_match_call_chol(fun::ANY, C::ANY, linfo)
     return ""
 end
 
-function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
-    call = ""
-    if isCall(rhs) || isInvoke(rhs)
-        fun = getCallFunction(rhs)
-        args = getCallArguments(rhs)
-        if length(args) == 2
-            call *= pattern_match_call_chol(fun,args[1],args[2],linfo)
-        end
-    end
-    if call!=""
-        return from_expr(lhs,linfo)*call
-    end
-    return ""
-end
-
-function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
-    return ""
-end
+# # 0.4 legacy code not needed anymore
+# function pattern_match_assignment_chol(lhs::LHSVar, rhs::Expr, linfo)
+#     call = ""
+#     if isCall(rhs) || isInvoke(rhs)
+#         fun = getCallFunction(rhs)
+#         args = getCallArguments(rhs)
+#         if length(args) == 2
+#             call *= pattern_match_call_chol(fun,args[1],args[2],linfo)
+#         end
+#     end
+#     if call!=""
+#         return from_expr(lhs,linfo)*call
+#     end
+#     return ""
+# end
+#
+# function pattern_match_assignment_chol(lhs::ANY, rhs::ANY, linfo)
+#     return ""
+# end
 
 function pattern_match_assignment_transpose(lhs::LHSVar, rhs::Expr, linfo)
     @dprintln(3, "pattern_match_assignment_transpose ", lhs, " ", rhs)
@@ -557,6 +558,7 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
         s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
         s *= pattern_match_call_set_zeros(ast[1],ast[2],linfo)
+        s *= pattern_match_call_chol(ast[1],ast[2],linfo)
     end
 
     if s=="" && (length(ast)==3) # randn! call has 3 args
