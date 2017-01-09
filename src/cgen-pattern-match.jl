@@ -538,16 +538,17 @@ end
 
 pattern_match_call_subarray_lastdim(func::ANY, arr, index, linfo) = ""
 
-function pattern_match_call_set_zeros(func::GlobalRef, arr::RHSVar, linfo)
+function pattern_match_call_set_zeros(func::GlobalRef, arr::RHSVar, size, linfo)
     if func==GlobalRef(ParallelAccelerator.API,:set_zeros)
         carr = from_expr(toLHSVar(arr), linfo)
         ctyp = toCtype(eltype(getSymType(arr,linfo)))
-        return "memset($carr.data, 0, sizeof($ctyp)*$carr.ARRAYLEN())"
+        csize = from_expr(size, linfo)
+        return "memset($carr.data, 0, sizeof($ctyp)*$csize)"
     end
     return ""
 end
 
-pattern_match_call_set_zeros(func::ANY, arr::ANY, linfo) = ""
+pattern_match_call_set_zeros(func::ANY, arr::ANY, size, linfo) = ""
 
 function pattern_match_call(ast::Array{Any, 1},linfo)
     @dprintln(3,"pattern matching ",ast)
@@ -557,12 +558,12 @@ function pattern_match_call(ast::Array{Any, 1},linfo)
         s = pattern_match_call_throw(ast[1],ast[2],linfo)
         s *= pattern_match_call_math(ast[1],ast[2],linfo)
         s *= pattern_match_call_linalgtypeof(ast[1],ast[2],linfo)
-        s *= pattern_match_call_set_zeros(ast[1],ast[2],linfo)
         s *= pattern_match_call_chol(ast[1],ast[2],linfo)
     end
 
     if s=="" && (length(ast)==3) # randn! call has 3 args
         #sa*= pattern_match_call_powersq(ast[1],ast[2], ast[3])
+        s *= pattern_match_call_set_zeros(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_reshape(ast[1],ast[2],ast[3],linfo)
         s *= pattern_match_call_transpose(linfo, ast...)
         s *= pattern_match_call_vecnorm(ast[1],ast[2],ast[3],linfo)
