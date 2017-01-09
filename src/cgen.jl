@@ -2356,7 +2356,7 @@ function from_parforstart(args, linfo)
     @dprintln(3, "rdsprolog = ", rdsprolog)
     @dprintln(3, "rdsclause = ", rdsclause)
 
-    if isDistributedMode() && lstate.ompdepth == 1 && rdsclause != ""
+    if isDistributedMode() && lstate.ompdepth == 1 && parfor.force_simd
         s *= "$rdsprolog #pragma simd $rdsclause\n"
         s *= loopheaders
         return s

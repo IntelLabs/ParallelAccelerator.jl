@@ -375,8 +375,9 @@ type PIRParForAst
     arrays_written_past_index :: Set{LHSVar}
     arrays_read_past_index :: Set{LHSVar}
 
+    force_simd::Bool # generate pragma simd in backend
     function PIRParForAst(fi, b, pre, hoisted, nests, red, post, orig, t, unique, wrote_past_index, read_past_index)
-        new(fi, b, pre, hoisted, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index)
+        new(fi, b, pre, hoisted, nests, red, post, orig, [t], unique, Dict{Symbol,Symbol}(), nothing, wrote_past_index, read_past_index, false)
     end
 end
 
@@ -419,6 +420,7 @@ type PIRParForStartEnd
     reductions :: Array{PIRReduction,1}     # holds information about the reductions
     instruction_count_expr
     private_vars :: Array{RHSVar,1}
+    force_simd::Bool
 end
 
 """
