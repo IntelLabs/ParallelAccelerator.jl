@@ -35,7 +35,8 @@ using CompilerTools.Helper
 using ..DomainIR
 using CompilerTools.AliasAnalysis
 import ..ParallelAccelerator
-if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+#if ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE
+if VERSION >= v"0.5"
 using Base.Threads
 end
 
@@ -78,8 +79,6 @@ function getLoopPrivateFlags()
         return ISPRIVATEPARFORLOOP
     end
 end
-
-unique_num = 1
 
 """
 Ad-hoc support to mimic closures when we want the arguments to be processed during AstWalk.
@@ -973,14 +972,26 @@ function nonExactRangeSearch(ranges :: Array{DimensionSelector,1}, range_correla
 end
 
 
-"""
-If we need to generate a name and make sure it is unique then include an monotonically increasing number.
-"""
-function get_unique_num()
-    ret = unique_num
-    global unique_num = unique_num + 1
-    ret
+if VERSION >= v"0.5"
+    unique_num = Atomic{Int}(1)
+    """
+    If we need to generate a name and make sure it is unique then include an monotonically increasing number.
+    """
+    function get_unique_num()
+        atomic_add!(unique_num, 1)
+    end
+else
+    unique_num = 1
+    """
+    If we need to generate a name and make sure it is unique then include an monotonically increasing number.
+    """
+    function get_unique_num()
+        ret = unique_num
+        global unique_num = unique_num + 1
+        ret
+    end
 end
+
 
 # ===============================================================================================================================
 
