@@ -1634,6 +1634,66 @@ function replaceConstArraysizes(node::ANY, state::ReplaceConstArraysizesData, to
 end
 
 """
+Replace arraysize calls in range correlations like 1:arraysize() which are generated
+from expressions like A[:,i] (kmeans_gen case).
+"""
+function replaceConstArraysizesRangeCorrelations(range_correlations::Dict{Array{DimensionSelector,1},Int}, state::ReplaceConstArraysizesData)
+    @dprintln(3,"replaceConstArraysizesRangeCorrelations ", keys(range_correlations))
+    for a in keys(range_correlations)
+        for r in a
+            @dprintln(3,"replaceConstArraysizesRangeCorrelations ", r)
+            replaceConstArraysizesRange(r, state)
+        end
+    end
+    nothing
+end
+
+function replaceConstArraysizesRange(r::RangeData, state::ReplaceConstArraysizesData)
+    @dprintln(3,"replaceConstArraysizesRangeCorrelations ", r.exprs.last_val)
+    r.exprs.last_val = replaceConstArraysizesRangeNode(r.exprs.last_val, state)
+end
+
+replaceConstArraysizesRange(r::ANY, state::ReplaceConstArraysizesData) = nothing
+
+function replaceConstArraysizesRangeNode(node::Expr, state::ReplaceConstArraysizesData)
+    @dprintln(3,"replaceConstArraysizesRangeCorrelations RangeExprs last_val ", node)
+    if !isCall(node) return node end
+    func = getCallFunction(node)
+    if !isBaseFunc(func,:arraysize) && !isBaseFunc(func,:arraylen)
+        return node
+    end
+    @dprintln(3,"replaceConstArraysizesRangeCorrelations size call found", node)
+    args = getCallArguments(node)
+    arr = toLHSVar(args[1])
+    # get array sizes if available, there could be multiple
+    size_syms_arr = get_array_correlation_symbols(arr, state)
+    available_variables = getInputParametersAsLHSVar(state.linfo)
+    if isBaseFunc(func, :arraysize)
+        dim_ind::Int = args[2] # dimension number
+        for size_syms in size_syms_arr
+            res = size_syms[dim_ind]
+            if isa(res,Int) || in(res,available_variables)
+                @dprintln(3, "arraysize() in range replaced: ", node," res ", res)
+                return res
+            end
+        end
+    end
+
+    if isBaseFunc(func, :arraylen)
+        for size_syms in size_syms_arr
+            if mapreduce(x-> isa(x,Int) || in(x,available_variables), &, size_syms)
+                res = mk_mult_int_expr(size_syms)
+                @dprintln(3, "arraylen() in range replaced: ", node," res ", res)
+                return res
+            end
+        end
+    end
+    return node
+end
+
+replaceConstArraysizesRangeNode(node::ANY, state::ReplaceConstArraysizesData) = node
+
+"""
 Implements one of the main ParallelIR passes to remove assertEqShape AST nodes from the body if they are statically known to be in the same equivalence class.
 """
 function removeAssertEqShape(args :: Array{Any,1}, state)

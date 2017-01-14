@@ -3158,9 +3158,12 @@ function genEquivalenceClasses(linfo, body, new_vars)
     AstWalk(body, create_equivalence_classes, new_vars)
     # Using equivalence class info, replace Base.arraysize() calls for constant size arrays
     # A separate pass is better since this doesn't have to worry about statements being top level
-    AstWalk(body, replaceConstArraysizes, ReplaceConstArraysizesData(
+    # replace range correlations if possible since they can be 1:arraysize()
+    ra_data = ReplaceConstArraysizesData(
       new_vars.block_lives, new_vars.LambdaVarInfo, new_vars.array_length_correlation,
-        new_vars.symbol_array_correlation))
+        new_vars.symbol_array_correlation)
+    replaceConstArraysizesRangeCorrelations(new_vars.range_correlation, ra_data)
+    AstWalk(body, replaceConstArraysizes, ra_data)
 end
 
 """
