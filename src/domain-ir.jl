@@ -671,6 +671,11 @@ function from_range(rhs::Expr)
         start = rhs.args[2]
         step  = 1 # FIXME: could be wrong here!
         final = rhs.args[3].args[3]
+    elseif is(rhs.head, :new) && isUnitRange(rhs.args[1]) &&
+        (isa(rhs.args[2],LHSVar) || isa(rhs.args[2],Number)) && (isa(rhs.args[3],LHSVar) || isa(rhs.args[3],Number))
+        start = rhs.args[2]
+        step  = 1
+        final = rhs.args[3]
     elseif is(rhs.head, :new) && isStepRange(rhs.args[1])
         assert(length(rhs.args) == 4)
         start = rhs.args[2]
