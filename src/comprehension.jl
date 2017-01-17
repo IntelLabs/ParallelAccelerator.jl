@@ -44,6 +44,7 @@ function comprehension_to_cartesianarray(ast)
     args = ast.args[2:end]
     ndim = length(args)
   end
+  body = CompilerTools.AstWalker.AstWalk(body, process_node, nothing)
   params = Array(Symbol, ndim)
   indices = Array(Symbol, ndim)
   ranges = Array(Any, ndim)
