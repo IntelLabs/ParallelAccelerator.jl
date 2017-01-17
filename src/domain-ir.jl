@@ -2763,7 +2763,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :line)
         # skip
     elseif is(head, :new)
-        # skip?
+        ast.args = [ args[1], normalize_args(state, env, args[2:end])... ]
+        return ast
     elseif is(head, :boundscheck)
         # skip or remove?
         return nothing
