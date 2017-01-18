@@ -44,7 +44,7 @@ function copy(x::MT)
 end
 
 @inline function indmin{T<:Number}(A::DenseArray{T})
-  m = MT(A[1], 1)
+  m = MT(typemax(T), 1)
   cartesianmapreduce((length(A),),
     (x -> begin
             if m.val > x.val
@@ -64,7 +64,7 @@ end
 end
 
 @inline function indmax{T<:Number}(A::DenseArray{T})
-  m = MT(A[1], 1)
+  m = MT(typemin(T), 1)
   cartesianmapreduce((length(A),),
     (x -> begin
             if m.val < x.val
