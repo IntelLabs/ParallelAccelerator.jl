@@ -144,6 +144,7 @@ openblas_lib = ""
 sys_blas = 0
 NERSC = 0
 USE_DAAL = 0
+
 #config file overrides backend_compiler variable
 if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
@@ -609,6 +610,7 @@ function getLoopInfo(body)
     loop_info = CompilerTools.Loops.compute_dom_loops(cfg)
     im_doms = CompilerTools.CFGs.compute_immediate_dominators(loop_info.dom_dict)
     @dprintln(3, "immediate_dominators = ", im_doms)
+    @dprintln(3, "dominators = ", loop_info.dom_dict)
 
     for li in loop_info.loops
         @dprintln(3, "Loop Info = ", li)
@@ -666,26 +668,13 @@ function getLoopInfo(body)
             @dprintln(3, "2-way conditional in unaccounted")
             found = false
             best_follow = CompilerTools.CFGs.CFG_EXIT_BLOCK
+            # Scan the blocks in reverse order.
+            # If we find a block that inverse dominates the unaccounted (to_check) block then we
+            # have a potential follow block.  There may be other lesser blocks that also inverse
+            # dominate so we keep going until the block we are working with is the same as to_check.
             for j = length(cfg.depth_first_numbering):-1:1
                 potential_follow = cfg.depth_first_numbering[j]
                 @dprintln(3, "2-way conditional checking potential follow ", potential_follow)
-if false
-                if im_doms[potential_follow] == to_check
-                    @dprintln(3, "2-way conditional to_check is immediate dominator of potential_follow")
-                    pfbb = cfg.basic_blocks[potential_follow]
-                    if length(pfbb.preds) >= 2
-                        @dprintln(3, "2-way conditional found follow")
-                        addConditional(conditionals, to_check, potential_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
-                        for unr in unresolved
-                            @dprintln(3, "2-way conditional adding unresolved head ", unr)
-                            addConditional(conditionals, unr, potential_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
-                        end
-                        unresolved = Set{Int}()
-                    end
-                    found = true
-                    break
-                end
-else
                 if potential_follow == to_check
                     @dprintln(5,"Found follow == to_check.")
                     break
@@ -694,11 +683,28 @@ else
                     @dprintln(3,"Found new best_follow.")
                     best_follow = potential_follow
                 end
-end
             end
+            # If we found the closest block that inverse dominates to_check then add this combination as a conditional.
+            # to_check is the conditional head and best_follow is the block that follows the conditional.
             if best_follow != CompilerTools.CFGs.CFG_EXIT_BLOCK
+                @dprintln(3, "2-way conditional found follow.  head = ", to_check, " follow = ", best_follow)
                 addConditional(conditionals, to_check, best_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
                 found = true
+if false
+                for one_unresolved in unresolved
+                    if one_unresolved != best_follow 
+                        if in(to_check, loop_info.dom_dict[one_unresolved])
+                            @dprintln(3, "2-way conditional processing unresolved.  head = ", one_unresolved, " follow = ", best_follow)
+                            addConditional(conditionals, one_unresolved, best_follow, cfg.basic_blocks, follow_set, cond_jump_targets)
+                        else
+                            @dprintln(3, "2-way conditional skipping unresolved since to_check doesn't dominate unresolved.")
+                        end
+                    else
+                        @dprintln(3, "2-way conditional skipping unresolved since head and follow are equal.")
+                    end
+                end
+end
+                unresolved = Set{Int}()
             end
             if !found
                 @dprintln(3, "2-way conditional couldn't find follow....adding unresolved ", to_check)
@@ -720,6 +726,38 @@ end
     @dprintln(3, "all_loop_exits = ", lstate.all_loop_exits)
     @dprintln(3, "follow_set = ", lstate.follow_set)
     @dprintln(3, "cond_jump_targets = ", lstate.cond_jump_targets)
+end
+
+type CGen_boolean_and
+    lhs
+    rhs
+end
+
+function mergeGotoIfNot(body :: Expr)
+    assert(body.head == :body)
+    new_body = []
+
+    @dprintln(3, "Before mergeGotoIfNot. ", body)
+    i = 1
+    while i <= length(body.args) 
+        if isa(body.args[i], Expr) && body.args[i].head == :gotoifnot
+            labelId = body.args[i].args[2]
+            while ((i+1) <= length(body.args)) && 
+                  isa(body.args[i+1], Expr) && 
+                  body.args[i+1].head == :gotoifnot && 
+                  body.args[i+1].args[2] == labelId
+                body.args[i+1].args[1] = CGen_boolean_and(body.args[i].args[1], body.args[i+1].args[1])
+                i += 1
+            end
+        end
+        push!(new_body, body.args[i])
+        i += 1
+    end
+
+    body.args = new_body
+    @dprintln(3, "After mergeGotoIfNot. ", body)
+
+    return body
 end
 
 function from_lambda(linfo :: LambdaVarInfo, body)
@@ -744,6 +782,10 @@ function from_lambda(linfo :: LambdaVarInfo, body)
             lstate.globalUDTs[t] = 1
             push!(lstate.globalUDTsOrder, t)
         end
+    end
+
+    if recreateConds
+        body = mergeGotoIfNot(body)
     end
 
     getLoopInfo(body)
@@ -2031,7 +2073,7 @@ function from_gotoifnot(args,linfo)
     labelId = args[2]
     s = ""
     @dprintln(3,"Compiling gotoifnot: ", exp, " ", typeof(exp))
-    if isa(exp, Expr) || isa(exp, RHSVar)
+    if isa(exp, Expr) || isa(exp, RHSVar) || isa(exp, CGen_boolean_and)
         if recreateLoops && in(labelId, lstate.exit_loop_set)
             s *= "if (!(" * from_expr(exp,linfo) * ")) break"
         elseif recreateConds && in(labelId, lstate.cond_jump_targets)
@@ -2504,6 +2546,10 @@ function from_parallel_loopend(args,linfo)
         s *= "}\n"
     end
     s
+end
+
+function from_expr(ast::CGen_boolean_and, linfo)
+    "((" * from_expr(ast.lhs, linfo) * ") && (" * from_expr(ast.rhs, linfo) * "))"
 end
 
 function from_expr(ast::Expr, linfo)
