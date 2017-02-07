@@ -1060,7 +1060,7 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             else
                 throw(string("arraysize AST node didn't have 2 or 3 arguments."))
             end
-        elseif isBaseFunc(fun, :reshape)
+        elseif isBaseFunc(fun, :reshape) || fun==GlobalRef(ParallelAccelerator.API,:reshape)
             # rhs.args[2] is the array to be reshaped, lhs is the result, rhs.args[3] is a tuple with new shape
             if haskey(state.tuple_table, args[2])
                 @dprintln(3,"reshape tuple found in tuple_table = ", state.tuple_table[args[2]])

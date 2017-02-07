@@ -2,24 +2,24 @@
 Copyright (c) 2015, Intel Corporation
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, 
+- Redistributions of source code must retain the above copyright notice,
   this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice, 
-  this list of conditions and the following disclaimer in the documentation 
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
   and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 =#
 
@@ -30,15 +30,15 @@ import Base: call
 
 eval(x) = Core.eval(API, x)
 
-@noinline function setindex!{T}(A::DenseArray{T}, args...) 
+@noinline function setindex!{T}(A::DenseArray{T}, args...)
   Base.setindex!(A, args...)
 end
 
-@inline function setindex!(A, args...) 
+@inline function setindex!(A, args...)
   Base.setindex!(A, args...)
 end
 
-@noinline function getindex{T}(A::DenseArray{T}, args...) 
+@noinline function getindex{T}(A::DenseArray{T}, args...)
   Base.getindex(A, args...)
 end
 
@@ -46,15 +46,24 @@ end
   T[ X[i] for i=1:length(X) ]
 end
 
-@inline function getindex(A, args...) 
+@inline function getindex(A, args...)
   Base.getindex(A, args...)
+end
+
+@noinline function reshape{T}(A::DenseArray{T}, args)
+  Base.reshape(A, args...)
+end
+
+# inline reshape to version with dims as tuple for easier handling in compiler
+@inline function reshape{T}(A::DenseArray{T}, args...)
+  reshape(A, args)
 end
 
 # Unary operators/functions
 const unary_map_operators = Symbol[
     :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
-    :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh, 
+    :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
     :abs, :erf, :isnan]
 
 const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
@@ -65,7 +74,7 @@ const unary_operators = vcat(unary_map_operators, reduce_operators, Symbol[:copy
 const comparison_map_operators = Symbol[ :.>, :.<, :.<=, :.>=, :.== ]
 
 const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
-    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :.^, 
+    :-, :+, :.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :.^,
     :div, :mod, :rem, :&, :|, :$, :min, :max])
 
 const binary_operators = binary_map_operators
@@ -272,8 +281,8 @@ end
     Base.broadcast(f, a...)
 end
 
-operators = Set(vcat(unary_operators, binary_operators, 
-    Symbol[:map, :map!, :reduce, :broadcast, :setindex!, :getindex]))
+operators = Set(vcat(unary_operators, binary_operators,
+    Symbol[:map, :map!, :reduce, :broadcast, :setindex!, :getindex, :reshape]))
 
 for opr in operators
   @eval export $opr
@@ -294,7 +303,7 @@ macro par(args...)
     if !isa(loop,Expr) || !is(loop.head,:for)
         error("malformed @par loop")
     end
-    if !isa(loop.args[1], Expr) 
+    if !isa(loop.args[1], Expr)
         error("maltformed for loop")
     end
     for i = 1:na-1
@@ -341,4 +350,3 @@ enableLib()
 include("api-capture.jl")
 
 end
-

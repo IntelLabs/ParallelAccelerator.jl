@@ -128,7 +128,7 @@ end
 
 function pattern_match_call_reshape(fun, inp::Any, shape::RHSVar, linfo)
     res = ""
-    if isBaseFunc(fun, :reshape)
+    if isBaseFunc(fun, :reshape) || fun==GlobalRef(ParallelAccelerator.API,:reshape)
         typ = getSymType(shape, linfo)
         if istupletyp(typ)
             dim = length(typ.parameters)
