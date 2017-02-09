@@ -711,22 +711,31 @@ function from_assignment_match_vcat(lhs, rhs::Expr, linfo)
         args = getCallArguments(rhs)
         for a in args
             atyp = getType(a, linfo)
-            @assert atyp<:Array && ndims(atyp)==1 "CGen only supports vcat of 1D arrays"
+            @assert atyp<:Array && (ndims(atyp)==1 || ndims(atyp)==2) "CGen only supports vcat of 1D and 2D arrays"
         end
+        num_dims = ndims(getType(args[1], linfo))
         typ = eltype(getType(args[1], linfo))
         ctyp = toCtype(typ)
         clhs = from_expr(lhs,linfo)
         # get total size of array: size(a1)+size(a2)+...
         csize = "("* mapfoldl(a->from_arraysize(a,1,linfo),(a,b)->"$a+$b",args) *")"
+        c_num_cols = "1"
+        if num_dims==2
+            c_num_cols = from_arraysize(args[1],2,linfo)
+            csize *= ", $c_num_cols"
+        end
         s *= "{\n"
-        s *= "$clhs = j2c_array<$ctyp>::new_j2c_array_1d(NULL, $csize);\n"
-        s *= "  int64_t __cgen_curr_ind = 0;\n"
+        s *= "$clhs = j2c_array<$ctyp>::new_j2c_array_$(num_dims)d(NULL, $csize);\n"
+        s *= "int64_t __cgen_curr_ind = 0;\n"
+        s *= "for(int64_t j=0; j<$c_num_cols; j++){\n"
         for arr in args
             carr = from_expr(arr, linfo)
-            s *= "for(int64_t i=0; i<$(from_arraysize(arr,1,linfo)); i++){\n"
-            s *= "  $clhs.data[__cgen_curr_ind++] = $carr.data[i];\n"
+            col_size = from_arraysize(arr,1,linfo)
+            s *= "for(int64_t i=0; i<$col_size; i++){\n"
+            s *= "  $clhs.data[__cgen_curr_ind++] = $carr.data[j*$col_size+i];\n"
             s *= "}\n"
         end
+        s *= "}\n"
         s *= "}\n"
     end
     return s

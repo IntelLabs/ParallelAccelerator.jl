@@ -33,7 +33,7 @@ using ParallelAccelerator
 #using CompilerTools
 #CompilerTools.OptFramework.set_debug_level(4)
 
-@acc function cat1(a::Array{Float64,1},b::Array{Float64,1})
+@acc function cat1(a,b)
     C = vcat(a,b)
     return C
 end
@@ -41,10 +41,16 @@ end
 function test1()
     return cat1([1.,2.,3.],[4.,5.,6.]) 
 end
+
+function test2()
+    return cat1([1. 2. 3.; 6. 7. 8.],[4. 5. 6.]) 
+end
+
 end
 
 using Base.Test
 println("Testing vcat...")
 @test_approx_eq VCatTest.test1() [1.,2.,3.,4.,5.,6.]
+@test_approx_eq VCatTest.test2() [1. 2. 3.; 6. 7. 8.; 4. 5. 6.]
 println("Done testing vcat.")
 
