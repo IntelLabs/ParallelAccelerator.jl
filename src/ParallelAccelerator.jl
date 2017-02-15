@@ -180,6 +180,10 @@ Base.reinit_stdio()
 
 include("$current_file")
 
+# This is to force the target of CGen's atexit hook to transitively compile so that
+# compilation will not be attempted atexit time during Julia's build process.
+ParallelAccelerator.CGen.CGen_finalize()
+
 module __UserimgDummyModule__
 
 using ParallelAccelerator
