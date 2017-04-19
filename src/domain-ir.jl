@@ -545,14 +545,15 @@ function setExternalAliasCB(cb::Function)
 end
 
 const mapSym = vcat(API.unary_map_operators, API.binary_map_operators)
+const mapOpr = map(x -> API.rename_if_needed(x), mapSym)
 
 const mapVal = Symbol[ begin s = string(x); startswith(s, '.') ? Symbol(s[2:end]) : x end for x in mapSym]
 
 # * / are not point wise. it becomes point wise only when one argument is scalar.
-const pointWiseOps = setdiff(Set{Symbol}(mapSym), Set{Symbol}([:*, :/]))
+const pointWiseOps = setdiff(Set{Symbol}(mapOpr), Set{Symbol}([:pa_api_mul, :pa_api_div]))
 
 const compareOpSet = Set{Symbol}(API.comparison_map_operators)
-const mapOps = Dict{Symbol,Symbol}(zip(mapSym, mapVal))
+const mapOps = Dict{Symbol,Symbol}(zip(mapOpr, mapVal))
 # legacy v0.3
 # symbols that when lifted up to array level should be changed.
 # const liftOps = Dict{Symbol,Symbol}(zip(Symbol[:<=, :>=, :<, :(==), :>, :+,:-,:*,:/], Symbol[:.<=, :.>=, :.<, :.==, :.>, :.+, :.-, :.*, :./]))
@@ -738,10 +739,6 @@ end
 # check if a given function can be considered as a map operation.
 # Some operations depends on types.
 function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
-    #if haskey(rename_back, fun)
-    #    fun = rename_back(fun)
-    #end
-
     if !haskey(mapOps, fun)
         return false
     elseif in(fun, pointWiseOps)
@@ -1035,12 +1032,12 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
  (:lambda, {param, meta@{localvars, types, freevars}, body})
 """
 function from_lambda(state, env, expr, closure = nothing)
+    @dprintln(3,"expr = ", expr, " type = ", typeof(expr))
     local env_ = nextEnv(env)
     linfo, body = lambdaToLambdaVarInfo(expr)
     cfg = CompilerTools.CFGs.from_lambda(body)
     body = getBody(CompilerTools.CFGs.createFunctionBody(cfg), getReturnType(linfo))
     @dprintln(2,"from_lambda typeof(body) = ", typeof(body))
-    @dprintln(3,"expr = ", expr)
 
     assert(isa(body, Expr) && is(body.head, :body))
     defs = Dict{LHSVar,Any}()
@@ -1894,15 +1891,19 @@ Return the result AST with a modified return statement, namely, return
 is changed to Expr(:tuple, retvals...)
 """
 function get_ast_for_lambda(state, env, func::Union{Function,LambdaInfo,TypedVar,Expr}, argstyp)
+    dprintln(env, "get_ast_for_lambda func = ", func, " type = ", typeof(func), " argstyp = ", argstyp)
     if isa(func, TypedVar) && func.typ <: Function
+        dprintln(env, "func is TypedVar and func.typ is Function")
         # function/closure support is changed in julia 0.5
         lambda = func.typ #.name.primary
     elseif isa(func, Expr) && is(func.head, :new)
+        dprintln(env, "func is Expr and func.head is :new")
         lambda = func.args[1]
         if isa(lambda, GlobalRef)
             lambda = getfield(lambda.mod, lambda.name)
         end
     else
+        dprintln(env, "lambda = func")
         lambda = func
     end
     dprintln(env, "typeof(lambda) = ", typeof(lambda))
@@ -2026,7 +2027,9 @@ function get_lambda_for_arg(state, env, func::GlobalRef, argstyp)
     # m = code_typed(getfield(func.mod, func.name), tuple(argstyp...))
     #dprintln(env,"get_lambda_for_arg: ", func, " methods=", m, " argstyp=", argstyp)
     #assert(length(m) > 0)
-    get_ast_for_lambda(state, env, getfield(func.mod, func.name), argstyp)
+    gf = getfield(func.mod, func.name)
+    dprintln(env, "get_lambda_for_arg GlobalRef: func = ", func, " getfield = ", gf, " type = ", typeof(gf))
+    get_ast_for_lambda(state, env, gf, argstyp)
 end
 
 # broadcast support for Julia's semantics:

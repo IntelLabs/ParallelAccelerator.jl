@@ -89,8 +89,15 @@ const rename_back = Dict{Symbol,Symbol}(zip(rename_op_to,rename_op_from))
 
 function rename_if_needed(f)
     if haskey(rename_forward, f)
-        #return rename_forward[f]
+        return rename_forward[f]
+    else
         return f
+    end
+end
+
+function rename_back_if_needed(f)
+    if haskey(rename_back, f)
+        return rename_back[f]
     else
         return f
     end
