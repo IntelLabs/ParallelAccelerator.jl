@@ -6,6 +6,7 @@ import CompilerTools
 import ..API
 import ..operators
 import ..binary_operators
+import ..rename_if_needed
 import ParallelAccelerator
 
 import CompilerTools.DebugMsg
@@ -81,7 +82,6 @@ function process_node(node::Expr, state, top_level_number, is_top_level, read)
         rhs)),
         Expr(:call, GlobalRef(API, :setindex!), lhs, tmpvar, idx...),
         tmpvar]
-
     elseif haskey(ref_assign_map, head) 
         # x += ...
         lhs = node.args[1]
@@ -110,7 +110,8 @@ end
 
 
 function process_operator(node::Expr, opr::Symbol)
-    api_opr = GlobalRef(API, opr)
+    rename_opr = rename_if_needed(opr)
+    api_opr = GlobalRef(API, rename_opr)
     if in(opr, operators)
         node.args[1] = api_opr
     end

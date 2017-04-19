@@ -258,7 +258,7 @@ include("domain-ir.jl")
 include("parallel-ir.jl")
 include("j2c-array.jl")
 include("cgen.jl")
-include("callgraph.jl")
+#include("callgraph.jl")
 include("comprehension.jl")
 include("driver.jl")
 

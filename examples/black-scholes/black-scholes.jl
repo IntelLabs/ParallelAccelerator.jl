@@ -26,17 +26,20 @@ THE POSSIBILITY OF SUCH DAMAGE.
 using ParallelAccelerator
 using DocOpt
 
-#ParallelAccelerator.DomainIR.set_debug_level(3)
-#ParallelAccelerator.ParallelIR.set_debug_level(4)
-#using CompilerTools
-#CompilerTools.OptFramework.set_debug_level(3)
+ParallelAccelerator.DomainIR.set_debug_level(3)
+ParallelAccelerator.ParallelIR.set_debug_level(4)
+ParallelAccelerator.CGen.set_debug_level(4)
+using CompilerTools
+CompilerTools.OptFramework.set_debug_level(3)
+CompilerTools.LambdaHandling.set_debug_level(3)
+CompilerTools.LivenessAnalysis.set_debug_level(3)
 
 @acc begin
 
-@inline function cndf2(in)
-    out = 0.5 .+ 0.5 .* erf(0.707106781 .* in)
-    return out
-end
+#@inline function cndf2(in)
+#    out = 0.5 .+ 0.5 .* erf(0.707106781 .* in)
+#    return out
+#end
 
 function blackscholes(sptprice, strike, rate, volatility, time)
     logterm = log10(sptprice ./ strike)
@@ -44,8 +47,10 @@ function blackscholes(sptprice, strike, rate, volatility, time)
     den = volatility .* sqrt(time)
     d1 = (((rate .+ powterm) .* time) .+ logterm) ./ den
     d2 = d1 .- den
-    NofXd1 = cndf2(d1)
-    NofXd2 = cndf2(d2)
+    #NofXd1 = cndf2(d1)
+    #NofXd2 = cndf2(d2)
+    NofXd1 = d1
+    NofXd2 = d2
     futureValue = strike .* exp(- rate .* time)
     c1 = futureValue .* NofXd2
     call = sptprice .* NofXd1 .- c1

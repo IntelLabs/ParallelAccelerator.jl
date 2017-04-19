@@ -79,27 +79,43 @@ const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
 
 const binary_operators = binary_map_operators
 
+const rename_op_from = Symbol[ :-, :+, :*, :/, :.-, :.+, :.*, :./, :.>, :.<, :.<=, :.>=, :.==, :.\, :.%, :.<<, :.>>, :.^, :&, :|, :$ ]
+const rename_op_to = Symbol[ :pa_api_sub, :pa_api_add, :pa_api_mul, :pa_api_div, :pa_api_elem_sub, :pa_api_elem_add, :pa_api_elem_mul, :pa_api_elem_div, :pa_api_elem_gt, :pa_api_elem_lt, :pa_api_elem_lte, :pa_api_elem_gte, :pa_api_elem_equal, :pa_api_elem_back, :pa_api_elem_mod, :pa_api_elem_lshift, :pa_api_elem_rshift, :pa_api_elem_carat, :pa_api_ampersand, :pa_api_pipe, :pa_api_dollar ]
+const rename_forward = Dict{Symbol,Symbol}(zip(rename_op_from,rename_op_to))
+const rename_back = Dict{Symbol,Symbol}(zip(rename_op_to,rename_op_from))
+
 @inline sum(A::DenseArray{Bool}) = sum(1 .* A)
 @inline sum(A::DenseArray{Bool}, x::Int) = sum(1 .* A, x)
 
+function rename_if_needed(f)
+    if haskey(rename_forward, f)
+        #return rename_forward[f]
+        return f
+    else
+        return f
+    end
+end
+
 # reduction across a dimension
 for f in reduce_operators
+    nf = rename_if_needed(f)
     @eval begin
-        @noinline function ($f){T<:Number}(A::DenseArray{T}, x::Int)
+        @noinline function ($nf){T<:Number}(A::DenseArray{T}, x::Int)
             (Base.$f)(A, x)
         end
     end
 end
 
 for f in unary_operators
+    nf = rename_if_needed(f)
     @eval begin
-        @noinline function ($f){T<:Number}(A::DenseArray{T})
+        @noinline function ($nf){T<:Number}(A::DenseArray{T})
             (Base.$f)(A)
         end
     end
     if !(in(f, binary_operators))
         @eval begin
-            @inline function ($f)(A...)
+            @inline function ($nf)(A...)
                 (Base.$f)(A...)
             end
         end
@@ -107,31 +123,33 @@ for f in unary_operators
 end
 
 for f in unary_map_operators
+    nf = rename_if_needed(f)
     @eval begin
-        @noinline function ($f){T<:Number}(A::T)
+        @noinline function ($nf){T<:Number}(A::T)
             (Base.$f)(A)
         end
     end
 end
 
 for f in binary_operators
+    nf = rename_if_needed(f)
     @eval begin
-        @noinline function ($f){T1<:Number,T2<:Number}(A::T1, B::DenseArray{T2})
+        @noinline function ($nf){T1<:Number,T2<:Number}(A::T1, B::DenseArray{T2})
             (Base.$f)(A, B)
         end
-        @noinline function ($f){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
+        @noinline function ($nf){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
             (Base.$f)(B, A)
         end
     end
     if f != :* && f != :/
         @eval begin
-            @noinline function ($f){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
+            @noinline function ($nf){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
                 (Base.$f)(A, B)
             end
         end
     end
     @eval begin
-        @inline function ($f)(args...)
+        @inline function ($nf)(args...)
             (Base.$f)(args...)
         end
     end
@@ -285,7 +303,7 @@ operators = Set(vcat(unary_operators, binary_operators,
     Symbol[:map, :map!, :reduce, :broadcast, :setindex!, :getindex, :reshape]))
 
 for opr in operators
-  @eval export $opr
+    @eval export $opr
 end
 
 include("api-stencil.jl")

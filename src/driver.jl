@@ -34,7 +34,7 @@ using CompilerTools.Helper
 
 import ..ParallelAccelerator, ..Comprehension, ..DomainIR, ..ParallelIR, ..CGen, ..API
 import ..dprint, ..dprintln, ..@dprint, ..@dprintln, ..DEBUG_LVL
-import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
+#import ..CallGraph.extractStaticCallGraph, ..CallGraph.use_extract_static_call_graph
 using ..J2CArray
 
 # MODE for accelerate
@@ -157,12 +157,12 @@ function expandParMacro(func, ast, sig)
 end
 
 function extractCallGraph(func :: GlobalRef, ast, signature :: Tuple)
-    if use_extract_static_call_graph != 0
-      callgraph = extractStaticCallGraph(func, ast, signature)
-      @dprintln(3,"Callgraph:")
-      @dprintln(3,callgraph)
-      #throw(string("stop after cb"))
-    end
+#    if use_extract_static_call_graph != 0
+#      callgraph = extractStaticCallGraph(func, ast, signature)
+#      @dprintln(3,"Callgraph:")
+#      @dprintln(3,callgraph)
+#      #throw(string("stop after cb"))
+#    end
     return ast
 end
 

@@ -331,13 +331,13 @@ function makeCaptured(state, val, inner_linfo=nothing)
 end
 
 type IRState
-    linfo  :: LambdaVarInfo
-    defs   :: Dict{LHSVar, Any}  # stores local definition of LHS = RHS
+    linfo   :: LambdaVarInfo
+    defs    :: Dict{LHSVar, Any} # stores local definition of LHS = RHS
     escDict :: Dict{Symbol, Any} # mapping function closure fieldname to escaping variable
     boxtyps :: Dict{LHSVar, Any} # finer types for those have Box type
     nonNegs :: Set{LHSVar}       # remember single-assigned variables which are non-negative
-    stmts  :: Array{Any, 1}
-    parent :: Union{Void, IRState}
+    stmts   :: Array{Any, 1}
+    parent  :: Union{Void, IRState}
 end
 
 emptyState() = IRState(LambdaVarInfo(), Dict{LHSVar,Any}(), Dict{Symbol,RHSVar}(), Dict{LHSVar,Any}(), Set{LHSVar}(), Any[], nothing)
@@ -481,7 +481,10 @@ end
 Look up a definition of a variable throughout nested states until a definition is found.
 Return nothing If none is found.
 """
-function lookupDefInAllScopes(state::IRState, s::RHSVar)
+function lookupDefInAllScopes(state::IRState, s::Union{Symbol,RHSVar})
+    if isa(s, Symbol)
+        @dprintln(2,"lookupDefInAllScopes s = ", s)
+    end
     def = lookupDef(state, s)
     if is(def, nothing) && !is(state.parent, nothing)
         return lookupDefInAllScopes(state.parent, s)
@@ -735,6 +738,10 @@ end
 # check if a given function can be considered as a map operation.
 # Some operations depends on types.
 function verifyMapOps(state, fun :: Symbol, args :: Array{Any, 1})
+    #if haskey(rename_back, fun)
+    #    fun = rename_back(fun)
+    #end
+
     if !haskey(mapOps, fun)
         return false
     elseif in(fun, pointWiseOps)
@@ -1245,13 +1252,22 @@ function from_assignment(state, env, expr::Expr)
     return mk_expr(typ, head, lhs, rhs)
 end
 
+function from_foreigncall(state::IRState, env::IREnv, expr::Expr)
+    local env_ = nextEnv(env)
+
+    expr.args[2:end] = normalize_args(state, env, expr.args[2:end])
+    return expr
+end
+
 function from_call(state::IRState, env::IREnv, expr::Expr)
     local env_ = nextEnv(env)
     local fun = getCallFunction(expr)
     local args = getCallArguments(expr)
     local typ = expr.typ
-    # change all :invoke to :call, since :invoke doesn't pass inference
-    expr.head = :call
+    if expr.head == :invoke
+        # change all :invoke to :call, since :invoke doesn't pass inference
+        expr.head = :call
+    end
     expr.args = [fun; args]
     if in(fun, funcIgnoreList)
         dprintln(env,"from_call: fun=", fun, " in ignore list")
@@ -1291,6 +1307,10 @@ function translate_call(state, env, typ, head, oldfun::ANY, oldargs, fun::ANY, a
     mk_expr(typ, head, oldfun, oldargs...)
 end
 
+if VERSION >= v"0.6.0-pre"
+import CompilerTools.LambdaHandling.LambdaInfo
+end
+
 # turn Exprs in args into variable names, and put their definition into state
 # anything of void type in the argument is omitted in return value.
 function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
@@ -1299,7 +1319,14 @@ function normalize_args(state::IRState, env::IREnv, args::Array{Any,1})
     j = 0
     for i = 1:length(in_args)
         local arg = in_args[i]
-        if isa(arg, Expr) && arg.typ == Void
+        @dprintln(3, "normalize_args arg ", i, " is ", arg)
+        if isa(arg, Expr)
+            @dprintln(3, "is Expr with typ = ", arg.typ)
+        end
+        if isa(arg, Expr) && arg.typ == Any
+            j = j + 1
+            out_args[j] = in_args[i]
+        elseif isa(arg, Expr) && arg.typ == Void
             # do not produce new assignment for Void values
             @dprintln(3, "normalize_args got Void args[", i, "] = ", arg)
             emitStmt(state, arg)
@@ -2746,6 +2773,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
         return from_return(state, env, ast)
     elseif is(head, :call) || is(head, :invoke)
         return from_call(state, env, ast)
+    elseif is(head, :foreigncall)
+        return from_foreigncall(state, env, ast)
         # TODO: catch domain IR result here
     # legacy v0.3
     #elseif is(head, :call1)
@@ -2794,6 +2823,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :inbounds)
         # skip
     elseif is(head, :meta)
+        # skip
+    elseif is(head, :llvmcall)
         # skip
     elseif is(head, :static_parameter)
         p = args[1]

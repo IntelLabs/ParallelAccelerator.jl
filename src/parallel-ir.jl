@@ -2373,6 +2373,10 @@ function hasNoSideEffects(node :: Union{Symbol, LHSVar, RHSVar, GlobalRef, DataT
     return true
 end
 
+if VERSION >= v"0.6.0-pre"
+import CompilerTools.LambdaHandling.LambdaInfo
+end
+
 function hasNoSideEffects(node :: Union{QuoteNode, LambdaInfo, Number, Function})
     return true
 end
@@ -2663,6 +2667,22 @@ function from_call(ast::Expr, depth, state)
     args = from_exprs(args, depth+1, state)
 
     return ast.head == :invoke ? [ast.args[1]; fun; args] : [fun; args]
+end
+
+"""
+Process a foreigncall AST node.
+"""
+function from_foreigncall(ast::Expr, depth, state)
+    fun  = getCallFunction(ast)
+    args = getCallArguments(ast)
+    @dprintln(2,"from_foreigncall fun = ", fun, " typeof fun = ", typeof(fun))
+    if length(args) > 0
+        @dprintln(2,"first arg = ",args[1], " type = ", typeof(args[1]))
+    end
+    # Recursively process the arguments to the call.
+    args = from_exprs(args, depth+1, state)
+
+    return [fun; args]
 end
 
 """
@@ -3664,6 +3684,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     elseif head == :invoke || head == :call || head == :call1
         args = from_call(ast, depth, state)
         # TODO: catch domain IR result here
+    elseif head == :foreigncall
+        args = from_foreigncall(ast, depth, state)
     elseif head == :line
         # remove line numbers
         return []
@@ -3754,6 +3776,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     elseif head == :static_parameter
         # skip
     elseif head == :type_goto
+        # skip
+    elseif head == :llvmcall
         # skip
     elseif head in DomainIR.exprHeadIgnoreList
         # other packages like HPAT can generate new nodes like :alloc, :join
