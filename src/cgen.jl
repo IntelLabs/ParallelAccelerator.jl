@@ -272,7 +272,7 @@ _Intrinsics = [
         "sdiv_int", "udiv_int", "srem_int", "urem_int", "smod_int", "ctlz_int",
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "neg_float_fast", "add_float_fast", "sub_float_fast", "mul_float_fast", "div_float_fast",
-        "rem_float", "sqrt_llvm", "fma_float", "muladd_float",
+        "rem_float", "sqrt_llvm", "sqrt_llvm_fast", "fma_float", "muladd_float",
         "le_float", "ne_float", "eq_float", "copysign_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
         "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
@@ -1211,6 +1211,55 @@ function from_arraysize(arr, dim::Int, linfo)
 end
 
 
+function from_foreigncall(args, linfo)
+    @dprintln(3,"foreigncall args:")
+    @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
+    @dprintln(3,"return type: ", args[2])
+    @dprintln(3,"input types tuple: ", args[3])
+    @dprintln(3,"inputs tuple: ", args[4:end])
+    for i in 1:length(args)
+        @dprintln(3,"arg ", i, " = ", args[i])
+    end
+    @dprintln(3,"End of foreigncall args")
+    fun = args[1]
+    if isInlineable(fun, args, linfo)
+        return from_inlineable(fun, args, linfo)
+    end
+
+    if isa(fun, QuoteNode)
+        s = from_symbol(fun, linfo)
+#    elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
+#        s = canonicalize(string(fun.args[2]))
+#        @dprintln(3,"ccall target: ", s)
+    elseif isa(fun, Tuple) && length(fun) == 2
+        s = canonicalize(string(fun[1]))
+        @dprintln(3,"ccall target: ", s)
+    else
+        throw("Invalid ccall format...")
+    end
+    s *= "("
+#    numInputs = length(args[3].args)-1
+    argsStart = 4
+    argsEnd = length(args)
+    if contains(s, "cblas") && contains(s, "gemm")
+        if mkl_lib!=""
+            s *= "(CBLAS_LAYOUT) $(from_expr(args[4], linfo)), "
+        else
+            s *= "(CBLAS_ORDER) $(from_expr(args[4], linfo)), "
+        end
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[6], linfo)), "
+        s *= "(CBLAS_TRANSPOSE) $(from_expr(args[8], linfo)), "
+        argsStart = 10
+    end
+    to_fold = args[argsStart:2:end]
+    if length(to_fold) > 0
+        s *= mapfoldl(x->from_expr(x,linfo), (a, b)-> "$a, $b", to_fold)
+    end
+    s *= ")"
+    @dprintln(3,"from_ccall: ", s)
+    s
+end
+
 function from_ccall(args, linfo)
     @dprintln(3,"ccall args:")
     @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
@@ -1231,11 +1280,14 @@ function from_ccall(args, linfo)
     elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
         s = canonicalize(string(fun.args[2]))
         @dprintln(3,"ccall target: ", s)
+    elseif isa(fun, Tuple) && length(fun) == 2
+        s = canonicalize(string(fun[1]))
+        @dprintln(3,"ccall target: ", s)
     else
         throw("Invalid ccall format...")
     end
     s *= "("
-    numInputs = length(args[3].args)-1
+#    numInputs = length(args[3].args)-1
     argsStart = 4
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
@@ -1633,7 +1685,7 @@ function from_intrinsic(f :: ANY, args, linfo)
         return "-($(from_expr(args[1], linfo)))"
     elseif intr == "abs_float"
         return "fabs(" * from_expr(args[1], linfo) * ")"
-    elseif intr == "sqrt_llvm"
+    elseif intr == "sqrt_llvm" || intr == "sqrt_llvm_fast"
         return "sqrt(" * from_expr(args[1], linfo) * ")"
     elseif intr == "sub_float" || intr == "sub_float_fast"
         return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
@@ -2599,6 +2651,12 @@ function from_expr(ast::Expr, linfo)
         fun  = getCallFunction(ast)
         args = getCallArguments(ast)
         s *= from_call([fun; args], linfo)
+
+    elseif head == :foreigncall
+        @dprintln(3,"Compiling foreigncall")
+        fun  = getCallFunction(ast)
+        args = getCallArguments(ast)
+        s *= from_foreigncall([fun; args], linfo)
 
     elseif head == :call1
         @dprintln(3,"Compiling call1")
