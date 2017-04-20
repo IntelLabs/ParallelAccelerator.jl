@@ -44,6 +44,7 @@ import ..H5SizeArr_t
 import ..SizeArr_t
 import .._accelerate
 import ..show_backtrace
+using Base.FastMath
 
 # uncomment this line when using Debug.jl
 #using Debug
@@ -1850,7 +1851,14 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     #end
     typs = Type[ typeOfOpr(state, arg) for arg in args ]
     elmtyps = Type[ isArrayType(t) ? elmTypOf(t) : t for t in typs ]
-    opr = GlobalRef(Base, mapOps[fun])
+    scalar_op = mapOps[fun]
+    if haskey(Base.FastMath.fast_op, scalar_op)
+        dprintln(env,"translate_call_mapop: found op ", scalar_op, " in fastmath.")
+        scalar_op = Base.FastMath.fast_op[scalar_op]
+        opr = GlobalRef(Base.FastMath, scalar_op)
+    else
+        opr = GlobalRef(Base, scalar_op)
+    end
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
     # f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
     (body, linfo) = get_lambda_for_arg(state, env, opr, elmtyps)
