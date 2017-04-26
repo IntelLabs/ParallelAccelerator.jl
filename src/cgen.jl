@@ -1990,14 +1990,14 @@ function from_call(ast::Array{Any, 1},linfo)
 
     if isInlineable(fun, args, linfo)
         @dprintln(3,"Doing with inlining ", fun, "(", args, ")")
-        fs = from_inlineable(fun, args,linfo)
+        fs = from_inlineable(fun, args, linfo)
         return fs
     end
     @dprintln(3,"Not inlinable")
     if isa(mod, Module)
-        funStr = "_" * from_expr(GlobalRef(mod, fun),linfo)
+        funStr = "_" * from_expr(GlobalRef(mod, fun), linfo)
     else
-        funStr = "_" * from_expr(fun,linfo)
+        funStr = "_" * from_expr(fun, linfo)
     end
 
     if isBaseFunc(fun, :println) || isBaseFunc(fun, :print)
@@ -3400,20 +3400,20 @@ function insert(func::Symbol, name, typs)
     insert(target, name, typs)
 end
 
+funcToLambdaInfo(func, typs) = ParallelAccelerator.Driver.code_typed(func, typs)
+
 function insert(func::Function, name, typs)
     global lstate
-    #ast = code_typed(func, typs; optimize=true)
-    ast = ParallelAccelerator.Driver.code_typed(func, typs)
+    ast = funcToLambdaInfo(func, typs)
     if !isFunctionCompiled(name,typs)
-        @dprintln(3, "Adding function ", name, " to worklist.")
+        @dprintln(3, "Adding function ", name, " to worklist. ", ast, " ", typeof(ast))
         push!(lstate.worklist, (ast, name, typs))
     end
 end
 
 function insert(func::IntrinsicFunction, name, typs)
     global lstate
-    #ast = code_typed(func, typs; optimize=true)
-    ast = ParallelAccelerator.Driver.code_typed(func, typs)
+    ast = funcToLambdaInfo(func, typs)
     if !isFunctionCompiled(name,typs)
         @dprintln(3, "Adding intrinsic function ", name, " to worklist.")
         push!(lstate.worklist, (ast, name, typs))
@@ -3437,23 +3437,21 @@ function from_worklist()
         empty!(lstate.symboltable)
         empty!(lstate.ompprivatelist)
         if isa(a, Symbol)
-            a = ParallelAccelerator.Driver.code_typed(a, typs)
+            @dprintln(3,"a is a Symbol, calling code_typed")
+            a = funcToLambdaInfo(a, typs)
         end
-        if length(a) != 1
-            error("Error: expect 1 AST for ", a, " with signature ", typs, " but got: ", length(a))
-        else
-            @dprintln(3,"============ Compiling AST for ", fname, " ============")
-            fi, si = from_root_nonentry(a[1], fname, typs, Dict{DataType,Int64}())
-            @dprintln(3,"============== C++ after compiling ", fname, " ===========")
-            @dprintln(3,si)
-            @dprintln(3,"============== End of C++ for ", fname, " ===========")
-            @dprintln(3,"Adding ", (fname,typs), " to compiledFunctions")
-            @dprintln(3,lstate.compiledfunctions)
-            @dprintln(3,"Added ", (fname,typs), " to compiledFunctions")
-            @dprintln(3,lstate.compiledfunctions)
-            f *= fi
-            s *= si
-        end
+
+		@dprintln(3,"============ Compiling AST for ", fname, " ============")
+		fi, si = from_root_nonentry(a, fname, typs, Dict{DataType,Int64}())
+		@dprintln(3,"============== C++ after compiling ", fname, " ===========")
+		@dprintln(3,si)
+		@dprintln(3,"============== End of C++ for ", fname, " ===========")
+		@dprintln(3,"Adding ", (fname,typs), " to compiledFunctions")
+		@dprintln(3,lstate.compiledfunctions)
+		@dprintln(3,"Added ", (fname,typs), " to compiledFunctions")
+		@dprintln(3,lstate.compiledfunctions)
+		f *= fi
+		s *= si
     end
     f, s
 end

@@ -409,14 +409,21 @@ end
 function code_typed(func, signature)
   global alreadyOptimized
   if haskey(alreadyOptimized, (func, signature))
-    Any[ alreadyOptimized[(func, signature)] ]
+    @dprintln(3, "func ", func, " is already optimized")
+    return alreadyOptimized[(func, signature)]
   else
     @dprintln(3, "func ", func, " is not already optimized")
     mod = Base.function_module(func, signature)
     name = Base.function_name(func)
     func = eval(CompilerTools.OptFramework.findTargetFunc(mod, name))
     @dprintln(3, "target func is ", func)
-    Base.code_typed(func, signature)
+    ast = Base.code_typed(func, signature)[1]
+    if VERSION >= v"0.6.0-pre"
+        t1 = ast
+        @dprintln(3, "t1 = ", t1, " ", typeof(t1))
+        ast = LambdaInfo(func, signature, t1)
+    end
+    return ast
   end
 end
 
@@ -450,7 +457,7 @@ function accelerate(func::Function, signature::Tuple, level = TOPLEVEL)
   func_ref = GlobalRef(cur_module, Base.function_name(func))
 
   local out
-  ast = code_typed(func, signature)[1]
+  ast = ParallelAccelerator.Driver.code_typed(func, signature)
   global alreadyOptimized 
   global seenByMacroPass
 

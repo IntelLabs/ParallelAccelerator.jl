@@ -776,6 +776,7 @@ function specialize(state::IRState, args::Array{Any,1}, typs::Array{Type,1}, f::
     #local pre_body = Array(Any, 0)
     local repl_dict = Dict{LHSVar,Any}()
     @dprintln(2, "specialize typs = ", typs)
+    @dprintln(2, "specialize args = ", args)
     @dprintln(2, "specialize old_params = ", old_params)
     for i = 1:len
         local typ = typs[i]
@@ -1843,6 +1844,7 @@ end
 
 # operator mapping over inputs
 function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
+    dprintln(env,"translate_call_mapop: ", fun, " ", args)
     # TODO: check for unboxed array type
     args = normalize_args(state, env, args)
     #etyp = elmTypOf(typ)
@@ -2717,6 +2719,7 @@ end
 Entry point of DomainIR optimization pass.
 """
 function from_expr(cur_module :: Module, ast)
+    @dprintln(3, "Entry point from_expr ", typeof(ast), " ", ast)
     assert(isfunctionhead(ast))
     linfo, body = from_expr_tiebreak(emptyState(), newEnv(cur_module), ast)
     return linfo, body

@@ -459,7 +459,7 @@ function generate_instr_count(function_name, signature)
     @dprintln(2,"generate_instr_count ", function_name, " ", signature)
     state = eic_state(0, true, nothing)
     # Try to estimate the instruction count for the other function.
-    AstWalk(ct[1], estimateInstrCount, state)
+    AstWalk(ct, estimateInstrCount, state)
     @dprintln(2,"instruction count estimate for parfor = ", state)
     # If so then cache the result.
     if state.fully_analyzed
@@ -1802,7 +1802,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3,"task_func = ", task_func)
 
     # DON'T DELETE.  Forces function into existence.
-    unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)[1]
+    unused_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
     @dprintln(3, "unused_ct = ", unused_ct, " type = ", typeof(unused_ct))
     newLambdaVarInfo.orig_info = unused_ct
 
@@ -1937,18 +1937,13 @@ function parforToTask(parfor_index, bb_statements, body, state)
 
     if DEBUG_LVL >= 3
         task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
-        if length(task_func_ct) == 0
-            println("Error getting task func code.\n")
-        else
-            task_func_ct = task_func_ct[1]
-            println("Task func code for ", task_func)
-            println(task_func_ct)    
-            println("code = ", code)
-            println(CompilerTools.LambdaHandling.getBody(code))   
-            println(newLambdaVarInfo)   
+        println("Task func code for ", task_func)
+        println(task_func_ct)    
+        println("code = ", code)
+        println(CompilerTools.LambdaHandling.getBody(code))   
+        println(newLambdaVarInfo)   
 
-            ParallelAccelerator.Driver.code_llvm(task_func, all_arg_type)
-        end
+        ParallelAccelerator.Driver.code_llvm(task_func, all_arg_type)
     end
 #throw(string("stop here"))
 

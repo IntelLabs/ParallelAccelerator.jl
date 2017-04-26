@@ -218,8 +218,8 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
                 @dprintln(3,"method = ", method)
             end
 
-            ct = code_typed(func, call_sig_arg_tuple)
-            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct[1], call_sig_arg_tuple))
+            ct = ParallelAccelerator.Driver.code_typed(func, call_sig_arg_tuple)
+            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct, call_sig_arg_tuple))
             @dprintln(3,state.functionsToProcess)
         end
         push!(state.calls, CallInfo(fs, possibleGlobals, possibleArrayParams))
@@ -238,8 +238,8 @@ function processFuncCall(state, func_expr, call_sig_arg_tuple, possibleGlobals, 
                 @dprintln(3,"method = ", method)
             end
 
-            ct = code_typed(func, call_sig_arg_tuple)
-            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct[1], call_sig_arg_tuple))
+            ct = ParallelAccelerator.Driver.code_typed(func, call_sig_arg_tuple)
+            enqueue!(state.functionsToProcess, FunctionInfo(fgr, ct, call_sig_arg_tuple))
             @dprintln(3,state.functionsToProcess)
         end
         push!(state.calls, CallInfo(fs, possibleGlobals, possibleArrayParams))
@@ -521,10 +521,10 @@ function extractStaticCallGraph(func :: GlobalRef, ast :: Expr, sig :: Tuple)
 #                @dprintln(3,"Skipping function not found. ", the_func, " ", Base.function_name(the_func), " ", the_sig)
 #                continue
 #            end
-#            ct = code_typed(the_func, the_sig)
-#            @dprintln(4,ct[1])
+#            ct = ParallelAccelerator.Driver.code_typed(the_func, the_sig)
+#            @dprintln(4,ct)
 #            state = extractStaticCallGraphState(cur_func_sig, mapNameFuncInfo, functionsToProcess)
-#            AstWalker.AstWalk(ct[1], extractStaticCallGraphWalk, state)
+#            AstWalker.AstWalk(ct, extractStaticCallGraphWalk, state)
 #            @dprintln(4,state)
 #            mapNameFuncInfo[cur_func_sig] = FunctionInfo(cur_func_sig, state.calls, state.array_params_set_or_aliased, !state.cant_analyze && length(state.globalWrites) == 0, true, state.LambdaVarInfo)
 #        elseif ftyp == LambdaInfo
