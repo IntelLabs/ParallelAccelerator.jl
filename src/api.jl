@@ -28,6 +28,10 @@ baremodule API
 using Base
 import Base: call
 
+if VERSION >= v"0.6.0-pre"
+using SpecialFunctions
+end
+
 eval(x) = Core.eval(API, x)
 
 @noinline function setindex!{T}(A::DenseArray{T}, args...)
@@ -60,11 +64,15 @@ end
 end
 
 # Unary operators/functions
-const unary_map_operators = Symbol[
+const unary_map_operators_normal = Symbol[
     :-, :+, :acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
     :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
-    :abs, :erf, :isnan]
+    :abs, :isnan]
+
+const special_functions = Symbol[:erf]
+
+const unary_map_operators = vcat(unary_map_operators_normal, special_functions)
 
 const reduce_operators = Symbol[:sum, :prod, :minimum, :maximum, :any, :all]
 
@@ -129,11 +137,29 @@ for f in unary_operators
     end
 end
 
-for f in unary_map_operators
+for f in unary_map_operators_normal
     nf = rename_if_needed(f)
     @eval begin
         @noinline function ($nf){T<:Number}(A::T)
             (Base.$f)(A)
+        end
+    end
+end
+
+for f in special_functions
+    nf = rename_if_needed(f)
+    if VERSION >= v"0.6.0-pre"
+        println("mapping special_functions for ", nf)
+        @eval begin
+            @noinline function ($nf){T<:Number}(A::T)
+                (SpecialFunctions.$f)(A)
+            end
+        end
+    else
+        @eval begin
+            @noinline function ($nf){T<:Number}(A::T)
+                (Base.$f)(A)
+            end
         end
     end
 end
