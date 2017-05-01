@@ -2811,8 +2811,7 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
     elseif is(head, :line)
         # skip
     elseif is(head, :new)
-        ast.args = [ args[1], normalize_args(state, env, args[2:end])... ]
-        return ast
+        return TypedExpr(typ, :new, args[1], normalize_args(state, env, args[2:end])...)
     elseif is(head, :boundscheck)
         # skip or remove?
         return nothing
