@@ -605,7 +605,7 @@ function isbitmask(typ::ANY)
 end
 
 function isUnitRange(typ::DataType)
-    is(typ.name, UnitRange.name)
+    typ <: UnitRange
 end
 
 function isUnitRange(typ::ANY)
@@ -613,7 +613,7 @@ function isUnitRange(typ::ANY)
 end
 
 function isStepRange(typ::DataType)
-    is(typ.name, StepRange.name)
+    typ <: StepRange
 end
 
 function isStepRange(typ::ANY)
