@@ -1863,7 +1863,10 @@ function translate_call_mapop(state, env, typ, fun::Symbol, args::Array{Any,1})
     end
     dprintln(env,"translate_call_mapop: before specialize, opr=", opr, " args=", args, " typs=", typs)
     # f = DomainLambda(elmtyps, Type[etyp], params->Any[Expr(:tuple, box_ty(etyp, Expr(:call, opr, params...)))], state.linfo)
-    (body, linfo) = get_lambda_for_arg(state, env, opr, elmtyps)
+    # (body, linfo) = get_lambda_for_arg(state, env, opr, elmtyps)
+    func_args = [ Symbol(string("x", i)) for i = 1:length(elmtyps) ]
+    func = eval(Expr(:(->), Expr(:tuple, func_args...), Expr(:call, opr, func_args...)))
+    (body, linfo) = get_ast_for_lambda(state, env, func, elmtyps)
     if isa(typ, Union)
         dim = 1
         for x in typ.types
