@@ -149,7 +149,6 @@ end
 for f in special_functions
     nf = rename_if_needed(f)
     if VERSION >= v"0.6.0-pre"
-        println("mapping special_functions for ", nf)
         @eval begin
             @noinline function ($nf){T<:Number}(A::T)
                 (SpecialFunctions.$f)(A)
