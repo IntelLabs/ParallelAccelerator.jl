@@ -280,7 +280,7 @@ _Intrinsics = [
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int",
         "checked_smul", "checked_sdiv_int", "checked_udiv_int", "checked_urem_int", "flipsign_int", "check_top_bit", "shl_int", "ctpop_int",
-        "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm",
+        "checked_trunc_uint", "checked_trunc_sint", "checked_fptosi", "powi_llvm", "llvm.powi.f64", "llvm.powf.f64",
         "ashr_int", "lshr_int", "shl_int",
         "cttz_int",
         "zext_int", "sext_int"
@@ -1269,14 +1269,25 @@ function from_foreigncall(args, linfo, call_ret_typ)
     @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
     @dprintln(3,"return type: ", args[2])
     @dprintln(3,"input types tuple: ", args[3])
-    @dprintln(3,"inputs tuple: ", args[4:end])
+    long_inputs = args[4:end]
+    @dprintln(3,"inputs tuple: ", long_inputs)
+
+    short_inputs = []
+    for i = 1:length(long_inputs)
+        if i%2 == 1
+            push!(short_inputs, long_inputs[i])
+        end
+    end
+    @dprintln(3,"short_inputs: ", short_inputs)
+
     for i in 1:length(args)
         @dprintln(3,"arg ", i, " = ", args[i])
     end
     @dprintln(3,"End of foreigncall args")
     fun = args[1]
     if isInlineable(fun, args, linfo)
-        return from_inlineable(fun, args, linfo, call_ret_typ)
+        @dprintln(3,"isInlineable")
+        return from_inlineable(fun, short_inputs, linfo, call_ret_typ)
     end
 
     if isa(fun, QuoteNode)
@@ -1775,9 +1786,9 @@ function from_intrinsic(f :: ANY, args, linfo, call_ret_typ)
         return "round(" * from_expr(args[1], linfo) * ")"
     elseif f == :(===)
         return "(" * from_expr(args[1], linfo) * " == " * from_expr(args[2], linfo) * ")"
-    elseif intr == "pow" || intr == "powi_llvm"
+    elseif intr == "pow" || intr == "powi_llvm" || intr == "llvm.powi.f64"
         return "pow(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
-    elseif intr == "powf" || intr == "powf_llvm"
+    elseif intr == "powf" || intr == "powf_llvm" || intr == "llvm.powf.f64"
         return "powf(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
     elseif intr == "nan_dom_err"
         @dprintln(3,"nan_dom_err is: ")
