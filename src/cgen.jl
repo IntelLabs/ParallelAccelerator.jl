@@ -1272,13 +1272,13 @@ function from_foreigncall(args, linfo, call_ret_typ)
     long_inputs = args[4:end]
     @dprintln(3,"inputs tuple: ", long_inputs)
 
-    short_inputs = []
-    for i = 1:length(long_inputs)
-        if i%2 == 1
-            push!(short_inputs, long_inputs[i])
-        end
-    end
-    @dprintln(3,"short_inputs: ", short_inputs)
+#    short_inputs = []
+#    for i = 1:length(long_inputs)
+#        if i%2 == 1
+#            push!(short_inputs, long_inputs[i])
+#        end
+#    end
+#    @dprintln(3,"short_inputs: ", short_inputs)
 
     for i in 1:length(args)
         @dprintln(3,"arg ", i, " = ", args[i])
@@ -1287,7 +1287,7 @@ function from_foreigncall(args, linfo, call_ret_typ)
     fun = args[1]
     if isInlineable(fun, args, linfo)
         @dprintln(3,"isInlineable")
-        return from_inlineable(fun, short_inputs, linfo, call_ret_typ)
+        return from_inlineable(fun, args, linfo, call_ret_typ)
     end
 
     if isa(fun, QuoteNode)
@@ -1786,10 +1786,14 @@ function from_intrinsic(f :: ANY, args, linfo, call_ret_typ)
         return "round(" * from_expr(args[1], linfo) * ")"
     elseif f == :(===)
         return "(" * from_expr(args[1], linfo) * " == " * from_expr(args[2], linfo) * ")"
-    elseif intr == "pow" || intr == "powi_llvm" || intr == "llvm.powi.f64"
+    elseif intr == "pow" || intr == "powi_llvm"
         return "pow(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
-    elseif intr == "powf" || intr == "powf_llvm" || intr == "llvm.powf.f64"
+    elseif intr == "llvm.powi.f64"
+        return "pow(" * from_expr(args[4], linfo) * ", " * from_expr(args[6], linfo) * ")"
+    elseif intr == "powf" || intr == "powf_llvm"
         return "powf(" * from_expr(args[1], linfo) * ", " * from_expr(args[2], linfo) * ")"
+    elseif intr == "llvm.powf.f64"
+        return "powf(" * from_expr(args[4], linfo) * ", " * from_expr(args[6], linfo) * ")"
     elseif intr == "nan_dom_err"
         @dprintln(3,"nan_dom_err is: ")
         for i in 1:length(args)
