@@ -426,6 +426,59 @@ function from_includes()
 
     s *= "unsigned main_count = 0;\n"
 
+    if VERSION >= v"0.6.0-pre"
+        s *= "
+              template <typename R, typename T, typename U>
+              R checked_sadd_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x + y;
+                  if ((ret.f0 > x) != (y > 0)) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n 
+              template <typename R, typename T, typename U>
+              R checked_ssub_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x - y;
+                  if ((ret.f0 < x) != (y > 0)) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n
+              template <typename R, typename T, typename U>
+              R checked_smul_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x * y;
+                  if ((x != 0) && (ret.f0 / x != b)) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n
+              template <typename R, typename T, typename U>
+              R checked_uadd_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x + y;
+                  if ((ret.f0 < x) || (ret.f0 < y)) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n
+              template <typename R, typename T, typename U>
+              R checked_usub_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x - y;
+                  if (y > x) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n
+              template <typename R, typename T, typename U>
+              R checked_umul_int(T x, U y) {
+                  R ret;
+                  ret.f0 = x * y;
+                  if ((x != 0) && (ret.f0 / x != b)) ret.f1 = true;
+                  else ret.f1 = false;
+                  return ret;
+              }\n
+              "
+    end
+             
     return s
 end
 
@@ -937,7 +990,7 @@ function from_assignment(args::Array{Any,1}, linfo)
         # that doesn't have a type
         if typeAvailable(rhs) && is(rhs.typ, Any) &&
         hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
-            m, f, t = resolveCallTarget(rhs.args,linfo)
+            m, f, t = resolveCallTarget(rhs.args,linfo, rhs.typ)
             f = string(f)
             if f == "fpext"
                 @dprintln(3,"Args: ", rhs.args, " type = ", typeof(rhs.args[2]))
@@ -1211,7 +1264,7 @@ function from_arraysize(arr, dim::Int, linfo)
 end
 
 
-function from_foreigncall(args, linfo)
+function from_foreigncall(args, linfo, call_ret_typ)
     @dprintln(3,"foreigncall args:")
     @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
     @dprintln(3,"return type: ", args[2])
@@ -1223,7 +1276,7 @@ function from_foreigncall(args, linfo)
     @dprintln(3,"End of foreigncall args")
     fun = args[1]
     if isInlineable(fun, args, linfo)
-        return from_inlineable(fun, args, linfo)
+        return from_inlineable(fun, args, linfo, call_ret_typ)
     end
 
     if isa(fun, QuoteNode)
@@ -1256,11 +1309,11 @@ function from_foreigncall(args, linfo)
         s *= mapfoldl(x->from_expr(x,linfo), (a, b)-> "$a, $b", to_fold)
     end
     s *= ")"
-    @dprintln(3,"from_ccall: ", s)
+    @dprintln(3,"from_foreignccall: ", s)
     s
 end
 
-function from_ccall(args, linfo)
+function from_ccall(args, linfo, call_ret_typ)
     @dprintln(3,"ccall args:")
     @dprintln(3,"target tuple: ", args[1], " - ", typeof(args[1]))
     @dprintln(3,"return type: ", args[2])
@@ -1272,7 +1325,7 @@ function from_ccall(args, linfo)
     @dprintln(3,"End of ccall args")
     fun = args[1]
     if isInlineable(fun, args, linfo)
-        return from_inlineable(fun, args, linfo)
+        return from_inlineable(fun, args, linfo, call_ret_typ)
     end
 
     if isa(fun, QuoteNode)
@@ -1506,7 +1559,7 @@ function from_raw_pointer(args, linfo)
     end
 end
 
-function from_builtins(f, args, linfo)
+function from_builtins(f, args, linfo, call_ret_type)
     tgt = string(f)
     if tgt == "getindex" || tgt == "getindex!"
         return from_getindex(args, linfo)
@@ -1528,7 +1581,7 @@ function from_builtins(f, args, linfo)
     elseif tgt == "arraysize"
         return from_arraysize(args, linfo)
     elseif tgt == "ccall"
-        return from_ccall(args, linfo)
+        return from_ccall(args, linfo, call_ret_type)
     elseif tgt == "arrayset"
         return from_arrayset(args, linfo)
     elseif tgt == ":jl_new_array" || tgt == ":jl_alloc_array_1d" || tgt == ":jl_alloc_array_2d" || tgt == ":jl_alloc_array_3d"
@@ -1594,7 +1647,7 @@ function from_box(args, linfo)
     s
 end
 
-function from_intrinsic(f :: ANY, args, linfo)
+function from_intrinsic(f :: ANY, args, linfo, call_ret_typ)
     intr = string(f)
     @dprintln(3,"Intrinsic ", intr, ", args are ", args)
 
@@ -1625,11 +1678,29 @@ function from_intrinsic(f :: ANY, args, linfo)
     elseif intr == "shl_int"
         return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
     elseif intr == "checked_ssub" || intr == "checked_ssub_int"
-        return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
+        if VERSION >= v"0.6.0-pre"
+            return "checked_ssub_int<$(toCtype(call_ret_typ))>($(from_expr(args[1], linfo)), $(from_expr(args[2], linfo)))"
+        else
+            return "($(from_expr(args[1], linfo))) - ($(from_expr(args[2], linfo)))"
+        end
     elseif intr == "checked_sadd" || intr == "checked_sadd_int"
-        return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
+        if VERSION >= v"0.6.0-pre"
+            return "checked_sadd_int<$(toCtype(call_ret_typ))>($(from_expr(args[1], linfo)), $(from_expr(args[2], linfo)))"
+        else
+            return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
+        end
     elseif intr == "checked_smul"
-        return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
+        if VERSION >= v"0.6.0-pre"
+            return "checked_smul_int<$(toCtype(call_ret_typ))>($(from_expr(args[1], linfo)), $(from_expr(args[2], linfo)))"
+        else
+            return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
+        end
+    elseif intr == "checked_umul"
+        if VERSION >= v"0.6.0-pre"
+            return "checked_umul_int<$(toCtype(call_ret_typ))>($(from_expr(args[1], linfo)), $(from_expr(args[2], linfo)))"
+        else
+            return "($(from_expr(args[1], linfo))) * ($(from_expr(args[2], linfo)))"
+        end
     elseif intr == "zext_int"
         return "($(toCtype(args[1]))) ($(from_expr(args[2], linfo)))"
     elseif intr == "sext_int"
@@ -1723,7 +1794,7 @@ function from_intrinsic(f :: ANY, args, linfo)
     end
 end
 
-function from_inlineable(f, args, linfo)
+function from_inlineable(f, args, linfo, call_ret_typ)
     @dprintln(3,"Checking if ", f, " can be inlined")
     @dprintln(3,"Args are: ", args)
 #=
@@ -1738,9 +1809,9 @@ function from_inlineable(f, args, linfo)
 =#
     s = string(f)
     if has(_primitive_builtins, s) || has(_builtins, s)
-        return from_builtins(f, args, linfo)
+        return from_builtins(f, args, linfo, call_ret_typ)
     elseif has(_Intrinsics, s)
-        return from_intrinsic(f, args, linfo)
+        return from_intrinsic(f, args, linfo, call_ret_typ)
     else
         throw("Unknown Operator or Method encountered: " * s)
     end
@@ -1822,22 +1893,22 @@ function isPendingCompilation(list, tgt, typs0)
     return false
 end
 
-function resolveCallTarget(ast::Array{Any, 1},linfo)
+function resolveCallTarget(ast::Array{Any, 1},linfo, call_ret_typ)
     # julia doesn't have GetfieldNode anymore
     #if isdefined(:GetfieldNode) && isa(args[1],GetfieldNode) && isa(args[1].value,Module)
     #   M = args[1].value; s = args[1].name; t = ""
 
     @dprintln(3,"Trying to resolve target from ast::Array{Any,1} with args: ", ast)
-    return resolveCallTarget(ast[1], ast[2:end],linfo)
+    return resolveCallTarget(ast[1], ast[2:end],linfo, call_ret_typ)
 end
 
 #case 0:
-function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo)
+function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo, call_ret_typ)
     M = ""
     t = ""
     s = ""
     if isInlineable(f, args, linfo)
-        return M, string(f), from_inlineable(f, args, linfo)
+        return M, string(f), from_inlineable(f, args, linfo, call_ret_typ)
     elseif is(f, :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
         arglist = mapfoldl(x->from_expr(x,linfo), (a,b)->"$a, $b", args[2:end])
@@ -1850,7 +1921,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo)
     return M, s, t
 end
 
-function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
+function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo, call_ret_typ)
     M = ""
     t = ""
     s = ""
@@ -1868,7 +1939,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo)
     return M, s, t
 end
 
-function resolveCallTarget(f, args::Array{Any, 1},linfo)
+function resolveCallTarget(f, args::Array{Any, 1},linfo, call_ret_typ)
     @dprintln(3,"Trying to resolve target from ", f, "::", typeof(f), " with args: ", args)
     M = ""
     t = ""
@@ -1896,7 +1967,7 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo)
     #    return resolveCallTarget(f,linfo)
     # case 3:
     elseif (isa(f, TopNode) || isa(f, GlobalRef)) && isInlineable(f.name, args, linfo)
-        t = from_inlineable(f.name, args,linfo)
+        t = from_inlineable(f.name, args,linfo, call_ret_typ)
         @dprintln(3,"Case 3: Returning M = ", M, " s = ", s, " t = ", t)
     end
     @dprintln(3,"In resolveCallTarget: Returning M = ", M, " s = ", s, " t = ", t)
@@ -1952,7 +2023,7 @@ function setFunctionCompiled(funStr, argTyps)
     push!(lstate.compiledfunctions, (funStr, typs))
 end
 
-function from_call(ast::Array{Any, 1},linfo)
+function from_call(ast::Array{Any, 1},linfo, call_ret_typ)
 
     pat_out = external_pattern_match_call.func(ast,linfo)
     if pat_out != ""
@@ -1971,7 +2042,7 @@ function from_call(ast::Array{Any, 1},linfo)
         @dprintln(3,"Arg ", i, " = ", ast[i], " type = ", typeof(ast[i]))
     end
     # Try and find the target of the call
-    mod, fun, t = resolveCallTarget(ast,linfo)
+    mod, fun, t = resolveCallTarget(ast,linfo, call_ret_typ)
 
     # resolveCallTarget will eagerly try to translate the call
     # if it can. If it does, then we are done.
@@ -1990,7 +2061,7 @@ function from_call(ast::Array{Any, 1},linfo)
 
     if isInlineable(fun, args, linfo)
         @dprintln(3,"Doing with inlining ", fun, "(", args, ")")
-        fs = from_inlineable(fun, args, linfo)
+        fs = from_inlineable(fun, args, linfo, call_ret_typ)
         return fs
     end
     @dprintln(3,"Not inlinable")
@@ -2650,17 +2721,17 @@ function from_expr(ast::Expr, linfo)
         @dprintln(3,"Compiling call")
         fun  = getCallFunction(ast)
         args = getCallArguments(ast)
-        s *= from_call([fun; args], linfo)
+        s *= from_call([fun; args], linfo, typ)
 
     elseif head == :foreigncall
         @dprintln(3,"Compiling foreigncall")
         fun  = getCallFunction(ast)
         args = getCallArguments(ast)
-        s *= from_foreigncall([fun; args], linfo)
+        s *= from_foreigncall([fun; args], linfo, typ)
 
     elseif head == :call1
         @dprintln(3,"Compiling call1")
-        s *= from_call1(args, linfo)
+        s *= from_call1(args, linfo, typ)
 
     elseif head == :return
         @dprintln(3,"Compiling return")
