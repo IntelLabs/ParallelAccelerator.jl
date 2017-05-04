@@ -612,11 +612,20 @@ function from_assignment_match_hvcat(lhs, rhs::Expr, linfo)
             end
             @assert isa(atyp, DataType) ("hvcat expects the first argument to be a type, but got " * args[1])
             typ = toCtype(atyp)
-            rows = lstate.tupleTable[args[2]]
+            tuple_arg = args[2]
+            if isa(tuple_arg, Tuple)
+                rows = tuple_arg
+            else
+                rows = lstate.tupleTable[tuple_arg]
+            end
             values = args[3:end]
         else
-
-            rows = lstate.tupleTable[args[1]]
+            tuple_arg = args[1]
+            if isa(tuple_arg, Tuple)
+                rows = tuple_arg
+            else
+                rows = lstate.tupleTable[tuple_arg]
+            end
             values = args[2:end]
             atyp, arr_dims = parseArrayType(getSymType(lhs, linfo))
             typ = toCtype(atyp)
