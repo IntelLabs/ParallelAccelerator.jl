@@ -3779,6 +3779,8 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         # skip
     elseif head == :llvmcall
         # skip
+    elseif head == :simdloop
+        # skip
     elseif head in DomainIR.exprHeadIgnoreList
         # other packages like HPAT can generate new nodes like :alloc, :join
     else

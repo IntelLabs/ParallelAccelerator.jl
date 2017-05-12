@@ -2846,6 +2846,8 @@ function from_expr(state::IRState, env::IREnv, ast::Expr)
         # skip
     elseif is(head, :llvmcall)
         # skip
+    elseif is(head, :simdloop)
+        # skip
     elseif is(head, :static_parameter)
         p = args[1]
         @assert (isa(p, Int)) "Expect constant Int argument to :static_parameter, but got " * string(ast)
