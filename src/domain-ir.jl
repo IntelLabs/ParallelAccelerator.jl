@@ -1034,7 +1034,7 @@ mk_range(state, start, step, final) = mk_range(simplify(state, start), simplify(
  (:lambda, {param, meta@{localvars, types, freevars}, body})
 """
 function from_lambda(state, env, expr, closure = nothing)
-    @dprintln(3,"expr = ", expr, " type = ", typeof(expr))
+    @dprintln(3,"from_lambda expr = ", expr, " type = ", typeof(expr))
     local env_ = nextEnv(env)
     linfo, body = lambdaToLambdaVarInfo(expr)
     cfg = CompilerTools.CFGs.from_lambda(body)
@@ -2280,7 +2280,11 @@ function translate_call_cartesianmapreduce(state, env, typ, args::Array{Any,1})
     ndim = length(dimExp)   # num of dimensions
     argstyp = Any[ Int for i in 1:ndim ]
 
-    (body, linfo) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
+    lambdaDef = args_[1]
+    #lambdaDef::Expr = lookupConstDefForArg(state, args_[1])
+    dprintln(env, "lambdaDef = ", lambdaDef)
+    (body, linfo) = get_lambda_for_arg(state, env, lambdaDef, argstyp)     # first argument is the lambda
+    #(body, linfo) = get_lambda_for_arg(state, env, args_[1], argstyp)     # first argument is the lambda
     ety = getReturnType(linfo)
     #etys = isTupleType(ety) ? [ety.parameters...] : DataType[ety]
     dprintln(env, "ety = ", ety)
