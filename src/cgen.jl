@@ -273,9 +273,9 @@ _Intrinsics = [
         "neg_float", "add_float", "sub_float", "mul_float", "div_float",
         "neg_float_fast", "add_float_fast", "sub_float_fast", "mul_float_fast", "div_float_fast",
         "rem_float", "sqrt_llvm", "sqrt_llvm_fast", "fma_float", "muladd_float",
-        "le_float", "ne_float", "eq_float", "copysign_float",
+        "le_float", "le_float_fast", "ne_float", "ne_float_fast", "eq_float", "eq_float_fast", "copysign_float",
         "fptoui", "fptosi", "uitofp", "sitofp", "not_int",
-        "nan_dom_err", "lt_float", "slt_int", "ult_int", "abs_float", "select_value",
+        "nan_dom_err", "lt_float", "lt_float_fast", "slt_int", "ult_int", "abs_float", "select_value",
         "fptrunc", "fpext", "trunc_llvm", "floor_llvm", "rint_llvm",
         "trunc", "ceil_llvm", "ceil", "pow", "powf", "lshr_int",
         "checked_ssub", "checked_ssub_int", "checked_sadd", "checked_sadd_int", "checked_srem_int",
@@ -1755,13 +1755,13 @@ function from_intrinsic(f :: ANY, args, linfo, call_ret_typ)
         return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
     elseif intr == "add_float" || intr == "add_float_fast"
         return "($(from_expr(args[1], linfo))) + ($(from_expr(args[2], linfo)))"
-    elseif intr == "lt_float"
+    elseif intr == "lt_float" || intr == "lt_float_fast"
         return "($(from_expr(args[1], linfo))) < ($(from_expr(args[2], linfo)))"
-    elseif intr == "eq_float" || intr == "eq_int"
+    elseif intr == "eq_float" || intr == "eq_int" || intr == "eq_float_fast"
         return "($(from_expr(args[1], linfo))) == ($(from_expr(args[2], linfo)))"
-    elseif intr == "ne_float" || intr == "ne_int"
+    elseif intr == "ne_float" || intr == "ne_int" || intr == "ne_float_fast"
         return "($(from_expr(args[1], linfo))) != ($(from_expr(args[2], linfo)))"
-    elseif intr == "le_float"
+    elseif intr == "le_float" || intr == "le_float_fast"
         return "($(from_expr(args[1], linfo))) <= ($(from_expr(args[2], linfo)))"
     elseif intr == "neg_float" || intr == "neg_float_fast"
         return "-($(from_expr(args[1], linfo)))"
