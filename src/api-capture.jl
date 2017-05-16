@@ -17,14 +17,14 @@ const binary_operator_set = Set(binary_operators)
 #data_source_num = 0
 
 ref_assign_map = Dict{Symbol, Symbol}(
-    :(+=) => :(+),
-    :(-=) => :(-),
-    :(*=) => :(*),
-    :(/=) => :(/),
-    :(.+=) => :(.+),
-    :(.-=) => :(.-),
-    :(.*=) => :(.*),
-    :(./=) => :(./)
+    :(+=) => :pa_api_add,
+    :(-=) => :pa_api_sub,
+    :(*=) => :pa_api_mul,
+    :(/=) => :pa_api_div,
+    :(.+=) => :pa_api_elem_add,
+    :(.-=) => :pa_api_elem_sub,
+    :(.*=) => :pa_api_elem_mul,
+    :(./=) => :pa_api_elem_div
 )
 
 type process_node_state
