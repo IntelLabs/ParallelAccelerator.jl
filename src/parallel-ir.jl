@@ -89,6 +89,7 @@ type DelayedFunc
 end
 
 function callDelayedFuncWith(f::DelayedFunc, args...)
+    @dprintln(3,"callDelayedFuncWith f = ", f, " args = ", args...)
     full_args = vcat(f.args, Any[args...])
     f.func(full_args...)
 end
@@ -2581,6 +2582,7 @@ function from_assignment(lhs, rhs, depth, state)
 
     if isa(rhs, Expr)
         out_typ = rhs.typ
+        if false
         #@dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
 
         # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
@@ -2631,12 +2633,15 @@ function from_assignment(lhs, rhs, depth, state)
                 end
             end
         end
+        end
     elseif isa(rhs, TypedVar)
         out_typ = getType(rhs, state.LambdaVarInfo)
+        if false
         if isArrayType(out_typ)
             # Add a length correlation of the form "a = b".
             @dprintln(3,"Adding array length correlation ", lhs, " to ", rhs)
             add_merge_correlations(toLHSVar(rhs), lhsName, state)
+        end
         end
     else
         # Get the type of the lhs from its metadata declaration.
@@ -3399,9 +3404,13 @@ function from_root(function_name, ast)
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
         body = update_lambda_vars(LambdaVarInfo, body)
+        @dprintln(3,"AST after late_simplify = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
     end
 
     if unroll_small_parfors
+        @dprintln(3,"AST at start of unroll_small_pafors = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
         body = AstWalk(body, unroll_const_parfors, nothing)
         # flatten body since unroll can return :block nodes
         body = AstWalk(body, flatten_blocks, nothing)
@@ -3410,6 +3419,8 @@ function from_root(function_name, ast)
         body = AstWalk(body, copy_propagate, CopyPropagateState(lives,LambdaVarInfo))
         lives = computeLiveness(body, LambdaVarInfo)
         body = AstWalk(body, remove_dead, RemoveDeadState(lives,LambdaVarInfo))
+        @dprintln(3,"AST at end of unroll_small_parfors = ", " function = ", function_name)
+        printLambda(3, LambdaVarInfo, body)
     end
 
     @dprintln(1,"Final ParallelIR function = ", function_name, " body = ")
@@ -3471,6 +3482,7 @@ Find arrays that are only allocated and not written to, and remove them.
 """
 function remove_extra_allocs(LambdaVarInfo, body)
     @dprintln(3,"starting remove extra allocs")
+    printLambda(3, LambdaVarInfo, body)
     old_lives = computeLiveness(body, LambdaVarInfo)
     # rm_allocs_live_cb callback ignores allocation calls but finds other defs of arrays
     lives = CompilerTools.LivenessAnalysis.from_lambda(LambdaVarInfo, body, rm_allocs_live_cb, LambdaVarInfo)
@@ -3480,8 +3492,9 @@ function remove_extra_allocs(LambdaVarInfo, body)
         defs = union(defs, i.def)
     end
     # only consider those that are not aliased
-    uniqsets = CompilerTools.AliasAnalysis.from_lambda(LambdaVarInfo, body, old_lives, pir_alias_cb, nothing)
-    @dprintln(3, "remove extra allocations defs ",defs)
+    @dprintln(3, "starting alias analysis")
+    uniqsets = CompilerTools.AliasAnalysis.from_lambda(LambdaVarInfo, body, old_lives, pir_alias_cb, nothing, noReAssign=true)
+    @dprintln(3, "remove extra allocations defs ", defs, " uniqsets = ", uniqsets)
     rm_state = rm_allocs_state(defs, uniqsets, Dict{LHSVar,Array{Any,1}}(), LambdaVarInfo)
     AstWalk(body, rm_allocs_cb, rm_state)
     return body
@@ -3495,6 +3508,7 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
     head = ast.head
     args = ast.args
     if head == :(=) && isAllocation(args[2])
+        @dprintln(3,"rm_allocs_cb isAllocation ast = ", ast)
         arr = toLHSVar(args[1])
         # do not remove those that are being re-defined, or potentially aliased
         if in(arr, state.defs) || !in(arr, state.uniqsets)
