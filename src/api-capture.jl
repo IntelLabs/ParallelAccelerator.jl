@@ -229,6 +229,9 @@ function translate_par(args)
         redArg = gensym(string(redVar))
         opr = redOps[i]
         if in(opr, operators)
+            if haskey(API.rename_forward, opr)
+                opr = API.rename_forward[opr]
+            end
             opr = GlobalRef(API, opr)
         end
         redBody = Expr(:(=), redVars[i], Expr(:call, opr, redVar, redArg))
