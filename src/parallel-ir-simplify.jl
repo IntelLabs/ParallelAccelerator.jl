@@ -982,6 +982,17 @@ function create_equivalence_classes_assignment(lhs::RHSVar, rhs::RHSVar, state)
     CompilerTools.AstWalker.ASTWALK_RECURSE
 end
 
+function sizeNoTuples(x, state)
+    for s in x
+        stype = CompilerTools.LambdaHandling.getType(s, state.LambdaVarInfo)  # get size type
+        if stype <: Tuple
+            @dprintln(3,"Found Tuple in sizes for array correlation.")
+            return false
+        end
+    end
+    return true
+end
+
 function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
     @dprintln(4,lhs)
     @dprintln(4,rhs)
@@ -996,8 +1007,10 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
         sizes = Any[ x for x in rhs.args[2]]
         n = length(sizes)
         assert(n >= 1 && n <= 3)
-        @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
-        checkAndAddSymbolCorrelation(lhs, state, sizes)
+        if sizeNoTuples(sizes, state)
+            @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
+            checkAndAddSymbolCorrelation(lhs, state, sizes)
+        end
     elseif isCall(rhs)
         @dprintln(3, "Detected call rhs in from_assignment.")
         @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
@@ -1024,6 +1037,8 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
                 checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])
             end
+        elseif isBaseFunc(fun, :hvcat)
+            checkAndAddSymbolCorrelation(lhs, state, Any[rhs.args[2]...])
         elseif isBaseFunc(fun, :vect)
             @dprintln(3, "found vect, args: ", args)
             len = length(args)
