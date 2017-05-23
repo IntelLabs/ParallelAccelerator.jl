@@ -1148,6 +1148,10 @@ class ASCIIString {
     uint8_t& ARRAYELEM(uint64_t i) {
         return data.ARRAYELEM(i);
     }
+
+    uint64_t ARRAYLEN(void) const {
+        return data.ARRAYLEN();
+    }
 };
 
 std::ostream& operator<<(std::ostream& out, ASCIIString& p)
