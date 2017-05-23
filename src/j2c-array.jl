@@ -116,11 +116,19 @@ function __init__()
       ccall((:j2c_array_deref,$dyn_lib), Void, (Ptr{Void},), arr)
     end
 
+if VERSION >= v"0.6.0-pre"
+    # convert ASCIIString to J2C_Array and to C's ASCIIString 
+    function to_j2c_array(inp::AbstractString, ptr_array_dict, mapAtypeKey, j2c_array_new)
+      arr = to_j2c_array(Vector{UInt8}(inp), ptr_array_dict, mapAtypeKey, j2c_array_new)
+      ccall((:new_ascii_string, $dyn_lib), Ptr{Void}, (Ptr{Void}, ), arr)
+    end
+else
     # convert ASCIIString to J2C_Array and to C's ASCIIString 
     function to_j2c_array(inp::AbstractString, ptr_array_dict, mapAtypeKey, j2c_array_new)
       arr = to_j2c_array(inp.data, ptr_array_dict, mapAtypeKey, j2c_array_new)
       ccall((:new_ascii_string, $dyn_lib), Ptr{Void}, (Ptr{Void}, ), arr)
     end
+end
 
     # convert C's ASCIIString to Julia's Array{UInt8,1}
     function from_ascii_string(str::Ptr{Void}, ptr_array_dict)
