@@ -266,6 +266,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
 _Intrinsics = [
         "===",
         "box", "unbox",
+        "bitcast",
         #arithmetic
         "neg_int", "add_int", "sub_int", "mul_int", "sle_int", "ule_int",
         "xor_int", "and_int", "or_int", "ne_int", "eq_int",
@@ -1688,6 +1689,8 @@ function from_intrinsic(f :: ANY, args, linfo, call_ret_typ)
         return "($(from_expr(args[1], linfo))) >> ($(from_expr(args[2], linfo)))"
     elseif intr == "shl_int"
         return "($(from_expr(args[1], linfo))) << ($(from_expr(args[2], linfo)))"
+    elseif intr == "bitcast"
+        return "(($(toCtype(args[1])))($(from_expr(args[2], linfo))))"
     elseif intr == "checked_ssub" || intr == "checked_ssub_int"
         if VERSION >= v"0.6.0-pre"
             return "checked_ssub_int<$(toCtype(call_ret_typ))>($(from_expr(args[1], linfo)), $(from_expr(args[2], linfo)))"
@@ -1825,6 +1828,8 @@ function from_inlineable(f, args, linfo, call_ret_typ)
     s = string(f)
     if has(_primitive_builtins, s) || has(_builtins, s)
         return from_builtins(f, args, linfo, call_ret_typ)
+    elseif isBaseFunc(f, :length) && length(args) > 0 && (isArrayType(lookupType(args[1], linfo)) || isStringType(lookupType(args[1], linfo)))
+        return "(" * from_expr(args[1], linfo) * ".ARRAYLEN())"
     elseif has(_Intrinsics, s)
         return from_intrinsic(f, args, linfo, call_ret_typ)
     else
@@ -1833,11 +1838,19 @@ function from_inlineable(f, args, linfo, call_ret_typ)
 end
 
 function isInlineable(f, args, linfo)
+    #@dprintln(3, "IsInlineable f = ", f, " type = ", typeof(f), " isBase = ", isBaseFunc(f, :length), " args = ", args)
+    #if isBaseFunc(f, :length) && length(args) > 0
+    #    t = lookupType(args[1], linfo)
+    #    @dprintln(3,"t = ", t, " type = ", typeof(t), " isArray = ", isArrayType(t))
+    #end
+
     #if has(_operators, string(f)) || has(_builtins, string(f)) || has(_Intrinsics, string(f))
     s = string(f)
     if has(_primitive_builtins, s) && length(args) > 0
         t = lookupType(args[1], linfo)
         isPrimitiveJuliaType(t)
+    elseif isBaseFunc(f, :length) && length(args) > 0 && (isArrayType(lookupType(args[1], linfo)) || isStringType(lookupType(args[1], linfo)))
+        true
     else
         has(_builtins, s) || has(_Intrinsics, s)
     end
@@ -1959,6 +1972,14 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo, call_ret_typ)
     M = ""
     t = ""
     s = ""
+
+    if isa(f, QuoteNode)
+        @dprintln(3,"Removing QuoteNode.")
+        M = Base
+        f = f.value
+        s = f
+    end
+
     #case 1:
     if isBaseFunc(f, :getfield) && isa(args[2], QuoteNode)
         @dprintln(3,"Case 1: args[2] is ", args[2])
@@ -1990,12 +2011,21 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo, call_ret_typ)
 end
 
 function inSymbolTable(x::RHSVar, linfo)
+    @dprintln(3, "inSymbolTable RHSVar x = ", x)
     x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
+    @dprintln(3, "inSymbolTable RHSVar x = ", x)
+    if !haskey(lstate.symboltable, x)
+        @dprintln(3, "symboltable = ", lstate.symboltable)
+    end
     haskey(lstate.symboltable, x)
 end
 
 
-inSymbolTable(x, linfo) = haskey(lstate.symboltable, x)
+#inSymbolTable(x, linfo) = haskey(lstate.symboltable, x)
+function inSymbolTable(x, linfo) 
+    @dprintln(3, "inSymbolTable x = ", x, " ", typeof(x))
+    haskey(lstate.symboltable, x)
+end
 
 function lookupSymbolType(x, linfo)
     x = CompilerTools.LambdaHandling.lookupVariableName(x, linfo)
@@ -2104,7 +2134,7 @@ function from_call(ast::Array{Any, 1},linfo, call_ret_typ)
     map((i)->@dprintln(3,i), lstate.compiledfunctions)
     argTyps = []
     for a in 1:length(args)
-        @dprintln(4, "a = ", a, " args[a] = ", args[a])
+        @dprintln(3, "a = ", a, " args[a] = ", args[a], " type = ", typeof(args[a]))
         s *= from_expr(args[a],linfo) * (a < length(args) ? "," : "")
         #if !skipCompilation
             # Attempt to find type
@@ -2117,6 +2147,7 @@ function from_call(ast::Array{Any, 1},linfo, call_ret_typ)
             elseif inSymbolTable(args[a], linfo)
                 push!(argTyps, lookupSymbolType(args[a], linfo))
             else
+                @dprintln(3, "linfo = ", linfo)
                 throw(string("Could not determine type for arg ", a, " to call ", mod, ".", fun, " with name ", args[a]))
             end
         #end
@@ -2309,6 +2340,7 @@ function from_parforend(args,linfo)
     rds = parfor.reductions
     parallel_reduction = USE_OMP==1 && lstate.ompdepth <= 1 #&& any(Bool[(isa(a->reductionFunc, Function) || isa(a->reductionVarInit, Function)) for a in rds])
     if parallel_reduction && length(rds) > 0
+        @dprintln(3,"from_parforend: parallel_reduction")
         nthreadsvar = "_num_threads"
         rdsepilog = "for (unsigned i = 0; i < $nthreadsvar; i++) {\n"
         rdscleanup = ""
@@ -2316,12 +2348,18 @@ function from_parforend(args,linfo)
             rdv = rd.reductionVar
             rdvt = getSymType(rdv, linfo)
             rdvtyp = toCtype(rdvt)
+            @dprintln(3,"from_parforend: rdv = ", rdv, " rdvt = ", rdvt, " rdvtyp = ", rdvtyp, " func = ", rd.reductionFunc)
             rdvar = from_expr(rdv,linfo)
+            @dprintln(3,"from_parforend: rdvar = ", rdvar)
             # this is now handled either in pre_statements, or by user (in the case of explicit parfor loop).
             #rdsinit *= from_reductionVarInit(rd.reductionVarInit, rdv,linfo)
             rdvar_i = addLocalVariable(gensym(string(rdvar, "_i")), rdvt, 0, linfo)
+            setSymbolType(rdvar_i, rdvt, linfo)
+            @dprintln(3,"from_parforend: rdvar_i = ", rdvar_i)
             rdsepilog *= "$rdvtyp &" * from_expr(rdvar_i, linfo) * " = $(rdvar)_vec[i];\n"
+            @dprintln(3,"from_parforend: rdsepilog = ", rdsepilog);
             rdsepilog *= from_reductionFunc(rd.reductionFunc, rdv, rdvar_i,linfo) * ";\n"
+            @dprintln(3,"from_parforend: after reductionFunc rdsepilog = ", rdsepilog);
             if isPrimitiveJuliaType(rdvt)
                 rdscleanup *= "free($(rdvar)_vec);\n";
             end
@@ -2377,6 +2415,7 @@ function from_reductionFunc(reductionFunc :: Symbol, a, b, linfo)
 end
 
 function from_reductionFunc(reductionFunc :: ParallelIR.DelayedFunc, a, b, linfo)
+    @dprintln(3, "from_reductionFunc for DelayedFunc")
     from_exprs(ParallelIR.callDelayedFuncWith(reductionFunc, a, b), linfo)
 end
 
@@ -2504,7 +2543,8 @@ function from_parforstart(args, linfo)
         rdvtyp = toCtype(rdvt)
         rdvar = from_expr(rdv, linfo)
         rdv_tmp = gensym(rdvar)
-        addLocalVariable(rdv_tmp, rdvt, 0, linfo)
+        advout = addLocalVariable(rdv_tmp, rdvt, 0, linfo)
+        setSymbolType(advout, rdvt, linfo)
         rdvar_tmp = from_symbol(rdv_tmp, linfo)
         if parallel_reduction
             if isPrimitiveJuliaType(rdvt)
