@@ -1110,12 +1110,31 @@ class ASCIIString {
          
     ASCIIString() { }
 
+    // string_len here does count the NULL char.
     ASCIIString(const char* s, int64_t string_len) {
+        //std::cout << "ASCIIString const char * s with len = " << s << " len = " << string_len << std::endl;
         data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
         strncpy((char *)data.data, s, string_len);
+        // not count null char in size
+        data.dims[0]--;
+        //std::cout << "ASCIIString const char * = " << data.data << " len = " << ARRAYLEN() << std::endl;
+    }
+
+    // string_len1 and string_len2 here do count the NULL char.
+    ASCIIString(const char* s1, int64_t string_len1, const char *s2, int64_t string_len2) {
+        //std::cout << "ASCIIString const char * s1 = " << s1 << " len = " << string_len1 << std::endl;
+        //std::cout << "ASCIIString const char * s2 = " << s2 << " len = " << string_len2 << std::endl;
+        // Both string have NULL terminators so we can remove one of them.
+        data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len1+string_len2-1);
+        strncpy((char *)data.data, s1, string_len1);
+        strncpy((char *)data.data+string_len1-1, s2, string_len2);
+        // not count null char in size
+        data.dims[0]--;
+        //std::cout << "ASCIIString const char * = " << data.data << " len = " << ARRAYLEN() << std::endl;
     }
 
     ASCIIString(const char* s) {
+        //std::cout << "ASCIIString const char * s = " << s << " len = " << strlen(s)+1 << std::endl;
         // 1 extra space for null char
         uint64_t string_len = strlen(s)+1;
         data = j2c_array<uint8_t>::new_j2c_array_1d(NULL, string_len);
@@ -1123,10 +1142,12 @@ class ASCIIString {
         data.data[string_len-1] = 0x00; // null char
         // not count null char in size
         data.dims[0]--;
+        //std::cout << "ASCIIString const char * = " << data.data << " len = " << ARRAYLEN() << std::endl;
     }
 
     ASCIIString(const j2c_array<uint8_t> &a) {
         data = a;
+        //std::cout << "ASCIIString j2c_array<uint8_t> data = " << data.data << " len = " << ARRAYLEN() << std::endl;
     }
 
     ASCIIString(const ASCIIString &s) {
@@ -1153,6 +1174,58 @@ class ASCIIString {
         return data.ARRAYLEN();
     }
 };
+
+template<typename T>
+ASCIIString jl_alloc_string(const T &v) {
+    std::stringstream sstr;
+    sstr << v;
+    std::string ss = sstr.str();
+    ASCIIString res = ASCIIString(ss.c_str(), ss.length() + 1);
+    return res;
+}
+
+j2c_array<uint8_t> jl_string_to_array(const ASCIIString &s) {
+    j2c_array<uint8_t> res = j2c_array<uint8_t>::new_j2c_array_1d(NULL, s.ARRAYLEN()+1);
+    strncpy((char *)res.data, (const char *)s.data.data, s.ARRAYLEN()+1);
+    return res;
+}
+
+ASCIIString jl_array_to_string(const j2c_array<uint8_t> &s) {
+    ASCIIString res = ASCIIString((const char *)s.data, s.ARRAYLEN());
+    return res;
+}
+
+/*
+ * We implement our own BaseString to construct ASCIIString and its constructor that takes an arbitrary 
+ * number of arguments.  For the first function below, we construct an ASCIIString from just one string
+ * literal.  In the second function, we construct one ASCIIString from another.  In the third function
+ * the magic happens.  We create an ASCIIString from the first argument to BaseString and another 
+ * ASCIIString from all the other arguments.  To do the latter, the function is recursively called until
+ * it gets down to just one argument and then one of the following two functions can create the ASCIIString.
+ * Then, a concact constructor is called for ASCIIString to bring the separate ASCIIStrings for the first
+ * and rest arguments together.
+ */
+ASCIIString BaseString(const char *s) {
+    ASCIIString res(s);
+    //std::cout << "BaseString const char res = " << res.data.data << " len = " << res.ARRAYLEN() << std::endl;
+    return res;
+}
+
+ASCIIString BaseString(const ASCIIString &s) {
+    //std::cout << "BaseString ASCIIString s = " << s.data.data << " len = " << s.ARRAYLEN() << std::endl;
+    ASCIIString res((const char *)s.data.data, s.ARRAYLEN()+1);
+    //std::cout << "BaseString ASCIIString res = " << res.data.data << " len = " << res.ARRAYLEN() << std::endl;
+    return res;
+}
+
+template<typename T, typename... Args>
+ASCIIString BaseString(T s, Args... args) {
+    ASCIIString s1 = BaseString(s);
+    //std::cout << "s1 = " << s1.data.data << " len = " << s1.ARRAYLEN() << std::endl;
+    ASCIIString s2 = BaseString(args...);
+    //std::cout << "s2 = " << s2.data.data << " len = " << s2.ARRAYLEN() << std::endl;
+    return ASCIIString((const char *)s1.data.data, s1.ARRAYLEN()+1, (const char *)s2.data.data, s2.ARRAYLEN()+1);
+}
 
 std::ostream& operator<<(std::ostream& out, ASCIIString& p)
 {
@@ -1186,6 +1259,7 @@ extern "C"
 void *new_ascii_string(j2c_array<uint8_t> *a)
 {
     ASCIIString *p = new ASCIIString(*a);
+    //std::cout << "new_ascii_string p = " << p->data.data << " len = " << p->ARRAYLEN() << std::endl;
     return p;
 }
 
@@ -1198,7 +1272,7 @@ void *from_ascii_string(ASCIIString *s)
 extern "C" 
 void delete_ascii_string(ASCIIString *s)
 {
-    delete(s);
+    delete s;
 }
 
 /* compatibility fix for Julia 0.5 function to handle string append! */
