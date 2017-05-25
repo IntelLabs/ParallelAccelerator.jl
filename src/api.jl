@@ -92,8 +92,8 @@ const rename_op_to = Symbol[ :pa_api_sub, :pa_api_add, :pa_api_mul, :pa_api_div,
 const rename_forward = Dict{Symbol,Symbol}(zip(rename_op_from,rename_op_to))
 const rename_back = Dict{Symbol,Symbol}(zip(rename_op_to,rename_op_from))
 
-@inline sum(A::DenseArray{Bool}) = sum(1 .* A)
-@inline sum(A::DenseArray{Bool}, x::Int) = sum(1 .* A, x)
+@inline sum(A::DenseArray{Bool}) = sum(pa_api_elem_mul(1,A))
+@inline sum(A::DenseArray{Bool}, x::Int) = sum(pa_api_elem_mul(1,A), x)
 
 function rename_if_needed(f)
     if haskey(rename_forward, f)
