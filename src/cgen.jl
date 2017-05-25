@@ -259,7 +259,7 @@ _builtins = ["getindex", "getindex!", "setindex", "setindex!", "arrayref", "top"
             "Float32", "Float64",
             "Int8", "Int16", "Int32", "Int64",
             "UInt8", "UInt16", "UInt32", "UInt64",
-            "convert", "unsafe_convert", "setfield!"
+            "convert", "unsafe_convert", "setfield!", "string"
 ]
 
 # Intrinsics
@@ -1571,8 +1571,14 @@ function from_raw_pointer(args, linfo)
     end
 end
 
+function from_string(args, linfo)
+    @dprintln(3,"from_string")
+    "BaseString(" * mapfoldl(x -> from_expr(x, linfo), (a,b) -> a * "," * b, args) * ")"
+end
+
 function from_builtins(f, args, linfo, call_ret_type)
     tgt = string(f)
+    @dprintln(3,"from_builtins tgt = ", tgt)
     if tgt == "getindex" || tgt == "getindex!"
         return from_getindex(args, linfo)
     elseif tgt == "setindex" || tgt == "setindex!"
@@ -1633,6 +1639,8 @@ function from_builtins(f, args, linfo, call_ret_type)
             cmp_op = "<"
         end
         return "(($arg_x $cmp_op $arg_y) ? ($arg_x) : ($arg_y))"
+    elseif tgt == "string"
+        return from_string(args, linfo)
     elseif isdefined(Base, f)
         fval = getfield(Base, f)
         if isa(fval, DataType)
