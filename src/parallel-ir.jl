@@ -442,6 +442,7 @@ type expr_state
     max_label :: Int # holds the max number of all LabelNodes
     multi_correlation::Int # correlation number for arrays with multiple assignment
     in_nested :: Bool
+    tuple_assigns :: Dict{LHSVar,Array{Any,1}}
 
     # Initialize the state for parallel IR translation.
     function expr_state(function_name, bl, max_label, input_arrays)
@@ -452,7 +453,7 @@ type expr_state
         for i = 1:length(input_arrays)
             init_corr[input_arrays[i]] = i
         end
-        new(function_name, bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label, 0, false)
+        new(function_name, bl, 0, length(input_arrays)+1, init_corr, init_sym_corr, init_tup_table, Dict{Array{DimensionSelector,1},Int}(), CompilerTools.LambdaHandling.LambdaVarInfo(), max_label, 0, false, Dict{LHSVar,Array{Any,1}}())
     end
 end
 
@@ -2582,23 +2583,9 @@ function from_assignment(lhs, rhs, depth, state)
 
     if isa(rhs, Expr)
         out_typ = rhs.typ
-        if false
         #@dprintln(3, "from_assignment rhs is Expr, type = ", out_typ, " rhs.head = ", rhs.head, " rhs = ", rhs)
 
-        # If we have "a = parfor(...)" then record that array "a" has the same length as the output array of the parfor.
-        if rhs.head == :parfor
-            the_parfor = rhs.args[1]
-            if !(isa(out_typ, Tuple)) && isArrayType(out_typ) # both lhs and out_typ could be a tuple
-                @dprintln(3,"Adding parfor array length correlation ", lhs, " to ", rhs.args[1].postParFor[end])
-                add_merge_correlations(toLHSVar(the_parfor.postParFor[end]), lhsName, state)
-            end
-            # assertEqShape nodes can prevent fusion and slow things down regardless so we can try to remove them
-            # statically if our array length correlations indicate they are in the same length set.
-        elseif rhs.head == :assertEqShape
-            if from_assertEqShape(rhs, state)
-                return [], nothing
-            end
-        elseif rhs.head == :call || rhs.head == :invoke
+        if rhs.head == :call || rhs.head == :invoke
             @dprintln(3, "Detected call rhs in from_assignment.")
             @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
             if length(rhs.args) > 1
@@ -2606,33 +2593,14 @@ function from_assignment(lhs, rhs, depth, state)
             end
             fun = CompilerTools.Helper.getCallFunction(rhs)
             args = CompilerTools.Helper.getCallArguments(rhs)
-            if isBaseFunc(fun, :ccall)
-                if args[1] == QuoteNode(:jl_alloc_array_1d)
-                    dim1 = args[6]
-                    @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
-                    if isa(dim1, TypedVar)
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
-                        if si1 & ISASSIGNEDONCE == ISASSIGNEDONCE
-                            @dprintln(3, "Will establish array length correlation for const size ", dim1)
-                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1])
-                        end
-                    end
-                elseif args[1] == QuoteNode(:jl_alloc_array_2d)
-                    dim1 = args[6]
-                    dim2 = args[8]
-                    @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
-                    if isa(dim1, TypedVar) && isa(dim2, TypedVar)
-                        si1 = CompilerTools.LambdaHandling.getDesc(dim1, state.LambdaVarInfo)
-                        si2 = CompilerTools.LambdaHandling.getDesc(dim2, state.LambdaVarInfo)
-                        if (si1 & ISASSIGNEDONCE == ISASSIGNEDONCE) && (si2 & ISASSIGNEDONCE == ISASSIGNEDONCE)
-                            @dprintln(3, "Will establish array length correlation for const size ", dim1, " ", dim2)
-                            getOrAddSymbolCorrelation(lhsName, state, Union{RHSVar,Int}[dim1, dim2])
-                            print_correlations(3, state)
-                        end
-                    end
+            if isBaseFunc(fun, :tuple)
+                if haskey(state.tuple_assigns, lhsName)
+                    @dprintln(3, "tuple assignment already remembered for ", lhsName)
+                else
+                    @dprintln(3, "Remembering tuple assignment for ", lhsName)
+                    state.tuple_assigns[lhsName] = args
                 end
             end
-        end
         end
     elseif isa(rhs, TypedVar)
         out_typ = getType(rhs, state.LambdaVarInfo)
@@ -3783,7 +3751,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     elseif head == :alloc
         # turn array alloc back to plain Julia ccall
         head = :call
-        args = from_alloc(args)
+        args = from_alloc(args, state)
     elseif head == :stencil!
         head = :parfor
         ast = mk_parfor_args_from_stencil(typ, head, args, state)
@@ -3832,11 +3800,30 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     return [ast]
 end
 
-function from_alloc(args::Array{Any,1})
+function from_alloc(args::Array{Any,1}, state)
     elemTyp = args[1]
     sizes = args[2]
     n = length(sizes)
     assert(n >= 1 && n <= 3)
+
+    @dprintln(3, "from_alloc: elemTyp = ", elemTyp, " sizes = ", sizes)
+
+    if n == 1
+        only_size = sizes[1] 
+        os_type = CompilerTools.LambdaHandling.getType(only_size, state.LambdaVarInfo)
+        @dprintln(3, "from_alloc: only_size ", only_size, " has typ = ", os_type)
+        if os_type <: Tuple
+            if haskey(state.tuple_assigns, only_size)
+                @dprintln(3, "from_alloc: found declaration for tuple")
+                sizes = state.tuple_assigns[only_size]
+                n = length(sizes)
+                assert(n >= 1 && n <= 3)
+            else
+                @dprintln(3, "from_alloc: did not find declaration for tuple")
+            end
+        end
+    end
+
     name = Symbol(string("jl_alloc_array_", n, "d"))
     appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Core, :apply_type), GlobalRef(Core,:Array), elemTyp, n)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
