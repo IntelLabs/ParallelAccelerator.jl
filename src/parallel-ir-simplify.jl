@@ -1038,7 +1038,21 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
                 checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])
             end
         elseif isBaseFunc(fun, :hvcat)
-            checkAndAddSymbolCorrelation(lhs, state, Any[rhs.args[2]...])
+            dimSizes = [rhs.args[2]...]
+            firstDimSize = dimSizes[1]
+            all_same = true
+            for i = 2:length(dimSizes)
+                if dimSizes[i] != firstDimSize
+                    all_same = false
+                end
+            end
+            if length(dimSizes) > 2
+                @dprintln(1, "hvcat equivalence classes not supported for more than 2 dimensions yet.")
+            elseif !all_same
+                @dprintln(1, "hvcat equivalence classes does not support differing dimensions.")
+            else
+                checkAndAddSymbolCorrelation(lhs, state, Any[length(dimSizes), firstDimSize])
+            end
         elseif isBaseFunc(fun, :vect)
             @dprintln(3, "found vect, args: ", args)
             len = length(args)
