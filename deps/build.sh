@@ -25,7 +25,10 @@
 
 CONF_FILE="generated/config.jl"
 MKL_LIB=""
-if [ -z "$OPENBLAS_LIB" ]; then
+
+# Users who want to use ParallelAccelerator with OpenBLAS should set
+# the PA_USE_OPENBLAS environment variable to 1.
+if [ -z "$PA_USE_OPENBLAS" ]; then
     OPENBLAS_LIB=""
 fi  
 
@@ -59,8 +62,8 @@ do
     if echo "$lib" | grep -q "/mkl/"; then
         MKL_LIB=$lib
     fi
-    if [ -z "$OPENBLAS_LIB" ]; then
-        if echo "$lib" | grep -q "OpenBLAS"; then
+    if [ -z "$PA_USE_OPENBLAS" ]; then
+        if echo "$lib" | grep -q "OpenBLAS|openblas"; then
             OPENBLAS_LIB=$lib
         fi
     fi
@@ -69,7 +72,7 @@ done
 if [ -z "$MKL_LIB" ]; then
     echo "#include <mkl.h>" > blas_test.cpp
     echo "int main(){return 0;}" >> blas_test.cpp
-    SYS_BLAS=`icpc blas_test.cpp -mkl 2>&1`
+    SYS_BLAS=`$CC blas_test.cpp -mkl 2>&1`
     rm blas_test.cpp
     if [ -z "$SYS_BLAS" ]; then
         echo "System installed MKL found"
