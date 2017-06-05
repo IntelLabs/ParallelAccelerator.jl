@@ -670,7 +670,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
 #        push!(new_body, TypedExpr(Any, :call, :println, GlobalRef(Base,:STDOUT), "after label_head"))
 
         push!(new_body, mk_gotoifnot_expr(
-               Expr(:call, GlobalRef(Base, :box), GlobalRef(Base, :Bool),
+               boxOrNot(GlobalRef(Base, :Bool),
                    Expr(:call, GlobalRef(Base, :not_int),
                            Expr(:call, GlobalRef(Base, :or_int),
                                    Expr(:call, GlobalRef(Base, :and_int),
@@ -691,7 +691,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
                                            )
                                        ),
                                Expr(:call, GlobalRef(Base, :(===)), deepcopy(recreate_temp_rhsvar),
-                                   Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar)))
+                                   boxOrNot(Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(steprange_last_rhsvar), deepcopy(steprange_step_rhsvar)))
                                )
                            )
                    )
@@ -699,7 +699,7 @@ function recreateFromLoophead(new_body, stmt :: Expr, LoopEndDict :: Dict{LHSVar
                , label_end))
 
         push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa5_lhsvar), deepcopy(recreate_temp_rhsvar), newLambdaVarInfo))
-        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), Expr(:call, GlobalRef(Base, :box), Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo))
+        push!(new_body, mk_assignment_expr(deepcopy(recreate_ssa6_lhsvar), boxOrNot(Int64, Expr(:call, GlobalRef(Base, :add_int), deepcopy(recreate_temp_rhsvar), deepcopy(steprange_step_rhsvar))), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(CompilerTools.LambdaHandling.toLHSVar(deepcopy(loop_id), newLambdaVarInfo), deepcopy(recreate_ssa5_rhsvar), newLambdaVarInfo))
         push!(new_body, mk_assignment_expr(deepcopy(recreate_temp_lhsvar), deepcopy(recreate_ssa6_rhsvar), newLambdaVarInfo))
 

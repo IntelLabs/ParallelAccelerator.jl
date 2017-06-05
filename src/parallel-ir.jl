@@ -172,6 +172,14 @@ function EquivalenceClassesAdd(ec :: EquivalenceClasses, sym :: Symbol)
     ec.data[sym]
 end
 
+function boxOrNot(typ, expr)
+if VERSION >= v"0.6.0-pre"
+    return expr
+else
+    return Expr(:call, GlobalRef(Base, :box), typ, expr) 
+end
+end
+
 """
 Clear an equivalence class.
 """
