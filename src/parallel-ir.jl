@@ -471,16 +471,16 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         println(io,"Prestatements: ")
         for i = 1:length(pnode.preParFor)
             println(io,"    ", pnode.preParFor[i])
-            if DEBUG_LVL >= 4
+            if DEBUG_LVL >= 5
                 dump(pnode.preParFor[i])
             end
         end
     end
     if length(pnode.hoisted) > 0
-        println(io,"Prestatements: ")
+        println(io,"Hoisted: ")
         for i = 1:length(pnode.hoisted)
             println(io,"    ", pnode.hoisted[i])
-            if DEBUG_LVL >= 4
+            if DEBUG_LVL >= 5
                 dump(pnode.hoisted[i])
             end
         end
@@ -489,14 +489,14 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
     for i = 1:length(pnode.body)
         println(io,"    ", pnode.body[i])
     end
-    if DEBUG_LVL >= 4
+    if DEBUG_LVL >= 5
         dump(pnode.body)
     end
     if length(pnode.loopNests) > 0
         println(io,"Loop Nests: ")
         for i = 1:length(pnode.loopNests)
             println(io,"    ", pnode.loopNests[i])
-            if DEBUG_LVL >= 4
+            if DEBUG_LVL >= 5
                 dump(pnode.loopNests[i])
             end
         end
@@ -511,12 +511,12 @@ function show(io::IO, pnode::ParallelAccelerator.ParallelIR.PIRParForAst)
         println(io,"Poststatements: ")
         for i = 1:length(pnode.postParFor)
             println(io,"    ", pnode.postParFor[i])
-            if DEBUG_LVL >= 4
+            if DEBUG_LVL >= 5
                 dump(pnode.postParFor[i])
             end
         end
     end
-    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 4
+    if length(pnode.original_domain_nodes) > 0 && DEBUG_LVL >= 5
         println(io,"Domain nodes: ")
         for i = 1:length(pnode.original_domain_nodes)
             println(io,pnode.original_domain_nodes[i])
@@ -677,7 +677,19 @@ function mk_alloc_array_expr(elem_type, atype, length)
 
     length_expr = get_length_expr(length)
 
-    TypedExpr(
+if VERSION >= v"0.6.0-pre"
+    return TypedExpr(
+       atype,
+       :foreigncall,
+       QuoteNode(:jl_alloc_array_1d),
+       atype,
+       eval(new_svec),
+       atype,
+       0,
+       length_expr,
+       0)
+else
+    return TypedExpr(
        atype,
        :call,
        GlobalRef(Core,:ccall),
@@ -688,6 +700,7 @@ function mk_alloc_array_expr(elem_type, atype, length)
        0,
        length_expr,
        0)
+end
 end
 
 function get_length_expr(length::Union{RHSVar,Int64})
@@ -712,6 +725,21 @@ function mk_alloc_array_expr(elem_type, atype, length1, length2)
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 2)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core,:svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
 
+if VERSION >= v"0.6.0-pre"
+    TypedExpr(
+       atype,
+       :foreigncall,
+       QuoteNode(:jl_alloc_array_2d),
+       atype,
+       eval(new_svec),
+       atype,
+       0,
+       get_length_expr(length1),
+       0,
+       get_length_expr(length2),
+       0
+       )
+else
     TypedExpr(
        atype,
        :call,
@@ -727,6 +755,7 @@ function mk_alloc_array_expr(elem_type, atype, length1, length2)
        0
        )
 end
+end
 
 """
 Return an expression that allocates and initializes a 3D Julia array that has an element type specified by
@@ -737,6 +766,22 @@ function mk_alloc_array_expr(elem_type, atype, length1, length2, length3)
     ret_type = TypedExpr(Type{atype},  :call, GlobalRef(Core, :apply_type), GlobalRef(Core, :Array), elem_type, 3)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), GlobalRef(Base, :Int), GlobalRef(Base, :Int), GlobalRef(Base, :Int))
 
+if VERSION >= v"0.6.0-pre"
+    TypedExpr(
+       atype,
+       :foreigncall,
+       QuoteNode(:jl_alloc_array_3d),
+       atype,
+       eval(new_svec),
+       atype,
+       0,
+       get_length_expr(length1),
+       0,
+       get_length_expr(length2),
+       0,
+       get_length_expr(length3),
+       0)
+else
     TypedExpr(
        atype,
        :call,
@@ -752,6 +797,7 @@ function mk_alloc_array_expr(elem_type, atype, length1, length2, length3)
        0,
        get_length_expr(length3),
        0)
+end
 end
 
 """
@@ -1403,13 +1449,45 @@ function getAllAliases(input :: Set{LHSVar}, aliases :: Dict{LHSVar, LHSVar})
 end
 
 function isAllocation(expr :: Expr)
-    return expr.head == :call &&
-    isBaseFunc(expr.args[1], :ccall) &&
-    (expr.args[2] == QuoteNode(:jl_alloc_array_1d) || expr.args[2] == QuoteNode(:jl_alloc_array_2d) || expr.args[2] == QuoteNode(:jl_alloc_array_3d) || expr.args[2] == QuoteNode(:jl_new_array))
+    if (expr.head == :call && isBaseFunc(expr.args[1], :ccall)) || expr.head == :foreigncall
+        call_offset = getCallOffset(expr)        
+        if expr.args[call_offset] == QuoteNode(:jl_alloc_array_1d) || 
+           expr.args[call_offset] == QuoteNode(:jl_alloc_array_2d) || 
+           expr.args[call_offset] == QuoteNode(:jl_alloc_array_3d) || 
+           expr.args[call_offset] == QuoteNode(:jl_new_array)
+            return true
+        end
+    end
+    return false
 end
 
 function isAllocation(expr)
     return false
+end
+
+function getCallOffset(expr :: Expr)
+    if expr.head == :call
+        assert(isBaseFunc(expr.args[1], :ccall))
+        return 2
+    elseif expr.head == :foreigncall
+        return 1
+    else
+        throw(string("getFirstAllocSize called for a non-allocation."))
+    end
+end
+
+function getFirstAllocSize(expr :: Expr)
+    call_offset = getCallOffset(expr)
+    size_offset = call_offset + 5
+
+    if expr.args[call_offset] == QuoteNode(:jl_alloc_array_1d)
+        num_dim = 1
+    elseif expr.args[call_offset] == QuoteNode(:jl_alloc_array_2d)
+        num_dim = 2
+    elseif expr.args[call_offset] == QuoteNode(:jl_alloc_array_3d)
+        num_dim = 3
+    end
+    return num_dim, size_offset
 end
 
 # Takes one statement in the preParFor of a parfor and a set of variables that we've determined we can eliminate.
@@ -1734,7 +1812,7 @@ function is_eliminated_arraysize(x::Expr, removed_allocs :: Set, aliases)
     if x.head == :(=)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
-            @dprintln(3,"is_eliminated_arraylen is :call")
+            @dprintln(5,"is_eliminated_arraylen is :call")
             if isBaseFunc(rhs.args[1], :arraysize)
                 array_used_lhsvar = toLHSVar(rhs.args[2])
                 array_used_aliases = getAllAliases(array_used_lhsvar, aliases)
@@ -1765,7 +1843,7 @@ function is_eliminated_arraylen(x::Expr)
     if x.head == :(=)
         rhs = x.args[2]
         if isa(rhs, Expr) && rhs.head == :call
-            @dprintln(3,"is_eliminated_arraylen is :call")
+            @dprintln(5,"is_eliminated_arraylen is :call")
             if isBaseFunc(rhs.args[1], :arraysize)
                 @dprintln(3,"is_eliminated_arraylen is :arraysize")
                 return true
@@ -1791,14 +1869,17 @@ function sub_arraylen_walk(x::Expr, replacement, top_level_number, is_top_level,
 
     if x.head == :(=)
         rhs = x.args[2]
-        if isa(rhs, Expr) && rhs.head == :call
-            if isBaseFunc(rhs.args[1], :ccall)
-                if rhs.args[2] == QuoteNode(:jl_alloc_array_1d)
-                    rhs.args[7] = replacement[1]
-                elseif rhs.args[2] == QuoteNode(:jl_alloc_array_2d)
-                    rhs.args[7] = replacement[1]
-                    rhs.args[9] = replacement[2]
-                end
+        if isAllocation(rhs)
+            num_dim, size_offset = getFirstAllocSize(rhs)
+            if num_dim == 1
+                rhs.args[size_offset] = replacement[1]
+            elseif num_dim == 2
+                rhs.args[size_offset] = replacement[1]
+                rhs.args[size_offset+2] = replacement[2]
+            elseif num_dim == 3
+                rhs.args[size_offset] = replacement[1]
+                rhs.args[size_offset+2] = replacement[2]
+                rhs.args[size_offset+4] = replacement[3]
             end
         end
     end
@@ -2402,6 +2483,15 @@ function hasNoSideEffects(node :: Expr)
             newtyp = getfield(newtyp.mod, newtyp.name)
         end
         return isa(newtyp, Type) && (newtyp <: Range || newtyp <: Function)
+    elseif node.head == :foreigncall
+        func = CompilerTools.Helper.getCallFunction(node)
+        args = CompilerTools.Helper.getCallArguments(node)
+        if func == QuoteNode(:jl_alloc_array_1d) ||
+           func == QuoteNode(:jl_alloc_array_2d) ||
+           func == QuoteNode(:jl_alloc_array_3d)
+            @dprintln(3,"hasNoSideEffects found allocation returning true")
+            return true
+        end
     elseif node.head == :call1 || node.head == :call || node.head == :invoke
         func = CompilerTools.Helper.getCallFunction(node)
         args = CompilerTools.Helper.getCallArguments(node)
@@ -3508,7 +3598,8 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         if in(arr, state.defs) || !in(arr, state.uniqsets)
             return CompilerTools.AstWalker.ASTWALK_RECURSE
         end
-        alloc_args = args[2].args[2:end]
+        call_offset = getCallOffset(args[2])
+        alloc_args = args[2].args[call_offset:end]
         @dprintln(3,"alloc_args =", alloc_args)
         sh::Array{Any,1} = get_alloc_shape(alloc_args)
         shape = map(x -> if isa(x, Expr) x else toLHSVarOrInt(x) end, sh)
@@ -3521,7 +3612,6 @@ function rm_allocs_cb(ast::Expr, state::rm_allocs_state, top_level_number, is_to
         if length(args)>=2
             return rm_allocs_cb_call(state, args[1], args[2], args[3:end])
         end
-
     # remove extra arrays from parfor data structures
     elseif head==:parfor
         rm_allocs_cb_parfor(state, args[1])
@@ -3750,8 +3840,7 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
         args = vcat(GlobalRef(Base, :arraysize), args)
     elseif head == :alloc
         # turn array alloc back to plain Julia ccall
-        head = :call
-        args = from_alloc(args, state)
+        head, args = from_alloc(args, state)
     elseif head == :stencil!
         head = :parfor
         ast = mk_parfor_args_from_stencil(typ, head, args, state)
@@ -3800,6 +3889,14 @@ function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
     return [ast]
 end
 
+function createForeignCall(realArgs)
+if VERSION >= v"0.6.0-pre"
+    return :foreigncall, realArgs
+else
+    return :call, vcat(GlobalRef(Core,:ccall), realArgs)
+end
+end
+
 function from_alloc(args::Array{Any,1}, state)
     elemTyp = args[1]
     sizes = args[2]
@@ -3825,14 +3922,19 @@ function from_alloc(args::Array{Any,1}, state)
     end
 
     name = Symbol(string("jl_alloc_array_", n, "d"))
-    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Core, :apply_type), GlobalRef(Core,:Array), elemTyp, n)
     new_svec = TypedExpr(SimpleVector, :call, GlobalRef(Core, :svec), GlobalRef(Base, :Any), [ GlobalRef(Base, :Int) for i=1:n ]...)
+if VERSION >= v"0.6.0-pre"
+    appTypExpr = Array{elemTyp,n}
+    new_svec = eval(new_svec)
+else
+    appTypExpr = TypedExpr(Type{Array{elemTyp,n}}, :call, GlobalRef(Core, :apply_type), GlobalRef(Core,:Array), elemTyp, n)
+end
     realArgs = Any[QuoteNode(name), appTypExpr, new_svec, Array{elemTyp,n}, 0]
     for i=1:n
         push!(realArgs, sizes[i])
         push!(realArgs, 0)
     end
-    return vcat(GlobalRef(Core,:ccall), realArgs)
+    return createForeignCall(realArgs)
 end
 
 
