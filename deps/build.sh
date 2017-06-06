@@ -25,6 +25,7 @@
 
 CONF_FILE="generated/config.jl"
 MKL_LIB=""
+OPENMP_SUPPORTED=""
 
 # Users who want to use ParallelAccelerator with OpenBLAS should set
 # the PA_USE_OPENBLAS environment variable to 1.
@@ -92,6 +93,24 @@ else
 fi
 #echo "out" $SYS_BLAS $MKL_LIB $OPENBLAS_LIB
 
+echo "Checking for OpenMP support..."
+echo "#include <omp.h>" > openmp_test.cpp
+echo "#include <stdio.h>" >> openmp_test.cpp
+echo "int main() { printf(\"Max OpenMP threads: %d\n\", omp_get_max_threads()); }"  >> openmp_test.cpp
+OPENMP_COMPILE=`$CC openmp_test.cpp -fopenmp -o openmp.exe 2>&1`
+rm openmp_test.cpp
+
+if [ -z "$OPENMP_COMPILE" ]; then
+    echo "OpenMP support found in $CC"
+    OPENMP_SUPPORTED=1
+    OPENMP_RUN=`./openmp.exe`
+    echo $OPENMP_RUN
+    rm openmp.exe
+else
+    echo "No OpenMP support found in $CC"
+    OPENMP_SUPPORTED=0
+fi
+
 if [ -z "$MKL_LIB" ] && [ -z "$OPENBLAS_LIB" ] && [ "$SYS_BLAS" -eq "0" ]; then
     echo "No BLAS installation detected (optional)"
 fi
@@ -104,7 +123,7 @@ fi
 echo "mkl_lib = \"$MKL_LIB\"" >> "$CONF_FILE"
 echo "openblas_lib = \"$OPENBLAS_LIB\"" >> "$CONF_FILE"
 echo "sys_blas = $SYS_BLAS" >> "$CONF_FILE"
-
+echo "openmp_supported = $OPENMP_SUPPORTED" >> "$CONF_FILE"
 
 echo "Using $CC to build ParallelAccelerator array runtime.";
 $CC -std=c++11 -fPIC -shared -o libj2carray.so.1.0 j2c-array.cpp

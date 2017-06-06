@@ -152,12 +152,8 @@ end
 
 if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     global USE_OMP = 0
-else # on osx, use OpenMP only when ICC is used since GCC/Clang doesn't support it
-    if Compat.is_apple()
-        global USE_OMP = USE_ICC
-    else
-        global USE_OMP = 1
-    end
+else # use setting from config file
+    global USE_OMP = openmp_supported
 end
 
 if isDistributedMode() #&& NERSC==0
