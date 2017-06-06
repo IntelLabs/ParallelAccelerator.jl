@@ -1011,6 +1011,27 @@ function create_equivalence_classes_assignment(lhs, rhs::Expr, state)
             @dprintln(3, "Detected :alloc array allocation. dims = ", sizes)
             checkAndAddSymbolCorrelation(lhs, state, sizes)
         end
+    elseif rhs.head == :foreigncall
+        fun = rhs.args[1]
+        args = rhs.args[2:end]
+        @dprintln(3, "Detected foreigncall rhs in from_assignment.")
+        @dprintln(3, "fun = ", fun, " args = ", args)
+        if fun == QuoteNode(:jl_alloc_array_1d)
+            dim1 = args[5]
+            @dprintln(3, "Detected 1D array allocation. dim1 = ", dim1, " type = ", typeof(dim1))
+            checkAndAddSymbolCorrelation(lhs, state, Any[dim1])
+        elseif fun == QuoteNode(:jl_alloc_array_2d)
+            dim1 = args[5]
+            dim2 = args[7]
+            @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2)
+            checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2])
+        elseif fun == QuoteNode(:jl_alloc_array_3d)
+            dim1 = args[5]
+            dim2 = args[7]
+            dim3 = args[9]
+            @dprintln(3, "Detected 2D array allocation. dim1 = ", dim1, " dim2 = ", dim2, " dim3 = ", dim3)
+            checkAndAddSymbolCorrelation(lhs, state, Any[dim1, dim2, dim3])
+        end
     elseif isCall(rhs)
         @dprintln(3, "Detected call rhs in from_assignment.")
         @dprintln(3, "from_assignment call, arg1 = ", rhs.args[1])
