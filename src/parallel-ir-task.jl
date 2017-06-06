@@ -1215,14 +1215,6 @@ function addToBody!(new_body, x, line_num)
     return line_num + 1
 end
 
-function boxOrNot(typ, expr)
-if VERSION >= v"0.6.0-pre"
-    return expr
-else
-    return Expr(:call, GlobalRef(Base, :box), typ, expr) 
-end
-end
-
 """
 This is a recursive routine to reconstruct a regular Julia loop nest from the loop nests described in PIRParForAst.
 One call of this routine handles one level of the loop nest.
