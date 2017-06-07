@@ -103,7 +103,7 @@ rm openmp_test.cpp
 if [ -z "$OPENMP_COMPILE" ]; then
     echo "OpenMP support found in $CC"
     OPENMP_SUPPORTED=1
-    OPENMP_RUN=`./openmptest`
+    OPENMP_RUN=`./openmp_test`
     echo $OPENMP_RUN
     rm openmp_test
 else
