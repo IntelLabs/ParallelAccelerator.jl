@@ -97,15 +97,15 @@ echo "Checking for OpenMP support..."
 echo "#include <omp.h>" > openmp_test.cpp
 echo "#include <stdio.h>" >> openmp_test.cpp
 echo "int main() { printf(\"Max OpenMP threads: %d\n\", omp_get_max_threads()); }"  >> openmp_test.cpp
-OPENMP_COMPILE=`$CC openmp_test.cpp -fopenmp -o openmp.exe 2>&1`
+OPENMP_COMPILE=`$CC openmp_test.cpp -fopenmp -o openmp_test 2>&1`
 rm openmp_test.cpp
 
 if [ -z "$OPENMP_COMPILE" ]; then
     echo "OpenMP support found in $CC"
     OPENMP_SUPPORTED=1
-    OPENMP_RUN=`./openmp.exe`
+    OPENMP_RUN=`./openmptest`
     echo $OPENMP_RUN
-    rm openmp.exe
+    rm openmp_test
 else
     echo "No OpenMP support found in $CC"
     OPENMP_SUPPORTED=0
