@@ -587,7 +587,7 @@ function addFreshLocalVariable(s::AbstractString, t::Any, desc, linfo::LambdaVar
     unique = false
     while (!unique)
         unique_id = unique_id + 1
-        name = Symbol(string(s, "##", unique_id))
+        name = Symbol(string(s, "_domain_ir_fresh_local_variable_ASDFQWER_", unique_id))
         unique = !isLocalVariable(name, linfo)
     end
     addLocalVariable(name, t, desc, linfo)
@@ -917,6 +917,12 @@ end
 
 isTopNodeOrGlobalRef(x::Union{TopNode,GlobalRef},s) = isa(x, TopNode) ? is(x, TopNode(s)) : is(Base.resolve(x), GlobalRef(Core.Intrinsics, s))
 isTopNodeOrGlobalRef(x,s) = false
+if VERSION >= v"0.6.0-pre"
+function box_ty(ty, x::Expr)
+    x.typ = ty
+    return x
+end
+else
 function box_ty(ty, x::Expr)
   if ty == Bool
     x.typ = ty
@@ -934,6 +940,7 @@ function box_ty(ty, x::Expr)
     x.typ = ty
     return x
   end
+end
 end
 box_ty(ty, x) = x
 

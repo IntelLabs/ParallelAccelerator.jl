@@ -172,11 +172,13 @@ function EquivalenceClassesAdd(ec :: EquivalenceClasses, sym :: Symbol)
     ec.data[sym]
 end
 
+mk_call(fun,args) = Expr(:call, fun, args...)
+
 function boxOrNot(typ, expr)
 if VERSION >= v"0.6.0-pre"
     return expr
 else
-    return Expr(:call, GlobalRef(Base, :box), typ, expr) 
+    return mk_call(GlobalRef(Base, :box), [typ, expr]) 
 end
 end
 
@@ -186,8 +188,6 @@ Clear an equivalence class.
 function EquivalenceClassesClear(ec :: EquivalenceClasses)
     empty!(ec.data)
 end
-
-mk_call(fun,args) = Expr(:call, fun, args...)
 
 function mk_mult_int_expr(args::Array)
     if length(args)==0
@@ -200,7 +200,7 @@ function mk_mult_int_expr(args::Array)
 
     while next<=length(args)
         m_call = mk_call(GlobalRef(Base,:mul_int),[prev_expr,args[next]])
-        prev_expr  = mk_call(GlobalRef(Base,:box),[Int64,m_call])
+        prev_expr  = boxOrNot(Int64, m_call)
         next += 1
     end
     return prev_expr

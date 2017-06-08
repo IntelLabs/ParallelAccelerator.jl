@@ -245,8 +245,7 @@ function mk_arrayset1(num_dim_inputs,
                       value,
                       inbounds,
                       state :: expr_state,
-                      range :: Array{DimensionSelector,1} = DimensionSelector[];
-                      boxit = false)
+                      range :: Array{DimensionSelector,1} = DimensionSelector[])
     @dprintln(3,"mk_arrayset1 typeof(index_vars) = ", typeof(index_vars))
     @dprintln(3,"mk_arrayset1 array_name = ", array_name, " typeof(array_name) = ", typeof(array_name))
     arr_typ = CompilerTools.LambdaHandling.getType(array_name, state.LambdaVarInfo)
@@ -290,11 +289,7 @@ function mk_arrayset1(num_dim_inputs,
         @dprintln(3,"mk_arrayset1 value and element types do not match.")
     end
 
-    if boxit
-       te_value = Expr(:call, GlobalRef(Base, :box), elem_typ, :($value))
-    else
-       te_value = :($value)
-    end
+    te_value = :($value)
 
     TypedExpr(
        arr_typ,
@@ -926,9 +921,6 @@ function doHoistParfor(nested_body, state, unique_node_id, dl)
     return (nested_body, hi_state.hoisted_stmts)
 end
 
-box_tfa = false
-box_aset = false
-
 """
 The main routine that converts a mmap! AST node to a parfor AST node.
 """
@@ -1030,17 +1022,13 @@ function mk_parfor_args_from_mmap!(input_arrays :: Array, dl :: DomainLambda, wi
             tfa_typ = getArrayElemType(inputInfo[i].array, state)
         end
 
-        if box_tfa
-            push!(out_body, mk_assignment_expr(tfa, Expr(:call, GlobalRef(Base, :box), tfa_typ, lbexpr.args[i]), state))
-        else
-            @dprintln(3, "Adding assignment for ", tfa, " and ", lbexpr.args[i])
-            push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        end
+        @dprintln(3, "Adding assignment for ", tfa, " and ", lbexpr.args[i])
+        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
         @dprintln(3, "Adding mk_arrayset1 for ", inputInfo[i].array, " and ", parfor_index_syms, " and ", tfa)
-        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
+        push!(out_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         if length(condExprs) > 0
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
+            push!(else_body, mk_arrayset1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         end
     end
 
@@ -1462,15 +1450,11 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
         tfa = createTempForArray(nans_sn, 1, state)
         tfa_typ = getArrayElemType(nans_sn, state)
-        if box_tfa
-            push!(out_body, mk_assignment_expr(tfa, DomainIR.box_ty(tfa_typ, lbexpr.args[i]), state))
-        else
-            push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
-        end
-        push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state; boxit = box_aset))
+        push!(out_body, mk_assignment_expr(tfa, lbexpr.args[i], state))
+        push!(out_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state))
         if length(condExprs) > 0
             push!(else_body, mk_assignment_expr(tfa, mk_arrayref1(num_dim_inputs, inputInfo[i].array, parfor_index_syms, true, state, inputInfo[i].range), state))
-            push!(else_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state, inputInfo[i].range; boxit = box_aset))
+            push!(else_body, mk_arrayset1(num_dim_inputs, nans_sn, parfor_index_syms, tfa, true, state, inputInfo[i].range))
         end
         # keep the sum of the sizes of the individual output array elements
         output_element_sizes = output_element_sizes + sizeof(dl.outputs)

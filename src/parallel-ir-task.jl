@@ -1650,6 +1650,7 @@ function parforToTask(parfor_index, bb_statements, body, state)
     @dprintln(3,"out_vars = ", out, " type = ", typeof(out))
     locals = collect(locals)
     @dprintln(3,"local_vars = ", locals, " type = ", typeof(locals))
+    # The following 8 lines if just for debugging purposes.
     in_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in in_vars]
     out_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in out]
     locals_vars_sym = [lookupVariableName(x, state.LambdaVarInfo) for x in locals]
@@ -1723,6 +1724,20 @@ function parforToTask(parfor_index, bb_statements, body, state)
     addToTaskFunc!(io_symbols, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(reduction_vars, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
     addToTaskFunc!(locals, oldToTaskMap, state.LambdaVarInfo, newLambdaVarInfo)
+
+if false
+    rn = 0
+    for ian in in_array_names
+        map_entry = oldToTaskMap[ian]
+        tm = string(map_entry.name)
+        @dprintln(3,"map_entry = ", map_entry, " type = ", typeof(map_entry), " tm = ", tm, " type = ", typeof(tm))
+        if contains(tm, "#")
+            rn += 1
+            map_entry.name = Symbol("replacement_arg_" * string(rn))
+            @dprintln(3,"replaced ", tm, " with ", map_entry.name)
+        end
+    end
+end
 
     # Create the oldToNewMap as described above.
     for old in oldToTaskMap
@@ -1938,10 +1953,13 @@ function parforToTask(parfor_index, bb_statements, body, state)
     if DEBUG_LVL >= 3
         task_func_ct = ParallelAccelerator.Driver.code_typed(task_func, all_arg_type)
         println("Task func code for ", task_func)
-        println(task_func_ct)    
+        println(task_func_ct, " type = ", typeof(task_func_ct))    
         println("code = ", code)
-        println(CompilerTools.LambdaHandling.getBody(code))   
-        println(newLambdaVarInfo)   
+        debug_lvi = CompilerTools.LambdaHandling.lambdaToLambdaVarInfo(task_func_ct)
+        #println(newLambdaVarInfo)   
+        println("debug_lvi = ", code)
+        println(debug_lvi)   
+        println(CompilerTools.LambdaHandling.getBody(task_func_ct))   
 
         ParallelAccelerator.Driver.code_llvm(task_func, all_arg_type)
     end
