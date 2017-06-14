@@ -28,8 +28,12 @@ script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
   - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get update -qq; fi
   - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get install -qq gcc g++ gfortran; fi
-  #- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
-  #- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+
+  # Add OpenBLAS.
+  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get install -qq libopenblas-dev; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install homebrew/science/openblas; fi
+
   # Pull in and build CompilerTools dependency.
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
