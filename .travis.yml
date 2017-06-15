@@ -34,6 +34,10 @@ script:
   - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then sudo apt-get install -qq libopenblas-dev; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install homebrew/science/openblas; fi
 
+  # On Mac in particular, we need a couple of env vars set to be able to use OpenBLAS.
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/opt/openblas/lib; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/usr/local/opt/openblas/include/; fi
+
   # Pull in and build CompilerTools dependency.
   - julia -e 'Pkg.clone("https://github.com/IntelLabs/CompilerTools.jl")'
   - julia -e 'Pkg.build("CompilerTools")'
