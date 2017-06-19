@@ -26,6 +26,7 @@ Pkg.add("ParallelAccelerator")
 
 ## Resources
 
+- **Paper:** Todd A. Anderson, Hai Liu, Lindsey Kuper, Ehsan Totoni, Jan Vitek, and Tatiana Shpeisman, ["Parallelizing Julia with a Non-Invasive DSL"](http://drops.dagstuhl.de/opus/volltexte/2017/7269/pdf/LIPIcs-ECOOP-2017-4.pdf) ([ECOOP 2017](http://2017.ecoop.org/track/ecoop-2017-papers))
 - **Documentation:** <http://parallelacceleratorjl.readthedocs.org/>
 - **Blog post** with usage examples, performance results, and discussion of package internals: <http://julialang.org/blog/2016/03/parallelaccelerator>
 - **Presentations:**
