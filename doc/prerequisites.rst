@@ -46,11 +46,14 @@ If you do not have a BLAS library available, then as ParallelAccelerator runs, y
 For best results, we recommend installing `the Intel Math Kernel Library (MKL) <https://software.intel.com/en-us/mkl>`_.  As an alternative, we provide the below instructions for installing and using `OpenBLAS <http://www.openblas.net/>`_ on macOS and Ubuntu.  However, ParallelAccelerator uses a few features that are supported in MKL but not in OpenBLAS, as noted in `issue #147 <https://github.com/IntelLabs/ParallelAccelerator.jl/issues/147>`_.
 
   * To install OpenBLAS on Ubuntu and use it with ParallelAccelerator:
+
     - Run ``sudo apt-get install libopenblas-dev``, which should also install the necessary dependencies.
     - Remember to run ``Pkg.build("ParallelAccelerator")`` at the Julia prompt to rebuild ParallelAccelerator.  The build should now detect that a BLAS library is installed.
   * To install OpenBLAS on macOS (using Homebrew) and use it with ParallelAccelerator:
+
     - Run ``brew install homebrew/science/openblas``.  This should install OpenBLAS in ``/usr/local/opt/openblas``.
     - Set the following environment variables:
+
       + ``export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/opt/openblas/lib``
       + ``export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/usr/local/opt/openblas/include/``
     - Remember to run ``Pkg.build("ParallelAccelerator")`` at the Julia prompt to rebuild ParallelAccelerator.  The build should now detect that a BLAS library is installed.
