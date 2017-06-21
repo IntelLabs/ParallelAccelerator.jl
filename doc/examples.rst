@@ -4,7 +4,7 @@
 Examples
 *********
 
-After running ``Pkg.test("ParallelAccelerator")`` a good next step is
+After running ``Pkg.test("ParallelAccelerator")``, a good next step is
 to try out some example programs from the ParallelAccelerator
 ``examples/`` subdirectory.  These can be run either from the command
 line or from the Julia prompt.  For instance, to run the
