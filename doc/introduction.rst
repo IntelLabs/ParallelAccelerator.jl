@@ -19,7 +19,7 @@ data-parallel operations.
 ParallelAccelerator is part of the High Performance Scripting (HPS)
 project at Intel Labs.
 
-Quick install (requires Julia 0.4)::
+Quick install (requires Julia 0.5.x or 0.4.x)::
 
         Pkg.add("ParallelAccelerator") 
 
