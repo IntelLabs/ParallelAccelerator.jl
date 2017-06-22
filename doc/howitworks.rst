@@ -7,8 +7,8 @@ How It Works
 ParallelAccelerator is essentially a domain-specific compiler written in Julia.
 It performs additional analysis and optimization on top of the Julia compiler.
 ParallelAccelerator discovers and exploits the implicit parallelism in source programs that
-use parallel programming patterns such as *map, reduce, comprehension, and
-stencil*. For example, Julia array operators such as ``.+``, ``.-``, ``.*``, and ``./`` are
+use parallel programming patterns such as *map*, *reduce*, *comprehension*, and
+*stencil*. For example, Julia array operators such as ``.+``, ``.-``, ``.*``, and ``./`` are
 translated by ParallelAccelerator internally into data-parallel *map* operations over all
 elements of input arrays.  For the most part, these patterns are already
 present in standard Julia, so programmers can use ParallelAccelerator to run
@@ -37,4 +37,8 @@ compile it into binary form before loading it back into Julia as a dynamic
 library for execution. This step of translating Julia to C currently imposes
 certain limitations, and therefore we can only run user
 programs that meet such limitations.
+
+To learn more about how ParallelAccelerator works under the hood, see
+`our ECOOP 2017 paper`
+<http://2017.ecoop.org/event/ecoop-2017-papers-parallelizing-julia-with-a-non-invasive-dsl>`_.
 
