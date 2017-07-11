@@ -39,7 +39,7 @@ include("cat.jl")
 include("hcat.jl")
 include("vcat.jl")
 include("ranges.jl")
-include("misc.jl")
+#include("misc.jl")
 include("aug_assign.jl")
 include("complex.jl")
 include("print.jl")
@@ -87,14 +87,14 @@ if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
 end
 end
 
-module TestLR
-using Base.Test
-include("../examples/logistic_regression/logistic_regression.jl")
+#module TestLR
+#using Base.Test
+#include("../examples/logistic_regression/logistic_regression.jl")
 # logistic_regression should have 5 top-level parfors after optimization
-if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
-@test ParallelAccelerator.get_num_acc_parfors()==5
-end
-end
+#if !(ParallelAccelerator.getPseMode() == ParallelAccelerator.THREADS_MODE)
+#@test ParallelAccelerator.get_num_acc_parfors()==5
+#end
+#end
 
 # Delete file left behind by opt-flow.
 dir = pwd()
