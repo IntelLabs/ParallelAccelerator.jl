@@ -228,7 +228,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
 
         live_info = CompilerTools.LivenessAnalysis.find_top_number(top_level_number, data.lives)
         # Remove line number statements.
-        if head == :line
+        if head == :line || head == :meta
             return CompilerTools.AstWalker.ASTWALK_REMOVE
         end
         if live_info == nothing
