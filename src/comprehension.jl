@@ -45,10 +45,10 @@ function comprehension_to_cartesianarray(ast)
     ndim = length(args)
   end
   body = CompilerTools.AstWalker.AstWalk(body, process_node, nothing)
-  params = Array(Symbol, ndim)
-  indices = Array(Symbol, ndim)
-  ranges = Array(Any, ndim)
-  headers = Array(Any, ndim)
+  params = Array{Symbol}(ndim)
+  indices = Array{Symbol}(ndim)
+  ranges = Array{Any}(ndim)
+  headers = Array{Any}(ndim)
   for i = 1:ndim
     r = args[i]
     assert(r.head == :(=))

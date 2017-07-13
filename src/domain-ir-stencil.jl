@@ -65,7 +65,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   #assert(krn.head == Symbol("->"))
   @dprintln(3, "typeof krnBody = ", typeof(krnBody), " ", krnBody.head)
   assert(isa(krnBody, Expr))
-  #assert(is(krn.head, :lambda))
+  #assert((krn.head === :lambda))
   local stat = KernelStat()
   # warn(string("krn.args[1]=", krn.args[1]))
   local arrSyms::Array{Symbol,1} = getInputParameters(state.linfo)
@@ -73,7 +73,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
     arrSyms = arrSyms[2:end]
   end
   local narrs = length(arrSyms)
-  local bufSyms = Array(GenSym, narrs)
+  local bufSyms = Array{GenSym}(narrs)
   local arrSymDict = Dict{LHSVar,GenSym}()
   for i in 1:length(arrSyms)
     # this case is not possible since krn is a type inferred AST and not LambdaInfo
@@ -92,10 +92,10 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   traverse(state, expr, bufSyms, arrSymDict, stat, borderSty)
   # remove LineNumberNode, :line, and tuple assignment from expr
   #warn(string("kernel expr = ", expr))
-  body = Array(Any, 0)
+  body = Array{Any}(0)
   for e in expr.args
     if isa(e, LineNumberNode)
-    elseif isa(e, Expr) && is(e.head, :line)
+    elseif isa(e, Expr) && (e.head === :line)
     else
       push!(body, e)
     end
@@ -120,7 +120,7 @@ function analyze_kernel(state::IRState, bufTyps::Array{Type, 1}, krnBody::Expr, 
   # what we want since they are useful in kernel specification, but
   # they do not appear in kernel's DomainLambda.
   #for (v,d) in locals
-  #  if is(d.rhs, nothing)
+  #  if (d.rhs === nothing)
   #    delete!(locals, v)
   #  end
   #end
@@ -146,7 +146,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     end
   end
   # fix assignment and fill in variable type
-  if is(expr.head, :(=))
+  if (expr.head === :(=))
     lhs = toLHSVar(expr.args[1])
     rhs = expr.args[2]
     typ = typeOfOpr(state, rhs)
@@ -159,9 +159,9 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
    fun = getCallFunction(expr)
    args = getCallArguments(expr)
    if isa(fun, GlobalRef) && 
-     (is(fun.name, :getindex) || is(fun.name, :setindex!) || is(fun.name, :arrayref) || is(fun.name, :arrayset)) && 
+     ((fun.name === :getindex) || (fun.name === :setindex!) || (fun.name === :arrayref) || (fun.name === :arrayset)) && 
      isa(args[1], RHSVar) && in(args[1], bufSyms)
-    local isGet = is(fun.name, :arrayref) || is(fun.name, :getindex)
+    local isGet = (fun.name === :arrayref) || (fun.name === :getindex)
     #(bufSym, bufTyp) = arrSymDict[expr.args[2].name] # modify the reference to actual source array
     bufSym = args[1]
     elmTyp = elmTypOf(getType(bufSym, state.linfo))
@@ -186,7 +186,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     expr.args = isGet ? [ GlobalRef(Base, :unsafe_arrayref), args[1], args[(idxOffset+1):end]...] :
                         [ GlobalRef(Base, :unsafe_arrayset), args[1], args[2], args[(idxOffset+1):end]... ]
     # fix numerical coercion when converting setindex! into unsafe_arrayset
-    if is(expr.args[1].name, :unsafe_arrayset)
+    if (expr.args[1].name === :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
           expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, Symbol(string(elmTyp))), expr.args[3])
         end

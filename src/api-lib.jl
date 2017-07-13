@@ -26,7 +26,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 baremodule Lib
 
 using Base
-import Base: call, (==), copy
+import Base: (==), copy
+#import Base: call, (==), copy
 
 using ..cartesianmapreduce, ..cartesianarray, ..sum, ..(.*), ..map, ..map!
 
@@ -184,7 +185,8 @@ end
 baremodule NoInline
 
 using Base
-import Base: call, (==)
+import Base: (==)
+#import Base: call, (==)
 
 @noinline function rand(args...)
   Base.Random.rand(args...)
@@ -206,55 +208,55 @@ end
 import .NoInline
 
 @inline function rand(dims::Int...)
-  _pa_rand_gen_arr = Array(Float64, dims...)
+  _pa_rand_gen_arr = Array{Float64}(dims...)
   map!(x -> NoInline.rand(Float64)::Float64, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 @inline function randn(dims::Int...)
-  _pa_rand_gen_arr = Array(Float64, dims...)
+  _pa_rand_gen_arr = Array{Float64}(dims...)
   map!(x -> NoInline.randn()::Float64, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 @inline function rand(t::Tuple)
-  _pa_rand_gen_arr = Array(Float64, t)
+  _pa_rand_gen_arr = Array{Float64}(t)
   map!(x -> NoInline.rand(Float64)::Float64, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 @inline function randn(t::Tuple)
-  _pa_rand_gen_arr = Array(Float64, t)
+  _pa_rand_gen_arr = Array{Float64}(t)
   map!(x -> NoInline.randn()::Float64, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 @inline function rand(T::Type{Float32}, d::Int, dims::Int...)
-  _pa_rand_gen_arr = Array(Float32, d, dims...)
+  _pa_rand_gen_arr = Array{Float32}(d, dims...)
   map!(x -> NoInline.rand(Float32)::Float32, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 @inline function rand(T::Type, d::Int, dims::Int...)
-  _pa_rand_gen_arr = Array(T, d, dims...)
+  _pa_rand_gen_arr = Array{T}(d, dims...)
   map!(x -> NoInline.rand(T)::T, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 #@inline function randn(T::Type, d::Int, dims::Int...)
-#  _pa_rand_gen_arr = Array(T, d, dims...)
+#  _pa_rand_gen_arr = Array{T}(d, dims...)
 #  map!(x -> NoInline.randn(T)::T, _pa_rand_gen_arr)
 #  return _pa_rand_gen_arr
 #end
 
 @inline function rand(r::AbstractRNG, T::Type, d::Int, dims::Int...)
-  _pa_rand_gen_arr = Array(T, d, dims...)
+  _pa_rand_gen_arr = Array{T}(d, dims...)
   map!(x -> NoInline.rand(r, T)::T, _pa_rand_gen_arr)
   return _pa_rand_gen_arr
 end
 
 #@inline function randn(r::AbstractRNG, T::Type, d::Int, dims::Int...)
-#  _pa_rand_gen_arr = Array(T, d, dims...)
+#  _pa_rand_gen_arr = Array{T}(d, dims...)
 #  map!(x -> NoInline.randn(r, T)::T, _pa_rand_gen_arr)
 #  return _pa_rand_gen_arr
 #end

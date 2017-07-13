@@ -392,7 +392,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
 
     # The depth of the loop nest for the parfor is equal to the dimensions of the input_array.
     num_dim_inputs = findSelectedDimensions([inputInfo], state)
-    loopNests = Array(PIRLoopNest, red_dim > 0 ? 1 : num_dim_inputs) # only 1 loopNest if red_dim > 0
+    loopNests = Array{PIRLoopNest}(red_dim > 0 ? 1 : num_dim_inputs) # only 1 loopNest if red_dim > 0
     @dprintln(3, "num_dim_inputs = ", num_dim_inputs, " ", unique_node_id)
     @dprintln(3, "length(loopNests) = ", length(loopNests), " ", unique_node_id)
 
@@ -423,7 +423,7 @@ function mk_parfor_args_from_reduce(input_args::Array{Any,1}, state)
     pre_statements  = deepcopy(inputInfo.pre_offsets)
     post_statements = Any[]
     save_array_lens  = []
-    #input_array_rangeconds = Array(Any, num_dim_inputs)
+    #input_array_rangeconds = Array{Any}(num_dim_inputs)
     input_array_rangeconds = Any[]
 
     @dprintln(3, "initial pre_statements = ", pre_statements)
@@ -711,7 +711,7 @@ end
 function get_mmap_input_info(input_array :: Expr, state)
     thisInfo = InputInfo()
 
-    if is(input_array.head, :select)
+    if (input_array.head === :select)
         thisInfo.array = input_array.args[1]
         thisInfo.dim   = getArrayNumDims(thisInfo.array, state)
         thisInfo.indexed_dims = Bool[true for i = 1:thisInfo.dim]
@@ -834,7 +834,7 @@ function get_available_variables(state)
 end
 
 function gen_pir_loopnest(pre_statements, save_array_lens, num_dim_inputs, inputInfo, unique_node_id, parfor_index_syms, state)
-    loopNests = Array(PIRLoopNest, num_dim_inputs)
+    loopNests = Array{PIRLoopNest}(num_dim_inputs)
     @dprintln(3, "gen_pir_loopnest for ", inputInfo[1])
 
     # Don't generate arraysize calls if input array's size is constant.
@@ -1134,7 +1134,7 @@ function mk_parfor_args_from_parallel_for(args :: Array{Any,1}, state)
     if isa(out_body[end], Expr) && (out_body[end].head == :tuple)
         pop!(out_body)
     end
-    loopNests = Array(PIRLoopNest, n_loops)
+    loopNests = Array{PIRLoopNest}(n_loops)
     rearray = RangeExprs[]
     # Insert a statement to assign the length of the input arrays to a var
     for i = 1:n_loops
@@ -1232,7 +1232,7 @@ end
 
 # Create variables to use for the parfor loop indices.
 function gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)
-    parfor_index_syms = Array(Any,num_dim_inputs)
+    parfor_index_syms = Array{Any}(num_dim_inputs)
     for i = 1:num_dim_inputs
         parfor_index_var = string("parfor_index_", i, "_", unique_node_id)
         parfor_index_sym = Symbol(parfor_index_var)
@@ -1339,7 +1339,7 @@ function mk_parfor_args_from_mmap(input_arrays :: Array, dl :: DomainLambda, dom
 
     num_dim_inputs = findSelectedDimensions(inputInfo, state)
     @dprintln(3, "num_dim_inputs = ", num_dim_inputs, " " , unique_node_id)
-    loopNests = Array(PIRLoopNest, num_dim_inputs)
+    loopNests = Array{PIRLoopNest}(num_dim_inputs)
 
     # Create variables to use for the loop indices.
     parfor_index_syms::Array{Any,1} = gen_parfor_loop_indices(num_dim_inputs, unique_node_id, state)

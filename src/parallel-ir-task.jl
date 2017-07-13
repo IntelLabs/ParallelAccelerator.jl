@@ -712,7 +712,7 @@ function divide_fis(full_iteration_space :: ParallelAccelerator.ParallelIR.pir_r
 #    @dprintln(3, "divide_fis space = ", full_iteration_space, " numtotal = ", numtotal)
     dims = sort(dimlength[dimlength(i, full_iteration_space.upper_bounds[i] - full_iteration_space.lower_bounds[i] + 1)  for i = 1:full_iteration_space.dim], by=x->x.len, rev=true)
 #    @dprintln(3, "dims = ", dims)
-    assignments = Array(ParallelAccelerator.ParallelIR.pir_range_actual, numtotal)
+    assignments = Array{ParallelAccelerator.ParallelIR.pir_range_actual}(numtotal)
     divide_work(full_iteration_space, assignments, isf_range[], 1, numtotal, dims, 1)
     return assignments
 end
@@ -985,7 +985,7 @@ function getIO(stmt_ids, bb_statements)
     outputs = setdiff(intersect(cur_defs, stmts_for_ids[end].live_out), IntrinsicSet)
     @dprintln(3, "outputs = ", outputs)
     cur_defs = setdiff(cur_defs, IntrinsicSet)
-    cur_inputs = setdiff(filter(x -> !(is(x, :Int64) || is(x, :Float32)), cur_inputs), IntrinsicSet)
+    cur_inputs = setdiff(filter(x -> !((x === :Int64) || (x === :Float32)), cur_inputs), IntrinsicSet)
     # The locals are those things defined that aren't inputs or outputs of the function.
     cur_inputs, outputs, setdiff(cur_defs, union(cur_inputs, outputs))
 end
@@ -1989,6 +1989,3 @@ function seqTask(body_indices, bb_statements, body, state)
     throw(string("seqTask construction not implemented yet."))
     TaskInfo(:FIXFIXFIX, :FIXFIXFIX, Any[], Any[], nothing, PIRLoopNest[])
 end
-
-
-

@@ -40,7 +40,7 @@ function pattern_match_call_math(fun::Symbol, input::AbstractString, typ::Type, 
     end
 
     # abs() needs special handling since fabs() in math.h should be called for floats
-    if is(fun,:abs) && (isFloat || isDouble || isComplex || isInt)
+    if (fun === :abs) && (isFloat || isDouble || isComplex || isInt)
       @dprintln(3,"FOUND ", fun)
       fname = (isInt || isComplex) ? "abs" : (isFloat ? "fabsf" : "fabs")
       s = fname*"("*input*");"

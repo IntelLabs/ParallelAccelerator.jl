@@ -88,8 +88,8 @@ function hoistAllocation(ast::Array{Any,1}, lives, domLoop::DomLoops, state :: e
             end
         end
 
-        #if (is(preBlk, nothing) || length(preBlk.statements) == 0) continue end
-        if is(preBlk, nothing) continue end
+        #if ((preBlk === nothing) || length(preBlk.statements) == 0) continue end
+        if (preBlk === nothing) continue end
         tls = lives.basic_blocks[ preBlk ]
 
         # sometimes the preBlk has no statements
@@ -247,7 +247,7 @@ function remove_no_deps(node :: Expr, data :: RemoveNoDepsState, top_level_numbe
                 rhs = node.args[2]
                 @dprintln(4,rhs)
 
-                if isa(rhs, Expr) && (is(rhs.head, :parfor) || is(rhs.head, :mmap!))
+                if isa(rhs, Expr) && ((rhs.head === :parfor) || (rhs.head === :mmap!))
                     # Always keep parfor assignment in order to work with fusion
                     @dprintln(3, "keep assignment due to parfor or mmap! node")
                     return node
@@ -575,7 +575,7 @@ end
 
 function transpose_propagate_helper(node::Expr, data::TransposePropagateState)
 
-    if is(node.head, :gotoifnot)
+    if (node.head === :gotoifnot)
         # Only transpose propagate within a basic block.  this is now a new basic block.
         empty!(data.transpose_map)
     elseif isAssignmentNode(node) && isCall(node.args[2])

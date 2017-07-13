@@ -106,9 +106,6 @@ end
 const VECDEFAULT = 0
 const VECDISABLE = 1
 const VECFORCE = 2
-const USE_ICC = 0
-const USE_GCC = 1
-const USE_MINGW = 2
 USE_OMP = 1
 CGEN_RAW_ARRAY_MODE = false
 
@@ -135,25 +132,14 @@ end
 # Globals
 inEntryPoint = false
 lstate = nothing
-backend_compiler = USE_ICC
-use_bcpp = 0
 USE_HDF5 = 0
-package_root = getPackageRoot()
-mkl_lib = ""
-openblas_lib = ""
-sys_blas = 0
 NERSC = 0
 USE_DAAL = 0
-
-#config file overrides backend_compiler variable
-if isfile("$package_root/deps/generated/config.jl")
-  include("$package_root/deps/generated/config.jl")
-end
 
 if haskey(ENV, "CGEN_NO_OMP") && ENV["CGEN_NO_OMP"]=="1"
     global USE_OMP = 0
 else # use setting from config file
-    global USE_OMP = openmp_supported
+    global USE_OMP = ParallelAccelerator.openmp_supported
 end
 
 if isDistributedMode() #&& NERSC==0
@@ -532,7 +518,7 @@ end
 
 # Generic declaration emitter for non-primitive Julia DataTypes
 function from_decl(k::DataType, linfo)
-    if is(k, UnitRange{Int64})
+    if (k === UnitRange{Int64})
         if haskey(lstate.globalUDTs, k)
             lstate.globalUDTs[k] = 0
         end
@@ -599,7 +585,7 @@ end
 
 function isCompositeType(t::Type)
     # TODO: Expand this to real UDTs
-    b = (t<:Tuple) || is(t, UnitRange{Int64}) || is(t, StepRange{Int64, Int64})
+    b = (t<:Tuple) || (t === UnitRange{Int64}) || (t === StepRange{Int64, Int64})
     b
 end
 
@@ -985,8 +971,8 @@ function from_assignment(args::Array{Any,1}, linfo)
         end
         # Try to refine type for certain stmts with a call in the rhs
         # that doesn't have a type
-        if typeAvailable(rhs) && is(rhs.typ, Any) &&
-        hasfield(rhs, :head) && (is(rhs.head, :call) || is(rhs.head, :call1))
+        if typeAvailable(rhs) && (rhs.typ === Any) &&
+        hasfield(rhs, :head) && ((rhs.head === :call) || (rhs.head === :call1))
             m, f, t = resolveCallTarget(rhs.args,linfo, rhs.typ)
             f = string(f)
             if f == "fpext"
@@ -1289,7 +1275,7 @@ function from_foreigncall(args, linfo, call_ret_typ)
 
     if isa(fun, QuoteNode)
         s = from_symbol(fun, linfo)
-#    elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
+#    elseif isa(fun, Expr) && ((fun.head === :call1) || (fun.head === :call))
 #        s = canonicalize(string(fun.args[2]))
 #        @dprintln(3,"ccall target: ", s)
     elseif isa(fun, Tuple) && length(fun) == 2
@@ -1338,7 +1324,7 @@ function from_ccall(args, linfo, call_ret_typ)
 
     if isa(fun, QuoteNode)
         s = from_symbol(fun, linfo)
-    elseif isa(fun, Expr) && (is(fun.head, :call1) || is(fun.head, :call))
+    elseif isa(fun, Expr) && ((fun.head === :call1) || (fun.head === :call))
         s = canonicalize(string(fun.args[2]))
         @dprintln(3,"ccall target: ", s)
     elseif isa(fun, Tuple) && length(fun) == 2
@@ -1382,7 +1368,7 @@ function from_arrayset(args, linfo)
 end
 
 function istupletyp(typ)
-    isa(typ, DataType) && is(typ.name, Tuple.name)
+    isa(typ, DataType) && (typ.name === Tuple.name)
 end
 
 function from_setfield!(args, linfo)
@@ -1941,7 +1927,7 @@ function resolveCallTarget(f::Symbol, args::Array{Any, 1},linfo, call_ret_typ)
     s = ""
     if isInlineable(f, args, linfo)
         return M, string(f), from_inlineable(f, args, linfo, call_ret_typ)
-    elseif is(f, :call)
+    elseif (f === :call)
         #This means, we have a Base.call - if f is not a Function, this is translated to f(args)
         arglist = mapfoldl(x->from_expr(x,linfo), (a,b)->"$a, $b", args[2:end])
         if isa(args[1], DataType)
@@ -1957,7 +1943,7 @@ function resolveCallTarget(f::Expr, args::Array{Any, 1},linfo, call_ret_typ)
     M = ""
     t = ""
     s = ""
-    if is(f.head,:call) || is(f.head,:call1) # :call1 is gone in v0.4
+    if (f.head === :call) || (f.head === :call1) # :call1 is gone in v0.4
         if length(f.args) == 3 && isBaseFunc(f.args[1], :getfield) && isa(f.args[3],QuoteNode)
             s = f.args[3].value
             if isa(f.args[2],Module)
@@ -2002,7 +1988,7 @@ function resolveCallTarget(f, args::Array{Any, 1},linfo, call_ret_typ)
         end
         @dprintln(3,"Case 1: Returning M = ", M, " s = ", s, " t = ", t)
     # the following appears to be dead code
-    # elseif isBaseFunc(f, :getfield) && hasfield(f, :head) && is(f.head, :call)
+    # elseif isBaseFunc(f, :getfield) && hasfield(f, :head) && (f.head === :call)
     #    @dprintln(3,"Case 2: calling")
     #    return resolveCallTarget(f,linfo)
     # case 3:
@@ -2920,13 +2906,13 @@ function from_expr(ast::Char, linfo)
 end
 
 function from_expr(ast::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float16, Float32,Float64,Bool,Char,Void}, linfo)
-    if is(ast, Inf)
+    if (ast === Inf)
       "DBL_MAX"
-    elseif is(ast, Inf32)
+    elseif (ast === Inf32)
       "FLT_MAX"
-    elseif is(ast, -Inf)
+    elseif (ast === -Inf)
       "DBL_MIN"
-    elseif is(ast, -Inf32)
+    elseif (ast === -Inf32)
       "FLT_MIN"
     elseif isa(ast, Int64) && (ast >= (1<<31) || ast < -(1<<31))
       string("0x", hex(ast), "LL")

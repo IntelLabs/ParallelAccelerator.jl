@@ -66,7 +66,7 @@ function setindex!(asa::AbstractStencilArray, value, idx...)
       throw(string("Index ", idx, " is out of bounds!"))
     end
   end
-  if is(value, NaN)
+  if (value === NaN)
     if asa.borderStyle == :oob_dst_zero
       asa.src[idx...] = 0
     end
@@ -124,7 +124,7 @@ function runStencil(inputs...)
     typ = typeof(inputs[i])
     if typ <: AbstractArray
       push!(arrs, inputs[i])
-    elseif is(typ, Int)
+    elseif (typ === Int)
       iterations = inputs[i]
     else
       borderStyle = inputs[i]
@@ -134,7 +134,7 @@ function runStencil(inputs...)
   assert(narrs > 1)
   local sizes = [size(arrs[1])...]
   local n = length(sizes)
-  local indices = Array(Int, n)
+  local indices = Array{Int}(n)
   local bufs = [ AbstractStencilArray(n, sizes, indices, arr, borderStyle) for arr in arrs ]
   for steps = 1 : iterations
     for i = 1:n
@@ -186,7 +186,7 @@ function analyze_kernel(krn, esc)
   local stat = ()
   local params = krn.args[1]  # parameter of the kernel lambda, must be a tuple of symbols
   local bufs
-  if isa(params, Expr) && is(params.head, :tuple)
+  if isa(params, Expr) && (params.head === :tuple)
     bufs = Symbol[ arg for arg in params.args ] # all buffers, must be an array of symbols
   else isa(params, Symbol)
     bufs = Symbol[ params ]
@@ -197,12 +197,12 @@ function analyze_kernel(krn, esc)
   local expr = krn.args[2]
   function traverse(expr)     # traverse expr to find the places where arrSym is refernced
     assert(isa(expr, Expr))
-    if is(expr.head, :ref)
+    if (expr.head === :ref)
       if haskey(bufMap, expr.args[1]) # one of input bufers
         expr.args[1] = bufMap[expr.args[1]] # modify the reference to actual source array
         local dim = length(expr.args) - 1
         @assert (dim <= 10) "the dimension must be no greater than 10"
-        if is(stat, ())         # create stat if not already exists
+        if (stat === ())         # create stat if not already exists
           local idxSym = [ gensym(string("i", i)) for i in 1:dim ]
           stat = KernelStat(dim, zeros(dim), zeros(dim), idxSym, bufSym, nothing) 
         else                    # if stat already exists, check if the dimension matches
@@ -216,10 +216,10 @@ function analyze_kernel(krn, esc)
           expr.args[i+1] = :($(stat.idxSym[i]) + $(expr.args[i+1]))
         end
       end
-    elseif is(expr.head, :return)
+    elseif (expr.head === :return)
       swapSym = Symbol[]
       args = expr.args[1]
-      if isa(args, Expr) && is(args.head, :tuple)
+      if isa(args, Expr) && (args.head === :tuple)
         args = args.args
       elseif isa(args, Symbol)
         args = Symbol[args]
@@ -271,7 +271,7 @@ end
 
 # turn an array of Expr blocks into an a single block of Exprs
 function liftQuote(exprs::Array{Expr,1})
-  args = vcat([ is(expr.head, :block) ? expr.args : expr for expr in exprs ]...)
+  args = vcat([ (expr.head === :block) ? expr.args : expr for expr in exprs ]...)
   Expr(:block, args...)
 end
 
@@ -280,7 +280,7 @@ function specializeBorder(borderSty, borderCheckF, modF, krnExpr)
   oob_src_zero = borderSty == :oob_src_zero
   oob_wraparound = borderSty == :oob_wraparound
   function traverse(expr)
-    if is(expr.head, :(=)) && isa(expr.args[1], Expr) && is(expr.args[1].head, :ref)
+    if (expr.head === :(=)) && isa(expr.args[1], Expr) && (expr.args[1].head === :ref)
       lhs = expr.args[1]
       rhs = expr.args[2]
       if oob_dst_zero 
@@ -289,7 +289,7 @@ function specializeBorder(borderSty, borderCheckF, modF, krnExpr)
         rhs = traverse(rhs)
       end
       return Expr(expr.head, lhs, rhs)
-    elseif is(expr.head, :ref)
+    elseif (expr.head === :ref)
       if oob_src_zero
         return Expr(:if, borderCheckF(expr.args[2:end]), expr, 0)
       elseif oob_wraparound
@@ -357,7 +357,7 @@ function translateStencil(krn, args::Array, esc)
                     nestedLoop(stat.dimension, idxSym, borderIterExpr, :(if $(innerCheckF(idxSym)) else $(borderKrnExpr) end))
   # inner region
   local loopExpr = nestedLoop(stat.dimension, stat.idxSym, innerIterExpr, krnExpr)
-  local swapExpr = is(swapSym, nothing) ? :() :
+  local swapExpr = (swapSym === nothing) ? :() :
                      liftQuote(vcat([ :($(tmpSym[i]) = $(swapSym[i])) for i = 1:nbufs ],
                                     [ :($(bufSym[i]) = $(tmpSym[i])) for i = 1:nbufs ]))
   local expr = quote

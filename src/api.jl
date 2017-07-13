@@ -26,7 +26,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 baremodule API
 
 using Base
-import Base: call
+#import Base: call
 
 if VERSION >= v"0.6.0-pre"
 using SpecialFunctions
@@ -86,6 +86,10 @@ const binary_map_operators = vcat(comparison_map_operators, Symbol[ :*, :/,
     :div, :mod, :rem, :&, :|, :$, :min, :max])
 
 const binary_operators = binary_map_operators
+
+const elem_ops = Symbol[ :.-, :.+, :.*, :./, :.>, :.<, :.<=, :.>=, :.==, :.\, :.%, :.<<, :.>>, :.^ ]
+const elem_bare_ops = Symbol[ :-, :+, :*, :/, :>, :<, :<=, :>=, :(==), :\, :%, :<<, :>>, :^ ]
+const elem_map = Dict{Symbol,Symbol}(zip(elem_ops,elem_bare_ops))
 
 const rename_op_from = Symbol[ :-, :+, :*, :/, :.-, :.+, :.*, :./, :.>, :.<, :.<=, :.>=, :.==, :.\, :.%, :.<<, :.>>, :.^, :&, :|, :$ ]
 const rename_op_to = Symbol[ :pa_api_sub, :pa_api_add, :pa_api_mul, :pa_api_div, :pa_api_elem_sub, :pa_api_elem_add, :pa_api_elem_mul, :pa_api_elem_div, :pa_api_elem_gt, :pa_api_elem_lt, :pa_api_elem_lte, :pa_api_elem_gte, :pa_api_elem_equal, :pa_api_elem_back, :pa_api_elem_mod, :pa_api_elem_lshift, :pa_api_elem_rshift, :pa_api_elem_carat, :pa_api_ampersand, :pa_api_pipe, :pa_api_dollar ]
@@ -165,21 +169,47 @@ end
 
 for f in binary_operators
     nf = rename_if_needed(f)
+    bare_op = f
+    if haskey(elem_map, bare_op)
+        bare_op = elem_map[bare_op]
+    end
+
     @eval begin
         @noinline function ($nf){T1<:Number,T2<:Number}(A::T1, B::DenseArray{T2})
             (Base.$f)(A, B)
         end
-        @noinline function ($nf){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
-            (Base.$f)(B, A)
-        end
     end
+
+    if bare_op == f
+		@eval begin
+			@noinline function ($nf){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
+				(Base.$f)(B, A)
+			end
+		end
+    else
+		@eval begin
+			@noinline function ($nf){T1<:Number,T2<:Number}(B::DenseArray{T1}, A::T2)
+				broadcast($bare_op, B, A)
+			end
+		end
+    end
+
     if f != :* && f != :/
-        @eval begin
-            @noinline function ($nf){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
-                (Base.$f)(A, B)
-            end
+        if bare_op == f
+			@eval begin
+				@noinline function ($nf){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
+					(Base.$f)(A, B)
+				end
+			end
+        else
+			@eval begin
+				@noinline function ($nf){T1<:Number,T2<:Number}(A::DenseArray{T1}, B::DenseArray{T2})
+					broadcast($bare_op, A, B)
+				end
+			end
         end
     end
+
     @eval begin
         @inline function ($nf)(args...)
             (Base.$f)(args...)
@@ -232,7 +262,7 @@ end
 end
 
 function cartesianarray{T}(body, ::Type{Tuple{T}}, ndims)
-  a = Array(T, ndims...)
+  a = Array{T}(ndims...)
   for I in CartesianRange(ndims)
     a[I.I...] = body(I.I...)
   end
@@ -240,8 +270,8 @@ function cartesianarray{T}(body, ::Type{Tuple{T}}, ndims)
 end
 
 function cartesianarray{T1,T2}(body, ::Type{Tuple{T1, T2}}, ndims)
-  a = Array(T1, ndims...)
-  b = Array(T2, ndims...)
+  a = Array{T1}(ndims...)
+  b = Array{T2}(ndims...)
   for I in CartesianRange(ndims)
     (u, v) = body(I.I...)
     a[I.I...] = u
@@ -251,9 +281,9 @@ function cartesianarray{T1,T2}(body, ::Type{Tuple{T1, T2}}, ndims)
 end
 
 function cartesianarray{T1,T2,T3}(body, ::Type{Tuple{T1, T2, T3}}, ndims)
-  a = Array(T1, ndims...)
-  b = Array(T2, ndims...)
-  c = Array(T3, ndims...)
+  a = Array{T1}(ndims...)
+  b = Array{T2}(ndims...)
+  c = Array{T3}(ndims...)
   for I in CartesianRange(ndims)
     (u, v, w) = body(I.I...)
     a[I.I...] = u
@@ -347,10 +377,10 @@ end
 macro par(args...)
     na = length(args)
     @assert (na > 0) "Expect a for loop as argument to @par"
-    redVars = Array(Symbol, na-1)
-    redOps = Array(Symbol, na-1)
+    redVars = Array{Symbol}(na-1)
+    redOps = Array{Symbol}(na-1)
     loop = args[end]
-    if !isa(loop,Expr) || !is(loop.head,:for)
+    if !isa(loop,Expr) || !(loop.head === :for)
         error("malformed @par loop")
     end
     if !isa(loop.args[1], Expr)

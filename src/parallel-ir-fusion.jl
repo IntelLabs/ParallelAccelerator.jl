@@ -553,14 +553,14 @@ function mmapToMmap!(LambdaVarInfo, body::Expr, lives, uniqSet)
     for i =1:length(body.args)
         expr = body.args[i]
         # If the statement is an assignment.
-        if isa(expr, Expr) && is(expr.head, :(=))
+        if isa(expr, Expr) && (expr.head === :(=))
             lhs = toLHSVar(expr.args[1], LambdaVarInfo)
             rhs = expr.args[2]
             # right now assume all
             assert(isa(lhs, RHSVar))
             lhsTyp = CompilerTools.LambdaHandling.getType(lhs, LambdaVarInfo)
             # If the right-hand side is an mmap.
-            if isa(rhs, Expr) && is(rhs.head, :mmap)
+            if isa(rhs, Expr) && (rhs.head === :mmap)
                 args = rhs.args[1]
                 tls = CompilerTools.LivenessAnalysis.find_top_number(i, lives)
                 assert(tls != nothing)
@@ -581,7 +581,7 @@ function mmapToMmap!(LambdaVarInfo, body::Expr, lives, uniqSet)
                     end
                 end
                 # If we found a dying array whose space we can reuse.
-                if !is(reuse, nothing)
+                if !(reuse === nothing)
                     rhs.head = :mmap!   # Change to mmap!
                     @dprintln(2, "mmapToMMap!: successfully reuse ", reuse, " for ", lhs)
                     if j != 1  # The array to reuse has to be first.  If it isn't already then reorder the args to make it so.

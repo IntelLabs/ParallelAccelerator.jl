@@ -40,7 +40,7 @@ function relabel(exprs::Array{Any}, irState)
       exprs[i] = LabelNode(labelDict[expr.label])
     elseif isa(expr, GotoNode)
       exprs[i] = GotoNode(labelDict[expr.label])
-    elseif isa(expr, Expr) && is(expr.head, :gotoifnot)
+    elseif isa(expr, Expr) && (expr.head === :gotoifnot)
       exprs[i] = TypedExpr(expr.typ, expr.head, expr.args[1], labelDict[expr.args[2]])
     end
   end
@@ -86,10 +86,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   local oob_src_zero = false
   local oob_wraparound = false
   assert(isa(border, Symbol))
-  oob_skip = is(border, :oob_skip)
-  oob_dst_zero = is(border, :oob_dst_zero)
-  oob_src_zero = is(border, :oob_src_zero)
-  oob_wraparound = is(border, :oob_wraparound)
+  oob_skip = (border === :oob_skip)
+  oob_dst_zero = (border === :oob_dst_zero)
+  oob_src_zero = (border === :oob_src_zero)
+  oob_wraparound = (border === :oob_wraparound)
   local iterations = args[2]
   # convert all TypedVar in bufs to just Symbol
   local bufs = args[3]
@@ -104,7 +104,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                                    TypedExpr(Int, :call, GlobalRef(Base, :arraysize), buf, i))
                          for i in 1:n ]
   local strideNodes = [ addTempVariable(Int, linfo) for s in stat.strideSym ]
-  local strideInitExpr = Array(Any, n)
+  local strideInitExpr = Array{Any}(n)
   strideInitExpr[1] = TypedExpr(Int, :(=), strideNodes[1], 1)
   # the following assumes contiguous column major layout for multi-dimensional arrays
   for i = 2:n
@@ -118,7 +118,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
                                  1)
                      for i in n:-1:1 ]
   local nbufs = length(bufs)
-  tmpBufs = Array(TypedVar, nbufs)
+  tmpBufs = Array{TypedVar}(nbufs)
   for i = 1:length(bufs)
     elmTyp = DomainIR.elmTypOf(getType(bufs[i], linfo))
     arrTyp = Array{elmTyp, n}
@@ -136,11 +136,11 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   @dprintln(3, "before simplifyBodyExpr body=", bodyExpr)
   bodyExpr = relabel(DomainIR.stencilGenBody(stat, bodyLinfo, bodyExpr, idxNodes, strideNodes, bufs, linfo, getLoopPrivateFlags()), irState)
   # rotate
-  assert(is(bodyExpr[end].head, :tuple))
+  assert((bodyExpr[end].head === :tuple))
   @dprintln(3,"bodyExpr = ")
   printBody(3, bodyExpr)
-  local rotateExpr = Array(Any, 0)
-  local revertExpr = Array(Any, 0)
+  local rotateExpr = Array{Any}(0)
+  local revertExpr = Array{Any}(0)
   # warn(string("last return=", bodyExpr[end]))
   if bodyExpr[end].args[1] != nothing
     rets = bodyExpr[end].args
@@ -175,7 +175,7 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   if oob_dst_zero
     for expr in bodyExpr
       expr = deepcopy(expr)
-      if is(expr.head, :call) && isBaseFunc(expr.args[1], :unsafe_arrayset)
+      if (expr.head === :call) && isBaseFunc(expr.args[1], :unsafe_arrayset)
         zero = Base.convert(DomainIR.elmTypOf(getType(expr.args[2], linfo)), 0)
         push!(borderExpr, TypedExpr(expr.typ, :call, expr.args[1], expr.args[2], zero, expr.args[4:end]...))
       end
@@ -183,10 +183,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   elseif oob_src_zero
     for expr in bodyExpr
       expr = deepcopy(expr)
-      if isa(expr, Expr) && is(expr.head, :(=))
+      if isa(expr, Expr) && (expr.head === :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
-        if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
+        if isa(rhs, Expr) && (rhs.head === :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
           zero = Base.convert(rhs.typ, 0)
           expr = TypedExpr(expr.typ, :(=), lhs,
                   TypedExpr(rhs.typ, :call, GlobalRef(Base, :safe_arrayref),
@@ -198,10 +198,10 @@ function mk_parfor_args_from_stencil(typ, head, args, irState)
   elseif oob_wraparound
     for expr in bodyExpr
       expr = deepcopy(expr)
-      if isa(expr, Expr) && is(expr.head, :(=))
+      if isa(expr, Expr) && (expr.head === :(=))
         lhs = expr.args[1]
         rhs = expr.args[2]
-        if isa(rhs, Expr) && is(rhs.head, :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
+        if isa(rhs, Expr) && (rhs.head === :call) && isBaseFunc(rhs.args[1], :unsafe_arrayref)
           indices = Expr[ TypedExpr(Int, :call, GlobalRef(Base, :select_value),
                             DomainIR.box_ty(Bool, Expr(:call, GlobalRef(Base, :sle_int), deepcopy(rhs.args[2+i]), 0)),
                             DomainIR.add_expr(deepcopy(rhs.args[2+i]), sizeNodes[i]),

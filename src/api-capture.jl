@@ -158,10 +158,10 @@ end
 function translate_par(args)
     na = length(args)
     @assert (na > 0) "Expect a for loop as argument to @par"
-    redVars = Array(Symbol, na-1)
-    redOps = Array(Symbol, na-1)
+    redVars = Array{Symbol}(na-1)
+    redOps = Array{Symbol}(na-1)
     loop = args[end]
-    if !isa(loop,Expr) || !is(loop.head,:for)
+    if !isa(loop,Expr) || !(loop.head === :for)
         error("malformed @par loop")
     end
     if !isa(loop.args[1], Expr) 
@@ -184,10 +184,10 @@ function translate_par(args)
     end
     ndim = length(loopheads)
     body = loop.args[2]
-    params = Array(Symbol, ndim)
-    indices = Array(Symbol, ndim)
-    ranges = Array(Any, ndim)
-    headers = Array(Any, ndim)
+    params = Array{Symbol}(ndim)
+    indices = Array{Symbol}(ndim)
+    ranges = Array{Any}(ndim)
+    headers = Array{Any}(ndim)
     for i = 1:ndim
         r = loopheads[i]
         assert(r.head == :(=))
@@ -251,7 +251,7 @@ function isStart1UnitRange(node::Expr)
 end
 
 function process_par_macro(node::Expr, state, top_level_number, is_top_level, read)
-    if is(node.head, :macrocall) 
+    if node.head === :macrocall
         #println("got par macro, args = ", node.args)
         if node.args[1] == Symbol("@par")
             ast = translate_par(node.args[2:end])

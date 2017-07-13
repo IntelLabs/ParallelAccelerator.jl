@@ -57,7 +57,7 @@ function __init__()
 #    function j2c_array_new(elem_bytes::Int, inp::Union{Array, Void}, ndim::Int, dims::Tuple)
 #      # note that C interface mandates Int64 for dimension data
 #      _dims = Int64[ convert(Int64, x) for x in dims ]
-#      _inp = is(inp, nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
+#      _inp = (inp === nothing) ? C_NULL : convert(Ptr{Void}, pointer(inp))
 #
 #      #ccall((:j2c_array_new, $dyn_lib), Ptr{Void}, (Cint, Ptr{Void}, Cuint, Ptr{UInt64}),
 #      #      convert(Cint, elem_bytes), _inp, convert(Cuint, ndim), pointer(_dims))
@@ -82,8 +82,8 @@ function __init__()
     # If T is Ptr{Void}, treat the element type as j2c array, and the
     # returned array is merely a pointer, not a new object.
     function j2c_array_get(arr::Ptr{Void}, idx::Int, T::Type)
-      nbytes = is(T, Ptr{Void}) ? 0 : sizeof(T)
-      _value = Array(T, 1)
+      nbytes = (T === Ptr{Void}) ? 0 : sizeof(T)
+      _value = Array{T}(1)
       ccall((:j2c_array_get,$dyn_lib), Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
             convert(Cint, nbytes), arr, convert(Cuint, idx), convert(Ptr{Void}, pointer(_value)))
       return _value[1]
@@ -92,7 +92,7 @@ function __init__()
     # Set the j2c array element at the given (linear) index to the given value.
     # If T is Ptr{Void}, treat value as a pointer to j2c array.
     function j2c_array_set{T}(arr::Ptr{Void}, idx::Int, value::T)
-      nbytes = is(T, Ptr{Void}) ? 0 : sizeof(T)
+      nbytes = (T === Ptr{Void}) ? 0 : sizeof(T)
       _value = nbytes == 0 ? value : convert(Ptr{Void}, pointer(T[ value ]))
       ccall((:j2c_array_set, $dyn_lib), Void, (Cint, Ptr{Void}, Cuint, Ptr{Void}),
             convert(Cint, nbytes), arr, convert(Cuint, idx), _value)
@@ -168,7 +168,7 @@ end
 # 1. We assume the input j2c array object contains no data pointer aliases.
 # 2. The returned Julia array will share the pointer to J2C array data at leaf level.
 function _from_j2c_array(inp::Ptr{Void}, elem_typ::DataType, N::Int, ptr_array_dict :: Dict{Ptr{Void}, Array})
-  dims = Array(Int, N)
+  dims = Array{Int}(N)
   len  = 1
   for i = 1:N
     dims[i] = j2c_array_size(inp, i)
@@ -186,7 +186,7 @@ else
 end
     end
   elseif isArrayType(elem_typ)
-    arr = Array(elem_typ, dims...)
+    arr = Array{elem_typ}(dims...)
     sub_type = elem_typ.parameters[1]
     sub_dim  = elem_typ.parameters[2]
     for i = 1:len

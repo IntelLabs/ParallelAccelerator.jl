@@ -279,7 +279,7 @@ function isequal(x :: SingularSelector, y :: SingularSelector)
     isequal(x.value, y.value)
 end
 
-typealias DimensionSelector Union{RangeData, MaskSelector, SingularSelector}
+const DimensionSelector = Union{RangeData, MaskSelector, SingularSelector}
 
 function hash(x :: Array{DimensionSelector,1})
     @dprintln(4, "Array{DimensionSelector,1} hash")
@@ -3003,7 +3003,7 @@ function nested_function_exprs(domain_lambda, out_state)
     @dprintln(3,"Non-array escaping = ", non_array_escaping, " " , unique_node_id)
 
     # Find out max_label.
-    assert(isa(body, Expr) && is(body.head, :body))
+    assert(isa(body, Expr) && (body.head === :body))
     max_label = getMaxLabel(max_label, body.args)
 
     eq_start = time_ns()
@@ -3367,7 +3367,7 @@ function from_root(function_name, ast)
     @dprintln(3,"Non-array params = ", non_array_params, " function = ", function_name)
 
     # Find out max_label
-    assert(isa(body, Expr) && is(body.head, :body))
+    assert(isa(body, Expr) && (body.head === :body))
     max_label = getMaxLabel(0, body.args)
     @dprintln(3,"maxLabel = ", max_label, " body type = ", body.typ)
 
@@ -3753,7 +3753,7 @@ end
 The main ParallelIR function for processing some node in the AST.
 """
 function from_expr(ast ::Expr, depth, state :: expr_state, top_level)
-    if is(ast, nothing)
+    if (ast === nothing)
         return [nothing]
     end
     @dprintln(2,"from_expr depth=",depth," ")
