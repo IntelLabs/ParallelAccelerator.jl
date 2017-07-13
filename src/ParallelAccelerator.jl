@@ -114,7 +114,8 @@ function getPseMode()
     global cached_mode
     if cached_mode == nothing
         if haskey(ENV,"PROSPECT_MODE")
-            if ENV["PROSPECT_MODE"] != "threads" && backend_compiler == NONE
+            env_mode = ENV["PROSPECT_MODE"]
+            if (env_mode == "cgen" || env_mode == "offload1" || env_mode == "offload2" || env_mode == "task") && backend_compiler == NONE
                 println("ParallelAccelerator backend CGen requested but no C compiler is installed...")
                 println("...reverting to Julia native threading backend.")
                 ENV["PROSPECT_MODE"] = "threads"
