@@ -13,10 +13,9 @@ using ParallelAccelerator
 end
 
 function main(m::Int, k::Int)
-    Y  = Array(Float64, m, k)    # to store E{x g(w'x)} for components
-    E1 = Array(Float64, k)       # store E{g'(w'x)} for components
-
-    W  = Array(Float64, m, k)    # to store E{x g(w'x)} for components
+    Y  = Array{Float64}(m, k)    # to store E{x g(w'x)} for components
+    E1 = Array{Float64}(k)       # store E{g'(w'x)} for components
+    W  = Array{Float64}(m, k)    # to store E{x g(w'x)} for components
 
     fill!(W, 3)
     fill!(Y, 9)

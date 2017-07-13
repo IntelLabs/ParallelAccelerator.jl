@@ -45,5 +45,5 @@ end
 using Base.Test
 
 println("Testing constant promotion for pointwise operations...")
-@test_approx_eq ConstPromoteTest.test1() [9.0,6.76,0.04]
+@test ConstPromoteTest.test1() ≈ [9.0,6.76,0.04]
 println("Done testing constant promotion.")

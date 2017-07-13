@@ -39,7 +39,7 @@ using ParallelAccelerator
 
 @acc minMax(A) = (indmin(A), indmax(A))
 
-@acc vecLen(A) = sqrt(sumabs2(A))
+@acc vecLen(A) = sqrt(sum(abs2, A))
 
 @acc diagTest(A) = sum(diag(diagm(A)))
 
@@ -64,7 +64,7 @@ end
 function test2()
   A = rand(5)
   abs(vecLen(A) - (@noacc vecLen(A))) < 1.0e-10 &&
-  abs(vecLen(A) - sqrt(Base.sumabs2(A))) < 1.0e-10
+  abs(vecLen(A) - sqrt(Base.sum(abs2, A))) < 1.0e-10
 end
 
 function test3()

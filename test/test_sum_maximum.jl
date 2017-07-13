@@ -9,8 +9,8 @@ using ParallelAccelerator
 end
 
 function main(m::Int, k::Int)
-    W  = Array(Float64, m, k)   
-    Wp = Array(Float64, m, k)
+    W  = Array{Float64}(m, k)   
+    Wp = Array{Float64}(m, k)
     fill!(W, 3)
     fill!(Wp, 5)
     chg = find_chg(k,m,W,Wp)

@@ -122,7 +122,7 @@ end
 
 function test6()
     A = Int[x for x = 1:10]
-    reduce_2(A) == sumabs2(A)
+    reduce_2(A) == sum(abs2, A)
 end
 
 function test7()

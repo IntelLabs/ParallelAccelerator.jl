@@ -67,8 +67,8 @@ end
 
 using Base.Test
 println("Testing cat...")
-@test_approx_eq CatTest.test1() [3.0; 1.0]
-@test_approx_eq CatTest.test2() [2.0 2.5; 1.5 11.0]
-@test_approx_eq CatTest.test3() [2.0 2.5 3.0; 1.5 11.0 16.0]
+@test CatTest.test1() ≈ [3.0; 1.0]
+@test CatTest.test2() ≈ [2.0 2.5; 1.5 11.0]
+@test CatTest.test3() ≈ [2.0 2.5 3.0; 1.5 11.0 16.0]
 println("Done testing cat.")
 

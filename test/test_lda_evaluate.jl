@@ -12,8 +12,8 @@ end
 end
 
 function main(m::Int, n::Int)
-    X = Array(Float64, m, n)
-    W = Array(Float64, m)
+    X = Array{Float64}(m, n)
+    W = Array{Float64}(m)
     fill!(X, 5)
     fill!(W, 3)
     b = 1.0

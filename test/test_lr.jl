@@ -49,7 +49,7 @@ end
 
 using Base.Test
 println("Testing logistic regression...")
-@test_approx_eq TestLogisticRegression.logistic_regression(10) [0.9461770317849691 0.8827825771001324 1.2035527971160302]
+@test TestLogisticRegression.logistic_regression(10) ≈ [0.9461770317849691 0.8827825771001324 1.2035527971160302]
 println("Done testing logistic regression...")
 
 

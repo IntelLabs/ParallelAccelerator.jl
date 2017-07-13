@@ -58,8 +58,8 @@ end
 end
 
 function test_At_mul_B(m::Int, k::Int, n::Int)
-    W = Array(Float64, m, k)   
-    X = Array(Float64, m, n)
+    W = Array{Float64}(m, k)   
+    X = Array{Float64}(m, n)
     fill!(W, 3)
     fill!(X, 5)
     opt_At_mul_B!(X, W)
