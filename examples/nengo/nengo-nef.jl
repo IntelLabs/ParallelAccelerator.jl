@@ -34,7 +34,7 @@ if "--plot" in ARGS
     using PyPlot
 end
 
-typealias Float Float64
+const Float = Float64
 
 const dt = Float(0.001)    # simulation time step
 const end_t = Float(10.0)  # simulation duration
@@ -54,8 +54,8 @@ funcAB(x)=x*x
 uniform(low, high) = rand() * (high - low) + low
 
 function generate_gain_and_bias(count, intercept_low, intercept_high, rate_low, rate_high)
-    gain = Array(Float, count)
-    bias = Array(Float, count)
+    gain = Array{Float}(count)
+    bias = Array{Float}(count)
     for i in 1:count
         # desired intercept (x value for which the neuron starts firing
         intercept = uniform(intercept_low, intercept_high)
@@ -97,7 +97,7 @@ function compute_response(x, encoder, gain, bias, time_limit=0.5)
     ref = zeros(Float, N)        # refractory period
 
     # compute input corresponding to x
-    input = Array(Float, N)
+    input = Array{Float}(N)
     for i in 1:N
         input[i] = x*encoder[i]*gain[i]+bias[i]
         v[i]=uniform(0,1)  # randomize the initial voltage level
@@ -124,7 +124,7 @@ function compute_tuning_curves(encoder, gain, bias)
     x_values = Float[i*2.0/N_samples - 1.0 for i in 0:N_samples-1]
 
     # build up a matrix of neural responses to each input (i.e. tuning curves)
-    A = Array(Float, N, N_samples)
+    A = Array{Float}(N, N_samples)
     for i in 1:length(x_values)
         x = x_values[i]
         response = compute_response(x, encoder, gain, bias)

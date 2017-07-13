@@ -58,11 +58,11 @@ function singleScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::F
   # Compute the gradient of i1
   # This is basically two stencils, one for x and one for y
   # The stencil is [1 8 0 -8 -1]/12 and leave zeros in the boundary
-  Ix = Array(Float32, w, h)
+  Ix = Array{Float32}(w, h)
   runStencil(Ix, i1, 1, :oob_dst_zero) do b, a
     b[0,0] = (a[-2,0] + 8.0f0 * a[-1,0] - 8.0f0 * a[1,0] - a[2,0])/12.0f0
   end
-  Iy = Array(Float32, w, h)
+  Iy = Array{Float32}(w, h)
   runStencil(Iy, i1, :oob_dst_zero) do b, a
     b[0,0] = (a[0,-2] + 8.0f0 * a[0,-1] - 8.0f0 * a[0,1] - a[0,2])/12.0f0
   end
@@ -86,8 +86,8 @@ function singleScaleOpticalFlow(i1::Matrix{Float32}, i2::Matrix{Float32}, lam::F
     #   Ix*Iy for (0,0) of the other array
     #   Ix^2+4*lam and Iy^2+4*lam for (0,0) respectively (Ix for u, Iy for v)
     # At boundaries just include terms that exist
-    Apu = Array(Float32, w, h)
-    Apv = Array(Float32, w, h)
+    Apu = Array{Float32}(w, h)
+    Apv = Array{Float32}(w, h)
     runStencil(Apu, Apv, pu, pv, Ix, Iy, :oob_src_zero) do Apu, Apv, pu, pv, Ix, Iy
       ix = Ix[0,0]
       iy = Iy[0,0]
@@ -189,7 +189,7 @@ Assumes that image files are in the same directory as opt-flow.jl.
 
     println("nframes = ", nframes)
     assert(nframes > 1)
-    frames = Array(Matrix{Float32}, nframes)
+    frames = Array{Matrix{Float32}}(nframes)
     for i = 1:nframes
         frames[i] = Image.readImage(filepaths[i])
         if i > 1 && size(frames[i])!=size(frames[i-1])

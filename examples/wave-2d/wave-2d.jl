@@ -40,8 +40,8 @@ end
     end
 
     # Dynamic source
-    f[s2+s4-1:s2+s4+1, 1:2] = 1.5 * sin(t*n)
-    f[s2-s4-1:s2-s4+1, 1:2] = 1.5 * sin(t*n)
+    f[s2+s4-1:s2+s4+1, 1:2] = 1.5 * sin.(t*n)
+    f[s2-s4-1:s2-s4+1, 1:2] = 1.5 * sin.(t*n)
     f[2:s-1, 1:2] = 1.0
 
     # Transparent boundary handling
@@ -74,7 +74,7 @@ function prime_wave2d()
 
     for i = s2 - s16 : s2 + s16
         # Initial conditions
-        c[i, s2 - s16 : s2 + s16] = - 2 * cos(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos(0.5 * 2 * pi / (s8) * i)
+        c[i, s2 - s16 : s2 + s16] = - 2 * cos.(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos.(0.5 * 2 * pi / (s8) * i)
         p[i, 1:s] = c[i, 1:s]
     end
 
@@ -109,7 +109,7 @@ function wave2d(demo::Bool)
 
     for i = s2 - s16 : s2 + s16
         # Initial conditions
-        c[i, s2 - s16 : s2 + s16] = - 2 * cos(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos(0.5 * 2 * pi / (s8) * i)
+        c[i, s2 - s16 : s2 + s16] = - 2 * cos.(0.5 * 2 * pi / (s8) * (s2 - s16 : s2 + s16)) * cos.(0.5 * 2 * pi / (s8) * i)
         p[i, 1:s] = c[i, 1:s]
     end
 

@@ -85,11 +85,11 @@ function init(numPaths::Int, numSteps::Int)
     # Compute all per-path asset values for each time step
     # NOTE: hand-hoisting obscures the basic formula.
     # Can the compiler do this optimization?
-    asset = Array(Array{Float64,1}, numSteps+1)
-    asset[1] = Array(Float64, numPaths)
+    asset = Array{Array{Float64,1}}(numSteps+1)
+    asset[1] = Array{Float64}(numPaths)
     fill!(asset[1], spot)
     for s=2:numSteps+1
-        asset[s] = asset[s-1] .* exp2(fwdFactor_log2e .+ vsqrtdt_log2e .* randn(numPaths))
+        asset[s] = asset[s-1] .* exp2.(fwdFactor_log2e .+ vsqrtdt_log2e .* randn(numPaths))
     end
     return asset
 end

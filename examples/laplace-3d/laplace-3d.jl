@@ -42,7 +42,7 @@ using DocOpt
 end
 
 function initialize(x, y, z)
-  src = Array(Float32, x, y, z)
+  src = Array{Float32}(x, y, z)
   rand!(src)
   dst = copy(src)
   return src, dst

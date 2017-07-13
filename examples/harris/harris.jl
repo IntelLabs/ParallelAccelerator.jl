@@ -91,7 +91,7 @@ Options:
     function harris(input_fname, output_fname)
         local img = convert(Matrix{Float32}, load(input_fname))
         tic()
-        res = harrisCornerDetect(Matrix{Float32}())
+        res = harrisCornerDetect(Matrix{Float32}(0, 0))
         println("SELFPRIMED ", toq())
 
         tic()

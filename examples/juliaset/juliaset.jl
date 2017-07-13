@@ -75,7 +75,7 @@ function juliaset(demo::Bool)
 
         # Mask out the NaN values (overflow).
         minval = minimum(W)
-        W[isnan(W)] = minval - minval/10
+        W[isnan.(W)] = minval - minval/10
 
         if demo
             # Plot the result as a "heat map"-style plot.  The values
