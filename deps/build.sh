@@ -39,14 +39,6 @@ then
   rm -f "$CONF_FILE"
 fi
 
-# Check for presence of bcpp, a C++ code formatting tool.  This is
-# completely optional; nothing will break if bcpp is not present, but
-# it makes the output of the ParallelAccelerator compiler easier to
-# read.
-if type "bcpp" >/dev/null 2>&1; then
-    echo "use_bcpp = 1" >> "$CONF_FILE"
-fi
-
 # C++ compiler checks.  We first check for existence of icpc; failing
 # that, we check for g++.
 if type "icpc" >/dev/null 2>&1; then
@@ -56,8 +48,22 @@ elif type "g++" >/dev/null 2>&1; then
     CC=g++
     echo "backend_compiler = USE_GCC" >> "$CONF_FILE"
 else
-    echo "You must have icpc or g++ installed to use ParallelAccelerator.";
-    exit 1;
+    echo "You won't be able to use the cgen backend because you don't have icpc or g++ installed.";
+    echo "use_bcpp = 0" >> "$CONF_FILE"
+    echo "backend_compiler = NONE" >> "$CONF_FILE"
+    echo "mkl_lib = \"\"" >> "$CONF_FILE"
+    echo "openblas_lib = \"\"" >> "$CONF_FILE"
+    echo "sys_blas = 0" >> "$CONF_FILE"
+    echo "openmp_supported = 0" >> "$CONF_FILE"
+    exit 0;
+fi
+
+# Check for presence of bcpp, a C++ code formatting tool.  This is
+# completely optional; nothing will break if bcpp is not present, but
+# it makes the output of the ParallelAccelerator compiler easier to
+# read.
+if type "bcpp" >/dev/null 2>&1; then
+    echo "use_bcpp = 1" >> "$CONF_FILE"
 fi
 
 # When build.jl runs, it passes the contents of the DYLD_LIBRARY_PATH
