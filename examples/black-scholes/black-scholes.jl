@@ -40,19 +40,19 @@ end
 @acc begin
 
 @inline function cndf2(in)
-    out = 0.5 .+ 0.5 .* erf(0.707106781 .* in)
+    out = 0.5 .+ 0.5 .* erf.(0.707106781 .* in)
     return out
 end
 
 function blackscholes(sptprice, strike, rate, volatility, time)
-    logterm = log10(sptprice ./ strike)
+    logterm = log10.(sptprice ./ strike)
     powterm = .5 .* volatility .* volatility
-    den = volatility .* sqrt(time)
+    den = volatility .* sqrt.(time)
     d1 = (((rate .+ powterm) .* time) .+ logterm) ./ den
     d2 = d1 .- den
     NofXd1 = cndf2(d1)
     NofXd2 = cndf2(d2)
-    futureValue = strike .* exp(- rate .* time)
+    futureValue = strike .* exp.(- rate .* time)
     c1 = futureValue .* NofXd2
     call = sptprice .* NofXd1 .- c1
     put  = call .- futureValue .+ sptprice
