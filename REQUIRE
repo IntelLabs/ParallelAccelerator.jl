@@ -1,5 +1,5 @@
 julia 0.6
-CompilerTools 0.2.2
+CompilerTools 0.3.0
 DataStructures 0.4.6
 Compat 0.8.0
 DocOpt
