@@ -3,4 +3,5 @@ CompilerTools 0.3.0
 DataStructures 0.4.6
 Compat 0.8.0
 DocOpt
+SpecialFunctions
 @windows WinRPM
