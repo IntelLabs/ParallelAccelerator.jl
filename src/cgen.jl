@@ -351,16 +351,16 @@ function from_includes()
     blas_include = ""
     if include_blas == true
         libblas = Base.libblas_name
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             blas_include = "#include <mkl.h>\n"
-        elseif openblas_lib!="" || sys_blas==1
+        elseif ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
             blas_include = "#include <cblas.h>\n"
         else
             blas_include = "#include \"$packageroot/deps/include/cgen_linalg.h\"\n"
         end
     end
     if include_lapack == true
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             blas_include = "#include <mkl.h>\n"
         end
     end
@@ -1289,7 +1289,7 @@ function from_foreigncall(args, linfo, call_ret_typ)
     argsStart = 4
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             s *= "(CBLAS_LAYOUT) $(from_expr(args[4], linfo)), "
         else
             s *= "(CBLAS_ORDER) $(from_expr(args[4], linfo)), "
@@ -1338,7 +1338,7 @@ function from_ccall(args, linfo, call_ret_typ)
     argsStart = 4
     argsEnd = length(args)
     if contains(s, "cblas") && contains(s, "gemm")
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             s *= "(CBLAS_LAYOUT) $(from_expr(args[4], linfo)), "
         else
             s *= "(CBLAS_ORDER) $(from_expr(args[4], linfo)), "
@@ -3621,16 +3621,16 @@ function getShellBase(flags=[])
    link_Opts = flags
     linkLibs = []
     if include_blas==true
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             push!(linkLibs,"-mkl ")
-        elseif openblas_lib!=""
+        elseif ParallelAccelerator.getOpenblasLib()!=""
             push!(linkLibs,"-lopenblas ")
-        elseif sys_blas==1
+        elseif ParallelAccelerator.getSysBlas()==1
             push!(linkLibs,"-lblas ")
         end
     end
     if include_lapack==true
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             push!(linkLibs,"-mkl ")
         end
     end
@@ -3660,7 +3660,7 @@ function getShellBase(flags=[])
     push!(linkLibs,"-ldl ")
   end
 
-  if backend_compiler == USE_ICC
+  if ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_ICC
     comp = "icpc"
     if isDistributedMode()
         if haskey(ENV,"HDF5_DIR")
@@ -3684,7 +3684,7 @@ function getShellBase(flags=[])
     end
     # Generate dyn_lib
     return "$comp $(Opts...) -g $vecOpts -fpic $(otherArgs...)", "$(linkLibs...) -lm"
-  elseif backend_compiler == USE_GCC
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_GCC
     comp = getGccName()
     if isDistributedMode()
         comp = "mpic++"
@@ -3693,7 +3693,7 @@ function getShellBase(flags=[])
         push!(Opts, "-fopenmp")
     end
     return "$comp $(Opts...) -g -fpic $(otherArgs...)", "$(linkLibs...) -lm"
-  elseif backend_compiler == USE_MINGW
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_MINGW
     throw(string("getShellBase implementation for mingw not completed."))
   end
 end
@@ -3716,7 +3716,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     DAALROOT=ENV["DAALROOT"]
     push!(Opts,"-I$DAALROOT/include")
   end
-  if backend_compiler == USE_ICC
+  if ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_ICC
     comp = "icpc"
     if isDistributedMode()
         if haskey(ENV,"HDF5_DIR")
@@ -3737,7 +3737,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     if USE_OMP == 1 || USE_DAAL==1
         push!(Opts, "-qopenmp")
     end
-    if mkl_lib!=""
+    if ParallelAccelerator.getMklLib()!=""
         push!(Opts,"-mkl")
     end
     if ParallelAccelerator.getPseMode() == ParallelAccelerator.OFFLOAD1_MODE ||
@@ -3747,7 +3747,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     end
     # Generate dyn_lib
     compileCommand = `$comp $Opts -std=c++11 -g $vecOpts -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
-  elseif backend_compiler == USE_GCC
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_GCC
     comp = getGccName()
     if isDistributedMode()
         comp = "mpic++"
@@ -3757,7 +3757,7 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
     end
     push!(Opts, "-std=c++11")
     compileCommand = `$comp $Opts -g -fpic -c -o $full_outfile_name $otherArgs $cgenOutput`
-  elseif backend_compiler == USE_MINGW
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_MINGW
     gpp = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin","g++")
     RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
     incdir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","include")
@@ -3776,7 +3776,6 @@ function getCompileCommand(full_outfile_name, cgenOutput, flags=[])
 end
 
 function compile(outfile_name; flags=[])
-    global use_bcpp
     packageroot = getPackageRoot()
 
     cgenOutput = "$generated_file_dir/$outfile_name.cpp"
@@ -3790,7 +3789,7 @@ function compile(outfile_name; flags=[])
             println("OpenMP is not used.")
         end
 
-        if use_bcpp == 1
+        if ParallelAccelerator.getUseBcpp() == 1
             cgenOutputTmp = "$generated_file_dir/$(outfile_name)_tmp.cpp"
             run(`cp $cgenOutput $cgenOutputTmp`)
             # make cpp code readable
@@ -3820,16 +3819,16 @@ function getLinkCommand(outfile_name, lib, flags=[])
         end
     end
     if include_blas==true
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             push!(linkLibs,"-mkl")
-        elseif openblas_lib!=""
+        elseif ParallelAccelerator.getOpenblasLib()!=""
             push!(linkLibs,"-lopenblas")
-        elseif sys_blas==1
+        elseif ParallelAccelerator.getSysBlas()==1
             push!(linkLibs,"-lblas")
         end
     end
     if include_lapack==true
-        if mkl_lib!=""
+        if ParallelAccelerator.getMklLib()!=""
             push!(linkLibs,"-mkl")
         end
     end
@@ -3858,7 +3857,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
     push!(linkLibs,"-liomp5")
     push!(linkLibs,"-ldl")
   end
-  if backend_compiler == USE_ICC
+  if ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_ICC
     comp = "icpc"
     if isDistributedMode()
         if NERSC==1
@@ -3871,7 +3870,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
         push!(Opts,"-qopenmp")
     end
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
-  elseif backend_compiler == USE_GCC
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_GCC
     comp = getGccName()
     if isDistributedMode()
         comp = "mpic++"
@@ -3881,7 +3880,7 @@ function getLinkCommand(outfile_name, lib, flags=[])
     end
     push!(Opts, "-std=c++11")
     linkCommand = `$comp -g -shared $Opts -o $lib $generated_file_dir/$outfile_name.o $linkLibs -lm`
-  elseif backend_compiler == USE_MINGW
+  elseif ParallelAccelerator.getBackendCompiler() == ParallelAccelerator.USE_MINGW
     gpp = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin","g++")
     RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
 

@@ -191,7 +191,7 @@ function pattern_match_call_gemm(fun::GlobalRef, C::RHSVar, tA::Char, tB::Char, 
     CblasColMajor = 102
 
 
-    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+    if ParallelAccelerator.getMklLib()!="" || ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),(CBLAS_TRANSPOSE)$(_tB),$m,$n,$k,$calpha,
         $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb, $cbeta, $(from_expr(C,linfo)).data, $ldc)"
     else
@@ -236,7 +236,7 @@ function pattern_match_call_gemv(fun::GlobalRef, y::RHSVar, tA::Char, A::RHSVar,
     CblasColMajor = 102
 
 
-    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+    if ParallelAccelerator.getMklLib()!="" || ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
         s *= "$(cblas_fun)((CBLAS_ORDER)$(CblasColMajor),(CBLAS_TRANSPOSE)$(_tA),$m,$n, 1.0,
         $(from_expr(A,linfo)).data, $lda, $(from_expr(x,linfo)).data, 1, 0.0, $(from_expr(y,linfo)).data, 1)"
     else
@@ -280,7 +280,7 @@ function pattern_match_call_chol(fun::GlobalRef, A::RHSVar, linfo)
     uplo = 'U' #vUL==Val{:U} ? 'U' : 'L'
 
 
-    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+    if ParallelAccelerator.getMklLib()!="" || ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
         s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', $n, $(from_expr(A,linfo)).data, $lda)"
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
@@ -359,7 +359,7 @@ function pattern_match_call_trtrs(fun::GlobalRef, uplo::Char, trans::Char, diag:
 
     LAPACK_COL_MAJOR = 102
 
-    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+    if ParallelAccelerator.getMklLib()!="" || ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
         s *= "$(lapack_fun)($(LAPACK_COL_MAJOR), '$uplo', '$trans', '$diag', $n, $nrhs, $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
         println("WARNING: MKL and OpenBLAS not found. Matrix multiplication might be slow.
@@ -393,7 +393,7 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, fun1::GlobalRef, B:
 end
 
 function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVar)
-    dprintln(3, "pattern_match_call_transpose, ", (fun, B, A), " mkl_lib=", mkl_lib, " openblas=",openblas_lib, " sys_blas=",sys_blas)
+    dprintln(3, "pattern_match_call_transpose, ", (fun, B, A), " ParallelAccelerator.getMklLib()=", ParallelAccelerator.getMklLib(), " openblas=",ParallelAccelerator.getOpenblasLib(), " ParallelAccelerator.getSysBlas()=",ParallelAccelerator.getSysBlas())
     if !(fun.mod==Base && fun.name==:transpose! || fun.name ==:transpose_f! || fun.name == :transpose)
         return ""
     end
@@ -418,10 +418,10 @@ function pattern_match_call_transpose(linfo, fun::GlobalRef, B::RHSVar, A::RHSVa
     lda = from_arraysize(A,1,linfo)
     ldb = from_arraysize(A,2,linfo)
 
-    if mkl_lib!="" && blas_fun!=""
+    if ParallelAccelerator.getMklLib()!="" && blas_fun!=""
         s *= "mkl_$(blas_fun)('C','T',$m,$n, 1.0,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
-    elseif (openblas_lib!="" || sys_blas==1) && blas_fun!=""
+    elseif (ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1) && blas_fun!=""
         s *= "cblas_$(blas_fun)(CblasColMajor,CblasTrans,$m,$n, 1.0,
              $(from_expr(A,linfo)).data, $lda, $(from_expr(B,linfo)).data, $ldb)"
     else
@@ -484,7 +484,7 @@ function pattern_match_call_vecnorm(fun::GlobalRef, y::RHSVar, p::Int,linfo)
     n = from_arraysize(y,1,linfo)
 
 
-    if mkl_lib!="" || openblas_lib!="" || sys_blas==1
+    if ParallelAccelerator.getMklLib()!="" || ParallelAccelerator.getOpenblasLib()!="" || ParallelAccelerator.getSysBlas()==1
         s *= "$(cblas_fun)( $n, $(from_expr(y,linfo)).data, 1)"
     else
         #println("WARNING: MKL and OpenBLAS not found. Matrix-vector multiplication might be slow.

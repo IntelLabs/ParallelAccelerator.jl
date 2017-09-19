@@ -288,7 +288,7 @@ function toCGen(func :: GlobalRef, code, signature :: Tuple)
   original_args = CompilerTools.LambdaHandling.getInputParameters(LambdaVarInfo)
   @dprintln(3, "len? ", length(original_args), length(sig_dims))
  
-  map!(s -> gensym(string(s)), original_args)
+  map!(s -> gensym(string(s)), original_args, original_args)
   assert(length(original_args) == length(sig_dims))
   modified_args = Array{Any}(length(sig_dims))
   extra_inits = Array{Any}(0)

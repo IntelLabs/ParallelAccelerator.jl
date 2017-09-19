@@ -105,6 +105,26 @@ if isfile("$package_root/deps/generated/config.jl")
   include("$package_root/deps/generated/config.jl")
 end
 
+function getMklLib()
+  return mkl_lib
+end
+
+function getOpenblasLib()
+  return openblas_lib
+end
+
+function getSysBlas()
+  return sys_blas
+end
+
+function getUseBcpp()
+  return use_bcpp
+end
+
+function getBackendCompiler()
+  return backend_compiler
+end
+
 cached_mode = nothing
 
 """
