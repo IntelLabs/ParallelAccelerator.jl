@@ -89,7 +89,7 @@ Options:
     println("output file = ", out_file)
 
     function harris(input_fname, output_fname)
-        local img = convert(Matrix{Float32}, load(input_fname))
+        local img = convert(Array{Float32, 2}, load(input_fname))
         tic()
         res = harrisCornerDetect(Matrix{Float32}(0, 0))
         println("SELFPRIMED ", toq())
@@ -98,7 +98,7 @@ Options:
         res = harrisCornerDetect(img)
         selftimed = toq()
         res = map((x,y) -> x > 0.001f0 ? 1.0f0 : (y / 2.0f0), res, img)
-        save(output_fname, ufixed8sc(convert(Image, res)))
+        save(output_fname, res)
         println("checksum: ", sum(res))
         println("SELFTIMED ", selftimed)
     end
