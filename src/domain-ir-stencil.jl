@@ -188,7 +188,7 @@ function traverse(state, expr::Expr, bufSyms, arrSymDict, stat, borderSty)
     # fix numerical coercion when converting setindex! into unsafe_arrayset
     if (expr.args[1].name === :unsafe_arrayset)
         if typeOfOpr(state, expr.args[3]) != elmTyp 
-          expr.args[3] = mk_expr(elmTyp, :call, GlobalRef(Base, Symbol(string(elmTyp))), expr.args[3])
+          expr.args[3] = mk_expr(elmTyp, :call, elmTyp, expr.args[3])
         end
     end
 
