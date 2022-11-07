@@ -1,3 +1,9 @@
+> :warning: **DISCONTINUATION OF PROJECT** - 
+> *This project will no longer be maintained by Intel.
+> Intel has ceased development and contributions including, but not limited to, maintenance, bug fixes, new releases, or updates, to this project.*
+> **Intel no longer accepts patches to this project.**
+> *If you have an ongoing need to use this project, are interested in independently developing it, or would like to maintain patches for the open source software community, please create your own fork of this project.*
+
 # ParallelAccelerator
 
 [![Join the chat at https://gitter.im/IntelLabs/ParallelAccelerator.jl](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/IntelLabs/ParallelAccelerator.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
